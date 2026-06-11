@@ -1,0 +1,14 @@
+# Go
+/bin/
+*.exe
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Local data
+/data/
+
+# Env
+.env

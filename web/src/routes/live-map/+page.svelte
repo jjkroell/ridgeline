@@ -42,15 +42,46 @@
 	const payloadColor = (t: string) => PAYLOAD_COLOR[t] ?? '#34e3c4';
 
 	// ── hop resolution ────────────────────────────────────────────────────
-	// Each path hop is an uppercase-hex key prefix; match it to a located node
-	// whose public key starts with that prefix (prefixes are ~unique here).
-	function resolvePath(path: string[]): [number, number][] {
-		const pts: [number, number][] = [];
-		for (const hop of path) {
-			const n = located.find((nd) => nd.publicKey.startsWith(hop));
-			if (n && n.longitude != null && n.latitude != null) pts.push([n.longitude, n.latitude]);
+	// A packet's hops are all at the originating node's hash size, so the hop
+	// length is the prefix length to match. Each hop may match several located
+	// nodes (a short/1-byte hop is ambiguous); resolve by:
+	//   1. preferring repeaters (relays are repeaters),
+	//   2. anchoring on hops with a single candidate,
+	//   3. for the rest, picking the candidate nearest a resolved neighbour.
+	// Returns the located points in path order plus whether any hop was
+	// ambiguous (so the path can be drawn with less confidence).
+	const dist2 = (a: [number, number], b: [number, number]) =>
+		(a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
+
+	function resolvePath(path: string[]): { pts: [number, number][]; uncertain: boolean } {
+		const cands: [number, number][][] = path.map((hop) => {
+			let c = located.filter((n) => n.publicKey.startsWith(hop));
+			const reps = c.filter((n) => n.role === 'Repeater');
+			if (reps.length) c = reps;
+			return c.map((n) => [n.longitude!, n.latitude!] as [number, number]);
+		});
+
+		const resolved: ([number, number] | null)[] = path.map(() => null);
+		let uncertain = false;
+
+		// anchor unambiguous hops
+		for (let i = 0; i < cands.length; i++) if (cands[i].length === 1) resolved[i] = cands[i][0];
+
+		// disambiguate the rest by nearest resolved neighbour
+		for (let i = 0; i < cands.length; i++) {
+			if (resolved[i] || cands[i].length === 0) continue;
+			uncertain = true;
+			let ref: [number, number] | null = null;
+			for (let d = 1; d < cands.length && !ref; d++) {
+				if (i - d >= 0 && resolved[i - d]) ref = resolved[i - d];
+				else if (i + d < cands.length && resolved[i + d]) ref = resolved[i + d];
+			}
+			resolved[i] = ref
+				? cands[i].reduce((best, p) => (dist2(p, ref!) < dist2(best, ref!) ? p : best))
+				: cands[i][0];
 		}
-		return pts;
+
+		return { pts: resolved.filter((p): p is [number, number] => p !== null), uncertain };
 	}
 
 	// ── animation state ───────────────────────────────────────────────────
@@ -61,12 +92,13 @@
 		color: string;
 		born: number;
 		dur: number;
+		uncertain: boolean;
 	}
 	let anims: Anim[] = [];
 	const animated = new Map<string, number>(); // messageHash -> time, for dedupe
 	const FADE = 700;
 
-	function addAnim(pts: [number, number][], color: string) {
+	function addAnim(pts: [number, number][], color: string, uncertain: boolean) {
 		const seglen = [0];
 		for (let i = 1; i < pts.length; i++) {
 			const dx = pts[i][0] - pts[i - 1][0],
@@ -74,7 +106,15 @@
 			seglen.push(seglen[i - 1] + Math.hypot(dx, dy));
 		}
 		const total = seglen[seglen.length - 1];
-		anims.push({ pts, seglen, total, color, born: performance.now(), dur: 900 + pts.length * 280 });
+		anims.push({
+			pts,
+			seglen,
+			total,
+			color,
+			born: performance.now(),
+			dur: 900 + pts.length * 280,
+			uncertain
+		});
 		if (anims.length > 60) anims.shift();
 	}
 
@@ -107,7 +147,9 @@
 		for (const a of anims) {
 			const age = now - a.born;
 			const travel = Math.min(1, age / a.dur);
-			const opacity = age < a.dur ? 0.85 : 0.85 * (1 - (age - a.dur) / FADE);
+			// Ambiguous (disambiguated) paths are drawn fainter.
+			const base = a.uncertain ? 0.45 : 0.85;
+			const opacity = age < a.dur ? base : base * (1 - (age - a.dur) / FADE);
 			lines.push({
 				type: 'Feature',
 				geometry: { type: 'LineString', coordinates: a.pts },
@@ -138,10 +180,10 @@
 		void live.events.length;
 		for (const ev of live.events.slice(0, 40)) {
 			if (!ev.path || ev.path.length < 1 || animated.has(ev.messageHash)) continue;
-			const pts = resolvePath(ev.path);
+			const { pts, uncertain } = resolvePath(ev.path);
 			if (pts.length < 2) continue;
 			animated.set(ev.messageHash, performance.now());
-			addAnim(pts, payloadColor(ev.payloadType));
+			addAnim(pts, payloadColor(ev.payloadType), uncertain);
 		}
 		// prune dedupe map
 		const cutoff = performance.now() - 60000;

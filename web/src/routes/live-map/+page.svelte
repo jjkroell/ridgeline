@@ -103,8 +103,13 @@
 		uncertain: boolean;
 	}
 	let anims: Anim[] = [];
-	const animated = new Map<string, number>(); // messageHash -> time, for dedupe
 	const FADE = 700;
+
+	// Fire-on-arrival: pulse each observer's reported header path as it comes
+	// in, deduped by messageHash + path. Observers report the same transmission
+	// over several seconds (mean ~5s here), so firing on arrival animates the
+	// flood spreading in real time rather than dumping every branch at once.
+	const fired = new Map<string, number>(); // "hash:path" -> time
 
 	// A small expanding ring fired at each node as the pulse passes through it.
 	interface Ripple {
@@ -114,23 +119,6 @@
 	}
 	let ripples: Ripple[] = [];
 	const RIPPLE_DUR = 650;
-
-	// Propagation buffer: the same transmission is heard by many observers,
-	// each reporting the actual hop sequence from the header as they received
-	// it. Collect a message hash's paths for a short window so every observer's
-	// header arrives, then pulse each distinct path the packet actually took.
-	const BUFFER_MS = 2500;
-	const pending = new Map<string, { paths: string[][]; color: string; fireAt: number }>();
-
-	// Keep the "maximal" header paths: drop any path that is merely a shorter
-	// prefix of another (the same flood branch observed less far along). What
-	// remains is each distinct route the packet actually took — one pulse each.
-	const isPrefix = (a: string[], b: string[]) =>
-		a.length < b.length && a.every((h, i) => h === b[i]);
-
-	function maximalPaths(paths: string[][]): string[][] {
-		return paths.filter((p) => !paths.some((q) => q !== p && isPrefix(p, q)));
-	}
 
 	function addAnim(pts: [number, number][], color: string, uncertain: boolean) {
 		const seglen = [0];
@@ -175,18 +163,6 @@
 			return;
 		}
 		const now = performance.now();
-
-		// Fire buffered transmissions whose collection window has elapsed —
-		// one pulse per distinct header path the packet actually took.
-		for (const [hash, p] of pending) {
-			if (now < p.fireAt) continue;
-			pending.delete(hash);
-			animated.set(hash, now);
-			for (const path of maximalPaths(p.paths)) {
-				const { pts, uncertain } = resolvePath(path);
-				if (pts.length >= 2) addAnim(pts, p.color, uncertain);
-			}
-		}
 
 		const lines: Feature[] = [];
 		const dots: Feature[] = [];
@@ -241,23 +217,21 @@
 		requestAnimationFrame(frame);
 	}
 
-	// react to new live events → collect paths into the propagation buffer
+	// react to new live events → pulse each newly-seen header path on arrival
 	$effect(() => {
 		void live.events.length;
 		const now = performance.now();
-		for (const ev of live.events.slice(0, 40)) {
-			if (!ev.path || ev.path.length < 1 || animated.has(ev.messageHash)) continue;
-			let p = pending.get(ev.messageHash);
-			if (!p) {
-				p = { paths: [], color: payloadColor(ev.payloadType), fireAt: now + BUFFER_MS };
-				pending.set(ev.messageHash, p);
-			}
-			const key = ev.path.join(',');
-			if (!p.paths.some((x) => x.join(',') === key)) p.paths.push(ev.path);
+		for (const ev of live.events.slice(0, 60)) {
+			if (!ev.path || ev.path.length < 1) continue;
+			const key = ev.messageHash + ':' + ev.path.join(',');
+			if (fired.has(key)) continue;
+			fired.set(key, now);
+			const { pts, uncertain } = resolvePath(ev.path);
+			if (pts.length >= 2) addAnim(pts, payloadColor(ev.payloadType), uncertain);
 		}
 		// prune dedupe map
-		const cutoff = now - 60000;
-		for (const [k, t] of animated) if (t < cutoff) animated.delete(k);
+		const cutoff = now - 90000;
+		for (const [k, t] of fired) if (t < cutoff) fired.delete(k);
 	});
 
 	// react to theme changes

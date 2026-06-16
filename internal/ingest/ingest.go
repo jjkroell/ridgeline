@@ -5,6 +5,7 @@ package ingest
 import (
 	"encoding/json"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,14 +17,44 @@ import (
 )
 
 // envelope is the JSON wrapper an observer publishes for each received packet.
-// Field names mirror the MeshCore observer convention.
+// Field names mirror the MeshCore observer convention. Note that real
+// observers encode SNR/RSSI as JSON strings (e.g. "11", "-45"), so those use
+// a lenient numeric type that accepts both strings and numbers.
 type envelope struct {
-	Raw       string   `json:"raw"`
-	SNR       *float64 `json:"SNR"`
-	RSSI      *float64 `json:"RSSI"`
-	Origin    string   `json:"origin"`
-	Region    string   `json:"region"`
-	Timestamp string   `json:"timestamp"`
+	Raw      string   `json:"raw"`
+	SNR      optFloat `json:"SNR"`
+	RSSI     optFloat `json:"RSSI"`
+	Origin   string   `json:"origin"`    // friendly observer name
+	OriginID string   `json:"origin_id"` // observer public key
+	Region   string   `json:"region"`
+}
+
+// optFloat is a float that unmarshals from a JSON number or a quoted numeric
+// string, tracking whether a usable value was present.
+type optFloat struct {
+	set bool
+	val float64
+}
+
+func (o *optFloat) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	if s == "" || s == "null" {
+		return nil
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return nil // tolerate non-numeric values rather than dropping the packet
+	}
+	o.set, o.val = true, v
+	return nil
+}
+
+func (o optFloat) ptr() *float64 {
+	if !o.set {
+		return nil
+	}
+	v := o.val
+	return &v
 }
 
 // Ingestor subscribes to the broker and writes decoded packets to the store.
@@ -96,20 +127,23 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
-	observerID, region := topicMeta(msg.Topic())
+	observerKey, region := topicMeta(msg.Topic())
 	if region == "" {
 		region = env.Region
 	}
+	// Prefer the friendly observer name for display; fall back to the
+	// topic-derived public key.
+	observerID := env.Origin
 	if observerID == "" {
-		observerID = env.Origin
+		observerID = observerKey
 	}
 
 	obs := store.Observation{
 		Packet:     packet,
 		ObserverID: observerID,
 		Region:     region,
-		SNR:        env.SNR,
-		RSSI:       env.RSSI,
+		SNR:        env.SNR.ptr(),
+		RSSI:       env.RSSI.ptr(),
 		// Server clock owns ordering; the envelope timestamp is untrusted
 		// (observers with skewed clocks would poison ordering).
 		ReceivedAt: time.Now(),

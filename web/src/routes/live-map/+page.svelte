@@ -156,6 +156,23 @@
 		return a.pts[a.pts.length - 1];
 	}
 
+	// The visible "comet" line: from the head position back to ~two nodes
+	// behind it. The lead reveals the line as it travels; the tail trails off
+	// once the head is more than two nodes ahead.
+	const TRAIL_NODES = 2;
+	function trailCoords(a: Anim, travel: number): [number, number][] {
+		const d = travel * a.total;
+		let lastV = 0; // last vertex the head has passed
+		for (let i = 1; i < a.pts.length; i++) {
+			if (a.seglen[i] <= d) lastV = i;
+			else break;
+		}
+		const tailV = Math.max(0, lastV - (TRAIL_NODES - 1));
+		const coords = a.pts.slice(tailV, lastV + 1);
+		if (d > a.seglen[lastV]) coords.push(along(a, travel)); // head mid-segment
+		return coords;
+	}
+
 	// ── per-frame render into GeoJSON sources ─────────────────────────────
 	function frame() {
 		if (!map || !ready) {
@@ -173,11 +190,14 @@
 			// Ambiguous (disambiguated) paths are drawn fainter.
 			const base = a.uncertain ? 0.45 : 0.85;
 			const opacity = age < a.dur ? base : base * (1 - (age - a.dur) / FADE);
-			lines.push({
-				type: 'Feature',
-				geometry: { type: 'LineString', coordinates: a.pts },
-				properties: { color: a.color, opacity }
-			});
+			const trail = trailCoords(a, travel);
+			if (trail.length >= 2) {
+				lines.push({
+					type: 'Feature',
+					geometry: { type: 'LineString', coordinates: trail },
+					properties: { color: a.color, opacity }
+				});
+			}
 			if (age < a.dur) {
 				dots.push({
 					type: 'Feature',

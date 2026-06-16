@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS nodes (
 CREATE TABLE IF NOT EXISTS observers (
 	id           TEXT PRIMARY KEY,
 	region       TEXT,
+	pubkey       TEXT,
 	first_seen   TEXT NOT NULL,
 	last_seen    TEXT NOT NULL,
 	packet_count INTEGER NOT NULL DEFAULT 0
@@ -82,6 +83,9 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("store: schema: %w", err)
 	}
+	// Lightweight migrations for databases created before a column existed.
+	// Errors are expected (and ignored) when the column is already present.
+	db.Exec(`ALTER TABLE observers ADD COLUMN pubkey TEXT`)
 	return &Store{db: db}, nil
 }
 
@@ -90,12 +94,13 @@ func (s *Store) Close() error { return s.db.Close() }
 
 // Observation is one observer's sighting of one packet, ready to persist.
 type Observation struct {
-	Packet     *meshcore.Packet
-	ObserverID string
-	Region     string
-	SNR        *float64
-	RSSI       *float64
-	ReceivedAt time.Time // server ingest time — authoritative for ordering
+	Packet         *meshcore.Packet
+	ObserverID     string
+	ObserverPubkey string // observer node public key (origin_id), for geo-locating
+	Region         string
+	SNR            *float64
+	RSSI           *float64
+	ReceivedAt     time.Time // server ingest time — authoritative for ordering
 }
 
 // Record persists an observation: it inserts the observation row, updates the
@@ -127,13 +132,14 @@ func (s *Store) Record(o Observation) error {
 
 	if o.ObserverID != "" {
 		if _, err := tx.Exec(`
-			INSERT INTO observers (id, region, first_seen, last_seen, packet_count)
-			VALUES (?,?,?,?,1)
+			INSERT INTO observers (id, region, pubkey, first_seen, last_seen, packet_count)
+			VALUES (?,?,?,?,?,1)
 			ON CONFLICT(id) DO UPDATE SET
 				last_seen    = excluded.last_seen,
 				region       = COALESCE(NULLIF(excluded.region,''), observers.region),
+				pubkey       = COALESCE(NULLIF(excluded.pubkey,''), observers.pubkey),
 				packet_count = observers.packet_count + 1`,
-			o.ObserverID, nullStr(o.Region), ts, ts,
+			o.ObserverID, nullStr(o.Region), nullStr(o.ObserverPubkey), ts, ts,
 		); err != nil {
 			return fmt.Errorf("store: upsert observer: %w", err)
 		}

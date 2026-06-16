@@ -139,11 +139,12 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 	}
 
 	obs := store.Observation{
-		Packet:     packet,
-		ObserverID: observerID,
-		Region:     region,
-		SNR:        env.SNR.ptr(),
-		RSSI:       env.RSSI.ptr(),
+		Packet:         packet,
+		ObserverID:     observerID,
+		ObserverPubkey: env.OriginID,
+		Region:         region,
+		SNR:            env.SNR.ptr(),
+		RSSI:           env.RSSI.ptr(),
 		// Server clock owns ordering; the envelope timestamp is untrusted
 		// (observers with skewed clocks would poison ordering).
 		ReceivedAt: time.Now(),

@@ -66,6 +66,9 @@ type LiveEvent struct {
 	RouteType   string   `json:"routeType"`
 	PayloadType string   `json:"payloadType"`
 	PathHops    int      `json:"pathHops"`
+	// Path holds the per-hop relay key prefixes (uppercase hex) the packet
+	// accumulated as it flooded — the chain of repeaters that relayed it.
+	Path        []string `json:"path,omitempty"`
 	ObserverID  string   `json:"observerId,omitempty"`
 	Region      string   `json:"region,omitempty"`
 	SNR         *float64 `json:"snr,omitempty"`
@@ -91,6 +94,7 @@ func (s *Server) Broadcast(o store.Observation) {
 		RouteType:   o.Packet.RouteType.String(),
 		PayloadType: o.Packet.PayloadType.String(),
 		PathHops:    o.Packet.PathHopCount,
+		Path:        o.Packet.Path,
 		ObserverID:  o.ObserverID,
 		Region:      o.Region,
 		SNR:         o.SNR,

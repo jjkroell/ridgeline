@@ -50,6 +50,8 @@ export interface LiveNode {
 
 export interface LiveEvent extends Observation {
 	node?: LiveNode;
+	/** Per-hop relay key prefixes the packet accumulated as it flooded. */
+	path?: string[];
 }
 
 async function get<T>(path: string): Promise<T> {

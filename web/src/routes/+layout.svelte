@@ -17,6 +17,7 @@
 		{ href: '/nodes', label: 'Nodes', icon: 'node' },
 		{ href: '/live', label: 'Live Feed', icon: 'pulse' },
 		{ href: '/map', label: 'Map', icon: 'map' },
+		{ href: '/live-map', label: 'Live Map', icon: 'signal' },
 		{ href: '/observers', label: 'Observers', icon: 'eye' }
 	];
 
@@ -30,6 +31,7 @@
 		node: 'M12 2v6m0 8v6M2 12h6m8 0h6M12 8a4 4 0 100 8 4 4 0 000-8z',
 		pulse: 'M2 12h4l3 8 4-16 3 8h6',
 		map: 'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14',
+		signal: 'M12 12h.01M8.5 8.5a5 5 0 000 7M15.5 8.5a5 5 0 010 7M5.6 5.6a9 9 0 000 12.8M18.4 5.6a9 9 0 010 12.8',
 		eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 9a3 3 0 100 6 3 3 0 000-6z'
 	};
 </script>

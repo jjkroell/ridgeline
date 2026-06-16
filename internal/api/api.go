@@ -62,18 +62,23 @@ func (s *Server) Handler() http.Handler {
 
 // LiveEvent is the JSON shape broadcast to WebSocket clients per observation.
 type LiveEvent struct {
-	MessageHash string   `json:"messageHash"`
-	RouteType   string   `json:"routeType"`
-	PayloadType string   `json:"payloadType"`
-	PathHops    int      `json:"pathHops"`
+	MessageHash    string `json:"messageHash"`
+	RouteType      string `json:"routeType"`
+	PayloadType    string `json:"payloadType"`
+	PayloadVersion uint8  `json:"payloadVersion"`
+	PathHops       int    `json:"pathHops"`
+	HashSize       int    `json:"hashSize"`
 	// Path holds the per-hop relay key prefixes (uppercase hex) the packet
 	// accumulated as it flooded — the chain of repeaters that relayed it.
-	Path        []string `json:"path,omitempty"`
-	ObserverID  string   `json:"observerId,omitempty"`
-	Region      string   `json:"region,omitempty"`
-	SNR         *float64 `json:"snr,omitempty"`
-	RSSI        *float64 `json:"rssi,omitempty"`
-	ReceivedAt  string   `json:"receivedAt"`
+	Path           []string  `json:"path,omitempty"`
+	TransportCodes *[2]uint16 `json:"transportCodes,omitempty"`
+	PayloadRaw     string    `json:"payloadRaw,omitempty"`
+	Raw            string    `json:"raw,omitempty"`
+	ObserverID     string    `json:"observerId,omitempty"`
+	Region         string    `json:"region,omitempty"`
+	SNR            *float64  `json:"snr,omitempty"`
+	RSSI           *float64  `json:"rssi,omitempty"`
+	ReceivedAt     string    `json:"receivedAt"`
 	// Node is populated for Advert packets.
 	Node *LiveNode `json:"node,omitempty"`
 }
@@ -85,24 +90,35 @@ type LiveNode struct {
 	Role      string   `json:"role"`
 	Latitude  *float64 `json:"latitude,omitempty"`
 	Longitude *float64 `json:"longitude,omitempty"`
+	Timestamp uint32   `json:"timestamp,omitempty"` // advertised unix time
 }
 
 // Broadcast pushes an observation to live WebSocket subscribers.
 func (s *Server) Broadcast(o store.Observation) {
 	ev := LiveEvent{
-		MessageHash: o.Packet.MessageHash,
-		RouteType:   o.Packet.RouteType.String(),
-		PayloadType: o.Packet.PayloadType.String(),
-		PathHops:    o.Packet.PathHopCount,
-		Path:        o.Packet.Path,
-		ObserverID:  o.ObserverID,
-		Region:      o.Region,
-		SNR:         o.SNR,
-		RSSI:        o.RSSI,
-		ReceivedAt:  o.ReceivedAt.UTC().Format(time.RFC3339Nano),
+		MessageHash:    o.Packet.MessageHash,
+		RouteType:      o.Packet.RouteType.String(),
+		PayloadType:    o.Packet.PayloadType.String(),
+		PayloadVersion: o.Packet.PayloadVersion,
+		PathHops:       o.Packet.PathHopCount,
+		HashSize:       o.Packet.PathHashSize,
+		Path:           o.Packet.Path,
+		TransportCodes: o.Packet.TransportCodes,
+		PayloadRaw:     o.Packet.PayloadRaw,
+		Raw:            o.RawHex,
+		ObserverID:     o.ObserverID,
+		Region:         o.Region,
+		SNR:            o.SNR,
+		RSSI:           o.RSSI,
+		ReceivedAt:     o.ReceivedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if a := o.Packet.Advert; a != nil {
-		n := &LiveNode{PublicKey: a.PublicKey, Name: a.Name, Role: a.DeviceRole.String()}
+		n := &LiveNode{
+			PublicKey: a.PublicKey,
+			Name:      a.Name,
+			Role:      a.DeviceRole.String(),
+			Timestamp: a.Timestamp,
+		}
 		if a.HasLocation {
 			lat, lon := a.Latitude, a.Longitude
 			n.Latitude, n.Longitude = &lat, &lon

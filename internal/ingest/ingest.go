@@ -140,6 +140,7 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 
 	obs := store.Observation{
 		Packet:         packet,
+		RawHex:         env.Raw,
 		ObserverID:     observerID,
 		ObserverPubkey: env.OriginID,
 		Region:         region,

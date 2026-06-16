@@ -97,6 +97,7 @@ func (s *Store) Close() error { return s.db.Close() }
 // Observation is one observer's sighting of one packet, ready to persist.
 type Observation struct {
 	Packet         *meshcore.Packet
+	RawHex         string // full raw packet hex as received
 	ObserverID     string
 	ObserverPubkey string // observer node public key (origin_id), for geo-locating
 	Region         string
@@ -120,12 +121,16 @@ func (s *Store) Record(o Observation) error {
 	ts := o.ReceivedAt.UTC().Format(time.RFC3339Nano)
 	p := o.Packet
 
+	rawHex := o.RawHex
+	if rawHex == "" {
+		rawHex = p.PayloadRaw
+	}
 	if _, err := tx.Exec(`
 		INSERT INTO observations
 			(message_hash, raw_hex, route_type, payload_type, path_hops,
 			 observer_id, region, snr, rssi, received_at)
 		VALUES (?,?,?,?,?,?,?,?,?,?)`,
-		p.MessageHash, p.PayloadRaw, p.RouteType.String(), p.PayloadType.String(),
+		p.MessageHash, rawHex, p.RouteType.String(), p.PayloadType.String(),
 		p.PathHopCount, nullStr(o.ObserverID), nullStr(o.Region),
 		o.SNR, o.RSSI, ts,
 	); err != nil {

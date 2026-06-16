@@ -13,7 +13,10 @@ export default defineConfig({
 		// itself runs on the daemon's default port.
 		proxy: {
 			'/api': {
-				target: process.env.RIDGELINE_API ?? 'http://localhost:8080',
+				// Read from the environment without depending on @types/node.
+				target:
+					(globalThis as { process?: { env?: Record<string, string> } }).process?.env
+						?.RIDGELINE_API ?? 'http://localhost:8080',
 				ws: true
 			}
 		}

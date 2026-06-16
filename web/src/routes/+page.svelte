@@ -1,15 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api, type Stats, type Node } from '$lib/api';
-	import { live } from '$lib/live.svelte';
+	import { live, groupLive, type LiveGroup } from '$lib/live.svelte';
 	import { ago, shortKey, fmtNum, snrColor, fmtSnr } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
 	import PayloadTag from '$lib/components/PayloadTag.svelte';
+	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
 
 	let stats = $state<Stats | null>(null);
 	let nodes = $state<Node[]>([]);
 	let error = $state<string | null>(null);
+	let selected = $state<LiveGroup | null>(null);
+
+	const groups = $derived(groupLive(live.events));
 
 	async function refresh() {
 		try {
@@ -104,28 +108,37 @@
 				<a href="/live" class="label hover:text-signal transition-colors">View all →</a>
 			</div>
 			<div class="divide-line/50 divide-y">
-				{#if live.events.length === 0}
+				{#if groups.length === 0}
 					<div class="text-fg-faint px-5 py-10 text-center text-sm">
 						Waiting for packets…
 					</div>
 				{:else}
-					{#each live.events.slice(0, 9) as ev (ev.messageHash + ev.receivedAt)}
-						<div class="flex items-center gap-3 px-5 py-2.5 text-sm">
-							<PayloadTag type={ev.payloadType} />
-							<span class="text-fg-dim min-w-0 flex-1 truncate">
-								{#if ev.node}
-									<span class="text-fg">{ev.node.name || shortKey(ev.node.publicKey)}</span>
-								{:else}
-									<span class="font-mono text-fg-faint">{ev.messageHash}</span>
+					{#each groups.slice(0, 9) as g (g.key)}
+						<button
+							onclick={() => (selected = g)}
+							class="panel-hover flex w-full items-center gap-3 px-5 py-2.5 text-left text-sm"
+						>
+							<PayloadTag type={g.payloadType} />
+							<span class="text-fg-dim flex min-w-0 flex-1 items-center gap-2 truncate">
+								<span class="truncate">
+									{#if g.node}
+										<span class="text-fg">{g.node.name || shortKey(g.node.publicKey)}</span>
+									{:else}
+										<span class="font-mono text-fg-faint">{g.messageHash}</span>
+									{/if}
+								</span>
+								{#if g.count > 1}
+									<span
+										class="font-mono text-signal bg-signal/10 shrink-0 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem] tnum"
+										>×{g.count}</span
+									>
 								{/if}
 							</span>
-							<span class="font-mono tnum text-xs" style="color:{snrColor(ev.snr)}"
-								>{fmtSnr(ev.snr)} dB</span
+							<span class="font-mono tnum text-xs" style="color:{snrColor(g.bestSnr)}"
+								>{fmtSnr(g.bestSnr)} dB</span
 							>
-							<span class="font-mono text-fg-faint w-10 text-right text-xs"
-								>{ev.observerId ?? '—'}</span
-							>
-						</div>
+							<span class="font-mono text-fg-faint w-10 text-right text-xs">{ago(g.latest)}</span>
+						</button>
 					{/each}
 				{/if}
 			</div>
@@ -165,3 +178,5 @@
 		</section>
 	</div>
 </div>
+
+<LiveGroupModal group={selected} onclose={() => (selected = null)} />

@@ -10,13 +10,15 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PayloadTag from '$lib/components/PayloadTag.svelte';
 	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
+	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
 	let ready = false;
 	let nodes: Node[] = [];
-	let located: Node[] = $state([]);
+	let located: Node[] = $state([]); // all located nodes (pulse resolution uses these)
 	let animCount = $state(0);
+	let selectedRoles = $state(new Set(['Repeater', 'RoomServer', 'ChatNode', 'Sensor']));
 
 	// Recent packets overlay (grouped, max 15) with minimize/maximize.
 	let panelOpen = $state(true);
@@ -265,17 +267,32 @@
 	function nodeFeatures(): FeatureCollection {
 		return {
 			type: 'FeatureCollection',
-			features: located.map((n) => ({
-				type: 'Feature',
-				geometry: { type: 'Point', coordinates: [n.longitude!, n.latitude!] },
-				properties: { role: n.role, color: ROLE_COLOR[n.role] ?? '#8394a1', name: n.name }
-			}))
+			features: located
+				.filter((n) => selectedRoles.has(n.role))
+				.map((n) => ({
+					type: 'Feature',
+					geometry: { type: 'Point', coordinates: [n.longitude!, n.latitude!] },
+					properties: { role: n.role, color: ROLE_COLOR[n.role] ?? '#8394a1', name: n.name }
+				}))
 		};
 	}
 
+	// re-filter node display when the role selection changes (pulses unaffected)
+	$effect(() => {
+		void selectedRoles;
+		if (map && ready) (map.getSource('nodes') as maplibregl.GeoJSONSource)?.setData(nodeFeatures());
+	});
+
 	async function loadNodes() {
 		nodes = await api.nodes();
-		located = nodes.filter((n) => n.hasLocation && n.latitude != null && n.longitude != null);
+		located = nodes.filter(
+			(n) =>
+				n.hasLocation &&
+				n.latitude != null &&
+				n.longitude != null &&
+				Math.abs(n.latitude) <= 90 &&
+				Math.abs(n.longitude) <= 180
+		);
 		if (map && ready) (map.getSource('nodes') as maplibregl.GeoJSONSource)?.setData(nodeFeatures());
 	}
 
@@ -388,6 +405,8 @@
 <div class="px-6 py-6 md:px-10">
 	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
 		<div bind:this={mapEl} class="h-full w-full"></div>
+
+		<MapRoleFilter bind:selected={selectedRoles} />
 
 		<!-- Recent packets overlay (bottom-left) -->
 		<div

@@ -107,26 +107,20 @@
 	const FADE = 700;
 
 	// Propagation buffer: the same transmission is heard by many observers,
-	// each reporting a different (often partial) path. Collect a message hash's
-	// paths for a short window, then fire one pulse along the most complete
-	// resolved path.
+	// each reporting the actual hop sequence from the header as they received
+	// it. Collect a message hash's paths for a short window so every observer's
+	// header arrives, then pulse each distinct path the packet actually took.
 	const BUFFER_MS = 2500;
 	const pending = new Map<string, { paths: string[][]; color: string; fireAt: number }>();
 
-	// Pick the path that resolves to the most located points (ties broken by
-	// confidence) among all observers' reports for one transmission.
-	function bestPath(paths: string[][]): { pts: [number, number][]; uncertain: boolean } | null {
-		let best: { pts: [number, number][]; uncertain: boolean } | null = null;
-		for (const path of paths) {
-			const r = resolvePath(path);
-			if (
-				!best ||
-				r.pts.length > best.pts.length ||
-				(r.pts.length === best.pts.length && best.uncertain && !r.uncertain)
-			)
-				best = r;
-		}
-		return best;
+	// Keep the "maximal" header paths: drop any path that is merely a shorter
+	// prefix of another (the same flood branch observed less far along). What
+	// remains is each distinct route the packet actually took — one pulse each.
+	const isPrefix = (a: string[], b: string[]) =>
+		a.length < b.length && a.every((h, i) => h === b[i]);
+
+	function maximalPaths(paths: string[][]): string[][] {
+		return paths.filter((p) => !paths.some((q) => q !== p && isPrefix(p, q)));
 	}
 
 	function addAnim(pts: [number, number][], color: string, uncertain: boolean) {
@@ -173,13 +167,16 @@
 		}
 		const now = performance.now();
 
-		// Fire buffered transmissions whose collection window has elapsed.
+		// Fire buffered transmissions whose collection window has elapsed —
+		// one pulse per distinct header path the packet actually took.
 		for (const [hash, p] of pending) {
 			if (now < p.fireAt) continue;
 			pending.delete(hash);
 			animated.set(hash, now);
-			const best = bestPath(p.paths);
-			if (best && best.pts.length >= 2) addAnim(best.pts, p.color, best.uncertain);
+			for (const path of maximalPaths(p.paths)) {
+				const { pts, uncertain } = resolvePath(path);
+				if (pts.length >= 2) addAnim(pts, p.color, uncertain);
+			}
 		}
 
 		const lines: Feature[] = [];

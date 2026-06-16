@@ -3,7 +3,7 @@
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { api, type Node } from '$lib/api';
-	import { roleColor } from '$lib/format';
+	import { roleColor, roleLabel } from '$lib/format';
 	import { theme } from '$lib/theme.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
@@ -74,7 +74,7 @@
 			const popup = new maplibregl.Popup({ offset: 14, closeButton: false }).setHTML(
 				`<div style="font-family:'Space Mono',monospace;font-size:12px">
 					<div style="color:var(--color-fg);font-weight:700">${n.name || n.publicKey.slice(0, 10)}</div>
-					<div style="color:${roleColor(n.role)};margin-top:2px">${n.role}</div>
+					<div style="color:${roleColor(n.role)};margin-top:2px">${roleLabel(n.role)}</div>
 				</div>`
 			);
 			return new maplibregl.Marker({ element: markerEl(n) })

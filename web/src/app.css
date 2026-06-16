@@ -1,0 +1,182 @@
+@import url('https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,300;0,400;0,500;0,700;0,900;1,400&family=Space+Mono:wght@400;700&display=swap');
+@import 'tailwindcss';
+
+/* ── Ridgeline design tokens ───────────────────────────────────────────────
+   A dark "topographic instrument": near-black blue-green ink, contour-line
+   textures, a luminous signal-teal accent, mono data readouts. */
+@theme {
+	--color-ink: #070a0e;
+	--color-ink-2: #0a0e13;
+	--color-panel: #0e141b;
+	--color-panel-2: #131c25;
+	--color-line: #1c2730;
+	--color-line-bright: #2b3b48;
+
+	--color-fg: #dde7ed;
+	--color-fg-dim: #8394a1;
+	--color-fg-faint: #55626d;
+
+	--color-signal: #34e3c4;
+	--color-signal-deep: #129e87;
+	--color-amber: #e8b454;
+	--color-coral: #ff6b6b;
+	--color-violet: #a78bfa;
+	--color-sky: #5b9dff;
+	--color-lime: #6ee7a8;
+
+	/* Node-role colors (consistent with the MeshCore ecosystem) */
+	--color-role-repeater: #ff6b6b;
+	--color-role-companion: #5b9dff;
+	--color-role-room: #6ee7a8;
+	--color-role-sensor: #e8b454;
+	--color-role-observer: #a78bfa;
+
+	--font-display: 'Chivo', ui-sans-serif, system-ui, sans-serif;
+	--font-sans: 'Chivo', ui-sans-serif, system-ui, sans-serif;
+	--font-mono: 'Space Mono', ui-monospace, 'SF Mono', monospace;
+
+	--radius: 2px;
+}
+
+@layer base {
+	html {
+		color-scheme: dark;
+	}
+	body {
+		background-color: var(--color-ink);
+		color: var(--color-fg);
+		font-family: var(--font-sans);
+		font-feature-settings: 'ss01', 'cv01';
+		-webkit-font-smoothing: antialiased;
+		text-rendering: optimizeLegibility;
+	}
+
+	/* Topographic + grid atmosphere, fixed behind everything. */
+	body::before {
+		content: '';
+		position: fixed;
+		inset: 0;
+		z-index: -2;
+		background:
+			radial-gradient(120% 80% at 80% -10%, rgba(52, 227, 196, 0.06), transparent 60%),
+			radial-gradient(100% 70% at 0% 110%, rgba(232, 180, 84, 0.045), transparent 55%),
+			var(--color-ink);
+	}
+	body::after {
+		content: '';
+		position: fixed;
+		inset: 0;
+		z-index: -1;
+		pointer-events: none;
+		opacity: 0.5;
+		background-image:
+			linear-gradient(rgba(43, 59, 72, 0.18) 1px, transparent 1px),
+			linear-gradient(90deg, rgba(43, 59, 72, 0.18) 1px, transparent 1px);
+		background-size: 48px 48px;
+		mask-image: radial-gradient(120% 100% at 50% 0%, #000 35%, transparent 90%);
+	}
+
+	::selection {
+		background: var(--color-signal);
+		color: var(--color-ink);
+	}
+
+	::-webkit-scrollbar {
+		width: 10px;
+		height: 10px;
+	}
+	::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	::-webkit-scrollbar-thumb {
+		background: var(--color-line-bright);
+		border: 3px solid transparent;
+		background-clip: content-box;
+		border-radius: 999px;
+	}
+	::-webkit-scrollbar-thumb:hover {
+		background: var(--color-signal-deep);
+		background-clip: content-box;
+	}
+}
+
+@layer components {
+	/* Eyebrow / instrument label */
+	.label {
+		font-family: var(--font-mono);
+		font-size: 0.64rem;
+		letter-spacing: 0.22em;
+		text-transform: uppercase;
+		color: var(--color-fg-faint);
+	}
+
+	.panel {
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent),
+			var(--color-panel);
+		border: 1px solid var(--color-line);
+		border-radius: var(--radius);
+	}
+
+	.panel-hover {
+		transition:
+			border-color 0.18s ease,
+			transform 0.18s ease,
+			background-color 0.18s ease;
+	}
+	.panel-hover:hover {
+		border-color: var(--color-line-bright);
+		background-color: var(--color-panel-2);
+	}
+
+	/* Luminous signal text + glow */
+	.glow-signal {
+		text-shadow: 0 0 14px rgba(52, 227, 196, 0.45);
+	}
+
+	/* Animated live dot */
+	.live-dot {
+		position: relative;
+		display: inline-block;
+		width: 8px;
+		height: 8px;
+		border-radius: 999px;
+		background: var(--color-signal);
+		box-shadow: 0 0 10px var(--color-signal);
+	}
+	.live-dot::after {
+		content: '';
+		position: absolute;
+		inset: -4px;
+		border-radius: 999px;
+		border: 1px solid var(--color-signal);
+		animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+	}
+	@keyframes ping {
+		0% {
+			transform: scale(0.6);
+			opacity: 0.8;
+		}
+		100% {
+			transform: scale(2.4);
+			opacity: 0;
+		}
+	}
+
+	/* Staggered entrance used on page load */
+	.rise {
+		opacity: 0;
+		transform: translateY(8px);
+		animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+	}
+	@keyframes rise {
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.tnum {
+		font-variant-numeric: tabular-nums;
+	}
+}

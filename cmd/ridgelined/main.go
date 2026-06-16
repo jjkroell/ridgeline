@@ -55,7 +55,7 @@ func run(log *slog.Logger, configPath string) error {
 	}
 	defer st.Close()
 
-	apiServer := api.New(st, log, version)
+	apiServer := api.New(st, log, version, cfg.WebDir)
 
 	in := ingest.New(cfg.MQTT, st, log)
 	in.OnObservation = apiServer.Broadcast

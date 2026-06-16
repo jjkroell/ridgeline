@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -19,16 +20,19 @@ type Server struct {
 	store   *store.Store
 	log     *slog.Logger
 	version string
+	webDir  string
 	hub     *hub
 	up      websocket.Upgrader
 }
 
-// New creates an API Server.
-func New(st *store.Store, log *slog.Logger, version string) *Server {
+// New creates an API Server. If webDir is non-empty and exists, the built SPA
+// is served from it with an index.html fallback for client routes.
+func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
 	return &Server{
 		store:   st,
 		log:     log,
 		version: version,
+		webDir:  webDir,
 		hub:     newHub(),
 		// Dev: allow any origin. Tighten before exposing publicly.
 		up: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
@@ -41,8 +45,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/health", s.health)
 	mux.HandleFunc("GET /api/stats", s.stats)
 	mux.HandleFunc("GET /api/nodes", s.nodes)
+	mux.HandleFunc("GET /api/observers", s.observers)
 	mux.HandleFunc("GET /api/observations", s.observations)
 	mux.HandleFunc("GET /api/live", s.live)
+
+	if s.webDir != "" {
+		if info, err := os.Stat(s.webDir); err == nil && info.IsDir() {
+			mux.HandleFunc("/", staticHandler(s.webDir))
+			s.log.Info("serving web UI", "dir", s.webDir)
+		} else {
+			s.log.Warn("web dir not found, serving API only", "dir", s.webDir)
+		}
+	}
 	return mux
 }
 
@@ -118,6 +132,15 @@ func (s *Server) nodes(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, nodes)
+}
+
+func (s *Server) observers(w http.ResponseWriter, _ *http.Request) {
+	obs, err := s.store.ListObservers()
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, obs)
 }
 
 func (s *Server) observations(w http.ResponseWriter, r *http.Request) {

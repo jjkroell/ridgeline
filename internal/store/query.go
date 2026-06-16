@@ -71,6 +71,37 @@ func (s *Store) Stats() (Stats, error) {
 	return st, nil
 }
 
+// Observer is a row from the observers table.
+type Observer struct {
+	ID          string `json:"id"`
+	Region      string `json:"region"`
+	FirstSeen   string `json:"firstSeen"`
+	LastSeen    string `json:"lastSeen"`
+	PacketCount int    `json:"packetCount"`
+}
+
+// ListObservers returns all observers, most recently active first.
+func (s *Store) ListObservers() ([]Observer, error) {
+	rows, err := s.db.Query(`
+		SELECT id, COALESCE(region,''), first_seen, last_seen, packet_count
+		FROM observers
+		ORDER BY last_seen DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []Observer{}
+	for rows.Next() {
+		var o Observer
+		if err := rows.Scan(&o.ID, &o.Region, &o.FirstSeen, &o.LastSeen, &o.PacketCount); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
 // RecentObservation is a lightweight view of a recent packet sighting.
 type RecentObservation struct {
 	MessageHash string   `json:"messageHash"`

@@ -13,6 +13,9 @@ type Config struct {
 	ListenAddr string `json:"listenAddr"`
 	// DBPath is the SQLite database file path.
 	DBPath string `json:"dbPath"`
+	// WebDir is the directory of built static web assets to serve. Empty
+	// disables static serving (API only).
+	WebDir string `json:"webDir"`
 	// MQTT configures the upstream packet source.
 	MQTT MQTT `json:"mqtt"`
 }
@@ -32,6 +35,7 @@ func Default() Config {
 	return Config{
 		ListenAddr: ":8080",
 		DBPath:     "ridgeline.db",
+		WebDir:     "web/build",
 		MQTT: MQTT{
 			Broker:   "tcp://localhost:1883",
 			ClientID: "ridgelined",

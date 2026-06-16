@@ -12,3 +12,6 @@
 
 # Env
 .env
+
+# Built daemon binary
+/ridgelined

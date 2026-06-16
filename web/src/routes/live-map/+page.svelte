@@ -106,6 +106,15 @@
 	const animated = new Map<string, number>(); // messageHash -> time, for dedupe
 	const FADE = 700;
 
+	// A small expanding ring fired at each node as the pulse passes through it.
+	interface Ripple {
+		at: [number, number];
+		born: number; // when the dot reaches this node (may be in the future)
+		color: string;
+	}
+	let ripples: Ripple[] = [];
+	const RIPPLE_DUR = 650;
+
 	// Propagation buffer: the same transmission is heard by many observers,
 	// each reporting the actual hop sequence from the header as they received
 	// it. Collect a message hash's paths for a short window so every observer's
@@ -131,16 +140,16 @@
 			seglen.push(seglen[i - 1] + Math.hypot(dx, dy));
 		}
 		const total = seglen[seglen.length - 1];
-		anims.push({
-			pts,
-			seglen,
-			total,
-			color,
-			born: performance.now(),
-			dur: 900 + pts.length * 280,
-			uncertain
-		});
+		const born = performance.now();
+		const dur = 900 + pts.length * 280;
+		anims.push({ pts, seglen, total, color, born, dur, uncertain });
 		if (anims.length > 60) anims.shift();
+
+		// Schedule a ripple at each node, timed to when the dot arrives there.
+		for (let i = 0; i < pts.length; i++) {
+			ripples.push({ at: pts[i], born: born + (total > 0 ? seglen[i] / total : 0) * dur, color });
+		}
+		if (ripples.length > 500) ripples.splice(0, ripples.length - 500);
 	}
 
 	// position along the polyline at fraction t (0..1)
@@ -209,6 +218,25 @@
 			type: 'FeatureCollection',
 			features: dots
 		});
+
+		// Node ripples: an expanding ring as the pulse reaches each node.
+		const rings: Feature[] = [];
+		ripples = ripples.filter((r) => now - r.born < RIPPLE_DUR);
+		for (const r of ripples) {
+			const age = now - r.born;
+			if (age < 0) continue; // scheduled but not yet reached
+			const t = age / RIPPLE_DUR;
+			rings.push({
+				type: 'Feature',
+				geometry: { type: 'Point', coordinates: r.at },
+				properties: { color: r.color, r: 3 + t * 11, o: 0.85 * (1 - t) }
+			});
+		}
+		(map.getSource('pulse-rings') as maplibregl.GeoJSONSource)?.setData({
+			type: 'FeatureCollection',
+			features: rings
+		});
+
 		animCount = anims.length;
 		requestAnimationFrame(frame);
 	}
@@ -262,6 +290,7 @@
 		map.addSource('nodes', { type: 'geojson', data: nodeFeatures() });
 		map.addSource('pulse-lines', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
 		map.addSource('pulse-dots', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+		map.addSource('pulse-rings', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
 
 		map.addLayer({
 			id: 'pulse-lines',
@@ -285,6 +314,18 @@
 				'circle-opacity': 0.85,
 				'circle-stroke-width': 1.5,
 				'circle-stroke-color': inkColor()
+			}
+		});
+		map.addLayer({
+			id: 'pulse-rings',
+			type: 'circle',
+			source: 'pulse-rings',
+			paint: {
+				'circle-radius': ['get', 'r'],
+				'circle-color': 'rgba(0,0,0,0)',
+				'circle-stroke-color': ['get', 'color'],
+				'circle-stroke-width': 1.5,
+				'circle-stroke-opacity': ['get', 'o']
 			}
 		});
 		map.addLayer({

@@ -12,6 +12,9 @@ type Node struct {
 	LastSeen    string   `json:"lastSeen"`
 	LastAdvert  string   `json:"lastAdvert,omitempty"`
 	AdvertCount int      `json:"advertCount"`
+	// HashSize is the node's path-hash length in bytes (1, 2, or 3), learned
+	// from its advert. 0 means not yet known.
+	HashSize int `json:"hashSize"`
 }
 
 // Stats is a high-level snapshot of the database.
@@ -27,7 +30,8 @@ func (s *Store) ListNodes() ([]Node, error) {
 	rows, err := s.db.Query(`
 		SELECT pubkey, COALESCE(name,''), COALESCE(role,''),
 		       latitude, longitude, has_location,
-		       first_seen, last_seen, COALESCE(last_advert,''), advert_count
+		       first_seen, last_seen, COALESCE(last_advert,''), advert_count,
+		       COALESCE(hash_size, 0)
 		FROM nodes
 		ORDER BY last_seen DESC`)
 	if err != nil {
@@ -41,7 +45,7 @@ func (s *Store) ListNodes() ([]Node, error) {
 		var hasLoc int
 		if err := rows.Scan(&n.PublicKey, &n.Name, &n.Role,
 			&n.Latitude, &n.Longitude, &hasLoc,
-			&n.FirstSeen, &n.LastSeen, &n.LastAdvert, &n.AdvertCount); err != nil {
+			&n.FirstSeen, &n.LastSeen, &n.LastAdvert, &n.AdvertCount, &n.HashSize); err != nil {
 			return nil, err
 		}
 		n.HasLocation = hasLoc != 0

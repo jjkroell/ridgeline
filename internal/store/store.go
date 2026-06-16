@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS nodes (
 	first_seen   TEXT NOT NULL,
 	last_seen    TEXT NOT NULL,
 	last_advert  TEXT,
-	advert_count INTEGER NOT NULL DEFAULT 0
+	advert_count INTEGER NOT NULL DEFAULT 0,
+	hash_size    INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS observers (
@@ -86,6 +87,7 @@ func Open(path string) (*Store, error) {
 	// Lightweight migrations for databases created before a column existed.
 	// Errors are expected (and ignored) when the column is already present.
 	db.Exec(`ALTER TABLE observers ADD COLUMN pubkey TEXT`)
+	db.Exec(`ALTER TABLE nodes ADD COLUMN hash_size INTEGER NOT NULL DEFAULT 0`)
 	return &Store{db: db}, nil
 }
 
@@ -150,11 +152,14 @@ func (s *Store) Record(o Observation) error {
 		if a.HasLocation {
 			lat, lon = a.Latitude, a.Longitude
 		}
+		// The advert's path-length byte carries the originating node's own
+		// hash size (1, 2, or 3 bytes) — the length of the key prefix by which
+		// this node is identified in packet paths.
 		if _, err := tx.Exec(`
 			INSERT INTO nodes
 				(pubkey, name, role, latitude, longitude, has_location,
-				 first_seen, last_seen, last_advert, advert_count)
-			VALUES (?,?,?,?,?,?,?,?,?,1)
+				 first_seen, last_seen, last_advert, advert_count, hash_size)
+			VALUES (?,?,?,?,?,?,?,?,?,1,?)
 			ON CONFLICT(pubkey) DO UPDATE SET
 				name         = COALESCE(NULLIF(excluded.name,''), nodes.name),
 				role         = excluded.role,
@@ -163,9 +168,10 @@ func (s *Store) Record(o Observation) error {
 				has_location = nodes.has_location | excluded.has_location,
 				last_seen    = excluded.last_seen,
 				last_advert  = excluded.last_advert,
-				advert_count = nodes.advert_count + 1`,
+				advert_count = nodes.advert_count + 1,
+				hash_size    = excluded.hash_size`,
 			a.PublicKey, nullStr(a.Name), a.DeviceRole.String(),
-			lat, lon, boolInt(a.HasLocation), ts, ts, ts,
+			lat, lon, boolInt(a.HasLocation), ts, ts, ts, p.PathHashSize,
 		); err != nil {
 			return fmt.Errorf("store: upsert node: %w", err)
 		}

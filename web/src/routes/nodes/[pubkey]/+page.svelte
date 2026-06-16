@@ -15,19 +15,19 @@
 
 	const node = $derived(allNodes.find((n) => n.publicKey === pubkey) ?? null);
 
-	// A packet path records each relay by a 1-, 2-, or 3-byte prefix of its
-	// public key (the size is chosen per packet). Show this node's prefix at
-	// each length and how many other known nodes share it — i.e. how
-	// identifiable this node is when it appears as a path hop.
-	const prefixes = $derived(
-		[1, 2, 3].map((bytes) => {
-			const hex = pubkey.slice(0, bytes * 2);
-			const shared = allNodes.filter(
-				(n) => n.publicKey !== pubkey && n.publicKey.startsWith(hex)
-			).length;
-			return { bytes, hex, shared };
-		})
-	);
+	// Each node advertises its own hash length (1, 2, or 3 bytes); its hash ID
+	// is that prefix of its public key — how the node is identified as a relay
+	// in packet paths. Compute the ID and how many other known nodes collide
+	// with it at that length.
+	const hashId = $derived.by(() => {
+		const hs = node?.hashSize ?? 0;
+		if (!hs) return null;
+		const hex = pubkey.slice(0, hs * 2);
+		const shared = allNodes.filter(
+			(n) => n.publicKey !== pubkey && n.publicKey.startsWith(hex)
+		).length;
+		return { bytes: hs, hex, shared };
+	});
 
 	async function refresh() {
 		try {
@@ -86,33 +86,42 @@
 					</div>
 				{/each}
 
-				<!-- Relay prefix identity -->
+				<!-- Hash ID identity -->
 				<div class="panel px-5 py-4">
-					<div class="label mb-3">Relay Prefix</div>
-					<div class="space-y-2">
-						{#each prefixes as p (p.bytes)}
-							<div class="flex items-center justify-between gap-2">
-								<span class="font-mono text-fg-faint w-12 text-[0.7rem]">{p.bytes}-byte</span>
-								<span class="font-mono text-fg flex-1 text-sm tracking-wider">{p.hex}</span>
-								{#if p.shared === 0}
-									<span
-										class="font-mono text-signal bg-signal/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem]"
-										>unique</span
-									>
-								{:else}
-									<span
-										class="font-mono text-amber bg-amber/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem] tnum"
-										title="{p.shared} other known node{p.shared > 1 ? 's' : ''} share this prefix"
-										>+{p.shared} shared</span
-									>
-								{/if}
-							</div>
-						{/each}
+					<div class="label mb-3 flex items-center justify-between">
+						Hash ID
+						{#if hashId}
+							<span class="font-mono text-fg-faint normal-case">{hashId.bytes}-byte</span>
+						{/if}
 					</div>
-					<p class="text-fg-faint mt-3 text-[0.68rem] leading-snug">
-						How this node appears in packet paths. Shorter hops are more ambiguous; “shared” counts
-						other known nodes with the same prefix.
-					</p>
+					{#if hashId}
+						<div class="flex items-baseline gap-3">
+							<span class="font-mono text-signal glow-signal text-2xl font-700 tracking-[0.15em]"
+								>{hashId.hex}</span
+							>
+							{#if hashId.shared === 0}
+								<span
+									class="font-mono text-signal bg-signal/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem]"
+									>unique</span
+								>
+							{:else}
+								<span
+									class="font-mono text-amber bg-amber/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem] tnum"
+									title="{hashId.shared} other known node{hashId.shared > 1 ? 's' : ''} collide at this length"
+									>+{hashId.shared} collision{hashId.shared > 1 ? 's' : ''}</span
+								>
+							{/if}
+						</div>
+						<p class="text-fg-faint mt-3 text-[0.68rem] leading-snug">
+							This node sets a {hashId.bytes}-byte hash, so it appears as
+							<span class="font-mono">{hashId.hex}</span> in packet paths.
+						</p>
+					{:else}
+						<div class="text-fg-faint text-sm">Unknown — not seen advertising yet.</div>
+						<p class="text-fg-faint mt-2 text-[0.68rem] leading-snug">
+							A node’s hash length is learned from its advertisement.
+						</p>
+					{/if}
 				</div>
 			</div>
 

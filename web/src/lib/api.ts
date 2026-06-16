@@ -18,6 +18,8 @@ export interface Node {
 	lastSeen: string;
 	lastAdvert?: string;
 	advertCount: number;
+	/** Path-hash length in bytes (1, 2, or 3), from the node's advert; 0 = unknown. */
+	hashSize: number;
 }
 
 export interface Observer {

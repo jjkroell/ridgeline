@@ -161,6 +161,31 @@
 		}
 	}
 
+	// Fit to the bulk of nodes, rejecting geographic outliers (bad GPS or far
+	// regions) via the 1.5×IQR rule so the view focuses where the mesh is.
+	function fitToNodes() {
+		if (!map || allLocated.length === 0) return;
+		const q = (arr: number[], p: number) =>
+			arr[Math.min(arr.length - 1, Math.max(0, Math.round((arr.length - 1) * p)))];
+		const whisker = (vals: number[]): [number, number] => {
+			const s = [...vals].sort((a, b) => a - b);
+			const q1 = q(s, 0.25),
+				q3 = q(s, 0.75),
+				iqr = q3 - q1;
+			return [q1 - 1.5 * iqr, q3 + 1.5 * iqr];
+		};
+		const [latLo, latHi] = whisker(allLocated.map((n) => n.latitude!));
+		const [lonLo, lonHi] = whisker(allLocated.map((n) => n.longitude!));
+		const inliers = allLocated.filter(
+			(n) =>
+				n.latitude! >= latLo && n.latitude! <= latHi && n.longitude! >= lonLo && n.longitude! <= lonHi
+		);
+		const pts = inliers.length ? inliers : allLocated;
+		const b = new maplibregl.LngLatBounds();
+		pts.forEach((n) => b.extend([n.longitude!, n.latitude!]));
+		map.fitBounds(b, { padding: 80, maxZoom: 12, duration: 600 });
+	}
+
 	async function plot() {
 		if (!map) return;
 		const nodes = await api.nodes();
@@ -174,9 +199,7 @@
 		);
 		if (ready) updateSource();
 		if (!didFit && allLocated.length > 0) {
-			const b = new maplibregl.LngLatBounds();
-			allLocated.forEach((n) => b.extend([n.longitude!, n.latitude!]));
-			map.fitBounds(b, { padding: 80, maxZoom: 12, duration: 600 });
+			fitToNodes();
 			didFit = true;
 		}
 	}
@@ -212,7 +235,7 @@
 </PageHeader>
 
 <div class="px-6 py-6 md:px-10">
-	<div class="panel overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
+	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
 		<div bind:this={mapEl} class="h-full w-full"></div>
 		<MapRoleFilter bind:selected={selectedRoles} />
 	</div>

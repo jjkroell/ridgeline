@@ -4,9 +4,12 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import type { Feature, FeatureCollection } from 'geojson';
 	import { api, type Node } from '$lib/api';
-	import { live } from '$lib/live.svelte';
+	import { live, groupLive, type LiveGroup } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
+	import { ago, shortKey, fmtSnr, snrColor } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import PayloadTag from '$lib/components/PayloadTag.svelte';
+	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -14,6 +17,11 @@
 	let nodes: Node[] = [];
 	let located: Node[] = $state([]);
 	let animCount = $state(0);
+
+	// Recent packets overlay (grouped, max 15) with minimize/maximize.
+	let panelOpen = $state(true);
+	let selected = $state<LiveGroup | null>(null);
+	const recent = $derived(groupLive(live.events).slice(0, 15));
 
 	const isLight = () => document.documentElement.classList.contains('theme-light');
 	const inkColor = () =>
@@ -309,14 +317,74 @@
 </PageHeader>
 
 <div class="px-6 py-6 md:px-10">
-	<div class="panel overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
+	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
 		<div bind:this={mapEl} class="h-full w-full"></div>
+
+		<!-- Recent packets overlay (bottom-left) -->
+		<div
+			class="border-line bg-ink-2/85 absolute bottom-3 left-3 z-10 w-[280px] overflow-hidden rounded-[var(--radius)] border shadow-lg backdrop-blur-md"
+		>
+			<button
+				onclick={() => (panelOpen = !panelOpen)}
+				class="border-line/70 hover:bg-panel-2/60 flex w-full items-center gap-2 px-3 py-2 text-left transition-colors {panelOpen
+					? 'border-b'
+					: ''}"
+			>
+				{#if live.connected}<span class="live-dot"></span>{/if}
+				<span class="font-display text-fg text-xs font-700 tracking-wide">RECENT PACKETS</span>
+				<span class="label ml-auto tnum">{recent.length}</span>
+				<svg
+					viewBox="0 0 24 24"
+					class="text-fg-faint h-3.5 w-3.5 transition-transform {panelOpen ? '' : 'rotate-180'}"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg
+				>
+			</button>
+
+			{#if panelOpen}
+				<div class="max-h-[300px] overflow-y-auto">
+					{#if recent.length === 0}
+						<div class="text-fg-faint px-3 py-6 text-center text-xs">Waiting for packets…</div>
+					{:else}
+						<div class="divide-line/40 divide-y">
+							{#each recent as g (g.key)}
+								<button
+									onclick={() => (selected = g)}
+									class="panel-hover flex w-full items-center gap-2 px-3 py-1.5 text-left"
+								>
+									<PayloadTag type={g.payloadType} />
+									<span class="min-w-0 flex-1 truncate text-xs">
+										{#if g.node}
+											<span class="text-fg">{g.node.name || shortKey(g.node.publicKey)}</span>
+										{:else}
+											<span class="font-mono text-fg-faint">{g.messageHash}</span>
+										{/if}
+									</span>
+									{#if g.count > 1}
+										<span class="font-mono text-signal text-[0.6rem] tnum">×{g.count}</span>
+									{/if}
+									<span class="font-mono w-9 text-right text-[0.62rem] tnum" style="color:{snrColor(g.bestSnr)}"
+										>{fmtSnr(g.bestSnr)}</span
+									>
+									<span class="font-mono text-fg-faint w-6 text-right text-[0.62rem] tnum">{ago(g.latest)}</span>
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
+		</div>
 	</div>
 	<p class="label mt-3">
 		Pulses trace each packet along the repeaters that relayed it · color = payload type · gaps
 		are hops whose repeater hasn't advertised a location yet
 	</p>
 </div>
+
+<LiveGroupModal group={selected} onclose={() => (selected = null)} />
 
 <style>
 	:global(.maplibregl-ctrl-group) {

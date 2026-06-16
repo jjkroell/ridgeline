@@ -10,6 +10,13 @@
 			content="Ridgeline — mesh network observability for MeshCore LoRa networks."
 		/>
 		<title>Ridgeline</title>
+		<script>
+			// Apply the saved theme before first paint to avoid a flash.
+			try {
+				if (localStorage.getItem('ridgeline-theme') === 'light')
+					document.documentElement.classList.add('theme-light');
+			} catch (e) {}
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

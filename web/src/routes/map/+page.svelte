@@ -4,6 +4,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { api, type Node } from '$lib/api';
 	import { roleColor } from '$lib/format';
+	import { theme } from '$lib/theme.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	let mapEl: HTMLDivElement;
@@ -11,30 +12,53 @@
 	let markers: maplibregl.Marker[] = [];
 	let located = $state(0);
 
-	const style: maplibregl.StyleSpecification = {
+	// The applied theme is authoritative via the <html> class (set by an
+	// inline script before paint), which is ready earlier than the theme
+	// store. Derive map colors from it so the basemap is correct at creation.
+	const isLight = () => document.documentElement.classList.contains('theme-light');
+
+	const basemap = (light: boolean) =>
+		(['a', 'b', 'c'] as const).map(
+			(s) => `https://${s}.basemaps.cartocdn.com/${light ? 'light_all' : 'dark_all'}/{z}/{x}/{y}.png`
+		);
+
+	const inkColor = () =>
+		getComputedStyle(document.documentElement).getPropertyValue('--color-ink').trim() || '#070a0e';
+
+	const style = (): maplibregl.StyleSpecification => ({
 		version: 8,
 		sources: {
 			carto: {
 				type: 'raster',
-				tiles: [
-					'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-					'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-					'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-				],
+				tiles: basemap(isLight()),
 				tileSize: 256,
 				attribution: '© OpenStreetMap © CARTO'
 			}
 		},
 		layers: [
-			{ id: 'bg', type: 'background', paint: { 'background-color': '#070a0e' } },
-			{ id: 'carto', type: 'raster', source: 'carto', paint: { 'raster-opacity': 0.65 } }
+			{ id: 'bg', type: 'background', paint: { 'background-color': inkColor() } },
+			{ id: 'carto', type: 'raster', source: 'carto', paint: { 'raster-opacity': 0.7 } }
 		]
-	};
+	});
+
+	// Re-apply the current theme's basemap. No-op until the style has loaded
+	// (MapLibre throws if mutated earlier).
+	function applyTheme() {
+		if (!map || !map.isStyleLoaded()) return;
+		(map.getSource('carto') as maplibregl.RasterTileSource | undefined)?.setTiles(basemap(isLight()));
+		map.setPaintProperty('bg', 'background-color', inkColor());
+	}
+
+	// React to live theme toggles (theme.mode change triggers the effect).
+	$effect(() => {
+		void theme.mode;
+		applyTheme();
+	});
 
 	function markerEl(node: Node): HTMLElement {
 		const c = roleColor(node.role);
 		const el = document.createElement('div');
-		el.style.cssText = `width:12px;height:12px;border-radius:999px;background:${c};box-shadow:0 0 0 2px rgba(7,10,14,.9),0 0 12px ${c};cursor:pointer`;
+		el.style.cssText = `width:12px;height:12px;border-radius:999px;background:${c};box-shadow:0 0 0 2px ${inkColor()},0 0 12px ${c};cursor:pointer`;
 		el.title = node.name || node.publicKey;
 		return el;
 	}
@@ -49,7 +73,7 @@
 		markers = withLoc.map((n) => {
 			const popup = new maplibregl.Popup({ offset: 14, closeButton: false }).setHTML(
 				`<div style="font-family:'Space Mono',monospace;font-size:12px">
-					<div style="color:#dde7ed;font-weight:700">${n.name || n.publicKey.slice(0, 10)}</div>
+					<div style="color:var(--color-fg);font-weight:700">${n.name || n.publicKey.slice(0, 10)}</div>
 					<div style="color:${roleColor(n.role)};margin-top:2px">${n.role}</div>
 				</div>`
 			);
@@ -69,7 +93,7 @@
 	onMount(() => {
 		map = new maplibregl.Map({
 			container: mapEl,
-			style,
+			style: style(),
 			center: [-123.65, 49.25],
 			zoom: 9,
 			attributionControl: { compact: true }
@@ -77,6 +101,7 @@
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 		map.on('load', () => {
 			map?.resize();
+			applyTheme();
 			plot();
 		});
 		const t = setInterval(plot, 10000);
@@ -104,21 +129,21 @@
 
 <style>
 	:global(.maplibregl-popup-content) {
-		background: #0e141b;
-		border: 1px solid #2b3b48;
+		background: var(--color-panel);
+		border: 1px solid var(--color-line-bright);
 		border-radius: 2px;
 		padding: 8px 10px;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 	}
 	:global(.maplibregl-popup-tip) {
-		border-top-color: #2b3b48 !important;
-		border-bottom-color: #2b3b48 !important;
+		border-top-color: var(--color-line-bright) !important;
+		border-bottom-color: var(--color-line-bright) !important;
 	}
 	:global(.maplibregl-ctrl-group) {
-		background: #0e141b;
-		border: 1px solid #1c2730;
+		background: var(--color-panel);
+		border: 1px solid var(--color-line);
 	}
 	:global(.maplibregl-ctrl-group button + button) {
-		border-top: 1px solid #1c2730;
+		border-top: 1px solid var(--color-line);
 	}
 </style>

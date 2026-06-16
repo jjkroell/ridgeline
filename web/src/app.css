@@ -36,11 +36,52 @@
 	--font-mono: 'Space Mono', ui-monospace, 'SF Mono', monospace;
 
 	--radius: 2px;
+
+	/* Atmosphere (dark defaults). Overridden by .theme-light below. */
+	--contour-color: rgba(94, 124, 140, 0.17);
+	--glow-a: rgba(52, 227, 196, 0.06);
+	--glow-b: rgba(232, 180, 84, 0.045);
+}
+
+/* ── Light theme: a "topographic paper" inverse — warm off-white ground,
+   ink text, brown contour lines, a deeper teal accent that reads on white. */
+html.theme-light {
+	--color-ink: #eef1ee;
+	--color-ink-2: #e7ece9;
+	--color-panel: #fbfcfa;
+	--color-panel-2: #eef2ef;
+	--color-line: #d4dbd6;
+	--color-line-bright: #b7c2bc;
+
+	--color-fg: #16242a;
+	--color-fg-dim: #4f5f66;
+	--color-fg-faint: #8a979c;
+
+	--color-signal: #0f9e8a;
+	--color-signal-deep: #0c7a6c;
+	--color-amber: #b07d1e;
+	--color-coral: #d94a47;
+	--color-violet: #7c5cf0;
+	--color-sky: #2f6fe0;
+	--color-lime: #1f9e62;
+
+	--color-role-repeater: #d4302f;
+	--color-role-companion: #2563eb;
+	--color-role-room: #16a34a;
+	--color-role-sensor: #b07d1e;
+	--color-role-observer: #7c5cf0;
+
+	--contour-color: rgba(141, 110, 74, 0.28);
+	--glow-a: rgba(15, 158, 138, 0.07);
+	--glow-b: rgba(176, 125, 30, 0.06);
 }
 
 @layer base {
 	html {
 		color-scheme: dark;
+	}
+	html.theme-light {
+		color-scheme: light;
 	}
 	body {
 		background-color: var(--color-ink);
@@ -51,15 +92,16 @@
 		text-rendering: optimizeLegibility;
 	}
 
-	/* Topographic + grid atmosphere, fixed behind everything. */
+	/* Atmosphere, fixed behind everything: corner glows + topographic
+	   contour lines drawn through a mask so they pick up the theme color. */
 	body::before {
 		content: '';
 		position: fixed;
 		inset: 0;
 		z-index: -2;
 		background:
-			radial-gradient(120% 80% at 80% -10%, rgba(52, 227, 196, 0.06), transparent 60%),
-			radial-gradient(100% 70% at 0% 110%, rgba(232, 180, 84, 0.045), transparent 55%),
+			radial-gradient(120% 80% at 80% -10%, var(--glow-a), transparent 60%),
+			radial-gradient(100% 70% at 0% 110%, var(--glow-b), transparent 55%),
 			var(--color-ink);
 	}
 	body::after {
@@ -68,12 +110,9 @@
 		inset: 0;
 		z-index: -1;
 		pointer-events: none;
-		opacity: 0.5;
-		background-image:
-			linear-gradient(rgba(43, 59, 72, 0.18) 1px, transparent 1px),
-			linear-gradient(90deg, rgba(43, 59, 72, 0.18) 1px, transparent 1px);
-		background-size: 48px 48px;
-		mask-image: radial-gradient(120% 100% at 50% 0%, #000 35%, transparent 90%);
+		background-color: var(--contour-color);
+		-webkit-mask: url('/contours.svg') center / cover no-repeat;
+		mask: url('/contours.svg') center / cover no-repeat;
 	}
 
 	::selection {

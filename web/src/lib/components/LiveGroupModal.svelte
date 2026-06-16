@@ -50,6 +50,38 @@
 		return new Date(ts * 1000).toISOString().replace('T', ' ').slice(0, 19) + 'Z';
 	}
 	const rel = (iso: string) => `+${((+new Date(iso) - firstAt) / 1000).toFixed(1)}s`;
+
+	// Split the raw packet hex into its structural sections for colouring.
+	const RAW_COLORS: Record<string, string> = {
+		header: 'var(--color-signal)',
+		transport: 'var(--color-violet)',
+		pathlen: 'var(--color-amber)',
+		path: 'var(--color-sky)',
+		payload: 'var(--color-coral)'
+	};
+	interface RawSeg {
+		label: string;
+		key: string;
+		hex: string;
+	}
+	const segments = $derived.by<RawSeg[]>(() => {
+		const hex = lead?.raw ?? '';
+		if (!hex) return [];
+		const segs: RawSeg[] = [];
+		let i = 0;
+		const take = (bytes: number, label: string, key: string) => {
+			const part = hex.slice(i, i + bytes * 2);
+			i += bytes * 2;
+			if (part) segs.push({ label, key, hex: part });
+		};
+		take(1, 'Header', 'header');
+		if (lead?.transportCodes) take(4, 'Transport', 'transport');
+		take(1, 'Path Len', 'pathlen');
+		const pathBytes = (lead?.pathHops ?? 0) * (lead?.hashSize ?? 1);
+		if (pathBytes) take(pathBytes, `Path (${lead?.pathHops})`, 'path');
+		if (i < hex.length) segs.push({ label: 'Payload', key: 'payload', hex: hex.slice(i) });
+		return segs;
+	});
 </script>
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && group && onclose()} />
@@ -179,19 +211,28 @@
 					{/if}
 				</section>
 
-				<!-- Raw -->
+				<!-- Raw (colour-coded by section) -->
 				{#if lead.raw}
 					<section>
-						<button
-							onclick={() => copy(lead.raw ?? '', 'raw')}
-							class="panel-hover w-full rounded-[var(--radius)] border border-line/50 px-3 py-2 text-left"
-						>
-							<div class="label mb-1 flex justify-between">
-								<span>Raw Packet · {lead.raw.length / 2} bytes</span>
-								<span class={copied === 'raw' ? '!text-signal' : ''}>{copied === 'raw' ? 'copied' : 'copy'}</span>
-							</div>
-							<div class="font-mono text-fg-dim break-all text-[0.68rem] leading-relaxed">{lead.raw}</div>
-						</button>
+						<div class="label mb-2 flex items-center justify-between">
+							<span>Raw Packet · {lead.raw.length / 2} bytes</span>
+							<button onclick={() => copy(lead.raw ?? '', 'raw')} class="hover:text-signal transition-colors {copied === 'raw' ? '!text-signal' : ''}">{copied === 'raw' ? 'copied' : 'copy'}</button>
+						</div>
+						<div class="mb-2 flex flex-wrap gap-x-3 gap-y-1">
+							{#each segments as s (s.key)}
+								<span class="label normal-case flex items-center gap-1.5">
+									<span class="inline-block h-2 w-2 rounded-full" style="background:{RAW_COLORS[s.key]}"></span>
+									{s.label}
+								</span>
+							{/each}
+						</div>
+						<div class="rounded-[var(--radius)] border border-line/50 px-3 py-2.5 font-mono text-[0.7rem] leading-relaxed break-all">
+							{#each segments as s (s.key)}<span
+									style="color:{RAW_COLORS[s.key]}"
+									class="mr-1.5 rounded-[1px]"
+									title={s.label}>{s.hex}</span
+								>{/each}
+						</div>
 					</section>
 				{/if}
 

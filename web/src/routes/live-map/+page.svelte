@@ -106,6 +106,29 @@
 	const animated = new Map<string, number>(); // messageHash -> time, for dedupe
 	const FADE = 700;
 
+	// Propagation buffer: the same transmission is heard by many observers,
+	// each reporting a different (often partial) path. Collect a message hash's
+	// paths for a short window, then fire one pulse along the most complete
+	// resolved path.
+	const BUFFER_MS = 2500;
+	const pending = new Map<string, { paths: string[][]; color: string; fireAt: number }>();
+
+	// Pick the path that resolves to the most located points (ties broken by
+	// confidence) among all observers' reports for one transmission.
+	function bestPath(paths: string[][]): { pts: [number, number][]; uncertain: boolean } | null {
+		let best: { pts: [number, number][]; uncertain: boolean } | null = null;
+		for (const path of paths) {
+			const r = resolvePath(path);
+			if (
+				!best ||
+				r.pts.length > best.pts.length ||
+				(r.pts.length === best.pts.length && best.uncertain && !r.uncertain)
+			)
+				best = r;
+		}
+		return best;
+	}
+
 	function addAnim(pts: [number, number][], color: string, uncertain: boolean) {
 		const seglen = [0];
 		for (let i = 1; i < pts.length; i++) {
@@ -149,6 +172,16 @@
 			return;
 		}
 		const now = performance.now();
+
+		// Fire buffered transmissions whose collection window has elapsed.
+		for (const [hash, p] of pending) {
+			if (now < p.fireAt) continue;
+			pending.delete(hash);
+			animated.set(hash, now);
+			const best = bestPath(p.paths);
+			if (best && best.pts.length >= 2) addAnim(best.pts, p.color, best.uncertain);
+		}
+
 		const lines: Feature[] = [];
 		const dots: Feature[] = [];
 		anims = anims.filter((a) => now - a.born < a.dur + FADE);
@@ -183,18 +216,22 @@
 		requestAnimationFrame(frame);
 	}
 
-	// react to new live events → enqueue animations
+	// react to new live events → collect paths into the propagation buffer
 	$effect(() => {
 		void live.events.length;
+		const now = performance.now();
 		for (const ev of live.events.slice(0, 40)) {
 			if (!ev.path || ev.path.length < 1 || animated.has(ev.messageHash)) continue;
-			const { pts, uncertain } = resolvePath(ev.path);
-			if (pts.length < 2) continue;
-			animated.set(ev.messageHash, performance.now());
-			addAnim(pts, payloadColor(ev.payloadType), uncertain);
+			let p = pending.get(ev.messageHash);
+			if (!p) {
+				p = { paths: [], color: payloadColor(ev.payloadType), fireAt: now + BUFFER_MS };
+				pending.set(ev.messageHash, p);
+			}
+			const key = ev.path.join(',');
+			if (!p.paths.some((x) => x.join(',') === key)) p.paths.push(ev.path);
 		}
 		// prune dedupe map
-		const cutoff = performance.now() - 60000;
+		const cutoff = now - 60000;
 		for (const [k, t] of animated) if (t < cutoff) animated.delete(k);
 	});
 

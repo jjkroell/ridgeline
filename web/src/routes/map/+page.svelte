@@ -75,7 +75,10 @@
 			attributionControl: { compact: true }
 		});
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
-		map.on('load', plot);
+		map.on('load', () => {
+			map?.resize();
+			plot();
+		});
 		const t = setInterval(plot, 10000);
 		return () => {
 			clearInterval(t);
@@ -91,8 +94,11 @@
 </PageHeader>
 
 <div class="px-6 py-6 md:px-10">
-	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
-		<div bind:this={mapEl} class="absolute inset-0"></div>
+	<div class="panel overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
+		<!-- Full-size block child: MapLibre's CSS forces position:relative on
+		     this element, so it must carry its own height rather than rely on
+		     absolute insets. -->
+		<div bind:this={mapEl} class="h-full w-full"></div>
 	</div>
 </div>
 

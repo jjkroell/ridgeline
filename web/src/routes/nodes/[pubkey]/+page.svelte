@@ -9,14 +9,29 @@
 	import PayloadTag from '$lib/components/PayloadTag.svelte';
 
 	const pubkey = $derived(page.params.pubkey ?? '');
-	let node = $state<Node | null>(null);
+	let allNodes = $state<Node[]>([]);
 	let loading = $state(true);
 	let copied = $state(false);
 
+	const node = $derived(allNodes.find((n) => n.publicKey === pubkey) ?? null);
+
+	// A packet path records each relay by a 1-, 2-, or 3-byte prefix of its
+	// public key (the size is chosen per packet). Show this node's prefix at
+	// each length and how many other known nodes share it — i.e. how
+	// identifiable this node is when it appears as a path hop.
+	const prefixes = $derived(
+		[1, 2, 3].map((bytes) => {
+			const hex = pubkey.slice(0, bytes * 2);
+			const shared = allNodes.filter(
+				(n) => n.publicKey !== pubkey && n.publicKey.startsWith(hex)
+			).length;
+			return { bytes, hex, shared };
+		})
+	);
+
 	async function refresh() {
 		try {
-			const nodes = await api.nodes();
-			node = nodes.find((n) => n.publicKey === pubkey) ?? null;
+			allNodes = await api.nodes();
 		} finally {
 			loading = false;
 		}
@@ -70,6 +85,35 @@
 						<span class="font-mono text-fg text-sm tnum">{f.v}</span>
 					</div>
 				{/each}
+
+				<!-- Relay prefix identity -->
+				<div class="panel px-5 py-4">
+					<div class="label mb-3">Relay Prefix</div>
+					<div class="space-y-2">
+						{#each prefixes as p (p.bytes)}
+							<div class="flex items-center justify-between gap-2">
+								<span class="font-mono text-fg-faint w-12 text-[0.7rem]">{p.bytes}-byte</span>
+								<span class="font-mono text-fg flex-1 text-sm tracking-wider">{p.hex}</span>
+								{#if p.shared === 0}
+									<span
+										class="font-mono text-signal bg-signal/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem]"
+										>unique</span
+									>
+								{:else}
+									<span
+										class="font-mono text-amber bg-amber/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem] tnum"
+										title="{p.shared} other known node{p.shared > 1 ? 's' : ''} share this prefix"
+										>+{p.shared} shared</span
+									>
+								{/if}
+							</div>
+						{/each}
+					</div>
+					<p class="text-fg-faint mt-3 text-[0.68rem] leading-snug">
+						How this node appears in packet paths. Shorter hops are more ambiguous; “shared” counts
+						other known nodes with the same prefix.
+					</p>
+				</div>
 			</div>
 
 			<!-- Live sightings for this node -->

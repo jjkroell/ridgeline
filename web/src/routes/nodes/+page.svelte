@@ -4,6 +4,10 @@
 	import { ago, shortKey, fmtCoord, fmtNum } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
+	import Tooltip from '$lib/components/Tooltip.svelte';
+
+	const GPS_WARNING =
+		'GPS coordinates appear corrupt — a statistical outlier versus the rest of the mesh, so this node is hidden from the maps. The node is otherwise valid and still appears in packet paths.';
 
 	let nodes = $state<Node[]>([]);
 	let loading = $state(true);
@@ -103,10 +107,22 @@
 				{#each filtered as n (n.publicKey)}
 					<a
 						href="/nodes/{n.publicKey}"
-						class="panel-hover grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-3 md:grid-cols-[1.4fr_120px_1fr_80px_70px]"
+						class="panel-hover grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-3 md:grid-cols-[1.4fr_120px_1fr_80px_70px] {n.gpsSuspect
+							? 'border-amber/60 bg-amber/[0.07] border-l-2'
+							: ''}"
 					>
 						<div class="min-w-0">
-							<div class="text-fg truncate font-medium">{n.name || shortKey(n.publicKey)}</div>
+							<div class="flex items-center gap-1.5">
+								{#if n.gpsSuspect}
+									<Tooltip text={GPS_WARNING}>
+										<svg viewBox="0 0 24 24" class="text-amber h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+											<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+											<path d="M12 9v4M12 17h.01" />
+										</svg>
+									</Tooltip>
+								{/if}
+								<span class="text-fg truncate font-medium">{n.name || shortKey(n.publicKey)}</span>
+							</div>
 							<div class="font-mono text-fg-faint mt-0.5 text-[0.68rem]">
 								{shortKey(n.publicKey, 10, 4)}
 							</div>

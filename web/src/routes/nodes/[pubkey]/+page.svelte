@@ -53,18 +53,6 @@
 
 <PageHeader eyebrow="Node Detail" title={node?.name || shortKey(pubkey, 8, 4)}>
 	{#if node}<RoleBadge role={node.role} />{/if}
-	{#if node?.gpsSuspect}
-		<span
-			class="text-coral border-coral/40 bg-coral/10 flex items-center gap-1.5 rounded-[var(--radius)] border px-2 py-1 text-xs"
-			title="GPS coordinates appear corrupt — this node's reported location is a statistical outlier versus the rest of the mesh, so it is hidden from the maps. The node is otherwise valid and still appears in packet paths."
-		>
-			<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
-				<path d="M12 9v4M12 17h.01" />
-			</svg>
-			Corrupt GPS
-		</span>
-	{/if}
 	<a href="/nodes" class="label hover:text-signal transition-colors">← All nodes</a>
 </PageHeader>
 

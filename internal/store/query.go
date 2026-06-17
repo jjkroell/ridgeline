@@ -1,5 +1,10 @@
 package store
 
+import (
+	"math"
+	"sort"
+)
+
 // Node is a row from the nodes table, shaped for API responses.
 type Node struct {
 	PublicKey   string   `json:"publicKey"`
@@ -15,6 +20,44 @@ type Node struct {
 	// HashSize is the node's path-hash length in bytes (1, 2, or 3), learned
 	// from its advert. 0 means not yet known.
 	HashSize int `json:"hashSize"`
+	// GpsSuspect marks a located node whose coordinates are a statistical
+	// outlier versus the rest of the mesh — likely corrupt GPS.
+	GpsSuspect bool `json:"gpsSuspect"`
+}
+
+// flagGpsOutliers marks located nodes whose latitude or longitude falls beyond
+// the 3×IQR far-outlier whiskers of the located population.
+func flagGpsOutliers(nodes []Node) {
+	var lats, lons []float64
+	for i := range nodes {
+		if nodes[i].Latitude != nil && nodes[i].Longitude != nil {
+			lats = append(lats, *nodes[i].Latitude)
+			lons = append(lons, *nodes[i].Longitude)
+		}
+	}
+	if len(lats) < 8 {
+		return // too few to judge an outlier
+	}
+	latLo, latHi := iqrWhiskers(lats)
+	lonLo, lonHi := iqrWhiskers(lons)
+	for i := range nodes {
+		if nodes[i].Latitude == nil || nodes[i].Longitude == nil {
+			continue
+		}
+		lat, lon := *nodes[i].Latitude, *nodes[i].Longitude
+		if lat < latLo || lat > latHi || lon < lonLo || lon > lonHi {
+			nodes[i].GpsSuspect = true
+		}
+	}
+}
+
+func iqrWhiskers(v []float64) (lo, hi float64) {
+	s := append([]float64(nil), v...)
+	sort.Float64s(s)
+	q := func(p float64) float64 { return s[int(math.Round(float64(len(s)-1)*p))] }
+	q1, q3 := q(0.25), q(0.75)
+	iqr := q3 - q1
+	return q1 - 3*iqr, q3 + 3*iqr
 }
 
 // Stats is a high-level snapshot of the database.
@@ -51,7 +94,11 @@ func (s *Store) ListNodes() ([]Node, error) {
 		n.HasLocation = hasLoc != 0
 		nodes = append(nodes, n)
 	}
-	return nodes, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	flagGpsOutliers(nodes)
+	return nodes, nil
 }
 
 // Stats returns counts and the most recent packet time.

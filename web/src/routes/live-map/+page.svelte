@@ -288,6 +288,7 @@
 		located = nodes.filter(
 			(n) =>
 				n.hasLocation &&
+				!n.gpsSuspect &&
 				n.latitude != null &&
 				n.longitude != null &&
 				Math.abs(n.latitude) <= 90 &&

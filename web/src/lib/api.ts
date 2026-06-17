@@ -20,6 +20,8 @@ export interface Node {
 	advertCount: number;
 	/** Path-hash length in bytes (1, 2, or 3), from the node's advert; 0 = unknown. */
 	hashSize: number;
+	/** Coordinates are a statistical outlier — likely corrupt GPS. */
+	gpsSuspect?: boolean;
 }
 
 export interface Observer {

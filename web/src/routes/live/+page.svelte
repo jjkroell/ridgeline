@@ -70,21 +70,23 @@
 			case 'GroupData':
 				return ch ? `ch ${ch} data` : 'group data';
 			case 'TextMessage':
-				return 'DM (encrypted)';
+				return raw.length >= 4 ? `DM ${raw.slice(2, 4)}→${raw.slice(0, 2)}` : 'DM (encrypted)';
 			case 'Ack':
 				return raw ? `ack ${raw.slice(0, 8)}` : 'ack';
 			case 'Trace':
 				return `trace #${g.messageHash}`;
 			case 'Path':
-				return 'path update';
+				return raw.length >= 4 ? `path ${raw.slice(2, 4)}→${raw.slice(0, 2)}` : 'path update';
 			case 'Request':
-				return 'request (encrypted)';
+				return raw.length >= 4 ? `req ${raw.slice(2, 4)}→${raw.slice(0, 2)}` : 'request (encrypted)';
 			case 'Response':
-				return 'response (encrypted)';
-			case 'Control':
-				return 'control';
+				return raw.length >= 4 ? `resp ${raw.slice(2, 4)}→${raw.slice(0, 2)}` : 'response (encrypted)';
+			case 'Control': {
+				const sub = raw.length >= 2 ? parseInt(raw.slice(0, 2), 16) & 0xf0 : 0;
+				return sub === 0x90 ? 'discover resp' : sub === 0x80 ? 'discover req' : 'control';
+			}
 			case 'AnonRequest':
-				return 'anon request';
+				return raw.length >= 2 ? `anon →${raw.slice(0, 2)}` : 'anon request';
 			default:
 				return bytes ? `${bytes} B payload` : g.payloadType.toLowerCase();
 		}

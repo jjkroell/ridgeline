@@ -60,6 +60,16 @@ function asciiName(h: string): string {
 	return s;
 }
 
+/** Signed int8 from a 2-hex-char byte. */
+function s8(h: string): number {
+	const v = parseInt(h, 16);
+	return isNaN(v) ? 0 : v >= 128 ? v - 256 : v;
+}
+
+function roleName(role: number): string {
+	return { 1: 'Chat', 2: 'Repeater', 3: 'Room', 4: 'Sensor' }[role] ?? 'Unknown';
+}
+
 function flagsDesc(fb: number, role?: string): string {
 	if (isNaN(fb)) return '';
 	const parts: string[] = [];
@@ -161,6 +171,52 @@ export function buildPacketFields(ev: LiveEvent): { fields: PacketField[]; range
 		add(ps, 1, 'Channel Hash', '0x' + up(byte(ps)), 'channel');
 		add(ps + 1, 2, 'MAC', up(slice(ps + 1, 2)), 'mac');
 		add(ps + 3, totalBytes - (ps + 3), 'Encrypted Data', trunc(up(hex.slice((ps + 3) * 2)), 32), 'encrypted');
+	} else if (
+		// Direct (peer-to-peer) envelope shared by TextMessage, Request, Response,
+		// and the encrypted Path return. Body needs the peers' shared secret.
+		(ev.payloadType === 'TextMessage' ||
+			ev.payloadType === 'Request' ||
+			ev.payloadType === 'Response' ||
+			ev.payloadType === 'Path') &&
+		totalBytes - ps >= 4
+	) {
+		add(ps, 1, 'Dest Hash', '0x' + up(byte(ps)), 'hash', 'first byte of destination key');
+		add(ps + 1, 1, 'Source Hash', '0x' + up(byte(ps + 1)), 'hash', 'first byte of source key');
+		add(ps + 2, 2, 'MAC', up(slice(ps + 2, 2)), 'mac');
+		add(ps + 4, totalBytes - (ps + 4), 'Encrypted Data', trunc(up(hex.slice((ps + 4) * 2)), 32), 'encrypted');
+	} else if (ev.payloadType === 'AnonRequest' && totalBytes - ps >= 35) {
+		add(ps, 1, 'Dest Hash', '0x' + up(byte(ps)), 'hash', 'first byte of destination key');
+		add(ps + 1, 32, 'Sender Key', trunc(up(slice(ps + 1, 32)), 24), 'pubkey', 'sender public key (clear)');
+		add(ps + 33, 2, 'MAC', up(slice(ps + 33, 2)), 'mac');
+		add(ps + 35, totalBytes - (ps + 35), 'Encrypted Data', trunc(up(hex.slice((ps + 35) * 2)), 32), 'encrypted');
+	} else if (ev.payloadType === 'Ack' && totalBytes - ps >= 4) {
+		add(ps, 4, 'Checksum', up(slice(ps, 4)), 'checksum', 'CRC of the acked message');
+	} else if (ev.payloadType === 'Trace' && totalBytes - ps >= 9) {
+		add(ps, 4, 'Trace Tag', up(slice(ps, 4)), 'tag');
+		add(ps + 4, 4, 'Auth Code', up(slice(ps + 4, 4)), 'timestamp', String(le32(slice(ps + 4, 4))));
+		const fb = parseInt(byte(ps + 8), 16);
+		const ths = isNaN(fb) ? 1 : 1 << (fb & 0x03);
+		add(ps + 8, 1, 'Flags', '0x' + up(byte(ps + 8)), 'flags', `hash_size=${ths}B`);
+		let to = ps + 9;
+		for (let i = 1; to + ths <= totalBytes; i++, to += ths) {
+			add(to, ths, `Trace Hop ${i}`, up(slice(to, ths)), 'path');
+		}
+	} else if (ev.payloadType === 'Control' && totalBytes - ps >= 1) {
+		const fb = parseInt(byte(ps), 16);
+		const sub = fb & 0xf0;
+		if (sub === 0x90 && totalBytes - ps >= 14) {
+			add(ps, 1, 'Flags', '0x' + up(byte(ps)), 'flags', `DiscoverResp · role ${roleName(fb & 0x0f)}`);
+			add(ps + 1, 1, 'SNR', s8(byte(ps + 1)) / 4 + ' dB', 'snr');
+			add(ps + 2, 4, 'Tag', up(slice(ps + 2, 4)), 'tag');
+			add(ps + 6, totalBytes - (ps + 6), 'Node Key', trunc(up(hex.slice((ps + 6) * 2)), 24), 'pubkey');
+		} else if (sub === 0x80 && totalBytes - ps >= 6) {
+			add(ps, 1, 'Flags', '0x' + up(byte(ps)), 'flags', `DiscoverReq${fb & 0x01 ? ' · prefix-only' : ''}`);
+			add(ps + 1, 1, 'Type Filter', '0x' + up(byte(ps + 1)), 'flags');
+			add(ps + 2, 4, 'Tag', up(slice(ps + 2, 4)), 'tag');
+			if (totalBytes - ps >= 10) add(ps + 6, 4, 'Since', up(slice(ps + 6, 4)), 'timestamp', advTime(slice(ps + 6, 4)));
+		} else {
+			add(ps, totalBytes - ps, 'Payload', trunc(up(hex.slice(ps * 2)), 32), 'payload');
+		}
 	} else {
 		add(ps, totalBytes - ps, 'Payload', trunc(up(hex.slice(ps * 2)), 32), 'payload');
 	}

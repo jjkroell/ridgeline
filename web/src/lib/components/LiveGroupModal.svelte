@@ -105,6 +105,8 @@
 	const summary = $derived(repeat ? eventSummary(repeat) : '');
 
 	function eventSummary(ev: LiveEvent): string {
+		const raw = ev.payloadRaw ?? '';
+		const route = raw.length >= 4 ? `${raw.slice(2, 4)}→${raw.slice(0, 2)}` : '';
 		switch (ev.payloadType) {
 			case 'Advert':
 				return ev.node?.name || 'advert';
@@ -113,21 +115,23 @@
 					? (repeatMsg.sender ? `${repeatMsg.sender}: ` : '') + repeatMsg.text
 					: `Ch ${ev.channelHash ?? '?'} (encrypted)`;
 			case 'TextMessage':
-				return 'direct message (encrypted)';
+				return route ? `direct message ${route} (encrypted)` : 'direct message (encrypted)';
 			case 'Ack':
 				return 'acknowledgement';
 			case 'Trace':
 				return `trace #${ev.messageHash}`;
 			case 'Path':
-				return 'path update';
+				return route ? `return path ${route} (encrypted)` : 'path update';
 			case 'Request':
-				return 'request (encrypted)';
+				return route ? `request ${route} (encrypted)` : 'request (encrypted)';
 			case 'Response':
-				return 'response (encrypted)';
-			case 'Control':
-				return 'control';
+				return route ? `response ${route} (encrypted)` : 'response (encrypted)';
+			case 'Control': {
+				const sub = raw.length >= 2 ? parseInt(raw.slice(0, 2), 16) & 0xf0 : 0;
+				return sub === 0x90 ? 'node discover response' : sub === 0x80 ? 'node discover request' : 'control';
+			}
 			case 'AnonRequest':
-				return 'anonymous request';
+				return raw.length >= 2 ? `anonymous request →${raw.slice(0, 2)}` : 'anonymous request';
 			default:
 				return ev.payloadType.toLowerCase();
 		}
@@ -148,13 +152,18 @@
 		channel: 'var(--color-signal)',
 		mac: 'var(--color-amber)',
 		encrypted: 'var(--color-coral)',
-		payload: 'var(--color-coral)'
+		payload: 'var(--color-coral)',
+		hash: 'var(--color-sky)',
+		checksum: 'var(--color-violet)',
+		tag: 'var(--color-signal)',
+		snr: 'var(--color-amber)'
 	};
 	const KEY_LABEL: Record<string, string> = {
 		header: 'Header', transport: 'Transport', pathlen: 'Path Length', path: 'Path',
 		pubkey: 'Public Key', timestamp: 'Timestamp', signature: 'Signature', flags: 'Flags',
 		location: 'Location', name: 'Name', channel: 'Channel', mac: 'MAC',
-		encrypted: 'Encrypted', payload: 'Payload'
+		encrypted: 'Encrypted', payload: 'Payload', hash: 'Node Hash', checksum: 'Checksum',
+		tag: 'Tag', snr: 'SNR'
 	};
 	const fieldColor = (k: string) => FIELD_COLORS[k] ?? 'var(--color-fg-faint)';
 

@@ -86,6 +86,9 @@ func Decode(b []byte) (*Packet, error) {
 	if p.PayloadType == PayloadAdvert {
 		p.Advert = decodeAdvert(payload)
 	}
+	if p.PayloadType == PayloadGroupText {
+		p.GroupText = decodeGroupText(payload)
+	}
 
 	p.Valid = true
 	return p, nil

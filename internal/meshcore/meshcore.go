@@ -149,9 +149,27 @@ type Packet struct {
 	// Advert is populated when PayloadType == PayloadAdvert.
 	Advert *Advert
 
+	// GroupText is populated when PayloadType == PayloadGroupText.
+	GroupText *GroupText
+
 	TotalBytes int
 	Valid      bool
 	Errors     []string
+}
+
+// GroupText is the decoded body of a GroupText (0x05) channel message. The
+// ciphertext is decrypted when its channel hash matches a known channel key
+// (currently the public channel); otherwise only the channel hash is known.
+type GroupText struct {
+	ChannelHash string // 1-byte channel identifier, uppercase hex
+	MAC         string // 2-byte cipher MAC, uppercase hex
+
+	// Set when decryption succeeds.
+	Decrypted bool
+	Channel   string // matched channel name, e.g. "Public"
+	Sender    string // sender name parsed from the message, if present
+	Message   string // decrypted message text
+	Timestamp uint32 // message timestamp, unix seconds
 }
 
 // Advert is the decoded body of an Advert (0x04) payload: a node announcing

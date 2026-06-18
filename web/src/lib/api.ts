@@ -121,6 +121,21 @@ export interface NodeDetailResponse {
 	generatedAt?: string;
 }
 
+// One stored observation attributable to a node (GET /api/nodes/{pubkey}/history).
+export interface NodeHistoryEntry {
+	messageHash: string;
+	payloadType: string;
+	routeType: string;
+	kind: 'advert' | 'relay';
+	receivedAt: string;
+	observerId?: string;
+	region?: string;
+	snr?: number;
+	rssi?: number;
+	pathHops: number;
+	hopIndex: number;
+}
+
 async function get<T>(path: string): Promise<T> {
 	const res = await fetch(path, { headers: { accept: 'application/json' } });
 	if (!res.ok) throw new Error(`${path}: ${res.status}`);
@@ -132,6 +147,9 @@ export const api = {
 	nodes: () => get<Node[]>('/api/nodes'),
 	/** One node's row plus its computed analytics snapshot. */
 	nodeDetail: (pubkey: string) => get<NodeDetailResponse>(`/api/nodes/${encodeURIComponent(pubkey)}`),
+	/** A node's stored observations (own adverts + relayed packets) over the last sinceSec seconds, newest first. */
+	nodeHistory: (pubkey: string, sinceSec = 86400, limit = 300) =>
+		get<NodeHistoryEntry[]>(`/api/nodes/${encodeURIComponent(pubkey)}/history?since=${sinceSec}&limit=${limit}`),
 	observers: () => get<Observer[]>('/api/observers'),
 	observations: (limit = 100) => get<Observation[]>(`/api/observations?limit=${limit}`),
 	/** Recent history (default last hour) in the live-event shape, newest first. */

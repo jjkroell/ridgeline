@@ -53,6 +53,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/stats", s.stats)
 	mux.HandleFunc("GET /api/nodes", s.nodes)
 	mux.HandleFunc("GET /api/nodes/{pubkey}", s.nodeDetail)
+	mux.HandleFunc("GET /api/nodes/{pubkey}/history", s.nodeHistory)
 	mux.HandleFunc("GET /api/observers", s.observers)
 	mux.HandleFunc("GET /api/observations", s.observations)
 	mux.HandleFunc("GET /api/recent", s.recent)
@@ -214,6 +215,41 @@ func (s *Server) nodeDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, resp)
+}
+
+// nodeHistory returns a node's stored observations over an arbitrary time range
+// (its own adverts + packets it relayed), newest first. Unlike nodeDetail's
+// fixed-window analytics snapshot, this queries the database on demand.
+func (s *Server) nodeHistory(w http.ResponseWriter, r *http.Request) {
+	pubkey := strings.ToUpper(r.PathValue("pubkey"))
+	sinceSec := 86400 // 24h
+	if v := r.URL.Query().Get("since"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			sinceSec = n
+		}
+	}
+	if sinceSec > 7*86400 {
+		sinceSec = 7 * 86400
+	}
+	limit := 200
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
+
+	nodes, err := s.store.ListNodes()
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	entries, err := analytics.NodeHistory(s.store, nodes, pubkey, cutoff, 0, limit)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, entries)
 }
 
 func (s *Server) observers(w http.ResponseWriter, _ *http.Request) {

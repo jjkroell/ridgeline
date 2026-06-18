@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import maplibregl from 'maplibre-gl';
 	import QRCode from 'qrcode';
-	import { api, type Node, type NodeAnalytics } from '$lib/api';
+	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry } from '$lib/api';
 	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel } from '$lib/format';
 	import PayloadTag from './PayloadTag.svelte';
 	import RoleBadge from './RoleBadge.svelte';
@@ -21,6 +21,32 @@
 	let nodesList = $state<Node[]>(nodesProp ?? []);
 	let loaded = $state(false);
 
+	// On-demand stored history (own adverts + relayed packets) over a chosen range.
+	const ranges = [
+		{ label: '6h', sec: 21600 },
+		{ label: '24h', sec: 86400 },
+		{ label: '3d', sec: 259200 }
+	];
+	let history = $state<NodeHistoryEntry[]>([]);
+	let histRange = $state(86400);
+	let histLoading = $state(false);
+
+	async function loadHistory() {
+		histLoading = true;
+		try {
+			history = await api.nodeHistory(pubkey, histRange, 300);
+		} catch {
+			history = [];
+		} finally {
+			histLoading = false;
+		}
+	}
+	function setRange(sec: number) {
+		if (sec === histRange) return;
+		histRange = sec;
+		loadHistory();
+	}
+
 	async function refresh() {
 		try {
 			const [resp, list] = await Promise.all([
@@ -36,6 +62,7 @@
 	}
 	onMount(() => {
 		refresh();
+		loadHistory();
 		const t = setInterval(refresh, 15000);
 		return () => clearInterval(t);
 	});
@@ -280,6 +307,43 @@
 								<span class="font-mono w-14 text-right text-xs tnum" style="color:{snrColor(p.snr)}">{fmtSnr(p.snr)} dB</span>
 							</div>
 						{/each}
+					</div>
+				{/if}
+			</section>
+
+			<!-- Activity history (stored observations, on demand) -->
+			<section class="panel">
+				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
+					<h3 class="font-display text-fg text-sm font-700 tracking-wide">ACTIVITY HISTORY</h3>
+					<div class="ml-auto flex items-center gap-1">
+						{#each ranges as r (r.sec)}
+							<button
+								onclick={() => setRange(r.sec)}
+								class="label rounded-[var(--radius)] border px-2 py-0.5 transition-colors {histRange === r.sec ? 'border-signal text-signal' : 'border-line text-fg-faint hover:text-fg'}"
+								>{r.label}</button
+							>
+						{/each}
+					</div>
+				</div>
+				{#if histLoading && history.length === 0}
+					<div class="text-fg-faint px-5 py-8 text-center text-sm">Loading…</div>
+				{:else if history.length === 0}
+					<div class="text-fg-faint px-5 py-8 text-center text-sm">No observations in this range.</div>
+				{:else}
+					<div class="divide-line/40 max-h-96 divide-y overflow-y-auto">
+						{#each history as h (h.messageHash + h.receivedAt + h.kind + h.hopIndex)}
+							<div class="flex items-center gap-3 px-5 py-2 text-sm">
+								<span class="font-mono text-fg-faint w-10 shrink-0 text-xs tnum" title={fmtAbs(h.receivedAt)}>{ago(h.receivedAt)}</span>
+								<span class="label shrink-0 rounded px-1.5 py-0.5 text-[0.56rem] {h.kind === 'advert' ? 'text-signal bg-signal/10' : 'text-sky bg-sky/10'}">{h.kind === 'advert' ? 'SENT' : 'RELAY'}</span>
+								<PayloadTag type={h.payloadType} />
+								<span class="font-mono text-fg-faint min-w-0 flex-1 truncate text-xs">via {h.observerId ?? '—'}</span>
+								{#if h.kind === 'relay'}<span class="font-mono text-fg-faint shrink-0 text-xs tnum" title="this node's position in the packet's path">hop {h.hopIndex + 1}/{h.pathHops}</span>{/if}
+								<span class="font-mono w-14 shrink-0 text-right text-xs tnum" style="color:{snrColor(h.snr)}">{fmtSnr(h.snr)} dB</span>
+							</div>
+						{/each}
+					</div>
+					<div class="text-fg-faint border-line/50 border-t px-5 py-2 text-center text-[0.62rem]">
+						{history.length} observation{history.length === 1 ? '' : 's'} · adverts sent + packets relayed{history.length >= 300 ? ' (capped)' : ''}
 					</div>
 				{/if}
 			</section>

@@ -201,3 +201,71 @@ func (s *Store) RecentObservations(limit int) ([]RecentObservation, error) {
 	}
 	return out, rows.Err()
 }
+
+// RawObservation carries the stored raw packet hex plus reception envelope,
+// for callers that re-decode history into the full live-event shape.
+type RawObservation struct {
+	RawHex     string
+	ObserverID string
+	Region     string
+	SNR        *float64
+	RSSI       *float64
+	ReceivedAt string // stored RFC3339Nano UTC string
+}
+
+// RawWindow returns raw observations received at or after sinceISO, newest
+// first, capped at max. Like RecentRaw but allows a larger cap for analytics
+// passes (which decode the whole window).
+func (s *Store) RawWindow(sinceISO string, max int) ([]RawObservation, error) {
+	if max <= 0 || max > 500000 {
+		max = 200000
+	}
+	rows, err := s.db.Query(`
+		SELECT raw_hex, COALESCE(observer_id,''), COALESCE(region,''), snr, rssi, received_at
+		FROM observations
+		WHERE received_at >= ?
+		ORDER BY id DESC
+		LIMIT ?`, sinceISO, max)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []RawObservation{}
+	for rows.Next() {
+		var o RawObservation
+		if err := rows.Scan(&o.RawHex, &o.ObserverID, &o.Region, &o.SNR, &o.RSSI, &o.ReceivedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// RecentRaw returns raw observations received at or after sinceISO (an
+// RFC3339Nano UTC string), newest first, capped at limit.
+func (s *Store) RecentRaw(sinceISO string, limit int) ([]RawObservation, error) {
+	if limit <= 0 || limit > 5000 {
+		limit = 2000
+	}
+	rows, err := s.db.Query(`
+		SELECT raw_hex, COALESCE(observer_id,''), COALESCE(region,''), snr, rssi, received_at
+		FROM observations
+		WHERE received_at >= ?
+		ORDER BY id DESC
+		LIMIT ?`, sinceISO, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []RawObservation{}
+	for rows.Next() {
+		var o RawObservation
+		if err := rows.Scan(&o.RawHex, &o.ObserverID, &o.Region, &o.SNR, &o.RSSI, &o.ReceivedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}

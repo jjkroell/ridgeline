@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jjkroell/ridgeline/internal/analytics"
 	"github.com/jjkroell/ridgeline/internal/api"
 	"github.com/jjkroell/ridgeline/internal/config"
 	"github.com/jjkroell/ridgeline/internal/ingest"
@@ -57,6 +58,10 @@ func run(log *slog.Logger, configPath string) error {
 
 	apiServer := api.New(st, log, version, cfg.WebDir)
 
+	// Per-node analytics snapshot, recomputed periodically over a rolling window.
+	engine := analytics.New(6)
+	apiServer.SetAnalytics(engine)
+
 	in := ingest.New(cfg.MQTT, st, log)
 	in.OnObservation = apiServer.Broadcast
 	if err := in.Start(); err != nil {
@@ -77,10 +82,39 @@ func run(log *slog.Logger, configPath string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	go runAnalytics(ctx, engine, st, log)
+
 	<-ctx.Done()
 
 	log.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// runAnalytics recomputes the per-node analytics snapshot immediately, then
+// every 90s, until ctx is cancelled.
+func runAnalytics(ctx context.Context, engine *analytics.Engine, st *store.Store, log *slog.Logger) {
+	recompute := func() {
+		nodes, err := st.ListNodes()
+		if err != nil {
+			log.Warn("analytics: list nodes", "err", err)
+			return
+		}
+		if err := engine.Recompute(st, nodes); err != nil {
+			log.Warn("analytics: recompute", "err", err)
+		}
+	}
+	recompute()
+	t := time.NewTicker(90 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			recompute()
+		}
+	}
 }

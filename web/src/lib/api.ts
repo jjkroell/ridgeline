@@ -114,6 +114,10 @@ export interface NodeAnalytics {
 	relay: NodeRelay;
 	trafficShare: number;
 	bridge: number;
+	/** Median seconds between the node's advert transmissions (heartbeat cadence). */
+	advertIntervalSec?: number;
+	/** Per-hour advert counts over the window, oldest bucket first. */
+	activity: number[];
 }
 export interface NodeDetailResponse {
 	node: Node | null;

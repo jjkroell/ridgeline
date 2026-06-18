@@ -67,6 +67,12 @@ type NodeDetail struct {
 	Relay             RelayStat      `json:"relay"`
 	TrafficShare      float64        `json:"trafficShare"`
 	Bridge            float64        `json:"bridge"`
+	// AdvertIntervalSec is the median seconds between the node's advert
+	// transmissions in the window — its heartbeat cadence. Nil with <2 adverts.
+	AdvertIntervalSec *float64 `json:"advertIntervalSec,omitempty"`
+	// Activity is per-hour advert-transmission counts over the window, oldest
+	// bucket first, newest last (length == WindowHours).
+	Activity []int `json:"activity"`
 }
 
 // Engine holds the latest analytics snapshot.
@@ -291,10 +297,12 @@ func build(raws []store.RawObservation, nodes []store.Node, windowHours int) map
 	for pk, a := range accs {
 		d := ensure(pk)
 		d.TotalObservations = a.obsCount
-		cnt, todayCnt, recent := summarizeAdverts(a.advs, today)
+		cnt, todayCnt, recent, txTimes := summarizeAdverts(a.advs, today)
 		d.TotalPackets = cnt
 		d.PacketsToday = todayCnt
 		d.RecentPackets = recent
+		d.AdvertIntervalSec = medianInterval(txTimes)
+		d.Activity = activityBuckets(txTimes, now, windowHours)
 		d.FirstHeard = a.first
 		d.LastHeard = a.last
 		if a.snrN > 0 {
@@ -359,12 +367,13 @@ func build(raws []store.RawObservation, nodes []store.Node, windowHours int) map
 // summarizeAdverts groups a node's advert observations into transmissions.
 // Because re-floods share a messageHash, observations of one hash are split
 // into separate transmissions wherever they're more than 30s apart. Returns the
-// transmission count, how many were today, and up to 20 newest as PacketRefs
-// (best-SNR observation per transmission).
-func summarizeAdverts(advs []advObs, today string) (count, todayCount int, recent []PacketRef) {
+// transmission count, how many were today, up to 20 newest as PacketRefs
+// (best-SNR observation per transmission), and the transmission times (newest
+// first) for cadence/activity analysis.
+func summarizeAdverts(advs []advObs, today string) (count, todayCount int, recent []PacketRef, txTimes []time.Time) {
 	recent = []PacketRef{}
 	if len(advs) == 0 {
-		return 0, 0, recent
+		return 0, 0, recent, nil
 	}
 	byHash := map[string][]advObs{}
 	for _, o := range advs {
@@ -407,6 +416,9 @@ func summarizeAdverts(advs []advObs, today string) (count, todayCount int, recen
 		if len(x.rep.receivedAt) >= 10 && x.rep.receivedAt[:10] == today {
 			todayCount++
 		}
+		if !x.t.IsZero() {
+			txTimes = append(txTimes, x.t)
+		}
 		if len(recent) < 20 {
 			recent = append(recent, PacketRef{
 				MessageHash: x.rep.hash,
@@ -419,7 +431,46 @@ func summarizeAdverts(advs []advObs, today string) (count, todayCount int, recen
 			})
 		}
 	}
-	return count, todayCount, recent
+	return count, todayCount, recent, txTimes
+}
+
+// medianInterval returns the median gap, in seconds, between consecutive
+// transmission times (a node's advert cadence). Nil with fewer than two times.
+func medianInterval(times []time.Time) *float64 {
+	if len(times) < 2 {
+		return nil
+	}
+	ts := append([]time.Time(nil), times...)
+	sort.Slice(ts, func(i, j int) bool { return ts[i].Before(ts[j]) })
+	diffs := make([]float64, 0, len(ts)-1)
+	for i := 1; i < len(ts); i++ {
+		diffs = append(diffs, ts[i].Sub(ts[i-1]).Seconds())
+	}
+	sort.Float64s(diffs)
+	var med float64
+	if n := len(diffs); n%2 == 1 {
+		med = diffs[n/2]
+	} else {
+		med = (diffs[n/2-1] + diffs[n/2]) / 2
+	}
+	return &med
+}
+
+// activityBuckets bins transmission times into windowHours one-hour buckets,
+// oldest first and most-recent last, so the UI can draw a recency sparkline.
+func activityBuckets(times []time.Time, now time.Time, windowHours int) []int {
+	buckets := make([]int, windowHours)
+	for _, t := range times {
+		if t.IsZero() {
+			continue
+		}
+		fromEnd := int(now.Sub(t).Hours()) // 0 = current hour
+		idx := windowHours - 1 - fromEnd
+		if idx >= 0 && idx < windowHours {
+			buckets[idx]++
+		}
+	}
+	return buckets
 }
 
 func parseTime(s string) time.Time {

@@ -104,6 +104,15 @@
 		return { label: 'No bridge role', color: 'var(--color-fg-faint)' };
 	}
 	const fmtAbs = (iso?: string) => (iso ? new Date(iso).toLocaleString() : '—');
+
+	// Advert cadence (heartbeat) → friendly "every ~N" string.
+	function cadence(sec?: number): string {
+		if (sec == null) return '—';
+		if (sec < 90) return `every ~${Math.round(sec)}s`;
+		if (sec < 5400) return `every ~${Math.round(sec / 60)}m`;
+		return `every ~${(sec / 3600).toFixed(1)}h`;
+	}
+	const activityMax = $derived(Math.max(1, ...(detail?.activity ?? [1])));
 	const tl = $derived(trafficLabel(detail?.trafficShare ?? 0));
 	const bl = $derived(bridgeLabel(detail?.bridge ?? 0));
 
@@ -197,13 +206,35 @@
 
 			<!-- Overview -->
 			<div class="panel divide-line/40 divide-y">
-				{#each [{ k: 'Status', v: status.label, c: status.color }, { k: 'Last heard', v: ago(node.lastSeen) + ' ago' }, { k: 'First seen', v: ago(node.firstSeen) + ' ago' }, { k: 'Packets (6h)', v: detail ? `${detail.totalPackets}` + (detail.totalObservations !== detail.totalPackets ? ` (seen ${detail.totalObservations}×)` : '') : '—' }, { k: 'Packets today', v: detail ? String(detail.packetsToday) : '—' }, { k: 'Adverts (all-time)', v: String(node.advertCount) }, { k: 'Avg SNR', v: detail?.avgSnr != null ? detail.avgSnr.toFixed(1) + ' dB' : '—' }, { k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' }, { k: 'Location', v: fmtCoord(node.latitude, node.longitude) }] as f (f.k)}
+				{#each [{ k: 'Status', v: status.label, c: status.color }, { k: 'Last heard', v: ago(node.lastSeen) + ' ago' }, { k: 'First seen', v: ago(node.firstSeen) + ' ago' }, { k: 'Packets (6h)', v: detail ? `${detail.totalPackets}` + (detail.totalObservations !== detail.totalPackets ? ` (seen ${detail.totalObservations}×)` : '') : '—' }, { k: 'Packets today', v: detail ? String(detail.packetsToday) : '—' }, { k: 'Adverts (all-time)', v: String(node.advertCount) }, { k: 'Advert cadence', v: cadence(detail?.advertIntervalSec) }, { k: 'Avg SNR', v: detail?.avgSnr != null ? detail.avgSnr.toFixed(1) + ' dB' : '—' }, { k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' }, { k: 'Location', v: fmtCoord(node.latitude, node.longitude) }] as f (f.k)}
 					<div class="flex items-center justify-between px-5 py-2.5">
 						<span class="label normal-case">{f.k}</span>
 						<span class="font-mono text-sm tnum" style="color:{f.c ?? 'var(--color-fg)'}">{f.v}</span>
 					</div>
 				{/each}
 			</div>
+
+			<!-- Advert activity sparkline (per-hour over the window) -->
+			{#if detail && detail.activity.length}
+				<div class="panel px-5 py-4">
+					<div class="label mb-3 flex items-center justify-between">
+						<span>Advert Activity</span>
+						<span class="font-mono text-fg-faint normal-case">last {detail.windowHours}h</span>
+					</div>
+					<div class="flex h-12 items-end gap-1">
+						{#each detail.activity as count, i (i)}
+							<div
+								class="bg-signal/80 hover:bg-signal min-w-0 flex-1 rounded-sm transition-all"
+								style="height:{count === 0 ? 2 : Math.max(8, (count / activityMax) * 100)}%;{count === 0 ? 'opacity:0.25' : ''}"
+								title="{count} advert{count === 1 ? '' : 's'} · {detail.windowHours - 1 - i === 0 ? 'this hour' : `${detail.windowHours - 1 - i}h ago`}"
+							></div>
+						{/each}
+					</div>
+					<div class="text-fg-faint mt-1.5 flex justify-between text-[0.58rem]">
+						<span>-{detail.windowHours}h</span><span>now</span>
+					</div>
+				</div>
+			{/if}
 
 			<!-- Hash ID -->
 			<div class="panel px-5 py-4">

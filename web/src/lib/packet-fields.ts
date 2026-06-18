@@ -79,6 +79,49 @@ function flagsDesc(fb: number, role?: string): string {
 	return parts.join(' · ');
 }
 
+export interface TraceInfo {
+	tag: string; // 4-byte trace tag, uppercase hex
+	authCode: number;
+	hashSize: number; // bytes per route-hash entry (1, 2, 4, or 8)
+	routeHashes: string[]; // node hashes along the traced route, uppercase hex
+	hopSnr: number[]; // per-hop SNR in dB, from the header path (signed int8 / 4)
+}
+
+/**
+ * Parse a Trace (0x09) packet into its traced route and per-hop SNR. The two are
+ * distinct, independently-sized things: routeHashes are the node hashes recorded
+ * in the trace payload (resolve via public-key prefix), while hopSnr comes from
+ * the header path — for a trace, each header-path byte is a signed int8 of SNR×4,
+ * the signal quality at each flood hop as this observer received it. Returns null
+ * for non-trace or malformed packets.
+ */
+export function parseTrace(ev: LiveEvent): TraceInfo | null {
+	if (ev.payloadType !== 'Trace') return null;
+	const hex = (ev.raw ?? '').replace(/\s+/g, '');
+	const totalBytes = Math.floor(hex.length / 2);
+	const slice = (b: number, n: number) => hex.slice(b * 2, (b + n) * 2);
+
+	let off = 1; // header byte
+	if (ev.transportCodes) off += 4;
+	if (off >= totalBytes) return null;
+	const pb = parseInt(slice(off, 1), 16);
+	const hHashSize = isNaN(pb) ? 1 : (pb >> 6) + 1;
+	const hHops = isNaN(pb) ? 0 : pb & 0x3f;
+	off += 1 + hHashSize * hHops; // skip the header path
+
+	const ps = off;
+	if (totalBytes - ps < 9) return null;
+	const flags = parseInt(slice(ps + 8, 1), 16);
+	const ths = isNaN(flags) ? 1 : 1 << (flags & 0x03);
+	const routeHashes: string[] = [];
+	for (let to = ps + 9; to + ths <= totalBytes; to += ths) routeHashes.push(up(slice(to, ths)));
+
+	// Header-path SNR is only meaningful when its entries are single bytes.
+	const hopSnr = hHashSize === 1 ? (ev.path ?? []).map((h) => s8(h.slice(0, 2)) / 4) : [];
+
+	return { tag: up(slice(ps, 4)), authCode: le32(slice(ps + 4, 4)), hashSize: ths, routeHashes, hopSnr };
+}
+
 /**
  * Break a packet's raw hex into labelled fields plus the byte ranges used to
  * colour the hex dump. Transport routes (detected via the presence of transport

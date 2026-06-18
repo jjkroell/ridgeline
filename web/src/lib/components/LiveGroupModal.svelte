@@ -3,7 +3,7 @@
 	import { channels } from '$lib/channels.svelte';
 	import { api, type Node, type LiveEvent } from '$lib/api';
 	import { ago, shortKey, fmtSnr, snrColor, roleColor, roleLabel, fmtCoord } from '$lib/format';
-	import { buildPacketFields, type ByteRange } from '$lib/packet-fields';
+	import { buildPacketFields, parseTrace, type ByteRange } from '$lib/packet-fields';
 	import PayloadTag from './PayloadTag.svelte';
 
 	interface Props {
@@ -351,8 +351,54 @@
 						</div>
 					</section>
 
-					<!-- Path (as this observer saw it) -->
-					{#if (ev.path ?? []).length > 0}
+					<!-- Trace: traced route (resolved nodes) + per-hop SNR -->
+					{#if ev.payloadType === 'Trace'}
+						{@const tr = parseTrace(ev)}
+						{#if tr}
+							<section>
+								<div class="label mb-2">Traced Route · {tr.routeHashes.length} {tr.routeHashes.length === 1 ? 'node' : 'nodes'}</div>
+								{#if tr.routeHashes.length}
+									<div class="flex flex-wrap items-center gap-1.5">
+										{#each tr.routeHashes as hop, i (i)}
+											{#if i > 0}<span class="text-fg-faint">→</span>{/if}
+											{@const n = resolveHop(hop)}
+											{#if n}
+												<a
+													href="/nodes/{n.publicKey}"
+													onclick={onclose}
+													class="border-line bg-panel-2/60 hover:border-signal/50 rounded-[var(--radius)] border px-2 py-1 text-xs"
+													style="color:{roleColor(n.role)}">{n.name || shortKey(n.publicKey)}</a
+												>
+											{:else}
+												<span
+													class="border-line/60 font-mono text-fg-faint rounded-[var(--radius)] border border-dashed px-2 py-1 text-xs"
+													title="no located node with this key prefix">{hop}</span
+												>
+											{/if}
+										{/each}
+									</div>
+								{:else}
+									<div class="text-fg-faint text-sm">No route hashes in payload.</div>
+								{/if}
+								{#if tr.hopSnr.length}
+									<div class="label mt-3 mb-2">Hop SNR · signal at each flood hop</div>
+									<div class="flex flex-wrap items-center gap-1.5">
+										{#each tr.hopSnr as snr, i (i)}
+											{#if i > 0}<span class="text-fg-faint">→</span>{/if}
+											<span
+												class="border-line/60 font-mono tnum rounded-[var(--radius)] border px-2 py-1 text-xs"
+												style="color:{snrColor(snr)}">{snr.toFixed(1)} dB</span
+											>
+										{/each}
+									</div>
+								{/if}
+							</section>
+						{/if}
+					{/if}
+
+					<!-- Path (as this observer saw it) — for a trace the header path is
+					     SNR data, surfaced in the Trace section above instead. -->
+					{#if (ev.path ?? []).length > 0 && ev.payloadType !== 'Trace'}
 						<section>
 							<div class="label mb-2 flex items-center justify-between">
 								<span>Path · {ev.path?.length} hops</span>

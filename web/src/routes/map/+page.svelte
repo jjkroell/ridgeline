@@ -122,15 +122,16 @@
 			source: 'nodes',
 			filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'fav'], true]],
 			paint: {
+				// Ring hugging the dot: ~2px outside the node radius at each zoom.
 				'circle-radius': [
 					'interpolate', ['linear'], ['zoom'],
-					6, ['match', ['get', 'role'], 'Repeater', 6, 5],
-					11, ['match', ['get', 'role'], 'Repeater', 9, 7.5],
-					15, ['match', ['get', 'role'], 'Repeater', 13, 10.5]
+					6, ['match', ['get', 'role'], 'Repeater', 4.5, 3.8],
+					11, ['match', ['get', 'role'], 'Repeater', 7, 5.2],
+					15, ['match', ['get', 'role'], 'Repeater', 10, 7.5]
 				],
 				'circle-color': 'rgba(0,0,0,0)',
 				'circle-stroke-color': FAV_COLOR,
-				'circle-stroke-width': 2,
+				'circle-stroke-width': 1.75,
 				'circle-stroke-opacity': 0.95
 			}
 		});

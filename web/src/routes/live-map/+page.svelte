@@ -6,6 +6,8 @@
 	import { api, type Node } from '$lib/api';
 	import { live, groupLive, type LiveGroup } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
+	import { favorites } from '$lib/favorites.svelte';
+	import { basemapStyleUrl } from '$lib/map-basemap';
 	import { ago, shortKey, fmtSnr, snrColor } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PayloadTag from '$lib/components/PayloadTag.svelte';
@@ -80,10 +82,7 @@
 	const isLight = () => document.documentElement.classList.contains('theme-light');
 	const inkColor = () =>
 		getComputedStyle(document.documentElement).getPropertyValue('--color-ink').trim() || '#070a0e';
-	const basemap = (light: boolean) =>
-		(['a', 'b', 'c'] as const).map(
-			(s) => `https://${s}.basemaps.cartocdn.com/${light ? 'light_all' : 'dark_all'}/{z}/{x}/{y}.png`
-		);
+	const FAV_COLOR = '#e8b454'; // amber ring on favorited nodes
 
 	const ROLE_COLOR: Record<string, string> = {
 		Repeater: '#ff6b6b',
@@ -316,13 +315,22 @@
 		for (const [k, t] of fired) if (t < cutoff) fired.delete(k);
 	});
 
-	// react to theme changes
+	// react to theme changes → swap the OpenFreeMap basemap style
+	let basemapLight = false;
 	$effect(() => {
 		void theme.mode;
-		if (!map || !map.isStyleLoaded()) return;
-		(map.getSource('carto') as maplibregl.RasterTileSource | undefined)?.setTiles(basemap(isLight()));
-		map.setPaintProperty('bg', 'background-color', inkColor());
+		const light = isLight();
+		if (!map || light === basemapLight) return;
+		basemapLight = light;
+		map.setStyle(basemapStyleUrl(light));
 	});
+
+	// Re-add overlays after a basemap style swap (theme change) removes them.
+	function ensureOverlays() {
+		if (!map || !map.isStyleLoaded() || map.getSource('nodes')) return;
+		addLayers();
+		(map.getSource('nodes') as maplibregl.GeoJSONSource | undefined)?.setData(nodeFeatures());
+	}
 
 	function nodeFeatures(): FeatureCollection {
 		return {
@@ -332,14 +340,21 @@
 				.map((n) => ({
 					type: 'Feature',
 					geometry: { type: 'Point', coordinates: [n.longitude!, n.latitude!] },
-					properties: { role: n.role, color: ROLE_COLOR[n.role] ?? '#8394a1', name: n.name, pubkey: n.publicKey }
+					properties: {
+						role: n.role,
+						color: ROLE_COLOR[n.role] ?? '#8394a1',
+						name: n.name,
+						pubkey: n.publicKey,
+						fav: favorites.has(n.publicKey)
+					}
 				}))
 		};
 	}
 
-	// re-filter node display when the role selection changes (pulses unaffected)
+	// re-filter node display when the role selection or favorites change
 	$effect(() => {
 		void selectedRoles;
+		void favorites.keys;
 		if (map && ready) (map.getSource('nodes') as maplibregl.GeoJSONSource)?.setData(nodeFeatures());
 	});
 
@@ -376,15 +391,40 @@
 				'line-blur': 1.5
 			}
 		});
+		// Amber ring around favorited nodes, beneath the node dots.
+		map.addLayer({
+			id: 'fav-halo',
+			type: 'circle',
+			source: 'nodes',
+			filter: ['==', ['get', 'fav'], true],
+			paint: {
+				'circle-radius': [
+					'interpolate', ['linear'], ['zoom'],
+					6, ['match', ['get', 'role'], 'Repeater', 5.5, 4.5],
+					11, ['match', ['get', 'role'], 'Repeater', 8.5, 7],
+					15, ['match', ['get', 'role'], 'Repeater', 12, 9.5]
+				],
+				'circle-color': 'rgba(0,0,0,0)',
+				'circle-stroke-color': FAV_COLOR,
+				'circle-stroke-width': 2,
+				'circle-stroke-opacity': 0.95
+			}
+		});
 		map.addLayer({
 			id: 'nodes',
 			type: 'circle',
 			source: 'nodes',
 			paint: {
-				'circle-radius': ['match', ['get', 'role'], 'Repeater', 5, 3],
+				// Smaller when zoomed out, scaling up as you zoom in.
+				'circle-radius': [
+					'interpolate', ['linear'], ['zoom'],
+					6, ['match', ['get', 'role'], 'Repeater', 2.2, 1.6],
+					11, ['match', ['get', 'role'], 'Repeater', 4.5, 2.8],
+					15, ['match', ['get', 'role'], 'Repeater', 7, 4.8]
+				],
 				'circle-color': ['get', 'color'],
 				'circle-opacity': 0.85,
-				'circle-stroke-width': 1.5,
+				'circle-stroke-width': 1,
 				'circle-stroke-color': inkColor()
 			}
 		});
@@ -418,6 +458,12 @@
 			}
 		});
 
+	}
+
+	// Interaction handlers — bound once. MapLibre keeps layer-id listeners across
+	// removeLayer/addLayer, so they survive a basemap style swap.
+	function bindEvents() {
+		if (!map) return;
 		// Node click → full node-detail modal.
 		map.on('click', 'nodes', (e) => {
 			const p = e.features![0].properties as { pubkey?: string };
@@ -443,18 +489,10 @@
 			window.addEventListener('pointerdown', unlock);
 		}
 
+		basemapLight = isLight();
 		map = new maplibregl.Map({
 			container: mapEl,
-			style: {
-				version: 8,
-				sources: {
-					carto: { type: 'raster', tiles: basemap(isLight()), tileSize: 256, attribution: '© OpenStreetMap © CARTO' }
-				},
-				layers: [
-					{ id: 'bg', type: 'background', paint: { 'background-color': inkColor() } },
-					{ id: 'carto', type: 'raster', source: 'carto', paint: { 'raster-opacity': 0.65 } }
-				]
-			},
+			style: basemapStyleUrl(basemapLight),
 			center: [-123.9, 49.2],
 			zoom: 8.4,
 			attributionControl: { compact: true }
@@ -463,9 +501,12 @@
 		map.on('load', () => {
 			map?.resize();
 			addLayers();
+			bindEvents();
 			ready = true;
 			loadNodes();
 		});
+		// Re-add overlays after a basemap (theme) style swap drops them.
+		map.on('styledata', ensureOverlays);
 		const t = setInterval(loadNodes, 30000);
 		requestAnimationFrame(frame);
 		return () => {

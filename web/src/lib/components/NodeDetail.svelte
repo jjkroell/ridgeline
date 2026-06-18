@@ -3,6 +3,7 @@
 	import maplibregl from 'maplibre-gl';
 	import QRCode from 'qrcode';
 	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry } from '$lib/api';
+	import { basemapStyleUrl } from '$lib/map-basemap';
 	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel } from '$lib/format';
 	import PayloadTag from './PayloadTag.svelte';
 	import RoleBadge from './RoleBadge.svelte';
@@ -130,19 +131,12 @@
 	$effect(() => {
 		if (!mapEl || !node || node.latitude == null || node.longitude == null || map) return;
 		const light = document.documentElement.classList.contains('theme-light');
-		const tiles = (['a', 'b', 'c'] as const).map(
-			(s) => `https://${s}.basemaps.cartocdn.com/${light ? 'light_all' : 'dark_all'}/{z}/{x}/{y}.png`
-		);
 		map = new maplibregl.Map({
 			container: mapEl,
-			style: {
-				version: 8,
-				sources: { carto: { type: 'raster', tiles, tileSize: 256, attribution: '© OSM © CARTO' } },
-				layers: [{ id: 'carto', type: 'raster', source: 'carto' }]
-			},
+			style: basemapStyleUrl(light),
 			center: [node.longitude, node.latitude],
 			zoom: 11,
-			attributionControl: false
+			attributionControl: { compact: true }
 		});
 		new maplibregl.Marker({ color: '#34e3c4' }).setLngLat([node.longitude, node.latitude]).addTo(map);
 		const m = map;

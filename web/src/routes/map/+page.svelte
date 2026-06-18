@@ -6,9 +6,13 @@
 	import { api, type Node } from '$lib/api';
 	import { roleLabel } from '$lib/format';
 	import { theme } from '$lib/theme.svelte';
+	import { favorites } from '$lib/favorites.svelte';
+	import { basemapStyleUrl } from '$lib/map-basemap';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
 	import NodeModal from '$lib/components/NodeModal.svelte';
+
+	const FAV_COLOR = '#e8b454'; // amber ring on favorited nodes
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -31,22 +35,6 @@
 	const isLight = () => document.documentElement.classList.contains('theme-light');
 	const inkColor = () =>
 		getComputedStyle(document.documentElement).getPropertyValue('--color-ink').trim() || '#070a0e';
-	const basemap = (light: boolean) =>
-		(['a', 'b', 'c'] as const).map(
-			(s) => `https://${s}.basemaps.cartocdn.com/${light ? 'light_all' : 'dark_all'}/{z}/{x}/{y}.png`
-		);
-
-	const style = (): maplibregl.StyleSpecification => ({
-		version: 8,
-		glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
-		sources: {
-			carto: { type: 'raster', tiles: basemap(isLight()), tileSize: 256, attribution: '© OpenStreetMap © CARTO' }
-		},
-		layers: [
-			{ id: 'bg', type: 'background', paint: { 'background-color': inkColor() } },
-			{ id: 'carto', type: 'raster', source: 'carto', paint: { 'raster-opacity': 0.7 } }
-		]
-	});
 
 	function nodeFeatures(): FeatureCollection {
 		return {
@@ -59,7 +47,8 @@
 					color: ROLE_HEX[n.role] ?? '#8394a1',
 					name: n.name || n.publicKey.slice(0, 10),
 					roleLabel: roleLabel(n.role),
-					pubkey: n.publicKey
+					pubkey: n.publicKey,
+					fav: favorites.has(n.publicKey)
 				}
 			}))
 		};
@@ -69,21 +58,26 @@
 		(map?.getSource('nodes') as maplibregl.GeoJSONSource | undefined)?.setData(nodeFeatures());
 	}
 
-	function applyTheme() {
-		if (!map || !map.isStyleLoaded()) return;
-		(map.getSource('carto') as maplibregl.RasterTileSource | undefined)?.setTiles(basemap(isLight()));
-		map.setPaintProperty('bg', 'background-color', inkColor());
-		if (map.getLayer('unclustered')) map.setPaintProperty('unclustered', 'circle-stroke-color', inkColor());
+	// Re-add overlays after a basemap style swap (theme change) removes them.
+	let basemapLight = false;
+	function ensureOverlays() {
+		if (!map || !map.isStyleLoaded() || map.getSource('nodes')) return;
+		addLayers();
+		updateSource();
 	}
 
 	$effect(() => {
 		void theme.mode;
-		applyTheme();
+		const light = isLight();
+		if (!map || light === basemapLight) return;
+		basemapLight = light;
+		map.setStyle(basemapStyleUrl(light));
 	});
 
-	// re-filter when role selection changes
+	// re-filter / re-style when the role selection or favorites change
 	$effect(() => {
 		void selectedRoles;
+		void favorites.keys;
 		if (ready) updateSource();
 	});
 
@@ -121,6 +115,25 @@
 			},
 			paint: { 'text-color': '#04140f' }
 		});
+		// Amber ring around favorited individual nodes, drawn beneath the dots.
+		map.addLayer({
+			id: 'fav-halo',
+			type: 'circle',
+			source: 'nodes',
+			filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'fav'], true]],
+			paint: {
+				'circle-radius': [
+					'interpolate', ['linear'], ['zoom'],
+					6, ['match', ['get', 'role'], 'Repeater', 6, 5],
+					11, ['match', ['get', 'role'], 'Repeater', 9, 7.5],
+					15, ['match', ['get', 'role'], 'Repeater', 13, 10.5]
+				],
+				'circle-color': 'rgba(0,0,0,0)',
+				'circle-stroke-color': FAV_COLOR,
+				'circle-stroke-width': 2,
+				'circle-stroke-opacity': 0.95
+			}
+		});
 		map.addLayer({
 			id: 'unclustered',
 			type: 'circle',
@@ -128,13 +141,24 @@
 			filter: ['!', ['has', 'point_count']],
 			paint: {
 				'circle-color': ['get', 'color'],
-				'circle-radius': ['match', ['get', 'role'], 'Repeater', 6, 4],
+				// Smaller when zoomed out, scaling up as you zoom in.
+				'circle-radius': [
+					'interpolate', ['linear'], ['zoom'],
+					6, ['match', ['get', 'role'], 'Repeater', 2.5, 1.8],
+					11, ['match', ['get', 'role'], 'Repeater', 5, 3.2],
+					15, ['match', ['get', 'role'], 'Repeater', 8, 5.5]
+				],
 				'circle-opacity': 0.9,
-				'circle-stroke-width': 1.5,
+				'circle-stroke-width': 1,
 				'circle-stroke-color': inkColor()
 			}
 		});
+	}
 
+	// Interaction handlers — bound once. MapLibre keeps layer-id listeners across
+	// removeLayer/addLayer, so they survive a basemap style swap.
+	function bindEvents() {
+		if (!map) return;
 		// Cluster click → zoom to expand.
 		map.on('click', 'clusters', async (e) => {
 			const f = map!.queryRenderedFeatures(e.point, { layers: ['clusters'] })[0];
@@ -199,9 +223,10 @@
 	}
 
 	onMount(() => {
+		basemapLight = isLight();
 		map = new maplibregl.Map({
 			container: mapEl,
-			style: style(),
+			style: basemapStyleUrl(basemapLight),
 			center: [-123.65, 49.25],
 			zoom: 9,
 			attributionControl: { compact: true }
@@ -210,10 +235,12 @@
 		map.on('load', () => {
 			map?.resize();
 			addLayers();
-			applyTheme();
+			bindEvents();
 			ready = true;
 			plot();
 		});
+		// Re-add overlays after a basemap (theme) style swap drops them.
+		map.on('styledata', ensureOverlays);
 		const t = setInterval(plot, 10000);
 		return () => {
 			clearInterval(t);

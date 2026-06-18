@@ -1,8 +1,12 @@
 // Reactive WebSocket connection to /api/live. Exposes a rolling buffer of the
 // most recent live events plus connection state, as Svelte 5 runes.
-import type { LiveEvent, LiveNode } from './api';
+import { api, type LiveEvent, type LiveNode } from './api';
 
-const MAX_EVENTS = 200;
+// Keep roughly the last hour of events in the rolling buffer. The live feed
+// renders this whole window; live-map takes its own newest-N slices from it.
+const RETAIN_MS = 60 * 60 * 1000;
+// Hard safety cap so a busy mesh can't grow the buffer without bound.
+const MAX_EVENTS = 5000;
 
 /** A collapsed set of related live events shown as one feed row. */
 export interface LiveGroup {
@@ -67,7 +71,28 @@ class LiveFeed {
 	start() {
 		if (this.#started) return;
 		this.#started = true;
+		this.#hydrate();
 		this.#connect();
+	}
+
+	// Seed the buffer with the last hour of history so the feed renders
+	// immediately instead of waiting for fresh packets.
+	async #hydrate() {
+		try {
+			const recent = await api.recent(3600);
+			const cutoff = Date.now() - RETAIN_MS;
+			const seed = recent.filter((e) => +new Date(e.receivedAt) >= cutoff);
+			// Any events that streamed in while fetching take precedence; append
+			// the (older) history after them, de-duped by observer+hash+time.
+			const seen = new Set(this.events.map((e) => e.observerId + e.messageHash + e.receivedAt));
+			const merged = [
+				...this.events,
+				...seed.filter((e) => !seen.has(e.observerId + e.messageHash + e.receivedAt))
+			];
+			this.events = merged.slice(0, MAX_EVENTS);
+		} catch {
+			/* history is best-effort; live stream still works */
+		}
 	}
 
 	#connect() {
@@ -82,7 +107,10 @@ class LiveFeed {
 		ws.onmessage = (e) => {
 			try {
 				const ev = JSON.parse(e.data) as LiveEvent;
-				this.events = [ev, ...this.events].slice(0, MAX_EVENTS);
+				const cutoff = Date.now() - RETAIN_MS;
+				this.events = [ev, ...this.events]
+					.filter((x) => +new Date(x.receivedAt) >= cutoff)
+					.slice(0, MAX_EVENTS);
 				this.total += 1;
 			} catch {
 				/* ignore malformed frames */

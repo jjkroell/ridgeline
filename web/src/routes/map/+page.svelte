@@ -8,6 +8,7 @@
 	import { theme } from '$lib/theme.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
+	import NodeModal from '$lib/components/NodeModal.svelte';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -15,6 +16,7 @@
 	let didFit = false;
 	let allLocated = $state<Node[]>([]);
 	let selectedRoles = $state(new Set(['Repeater', 'RoomServer', 'ChatNode', 'Sensor']));
+	let nodeKey = $state<string | null>(null);
 
 	const visible = $derived(allLocated.filter((n) => selectedRoles.has(n.role)));
 
@@ -141,19 +143,10 @@
 			const zoom = await src.getClusterExpansionZoom(id);
 			map!.easeTo({ center: (f.geometry as GeoJSON.Point).coordinates as [number, number], zoom });
 		});
-		// Node click → popup.
+		// Node click → full node-detail modal.
 		map.on('click', 'unclustered', (e) => {
-			const f = e.features![0];
-			const p = f.properties as { name: string; roleLabel: string; color: string };
-			new maplibregl.Popup({ offset: 12, closeButton: false })
-				.setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number])
-				.setHTML(
-					`<div style="font-family:'Space Mono',monospace;font-size:12px">
-						<div style="color:var(--color-fg);font-weight:700">${p.name}</div>
-						<div style="color:${p.color};margin-top:2px">${p.roleLabel}</div>
-					</div>`
-				)
-				.addTo(map!);
+			const p = e.features![0].properties as { pubkey?: string };
+			if (p?.pubkey) nodeKey = p.pubkey;
 		});
 		for (const layer of ['clusters', 'unclustered']) {
 			map.on('mouseenter', layer, () => (map!.getCanvas().style.cursor = 'pointer'));
@@ -241,6 +234,8 @@
 		<MapRoleFilter bind:selected={selectedRoles} />
 	</div>
 </div>
+
+<NodeModal pubkey={nodeKey} onclose={() => (nodeKey = null)} />
 
 <style>
 	:global(.maplibregl-popup-content) {

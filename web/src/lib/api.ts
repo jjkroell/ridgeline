@@ -62,6 +62,63 @@ export interface LiveEvent extends Observation {
 	transportCodes?: [number, number];
 	payloadRaw?: string;
 	raw?: string;
+	/** GroupText channel fields. channelHash is always set; the rest only when decrypted. */
+	channelHash?: string;
+	channel?: string;
+	sender?: string;
+	text?: string;
+}
+
+// --- Per-node analytics (GET /api/nodes/{pubkey}) ---
+export interface NodeObserverStat {
+	id: string;
+	region?: string;
+	count: number;
+	avgSnr?: number;
+	avgRssi?: number;
+}
+export interface NodeNeighbor {
+	publicKey: string;
+	name: string;
+	role: string;
+	count: number;
+}
+export interface NodePacketRef {
+	messageHash: string;
+	payloadType: string;
+	receivedAt: string;
+	observerId?: string;
+	snr?: number;
+	rssi?: number;
+	pathHops: number;
+}
+export interface NodeRelay {
+	lastRelayed?: string;
+	count1h: number;
+	count24h: number;
+	active: boolean;
+}
+export interface NodeAnalytics {
+	publicKey: string;
+	windowHours: number;
+	totalPackets: number; // advert transmissions in window
+	totalObservations: number;
+	packetsToday: number;
+	avgSnr?: number;
+	avgHops?: number;
+	firstHeard?: string;
+	lastHeard?: string;
+	observers: NodeObserverStat[];
+	recentPackets: NodePacketRef[];
+	neighbors: NodeNeighbor[];
+	relay: NodeRelay;
+	trafficShare: number;
+	bridge: number;
+}
+export interface NodeDetailResponse {
+	node: Node | null;
+	detail: NodeAnalytics | null;
+	generatedAt?: string;
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -73,6 +130,10 @@ async function get<T>(path: string): Promise<T> {
 export const api = {
 	stats: () => get<Stats>('/api/stats'),
 	nodes: () => get<Node[]>('/api/nodes'),
+	/** One node's row plus its computed analytics snapshot. */
+	nodeDetail: (pubkey: string) => get<NodeDetailResponse>(`/api/nodes/${encodeURIComponent(pubkey)}`),
 	observers: () => get<Observer[]>('/api/observers'),
-	observations: (limit = 100) => get<Observation[]>(`/api/observations?limit=${limit}`)
+	observations: (limit = 100) => get<Observation[]>(`/api/observations?limit=${limit}`),
+	/** Recent history (default last hour) in the live-event shape, newest first. */
+	recent: (sinceSec = 3600) => get<LiveEvent[]>(`/api/recent?since=${sinceSec}`)
 };

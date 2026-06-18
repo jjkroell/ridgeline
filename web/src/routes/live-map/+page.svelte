@@ -11,6 +11,7 @@
 	import PayloadTag from '$lib/components/PayloadTag.svelte';
 	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
+	import NodeModal from '$lib/components/NodeModal.svelte';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -20,9 +21,60 @@
 	let animCount = $state(0);
 	let selectedRoles = $state(new Set(['Repeater', 'RoomServer', 'ChatNode', 'Sensor']));
 
+	// ── Low-key audio: a soft chime as each pulse reaches a node ───────────
+	let soundOn = $state(false);
+	const SOUND_KEY = 'ridgeline-livemap-sound';
+	let actx: AudioContext | null = null;
+	let masterGain: GainNode | null = null;
+	let lastTickAt = 0;
+	// Pentatonic (C5 D5 E5 G5 A5) — overlapping hits stay pleasant, never jarring.
+	const SCALE = [523.25, 587.33, 659.25, 783.99, 880.0];
+
+	function ensureAudio() {
+		if (!actx) {
+			const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+			if (!AC) return;
+			actx = new AC();
+			masterGain = actx.createGain();
+			masterGain.gain.value = 0.5; // keep the whole thing quiet
+			masterGain.connect(actx.destination);
+		}
+		if (actx.state === 'suspended') actx.resume();
+	}
+
+	function toggleSound() {
+		soundOn = !soundOn;
+		if (soundOn) ensureAudio(); // created within the click gesture so the browser allows it
+		try {
+			localStorage.setItem(SOUND_KEY, soundOn ? '1' : '0');
+		} catch {
+			/* storage unavailable */
+		}
+	}
+
+	// A short, soft sine blip. seed picks a scale note so different nodes differ.
+	function playTick(seed: number) {
+		if (!actx || !masterGain) return;
+		const wall = performance.now();
+		if (wall - lastTickAt < 55) return; // throttle bursts into a gentle trickle
+		lastTickAt = wall;
+		const t = actx.currentTime;
+		const osc = actx.createOscillator();
+		const g = actx.createGain();
+		osc.type = 'sine';
+		osc.frequency.value = SCALE[Math.abs(seed) % SCALE.length];
+		g.gain.setValueAtTime(0, t);
+		g.gain.linearRampToValueAtTime(0.09, t + 0.008);
+		g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+		osc.connect(g).connect(masterGain);
+		osc.start(t);
+		osc.stop(t + 0.24);
+	}
+
 	// Recent packets overlay (grouped, max 15) with minimize/maximize.
 	let panelOpen = $state(true);
 	let selected = $state<LiveGroup | null>(null);
+	let nodeKey = $state<string | null>(null);
 	const recent = $derived(groupLive(live.events).slice(0, 15));
 
 	const isLight = () => document.documentElement.classList.contains('theme-light');
@@ -118,6 +170,7 @@
 		at: [number, number];
 		born: number; // when the dot reaches this node (may be in the future)
 		color: string;
+		played?: boolean; // chimed once on arrival
 	}
 	let ripples: Ripple[] = [];
 	const RIPPLE_DUR = 650;
@@ -223,6 +276,10 @@
 		for (const r of ripples) {
 			const age = now - r.born;
 			if (age < 0) continue; // scheduled but not yet reached
+			if (!r.played) {
+				r.played = true; // the dot just reached this node
+				if (soundOn) playTick(Math.round((r.at[0] + r.at[1]) * 100));
+			}
 			const t = age / RIPPLE_DUR;
 			rings.push({
 				type: 'Feature',
@@ -245,6 +302,9 @@
 		const now = performance.now();
 		for (const ev of live.events.slice(0, 60)) {
 			if (!ev.path || ev.path.length < 1) continue;
+			// Only pulse genuinely fresh arrivals — skip the last-hour history the
+			// feed seeds into the shared buffer, so the map doesn't burst on load.
+			if (Date.now() - +new Date(ev.receivedAt) > 20000) continue;
 			const key = ev.messageHash + ':' + ev.path.join(',');
 			if (fired.has(key)) continue;
 			fired.set(key, now);
@@ -272,7 +332,7 @@
 				.map((n) => ({
 					type: 'Feature',
 					geometry: { type: 'Point', coordinates: [n.longitude!, n.latitude!] },
-					properties: { role: n.role, color: ROLE_COLOR[n.role] ?? '#8394a1', name: n.name }
+					properties: { role: n.role, color: ROLE_COLOR[n.role] ?? '#8394a1', name: n.name, pubkey: n.publicKey }
 				}))
 		};
 	}
@@ -357,9 +417,32 @@
 				'circle-stroke-color': ['get', 'color']
 			}
 		});
+
+		// Node click → full node-detail modal.
+		map.on('click', 'nodes', (e) => {
+			const p = e.features![0].properties as { pubkey?: string };
+			if (p?.pubkey) nodeKey = p.pubkey;
+		});
+		map.on('mouseenter', 'nodes', () => map && (map.getCanvas().style.cursor = 'pointer'));
+		map.on('mouseleave', 'nodes', () => map && (map.getCanvas().style.cursor = ''));
 	}
 
 	onMount(() => {
+		try {
+			soundOn = localStorage.getItem(SOUND_KEY) === '1';
+		} catch {
+			/* storage unavailable */
+		}
+		// If sound was left on, the AudioContext can only start after a user
+		// gesture — arm it on the first interaction.
+		if (soundOn) {
+			const unlock = () => {
+				ensureAudio();
+				window.removeEventListener('pointerdown', unlock);
+			};
+			window.addEventListener('pointerdown', unlock);
+		}
+
 		map = new maplibregl.Map({
 			container: mapEl,
 			style: {
@@ -400,6 +483,22 @@
 			{#if live.connected}<span class="live-dot"></span>{/if}
 			<span class="text-fg-faint">{animCount} active</span>
 		</span>
+		<button
+			onclick={toggleSound}
+			title={soundOn ? 'Mute node chimes' : 'Play a soft chime as pulses reach nodes'}
+			aria-pressed={soundOn}
+			class="flex items-center gap-1.5 rounded-[var(--radius)] border px-2.5 py-1 transition-colors {soundOn
+				? 'border-signal/50 text-signal'
+				: 'border-line text-fg-dim hover:text-fg'}"
+		>
+			{#if soundOn}
+				<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" /></svg>
+				<span>Sound</span>
+			{:else}
+				<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M22 9l-6 6M16 9l6 6" /></svg>
+				<span>Muted</span>
+			{/if}
+		</button>
 	</div>
 </PageHeader>
 
@@ -474,6 +573,7 @@
 </div>
 
 <LiveGroupModal group={selected} onclose={() => (selected = null)} />
+<NodeModal pubkey={nodeKey} onclose={() => (nodeKey = null)} />
 
 <style>
 	:global(.maplibregl-ctrl-group) {

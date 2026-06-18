@@ -152,9 +152,101 @@ type Packet struct {
 	// GroupText is populated when PayloadType == PayloadGroupText.
 	GroupText *GroupText
 
+	// TextMessage, Request, and Response are direct (peer-to-peer) payloads
+	// that share the same envelope; the body is sealed with a shared secret we
+	// don't hold, so only the routing hashes and MAC are decoded. Exactly one
+	// is populated, matching PayloadType.
+	TextMessage *DirectMessage
+	Request     *DirectMessage
+	Response    *DirectMessage
+
+	// AnonRequest is populated when PayloadType == PayloadAnonRequest.
+	AnonRequest *AnonRequest
+
+	// Ack is populated when PayloadType == PayloadAck.
+	Ack *Ack
+
+	// ReturnPath is populated when PayloadType == PayloadPath. On real traffic a
+	// PATH packet carries the discovered return path encrypted; only the routing
+	// envelope (the same dest/src/MAC shape as a direct message) is in the clear,
+	// so the path list itself is inside Ciphertext and not decoded here. Distinct
+	// from the packet header's Path.
+	ReturnPath *DirectMessage
+
+	// Trace is populated when PayloadType == PayloadTrace.
+	Trace *Trace
+
+	// Control is populated when PayloadType == PayloadControl.
+	Control *Control
+
 	TotalBytes int
 	Valid      bool
 	Errors     []string
+}
+
+// DirectMessage is the cleartext envelope shared by TextMessage (0x02),
+// Request (0x00), and Response (0x01) payloads: a 1-byte destination hash, a
+// 1-byte source hash, a 2-byte cipher MAC, and the encrypted body. The body
+// (timestamp, message/request text) needs the peers' shared secret to decrypt,
+// which a passive observer doesn't have, so it's left as Ciphertext.
+type DirectMessage struct {
+	DestinationHash string // first byte of the destination public key, uppercase hex
+	SourceHash      string // first byte of the source public key, uppercase hex
+	CipherMAC       string // 2-byte MAC, uppercase hex
+	Ciphertext      string // encrypted remainder, uppercase hex
+}
+
+// AnonRequest is the decoded body of an AnonRequest (0x07) payload: a login or
+// request from a sender not yet known to the destination, so it carries the
+// sender's full public key in the clear. The body remains encrypted.
+type AnonRequest struct {
+	DestinationHash string // first byte of the destination public key, uppercase hex
+	SenderPublicKey string // 32-byte Ed25519 key, uppercase hex
+	CipherMAC       string // 2-byte MAC, uppercase hex
+	Ciphertext      string // encrypted remainder, uppercase hex
+}
+
+// Ack is the decoded body of an Ack (0x03) payload: a 4-byte CRC checksum over
+// the acknowledged message's timestamp, text, and sender public key.
+type Ack struct {
+	Checksum string // 4-byte CRC, uppercase hex
+}
+
+// Trace is the decoded body of a Trace (0x09) payload: a path-tracing probe.
+// The per-hop path hashes and any SNR values from the header path are not
+// decrypted (the trace carries them in the clear).
+type Trace struct {
+	Tag      string   // 4-byte trace tag, uppercase hex
+	AuthCode uint32   // authentication/verification code
+	Flags    uint8    // application-defined control flags
+	HashSize int      // bytes per path-hash entry (1, 2, 4, or 8)
+	Path     []string // node hashes along the trace path, uppercase hex
+}
+
+// Control sub-types occupy the upper 4 bits of the control flags byte.
+const (
+	ControlNodeDiscoverReq  uint8 = 0x80
+	ControlNodeDiscoverResp uint8 = 0x90
+)
+
+// Control is the decoded body of a Control (0x0B) payload. Only the node
+// discovery request/response sub-types are interpreted; the populated fields
+// depend on SubType.
+type Control struct {
+	SubType  uint8  // upper 4 bits of the flags byte
+	SubName  string // human-readable sub-type name
+	RawFlags uint8
+
+	// NodeDiscoverReq fields.
+	PrefixOnly bool
+	TypeFilter uint8
+	Tag        uint32
+	Since      uint32
+
+	// NodeDiscoverResp fields.
+	NodeRole  DeviceRole
+	SNR       float64
+	PublicKey string // responder key (prefix or full), uppercase hex
 }
 
 // GroupText is the decoded body of a GroupText (0x05) channel message. The

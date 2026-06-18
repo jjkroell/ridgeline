@@ -83,11 +83,27 @@ func Decode(b []byte) (*Packet, error) {
 	p.PayloadRaw = strings.ToUpper(hex.EncodeToString(payload))
 	p.MessageHash = messageHash(b, p.RouteType, p.PayloadType, p.PayloadVersion)
 
-	if p.PayloadType == PayloadAdvert {
+	switch p.PayloadType {
+	case PayloadAdvert:
 		p.Advert = decodeAdvert(payload)
-	}
-	if p.PayloadType == PayloadGroupText {
+	case PayloadGroupText:
 		p.GroupText = decodeGroupText(payload)
+	case PayloadTextMessage:
+		p.TextMessage = decodeDirectMessage(payload)
+	case PayloadRequest:
+		p.Request = decodeDirectMessage(payload)
+	case PayloadResponse:
+		p.Response = decodeDirectMessage(payload)
+	case PayloadAnonRequest:
+		p.AnonRequest = decodeAnonRequest(payload)
+	case PayloadAck:
+		p.Ack = decodeAck(payload)
+	case PayloadPath:
+		p.ReturnPath = decodeDirectMessage(payload)
+	case PayloadTrace:
+		p.Trace = decodeTrace(payload)
+	case PayloadControl:
+		p.Control = decodeControl(payload)
 	}
 
 	p.Valid = true

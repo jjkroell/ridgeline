@@ -7,6 +7,8 @@
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
 	import PayloadTag from '$lib/components/PayloadTag.svelte';
 	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
+	import FavoriteStar from '$lib/components/FavoriteStar.svelte';
+	import { favorites } from '$lib/favorites.svelte';
 
 	let stats = $state<Stats | null>(null);
 	let nodes = $state<Node[]>([]);
@@ -43,6 +45,20 @@
 		pulse: 'M2 12h4l3 8 4-16 3 8h6',
 		bolt: 'M13 2 4 14h7l-1 8 9-12h-7z'
 	};
+
+	// Favorites, front and center: the user's pinned nodes, in their saved order.
+	const favNodes = $derived(
+		favorites.keys
+			.map((k) => nodes.find((n) => n.publicKey.toUpperCase() === k))
+			.filter((n): n is Node => !!n)
+	);
+	function liveStatus(lastSeen?: string): { label: string; color: string } {
+		if (!lastSeen) return { label: 'Unknown', color: 'var(--color-fg-faint)' };
+		const age = Date.now() - new Date(lastSeen).getTime();
+		if (age < 15 * 60_000) return { label: 'Online', color: 'var(--color-signal)' };
+		if (age < 2 * 3_600_000) return { label: 'Idle', color: 'var(--color-amber)' };
+		return { label: 'Offline', color: 'var(--color-coral)' };
+	}
 </script>
 
 <PageHeader eyebrow="Network Observatory" title="Overview">
@@ -95,6 +111,33 @@
 			</div>
 		{/each}
 	</div>
+
+	<!-- Favorites — pinned nodes, front and center -->
+	{#if favNodes.length}
+		<section class="panel rise mt-6" style="animation-delay:120ms">
+			<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
+				<svg viewBox="0 0 24 24" class="text-amber h-4 w-4" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+					<path d="M12 2.5l2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.9l-5.8 3.05 1.1-6.45-4.7-4.6 6.5-.95z" />
+				</svg>
+				<h2 class="font-display text-fg text-sm font-700 tracking-wide">FAVORITES</h2>
+				<a href="/nodes" class="label hover:text-signal ml-auto transition-colors">Manage →</a>
+			</div>
+			<div class="grid gap-px sm:grid-cols-2 lg:grid-cols-3">
+				{#each favNodes as n (n.publicKey)}
+					{@const st = liveStatus(n.lastSeen)}
+					<a href="/nodes/{n.publicKey}" class="panel-hover flex items-center gap-3 px-5 py-3">
+						<span class="h-2 w-2 shrink-0 rounded-full" style="background:{st.color}" title={st.label}></span>
+						<div class="min-w-0 flex-1">
+							<div class="text-fg truncate text-sm font-medium">{n.name || shortKey(n.publicKey)}</div>
+							<div class="font-mono text-fg-faint mt-0.5 text-[0.68rem]">{st.label} · {ago(n.lastSeen)}</div>
+						</div>
+						<RoleBadge role={n.role} />
+						<FavoriteStar pubkey={n.publicKey} size="sm" />
+					</a>
+				{/each}
+			</div>
+		</section>
+	{/if}
 
 	<!-- Two columns -->
 	<div class="mt-6 grid gap-6 lg:grid-cols-5">

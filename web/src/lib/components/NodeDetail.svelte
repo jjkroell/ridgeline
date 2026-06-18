@@ -6,6 +6,7 @@
 	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel } from '$lib/format';
 	import PayloadTag from './PayloadTag.svelte';
 	import RoleBadge from './RoleBadge.svelte';
+	import FavoriteStar from './FavoriteStar.svelte';
 
 	interface Props {
 		pubkey: string;
@@ -182,12 +183,15 @@
 		</div>
 	{/if}
 
-	<!-- Public key strip -->
-	<button onclick={copyKey} class="panel panel-hover mb-5 flex w-full items-center gap-3 px-5 py-3 text-left">
-		<span class="label shrink-0">PUBKEY</span>
-		<span class="font-mono text-fg break-all text-xs md:text-sm">{pubkey}</span>
-		<span class="label ml-auto shrink-0 {copied ? '!text-signal' : ''}">{copied ? 'COPIED' : 'COPY'}</span>
-	</button>
+	<!-- Public key strip + favorite toggle -->
+	<div class="mb-5 flex items-center gap-2">
+		<FavoriteStar {pubkey} />
+		<button onclick={copyKey} class="panel panel-hover flex flex-1 items-center gap-3 px-5 py-3 text-left">
+			<span class="label shrink-0">PUBKEY</span>
+			<span class="font-mono text-fg break-all text-xs md:text-sm">{pubkey}</span>
+			<span class="label ml-auto shrink-0 {copied ? '!text-signal' : ''}">{copied ? 'COPIED' : 'COPY'}</span>
+		</button>
+	</div>
 
 	<div class="grid gap-5 lg:grid-cols-3">
 		<!-- LEFT: map, QR, overview, hash, scores -->

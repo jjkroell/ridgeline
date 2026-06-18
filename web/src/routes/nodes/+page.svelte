@@ -5,6 +5,8 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
+	import FavoriteStar from '$lib/components/FavoriteStar.svelte';
+	import { favorites } from '$lib/favorites.svelte';
 
 	const GPS_WARNING =
 		'GPS coordinates appear corrupt — a statistical outlier versus the rest of the mesh, so this node is hidden from the maps. The node is otherwise valid and still appears in packet paths.';
@@ -13,6 +15,7 @@
 	let loading = $state(true);
 	let query = $state('');
 	let roleFilter = $state<string>('all');
+	let favOnly = $state(false);
 
 	async function refresh() {
 		try {
@@ -38,12 +41,19 @@
 
 	const filtered = $derived(
 		nodes.filter((n) => {
+			if (favOnly && !favorites.has(n.publicKey)) return false;
 			if (roleFilter !== 'all' && n.role !== roleFilter) return false;
 			if (!query) return true;
 			const q = query.toLowerCase();
 			return n.name.toLowerCase().includes(q) || n.publicKey.toLowerCase().includes(q);
 		})
 	);
+
+	// Favorites pinned to the top, otherwise preserving the API's last-seen order.
+	const sorted = $derived([
+		...filtered.filter((n) => favorites.has(n.publicKey)),
+		...filtered.filter((n) => !favorites.has(n.publicKey))
+	]);
 </script>
 
 <PageHeader eyebrow="Mesh Inventory" title="Nodes">
@@ -83,6 +93,19 @@
 					{roleLabels[r]}
 				</button>
 			{/each}
+			<button
+				onclick={() => (favOnly = !favOnly)}
+				title="Show only favorited nodes"
+				class="flex items-center gap-1.5 rounded-[var(--radius)] border px-3 py-1.5 text-xs transition-colors
+					{favOnly
+					? 'border-amber/50 text-amber bg-amber/10'
+					: 'border-line text-fg-dim hover:border-line-bright hover:text-fg'}"
+			>
+				<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill={favOnly ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M12 2.5l2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.9l-5.8 3.05 1.1-6.45-4.7-4.6 6.5-.95z" />
+				</svg>
+				Favorites{#if favorites.count}<span class="tnum">{favorites.count}</span>{/if}
+			</button>
 		</div>
 	</div>
 
@@ -101,10 +124,12 @@
 		{#if loading}
 			<div class="text-fg-faint px-5 py-12 text-center text-sm">Loading…</div>
 		{:else if filtered.length === 0}
-			<div class="text-fg-faint px-5 py-12 text-center text-sm">No matching nodes.</div>
+			<div class="text-fg-faint px-5 py-12 text-center text-sm">
+				{favOnly ? 'No favorite nodes yet — tap the ☆ on a node to add one.' : 'No matching nodes.'}
+			</div>
 		{:else}
 			<div class="divide-line/50 divide-y">
-				{#each filtered as n (n.publicKey)}
+				{#each sorted as n (n.publicKey)}
 					<a
 						href="/nodes/{n.publicKey}"
 						class="panel-hover grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-3 md:grid-cols-[1.4fr_120px_1fr_80px_70px] {n.gpsSuspect
@@ -113,6 +138,7 @@
 					>
 						<div class="min-w-0">
 							<div class="flex items-center gap-1.5">
+								<FavoriteStar pubkey={n.publicKey} size="sm" />
 								{#if n.gpsSuspect}
 									<Tooltip text={GPS_WARNING}>
 										<svg viewBox="0 0 24 24" class="text-amber h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

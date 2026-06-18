@@ -5,12 +5,14 @@
 	import { live } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import { channels } from '$lib/channels.svelte';
+	import { favorites } from '$lib/favorites.svelte';
 
 	let { children } = $props();
 
 	onMount(() => {
 		theme.init();
 		channels.init();
+		favorites.init();
 		live.start();
 	});
 

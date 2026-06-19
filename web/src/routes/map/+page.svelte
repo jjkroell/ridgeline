@@ -8,6 +8,7 @@
 	import { theme } from '$lib/theme.svelte';
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemapStyleUrl } from '$lib/map-basemap';
+	import { ensureHillshade } from '$lib/map-hillshade';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
 	import NodeModal from '$lib/components/NodeModal.svelte';
@@ -61,7 +62,9 @@
 	// Re-add overlays after a basemap style swap (theme change) removes them.
 	let basemapLight = false;
 	function ensureOverlays() {
-		if (!map || !map.isStyleLoaded() || map.getSource('nodes')) return;
+		if (!map || !map.isStyleLoaded()) return;
+		ensureHillshade(map, basemapLight);
+		if (map.getSource('nodes')) return;
 		addLayers();
 		updateSource();
 	}
@@ -235,6 +238,7 @@
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 		map.on('load', () => {
 			map?.resize();
+			ensureHillshade(map!, basemapLight);
 			addLayers();
 			bindEvents();
 			ready = true;

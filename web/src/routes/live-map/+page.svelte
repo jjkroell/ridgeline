@@ -324,6 +324,9 @@
 		if (!map || light === basemapLight) return;
 		basemapLight = light;
 		map.setStyle(basemapStyleUrl(light));
+		// styledata fires mid-load with isStyleLoaded()===false, so ensureOverlays
+		// bails; `idle` is guaranteed once the new style has fully settled.
+		map.once('idle', ensureOverlays);
 	});
 
 	// Re-add overlays after a basemap style swap (theme change) removes them.

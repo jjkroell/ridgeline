@@ -12,9 +12,24 @@
 	let show = $state(false);
 	let pos = $state({ x: 0, y: 0 });
 
+	// Render the bubble straight under <body>. Its `position: fixed` is otherwise
+	// resolved against any ancestor with a transform (e.g. PageHeader's `rise`
+	// animation), which mis-anchors it and overflows the viewport.
+	function portal(node: HTMLElement) {
+		document.body.appendChild(node);
+		return { destroy: () => node.remove() };
+	}
+
 	function enter(e: MouseEvent) {
 		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-		pos = { x: r.left + r.width / 2, y: r.top };
+		// Clamp the (centered, max-250px) bubble inside the viewport so it never
+		// overflows the right/left edge — an overflowing fixed element adds a
+		// scrollbar and reflows the page (~10px shift) near edge-anchored controls.
+		const half = 125; // half of max-w-[250px]
+		const margin = 8;
+		const center = r.left + r.width / 2;
+		const x = Math.min(Math.max(center, half + margin), window.innerWidth - half - margin);
+		pos = { x, y: r.top };
 		show = true;
 	}
 </script>
@@ -25,6 +40,7 @@
 
 {#if show}
 	<div
+		use:portal
 		class="border-line-bright bg-ink-2 text-fg-dim pointer-events-none fixed z-[100] max-w-[250px] rounded-[var(--radius)] border px-2.5 py-1.5 text-xs leading-snug shadow-xl"
 		style="left:{pos.x}px;top:{pos.y}px;transform:translate(-50%,calc(-100% - 9px))"
 	>

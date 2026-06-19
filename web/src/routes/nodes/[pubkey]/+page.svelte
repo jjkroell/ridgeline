@@ -29,7 +29,7 @@
 </script>
 
 <PageHeader eyebrow="Node Detail" title={node?.name || shortKey(pubkey, 8, 4)}>
-	{#snippet titleLeft()}<FavoriteStar {pubkey} size="lg" />{/snippet}
+	{#snippet titleLeft()}<FavoriteStar {pubkey} size="md" />{/snippet}
 	{#if node}<RoleBadge role={node.role} />{/if}
 	<a href="/nodes" class="label hover:text-signal transition-colors">← All nodes</a>
 </PageHeader>

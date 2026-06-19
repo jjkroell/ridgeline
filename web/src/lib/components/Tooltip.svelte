@@ -1,7 +1,13 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 
-	let { text, children }: { text: string; children: Snippet } = $props();
+	// `class` is applied to the wrapper so it can carry the layout classes of the
+	// element it replaces (widths, shrink-0, etc.) and not disturb flex rows.
+	let {
+		text,
+		class: cls = '',
+		children
+	}: { text: string; class?: string; children: Snippet } = $props();
 
 	let show = $state(false);
 	let pos = $state({ x: 0, y: 0 });
@@ -13,7 +19,7 @@
 	}
 </script>
 
-<span class="inline-flex" onmouseenter={enter} onmouseleave={() => (show = false)} role="note">
+<span class="inline-flex {cls}" onmouseenter={enter} onmouseleave={() => (show = false)} role="note">
 	{@render children()}
 </span>
 

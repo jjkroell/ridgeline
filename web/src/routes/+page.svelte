@@ -6,6 +6,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
 	import PayloadTag from '$lib/components/PayloadTag.svelte';
+	import Tooltip from '$lib/components/Tooltip.svelte';
 	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
 	import FavoriteStar from '$lib/components/FavoriteStar.svelte';
 	import { favorites } from '$lib/favorites.svelte';
@@ -119,7 +120,7 @@
 				{#each favNodes as n (n.publicKey)}
 					{@const st = nodeStatus(n)}
 					<a href="/nodes/{n.publicKey}" class="panel-hover flex items-center gap-3 px-5 py-3">
-						<span class="h-2 w-2 shrink-0 rounded-full" style="background:{st.color}" title={st.label}></span>
+						<Tooltip text={st.label} class="shrink-0"><span class="h-2 w-2 rounded-full" style="background:{st.color}"></span></Tooltip>
 						<div class="min-w-0 flex-1">
 							<div class="text-fg truncate text-sm font-medium">{n.name || shortKey(n.publicKey)}</div>
 							<div class="font-mono text-fg-faint mt-0.5 text-[0.68rem]">{st.label} · {ago(n.lastSeen)}</div>

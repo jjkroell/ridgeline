@@ -6,6 +6,7 @@
 	import { api, type LiveEvent } from '$lib/api';
 	import { ago } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Tooltip from '$lib/components/Tooltip.svelte';
 
 	// How far back the reader pulls history (server caps /api/recent at 6h).
 	const HISTORY_SEC = 21600;
@@ -316,14 +317,18 @@
 						</button>
 						<span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background:{typeColor[selected.type]}"></span>
 						<h2 class="font-display text-fg truncate text-xl font-700">{selected.name}</h2>
-						<button
-							onclick={toggleSort}
-							title={sortDir === 'desc' ? 'Newest first — tap for oldest first' : 'Oldest first — tap for newest first'}
-							class="text-fg-faint hover:text-fg ml-auto flex shrink-0 items-center gap-1 font-mono text-[0.62rem] transition-colors"
+						<Tooltip
+							text={sortDir === 'desc' ? 'Newest first — tap for oldest first' : 'Oldest first — tap for newest first'}
+							class="ml-auto shrink-0"
 						>
-							<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 transition-transform {sortDir === 'desc' ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6" /></svg>
-							<span class="hidden sm:inline">{sortDir === 'desc' ? 'Newest first' : 'Oldest first'}</span>
-						</button>
+							<button
+								onclick={toggleSort}
+								class="text-fg-faint hover:text-fg flex items-center gap-1 font-mono text-[0.62rem] transition-colors"
+							>
+								<svg viewBox="0 0 24 24" class="h-3.5 w-3.5 transition-transform {sortDir === 'desc' ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6" /></svg>
+								<span class="hidden sm:inline">{sortDir === 'desc' ? 'Newest first' : 'Oldest first'}</span>
+							</button>
+						</Tooltip>
 						<span class="text-fg-faint font-mono text-xs"><span class="text-signal tnum">{messages.length}</span> msgs</span>
 						<button
 							onclick={() => (settingsOpen = !settingsOpen)}
@@ -364,7 +369,7 @@
 									{:else}
 										<span class="font-display text-fg-faint text-sm font-700 italic">anon</span>
 									{/if}
-									<span class="text-fg-faint font-mono text-[0.62rem]" title={clockTime(m.receivedAt)}>{ago(m.receivedAt)} ago</span>
+									<Tooltip text={clockTime(m.receivedAt)}><span class="text-fg-faint font-mono text-[0.62rem]">{ago(m.receivedAt)} ago</span></Tooltip>
 									{#if m.observers > 1}<span class="text-fg-faint ml-auto font-mono text-[0.62rem]">heard ×{m.observers}</span>{/if}
 								</div>
 								<div class="text-fg text-sm break-words whitespace-pre-wrap">{m.text}</div>

@@ -93,19 +93,20 @@
 					{roleLabels[r]}
 				</button>
 			{/each}
-			<button
-				onclick={() => (favOnly = !favOnly)}
-				title="Show only favorited nodes"
-				class="flex items-center gap-1.5 rounded-[var(--radius)] border px-3 py-1.5 text-xs transition-colors
-					{favOnly
-					? 'border-amber/50 text-amber bg-amber/10'
-					: 'border-line text-fg-dim hover:border-line-bright hover:text-fg'}"
-			>
-				<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill={favOnly ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M12 2.5l2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.9l-5.8 3.05 1.1-6.45-4.7-4.6 6.5-.95z" />
-				</svg>
-				Favorites{#if favorites.count}<span class="tnum">{favorites.count}</span>{/if}
-			</button>
+			<Tooltip text="Show only favorited nodes">
+				<button
+					onclick={() => (favOnly = !favOnly)}
+					class="flex items-center gap-1.5 rounded-[var(--radius)] border px-3 py-1.5 text-xs transition-colors
+						{favOnly
+						? 'border-amber/50 text-amber bg-amber/10'
+						: 'border-line text-fg-dim hover:border-line-bright hover:text-fg'}"
+				>
+					<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill={favOnly ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M12 2.5l2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.9l-5.8 3.05 1.1-6.45-4.7-4.6 6.5-.95z" />
+					</svg>
+					Favorites{#if favorites.count}<span class="tnum">{favorites.count}</span>{/if}
+				</button>
+			</Tooltip>
 		</div>
 	</div>
 
@@ -139,7 +140,7 @@
 					>
 						<div class="min-w-0">
 							<div class="flex items-center gap-1.5">
-								<span class="h-2 w-2 shrink-0 rounded-full" style="background:{st.color}" title="{st.label}"></span>
+								<Tooltip text={st.label} class="shrink-0"><span class="h-2 w-2 rounded-full" style="background:{st.color}"></span></Tooltip>
 								<FavoriteStar pubkey={n.publicKey} size="sm" />
 								{#if n.gpsSuspect}
 									<Tooltip text={GPS_WARNING}>

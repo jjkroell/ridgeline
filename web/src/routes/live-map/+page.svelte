@@ -12,6 +12,7 @@
 	import { ago, shortKey, fmtSnr, snrColor } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PayloadTag from '$lib/components/PayloadTag.svelte';
+	import Tooltip from '$lib/components/Tooltip.svelte';
 	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
 	import NodeModal from '$lib/components/NodeModal.svelte';
@@ -533,22 +534,23 @@
 			{#if live.connected}<span class="live-dot"></span>{/if}
 			<span class="text-fg-faint">{animCount} active</span>
 		</span>
-		<button
-			onclick={toggleSound}
-			title={soundOn ? 'Mute node chimes' : 'Play a soft chime as pulses reach nodes'}
-			aria-pressed={soundOn}
-			class="flex items-center gap-1.5 rounded-[var(--radius)] border px-2.5 py-1 transition-colors {soundOn
-				? 'border-signal/50 text-signal'
-				: 'border-line text-fg-dim hover:text-fg'}"
-		>
-			{#if soundOn}
-				<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" /></svg>
-				<span>Sound</span>
-			{:else}
-				<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M22 9l-6 6M16 9l6 6" /></svg>
-				<span>Muted</span>
-			{/if}
-		</button>
+		<Tooltip text={soundOn ? 'Mute node chimes' : 'Play a soft chime as pulses reach nodes'}>
+			<button
+				onclick={toggleSound}
+				aria-pressed={soundOn}
+				class="flex items-center gap-1.5 rounded-[var(--radius)] border px-2.5 py-1 transition-colors {soundOn
+					? 'border-signal/50 text-signal'
+					: 'border-line text-fg-dim hover:text-fg'}"
+			>
+				{#if soundOn}
+					<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" /></svg>
+					<span>Sound</span>
+				{:else}
+					<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M22 9l-6 6M16 9l6 6" /></svg>
+					<span>Muted</span>
+				{/if}
+			</button>
+		</Tooltip>
 	</div>
 </PageHeader>
 

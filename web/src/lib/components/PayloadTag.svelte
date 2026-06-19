@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Tooltip from './Tooltip.svelte';
+
 	let { type }: { type: string } = $props();
 
 	const colors: Record<string, string> = {
@@ -26,10 +28,11 @@
 	const label = $derived(abbr[type] ?? type);
 </script>
 
-<span
-	class="font-mono rounded-[var(--radius)] px-1.5 py-0.5 text-[0.66rem] tracking-wide whitespace-nowrap"
-	style="color:{color}; background:color-mix(in srgb, {color} 10%, transparent)"
-	title={type}
->
-	{label}
-</span>
+<Tooltip text={type}>
+	<span
+		class="font-mono rounded-[var(--radius)] px-1.5 py-0.5 text-[0.66rem] tracking-wide whitespace-nowrap"
+		style="color:{color}; background:color-mix(in srgb, {color} 10%, transparent)"
+	>
+		{label}
+	</span>
+</Tooltip>

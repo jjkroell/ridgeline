@@ -11,6 +11,7 @@
 	import PayloadTag from './PayloadTag.svelte';
 	import RoleBadge from './RoleBadge.svelte';
 	import FavoriteStar from './FavoriteStar.svelte';
+	import Tooltip from './Tooltip.svelte';
 
 	interface Props {
 		pubkey: string;
@@ -221,7 +222,7 @@
 
 			<!-- Overview -->
 			<div class="panel divide-line/40 divide-y">
-				{#each [{ k: 'Status', v: status.label, c: status.color }, { k: 'Last advert', v: ago(node.lastSeen) + ' ago' }, { k: 'Last relay', v: detail?.relay.lastRelayed ? ago(detail.relay.lastRelayed) + ' ago' + (detail.relay.count1h ? ` · ${detail.relay.count1h}× last hr` : '') : 'none in 6h', c: detail?.relay.lastRelayed ? 'var(--color-fg)' : 'var(--color-fg-faint)' }, { k: 'First seen', v: ago(node.firstSeen) + ' ago' }, { k: 'Packets (6h)', v: detail ? `${detail.totalPackets}` + (detail.totalObservations !== detail.totalPackets ? ` (seen ${detail.totalObservations}×)` : '') : '—' }, { k: 'Packets today', v: detail ? String(detail.packetsToday) : '—' }, { k: 'Adverts (all-time)', v: String(node.advertCount) }, { k: 'Advert cadence', v: cadence(detail?.advertIntervalSec) }, { k: 'Avg SNR', v: detail?.avgSnr != null ? detail.avgSnr.toFixed(1) + ' dB' : '—' }, { k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' }, { k: 'Location', v: fmtCoord(node.latitude, node.longitude) }] as f (f.k)}
+				{#each [{ k: 'Status', v: status.label, c: status.color }, { k: 'Last advert', v: ago(node.lastSeen) + ' ago' }, { k: 'Last relay', v: detail?.relay.lastRelayed ? ago(detail.relay.lastRelayed) + ' ago' + (detail.relay.count1h ? ` · ${detail.relay.count1h}× last hr` : '') : 'none in 24h', c: detail?.relay.lastRelayed ? 'var(--color-fg)' : 'var(--color-fg-faint)' }, { k: 'First seen', v: ago(node.firstSeen) + ' ago' }, { k: 'Packets (6h)', v: detail ? `${detail.totalPackets}` + (detail.totalObservations !== detail.totalPackets ? ` (seen ${detail.totalObservations}×)` : '') : '—' }, { k: 'Packets today', v: detail ? String(detail.packetsToday) : '—' }, { k: 'Adverts (all-time)', v: String(node.advertCount) }, { k: 'Advert cadence', v: cadence(detail?.advertIntervalSec) }, { k: 'Avg SNR', v: detail?.avgSnr != null ? detail.avgSnr.toFixed(1) + ' dB' : '—' }, { k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' }, { k: 'Location', v: fmtCoord(node.latitude, node.longitude) }] as f (f.k)}
 					<div class="flex items-center justify-between px-5 py-2.5">
 						<span class="label normal-case">{f.k}</span>
 						<span class="font-mono text-sm tnum" style="color:{f.c ?? 'var(--color-fg)'}">{f.v}</span>
@@ -238,11 +239,15 @@
 					</div>
 					<div class="flex h-12 items-end gap-1">
 						{#each detail.activity as count, i (i)}
-							<div
-								class="bg-signal/80 hover:bg-signal min-w-0 flex-1 rounded-sm transition-all"
-								style="height:{count === 0 ? 2 : Math.max(8, (count / activityMax) * 100)}%;{count === 0 ? 'opacity:0.25' : ''}"
-								title="{count} advert{count === 1 ? '' : 's'} · {detail.windowHours - 1 - i === 0 ? 'this hour' : `${detail.windowHours - 1 - i}h ago`}"
-							></div>
+							<Tooltip
+								text="{count} advert{count === 1 ? '' : 's'} · {detail.windowHours - 1 - i === 0 ? 'this hour' : `${detail.windowHours - 1 - i}h ago`}"
+								class="h-full min-w-0 flex-1 items-end"
+							>
+								<div
+									class="bg-signal/80 hover:bg-signal w-full rounded-sm transition-all"
+									style="height:{count === 0 ? 2 : Math.max(8, (count / activityMax) * 100)}%;{count === 0 ? 'opacity:0.25' : ''}"
+								></div>
+							</Tooltip>
 						{/each}
 					</div>
 					<div class="text-fg-faint mt-1.5 flex justify-between text-[0.58rem]">
@@ -288,7 +293,7 @@
 						</div>
 							<div class="py-2">
 							<div class="mb-1 flex items-center justify-between">
-								<span class="label normal-case" title="Fraction of relayed traffic that transited this node (6h window)">Traffic share</span>
+								<Tooltip text="Fraction of relayed traffic that transited this node (24h window)"><span class="label normal-case">Traffic share</span></Tooltip>
 								<span class="font-mono text-xs" style="color:{tl.color}">{(detail.trafficShare * 100).toFixed(1)}% · {tl.label}</span>
 							</div>
 							<div class="bg-panel-2 h-1.5 w-full overflow-hidden rounded-full">
@@ -297,7 +302,7 @@
 						</div>
 							<div class="py-2">
 							<div class="mb-1 flex items-center justify-between">
-								<span class="label normal-case" title="Betweenness centrality — how often this node sits on shortest paths (1.0 = most structurally critical)">Bridge score</span>
+								<Tooltip text="Betweenness centrality — how often this node sits on shortest paths (1.0 = most structurally critical)"><span class="label normal-case">Bridge score</span></Tooltip>
 								<span class="font-mono text-xs" style="color:{bl.color}">{(detail.bridge * 100).toFixed(1)}% · {bl.label}</span>
 							</div>
 							<div class="bg-panel-2 h-1.5 w-full overflow-hidden rounded-full">
@@ -346,7 +351,7 @@
 					<div class="divide-line/40 divide-y">
 						{#each detail.recentPackets as p (p.messageHash + p.receivedAt)}
 							<div class="flex items-center gap-3 px-5 py-2 text-sm">
-								<span class="font-mono text-fg-faint w-10 text-xs tnum" title={fmtAbs(p.receivedAt)}>{ago(p.receivedAt)}</span>
+								<Tooltip text={fmtAbs(p.receivedAt)} class="w-10 shrink-0"><span class="font-mono text-fg-faint text-xs tnum">{ago(p.receivedAt)}</span></Tooltip>
 								<PayloadTag type={p.payloadType} />
 								<span class="font-mono text-fg-faint min-w-0 flex-1 truncate text-xs">via {p.observerId ?? '—'}</span>
 								<span class="font-mono text-fg-faint text-xs tnum">{p.pathHops} hop{p.pathHops === 1 ? '' : 's'}</span>
@@ -379,11 +384,11 @@
 					<div class="divide-line/40 max-h-96 divide-y overflow-y-auto">
 						{#each history as h (h.messageHash + h.receivedAt + h.kind + h.hopIndex)}
 							<div class="flex items-center gap-3 px-5 py-2 text-sm">
-								<span class="font-mono text-fg-faint w-10 shrink-0 text-xs tnum" title={fmtAbs(h.receivedAt)}>{ago(h.receivedAt)}</span>
+								<Tooltip text={fmtAbs(h.receivedAt)} class="w-10 shrink-0"><span class="font-mono text-fg-faint text-xs tnum">{ago(h.receivedAt)}</span></Tooltip>
 								<span class="label shrink-0 rounded px-1.5 py-0.5 text-[0.56rem] {h.kind === 'advert' ? 'text-signal bg-signal/10' : 'text-sky bg-sky/10'}">{h.kind === 'advert' ? 'SENT' : 'RELAY'}</span>
 								<PayloadTag type={h.payloadType} />
 								<span class="font-mono text-fg-faint min-w-0 flex-1 truncate text-xs">via {h.observerId ?? '—'}</span>
-								{#if h.kind === 'relay'}<span class="font-mono text-fg-faint shrink-0 text-xs tnum" title="this node's position in the packet's path">hop {h.hopIndex + 1}/{h.pathHops}</span>{/if}
+								{#if h.kind === 'relay'}<Tooltip text="this node's position in the packet's path" class="shrink-0"><span class="font-mono text-fg-faint text-xs tnum">hop {h.hopIndex + 1}/{h.pathHops}</span></Tooltip>{/if}
 								<span class="font-mono w-14 shrink-0 text-right text-xs tnum" style="color:{snrColor(h.snr)}">{fmtSnr(h.snr)} dB</span>
 							</div>
 						{/each}

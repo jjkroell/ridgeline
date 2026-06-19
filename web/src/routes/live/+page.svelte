@@ -5,6 +5,7 @@
 	import { ago, shortKey, roleLabel } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PayloadTag from '$lib/components/PayloadTag.svelte';
+	import Tooltip from '$lib/components/Tooltip.svelte';
 	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
 	import PathModal from '$lib/components/PathModal.svelte';
 
@@ -104,13 +105,14 @@
 </script>
 
 <PageHeader eyebrow="Real-time Telemetry" title="Live Feed">
-	<button
-		onclick={() => (showIds = !showIds)}
-		title="Toggle the Path column between node names and hash IDs"
-		class="font-mono border-line text-fg-dim hover:border-line-bright hover:text-fg flex items-center gap-2 rounded-[var(--radius)] border px-3 py-1.5 text-xs transition-colors"
-	>
-		Path ⇄ {showIds ? 'IDs' : 'Names'}
-	</button>
+	<Tooltip text="Toggle the Path column between node names and hash IDs">
+		<button
+			onclick={() => (showIds = !showIds)}
+			class="font-mono border-line text-fg-dim hover:border-line-bright hover:text-fg flex items-center gap-2 rounded-[var(--radius)] border px-3 py-1.5 text-xs transition-colors"
+		>
+			Path ⇄ {showIds ? 'IDs' : 'Names'}
+		</button>
+	</Tooltip>
 	<button
 		onclick={togglePause}
 		class="font-mono flex items-center gap-2 rounded-[var(--radius)] border px-3 py-1.5 text-xs transition-colors

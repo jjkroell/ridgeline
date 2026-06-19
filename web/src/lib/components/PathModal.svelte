@@ -3,6 +3,7 @@
 	import type { Node } from '$lib/api';
 	import { shortKey, roleColor } from '$lib/format';
 	import PayloadTag from './PayloadTag.svelte';
+	import Tooltip from './Tooltip.svelte';
 
 	interface Props {
 		group: LiveGroup | null;
@@ -78,10 +79,10 @@
 									style="color:{roleColor(n.role)}">{showIds ? hashId(n) : n.name || shortKey(n.publicKey)}</a
 								>
 							{:else}
-								<span
-									class="border-line/60 font-mono text-fg-faint rounded-[var(--radius)] border border-dashed px-2 py-1 text-xs"
-									title="no located node with this key prefix">{hop}</span
-								>
+								<Tooltip text="no located node with this key prefix"><span
+										class="border-line/60 font-mono text-fg-faint rounded-[var(--radius)] border border-dashed px-2 py-1 text-xs"
+										>{hop}</span
+									></Tooltip>
 							{/if}
 						{/each}
 					</div>

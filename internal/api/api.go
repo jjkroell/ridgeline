@@ -54,6 +54,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/nodes", s.nodes)
 	mux.HandleFunc("GET /api/nodes/{pubkey}", s.nodeDetail)
 	mux.HandleFunc("GET /api/nodes/{pubkey}/history", s.nodeHistory)
+	mux.HandleFunc("GET /api/nodes/{pubkey}/heatmap", s.nodeHeatmap)
+	mux.HandleFunc("GET /api/mesh-analytics", s.meshAnalytics)
 	mux.HandleFunc("GET /api/observers", s.observers)
 	mux.HandleFunc("GET /api/observations", s.observations)
 	mux.HandleFunc("GET /api/recent", s.recent)
@@ -270,6 +272,63 @@ func (s *Server) nodeHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, entries)
+}
+
+// nodeHeatmap returns a node's weekday×hour activity grid over the last `days`.
+func (s *Server) nodeHeatmap(w http.ResponseWriter, r *http.Request) {
+	pubkey := strings.ToUpper(r.PathValue("pubkey"))
+	days := 7
+	if v := r.URL.Query().Get("days"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 30 {
+			days = n
+		}
+	}
+	cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
+	nodes, err := s.store.ListNodes()
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	grid, err := analytics.NodeHeatmap(s.store, nodes, pubkey, cutoff, 0, days)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, grid)
+}
+
+// meshAnalytics returns a mesh-wide aggregate (traffic mix, link/RF health,
+// channel utilisation, busiest relays) over a selectable window. Computed on
+// demand from stored raw_hex, like nodeHistory.
+func (s *Server) meshAnalytics(w http.ResponseWriter, r *http.Request) {
+	sinceSec := 6 * 3600 // 6h default
+	if v := r.URL.Query().Get("since"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			sinceSec = n
+		}
+	}
+	if sinceSec > 24*3600 {
+		sinceSec = 24 * 3600
+	}
+	bucketMin := 10
+	if v := r.URL.Query().Get("bucket"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			bucketMin = n
+		}
+	}
+	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
+
+	nodes, err := s.store.ListNodes()
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	summary, err := analytics.MeshSummary(s.store, nodes, cutoff, 0, analytics.DefaultRadio(), bucketMin)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, summary)
 }
 
 func (s *Server) observers(w http.ResponseWriter, _ *http.Request) {

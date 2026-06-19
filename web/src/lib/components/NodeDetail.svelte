@@ -7,7 +7,7 @@
 	import QRCode from 'qrcode';
 	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry } from '$lib/api';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
-	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel } from '$lib/format';
+	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus } from '$lib/format';
 	import PayloadTag from './PayloadTag.svelte';
 	import RoleBadge from './RoleBadge.svelte';
 	import FavoriteStar from './FavoriteStar.svelte';
@@ -83,14 +83,10 @@
 		return { bytes: hs, hex, shared };
 	});
 
-	function statusOf(lastSeen?: string): { label: string; color: string } {
-		if (!lastSeen) return { label: 'Unknown', color: 'var(--color-fg-faint)' };
-		const age = Date.now() - new Date(lastSeen).getTime();
-		if (age < 15 * 60_000) return { label: 'Online', color: 'var(--color-signal)' };
-		if (age < 2 * 3_600_000) return { label: 'Idle', color: 'var(--color-amber)' };
-		return { label: 'Offline', color: 'var(--color-coral)' };
-	}
-	const status = $derived(statusOf(node?.lastSeen));
+	// Liveness from the most recent of advert or relay activity (see nodeStatus).
+	const status = $derived(
+		nodeStatus({ lastSeen: node?.lastSeen, lastRelayed: detail?.relay.lastRelayed })
+	);
 	const isRelay = $derived(node?.role === 'Repeater' || node?.role === 'RoomServer');
 
 	// Score → label/colour, mirroring CoreScope's classification bands.
@@ -225,7 +221,7 @@
 
 			<!-- Overview -->
 			<div class="panel divide-line/40 divide-y">
-				{#each [{ k: 'Status', v: status.label, c: status.color }, { k: 'Last heard', v: ago(node.lastSeen) + ' ago' }, { k: 'First seen', v: ago(node.firstSeen) + ' ago' }, { k: 'Packets (6h)', v: detail ? `${detail.totalPackets}` + (detail.totalObservations !== detail.totalPackets ? ` (seen ${detail.totalObservations}×)` : '') : '—' }, { k: 'Packets today', v: detail ? String(detail.packetsToday) : '—' }, { k: 'Adverts (all-time)', v: String(node.advertCount) }, { k: 'Advert cadence', v: cadence(detail?.advertIntervalSec) }, { k: 'Avg SNR', v: detail?.avgSnr != null ? detail.avgSnr.toFixed(1) + ' dB' : '—' }, { k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' }, { k: 'Location', v: fmtCoord(node.latitude, node.longitude) }] as f (f.k)}
+				{#each [{ k: 'Status', v: status.label, c: status.color }, { k: 'Last advert', v: ago(node.lastSeen) + ' ago' }, { k: 'Last relay', v: detail?.relay.lastRelayed ? ago(detail.relay.lastRelayed) + ' ago' + (detail.relay.count1h ? ` · ${detail.relay.count1h}× last hr` : '') : 'none in 6h', c: detail?.relay.lastRelayed ? 'var(--color-fg)' : 'var(--color-fg-faint)' }, { k: 'First seen', v: ago(node.firstSeen) + ' ago' }, { k: 'Packets (6h)', v: detail ? `${detail.totalPackets}` + (detail.totalObservations !== detail.totalPackets ? ` (seen ${detail.totalObservations}×)` : '') : '—' }, { k: 'Packets today', v: detail ? String(detail.packetsToday) : '—' }, { k: 'Adverts (all-time)', v: String(node.advertCount) }, { k: 'Advert cadence', v: cadence(detail?.advertIntervalSec) }, { k: 'Avg SNR', v: detail?.avgSnr != null ? detail.avgSnr.toFixed(1) + ' dB' : '—' }, { k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' }, { k: 'Location', v: fmtCoord(node.latitude, node.longitude) }] as f (f.k)}
 					<div class="flex items-center justify-between px-5 py-2.5">
 						<span class="label normal-case">{f.k}</span>
 						<span class="font-mono text-sm tnum" style="color:{f.c ?? 'var(--color-fg)'}">{f.v}</span>

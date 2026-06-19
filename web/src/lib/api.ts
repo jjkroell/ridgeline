@@ -22,6 +22,10 @@ export interface Node {
 	hashSize: number;
 	/** Coordinates are a statistical outlier — likely corrupt GPS. */
 	gpsSuspect?: boolean;
+	/** Most recent time this node relayed a packet (within the analytics window). */
+	lastRelayed?: string;
+	/** Packets this node relayed in the last hour. */
+	relayCount1h?: number;
 }
 
 export interface Observer {

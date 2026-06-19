@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api, type Stats, type Node } from '$lib/api';
 	import { live, groupLive, type LiveGroup } from '$lib/live.svelte';
-	import { ago, shortKey, fmtNum, snrColor, fmtSnr } from '$lib/format';
+	import { ago, shortKey, fmtNum, snrColor, fmtSnr, nodeStatus } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
 	import PayloadTag from '$lib/components/PayloadTag.svelte';
@@ -52,13 +52,6 @@
 			.map((k) => nodes.find((n) => n.publicKey.toUpperCase() === k))
 			.filter((n): n is Node => !!n)
 	);
-	function liveStatus(lastSeen?: string): { label: string; color: string } {
-		if (!lastSeen) return { label: 'Unknown', color: 'var(--color-fg-faint)' };
-		const age = Date.now() - new Date(lastSeen).getTime();
-		if (age < 15 * 60_000) return { label: 'Online', color: 'var(--color-signal)' };
-		if (age < 2 * 3_600_000) return { label: 'Idle', color: 'var(--color-amber)' };
-		return { label: 'Offline', color: 'var(--color-coral)' };
-	}
 </script>
 
 <PageHeader eyebrow="Network Observatory" title="Overview">
@@ -124,7 +117,7 @@
 			</div>
 			<div class="grid gap-px sm:grid-cols-2 lg:grid-cols-3">
 				{#each favNodes as n (n.publicKey)}
-					{@const st = liveStatus(n.lastSeen)}
+					{@const st = nodeStatus(n)}
 					<a href="/nodes/{n.publicKey}" class="panel-hover flex items-center gap-3 px-5 py-3">
 						<span class="h-2 w-2 shrink-0 rounded-full" style="background:{st.color}" title={st.label}></span>
 						<div class="min-w-0 flex-1">

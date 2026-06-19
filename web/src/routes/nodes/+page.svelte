@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api, type Node } from '$lib/api';
-	import { ago, shortKey, fmtCoord, fmtNum } from '$lib/format';
+	import { shortKey, fmtCoord, fmtNum, nodeStatus } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -118,7 +118,7 @@
 			<span class="hidden md:block">Role</span>
 			<span class="hidden md:block">Location</span>
 			<span class="text-right">Adverts</span>
-			<span class="text-right">Seen</span>
+			<span class="text-right">Status</span>
 		</div>
 
 		{#if loading}
@@ -130,6 +130,7 @@
 		{:else}
 			<div class="divide-line/50 divide-y">
 				{#each sorted as n (n.publicKey)}
+					{@const st = nodeStatus(n)}
 					<a
 						href="/nodes/{n.publicKey}"
 						class="panel-hover grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-3 md:grid-cols-[1.4fr_120px_1fr_80px_70px] {n.gpsSuspect
@@ -138,6 +139,7 @@
 					>
 						<div class="min-w-0">
 							<div class="flex items-center gap-1.5">
+								<span class="h-2 w-2 shrink-0 rounded-full" style="background:{st.color}" title="{st.label}"></span>
 								<FavoriteStar pubkey={n.publicKey} size="sm" />
 								{#if n.gpsSuspect}
 									<Tooltip text={GPS_WARNING}>
@@ -158,7 +160,7 @@
 							{fmtCoord(n.latitude, n.longitude)}
 						</div>
 						<div class="font-mono tnum text-fg-dim text-right text-sm">{n.advertCount}</div>
-						<div class="font-mono tnum text-fg-faint text-right text-xs">{ago(n.lastSeen)}</div>
+						<div class="font-mono tnum text-right text-xs" style="color:{st.color}">{st.label}</div>
 					</a>
 				{/each}
 			</div>

@@ -178,13 +178,33 @@ func (s *Server) stats(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, st)
 }
 
+// nodeWithLiveness augments a stored node with its recent relay activity so the
+// UI can compute a true "alive in the mesh" status (advert recency OR traffic).
+type nodeWithLiveness struct {
+	store.Node
+	LastRelayed  string `json:"lastRelayed,omitempty"`
+	RelayCount1h int    `json:"relayCount1h,omitempty"`
+}
+
 func (s *Server) nodes(w http.ResponseWriter, _ *http.Request) {
 	nodes, err := s.store.ListNodes()
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	writeJSON(w, nodes)
+	var live map[string]analytics.LiveSignal
+	if s.analytics != nil {
+		live = s.analytics.Liveness()
+	}
+	out := make([]nodeWithLiveness, len(nodes))
+	for i, n := range nodes {
+		out[i] = nodeWithLiveness{Node: n}
+		if sig, ok := live[n.PublicKey]; ok {
+			out[i].LastRelayed = sig.LastRelayed
+			out[i].RelayCount1h = sig.RelayCount1h
+		}
+	}
+	writeJSON(w, out)
 }
 
 // nodeDetail returns one node's row plus its computed analytics snapshot.

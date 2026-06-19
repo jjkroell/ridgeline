@@ -99,6 +99,29 @@ func (e *Engine) Get(pubkey string) (*NodeDetail, time.Time) {
 	return e.details[pubkey], e.generatedAt
 }
 
+// LiveSignal is the recent-activity summary used to compute a node's liveness
+// (alongside its last advert). A relay within the window is strong proof the
+// node is alive and working in the mesh, even when its advert is stale.
+type LiveSignal struct {
+	LastRelayed  string `json:"lastRelayed,omitempty"`
+	RelayCount1h int    `json:"relayCount1h,omitempty"`
+}
+
+// Liveness returns the relay-activity signal for every node in the current
+// snapshot, keyed by pubkey. Cheap copy so callers don't hold the lock.
+func (e *Engine) Liveness() map[string]LiveSignal {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make(map[string]LiveSignal, len(e.details))
+	for pk, d := range e.details {
+		if d.Relay.LastRelayed == "" && d.Relay.Count1h == 0 {
+			continue
+		}
+		out[pk] = LiveSignal{LastRelayed: d.Relay.LastRelayed, RelayCount1h: d.Relay.Count1h}
+	}
+	return out
+}
+
 // Recompute fetches the window of observations and rebuilds the snapshot.
 func (e *Engine) Recompute(st *store.Store, nodes []store.Node) error {
 	cutoff := time.Now().Add(-time.Duration(e.windowHours) * time.Hour).UTC().Format(time.RFC3339Nano)

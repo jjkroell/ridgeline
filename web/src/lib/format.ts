@@ -1,5 +1,37 @@
 // Display helpers shared across the UI.
 
+export type StatusTier = 'online' | 'idle' | 'offline' | 'unknown';
+export interface NodeStatus {
+	label: string;
+	color: string;
+	tier: StatusTier;
+}
+
+// True "alive in the mesh" status. A node is alive if it's done ANYTHING
+// recently — broadcast its own advert OR relayed someone else's traffic — so we
+// score on the most recent of the two. With a ~30h recommended advert interval,
+// advert recency alone is a weak signal; relay activity is the strong proof a
+// node is up and working. Thresholds: Online <6h, Idle <33h (one advert cycle +
+// grace), Offline beyond that.
+const HOUR = 3_600_000;
+export function nodeStatus(n: {
+	lastSeen?: string;
+	lastRelayed?: string;
+}): NodeStatus {
+	const times: number[] = [];
+	for (const t of [n.lastSeen, n.lastRelayed]) {
+		if (t) {
+			const ms = new Date(t).getTime();
+			if (!Number.isNaN(ms)) times.push(ms);
+		}
+	}
+	if (!times.length) return { label: 'Unknown', color: 'var(--color-fg-faint)', tier: 'unknown' };
+	const age = Date.now() - Math.max(...times);
+	if (age < 6 * HOUR) return { label: 'Online', color: 'var(--color-signal)', tier: 'online' };
+	if (age < 33 * HOUR) return { label: 'Idle', color: 'var(--color-amber)', tier: 'idle' };
+	return { label: 'Offline', color: 'var(--color-coral)', tier: 'offline' };
+}
+
 const ROLE_COLORS: Record<string, string> = {
 	Repeater: 'var(--color-role-repeater)',
 	ChatNode: 'var(--color-role-companion)',

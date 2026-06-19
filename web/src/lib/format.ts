@@ -92,6 +92,19 @@ export function fmtNum(n: number): string {
 	return n.toLocaleString('en-US');
 }
 
+// Observer clock-skew (median RX-time deviation, ms): tight = healthy clock,
+// large = drifting. Shared by the analytics + observer views.
+export function skewColor(ms?: number): string {
+	if (ms == null) return 'var(--color-fg-faint)';
+	const a = Math.abs(ms);
+	return a < 50 ? 'var(--color-lime)' : a < 250 ? 'var(--color-amber)' : 'var(--color-coral)';
+}
+
+export function fmtSkew(ms?: number): string {
+	if (ms == null) return '—';
+	return (ms >= 0 ? '+' : '') + Math.round(ms) + ' ms';
+}
+
 export function fmtCoord(lat?: number, lon?: number): string {
 	if (lat == null || lon == null) return '—';
 	return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api, type MeshAnalytics } from '$lib/api';
-	import { fmtNum, roleColor, shortKey } from '$lib/format';
+	import { fmtNum, roleColor, shortKey, skewColor, fmtSkew } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -83,16 +83,6 @@
 	};
 	function tierColor(t?: string): string {
 		return (t && tierColors[t]) || 'var(--color-fg-dim)';
-	}
-	// Clock-skew severity: tight = good, large = drifting clock.
-	function skewColor(ms?: number): string {
-		if (ms == null) return 'var(--color-fg-faint)';
-		const a = Math.abs(ms);
-		return a < 50 ? 'var(--color-lime)' : a < 250 ? 'var(--color-amber)' : 'var(--color-coral)';
-	}
-	function fmtSkew(ms?: number): string {
-		if (ms == null) return '—';
-		return (ms >= 0 ? '+' : '') + Math.round(ms) + ' ms';
 	}
 	function fmtAir(ms: number): string {
 		return ms >= 1000 ? (ms / 1000).toFixed(1) + ' s' : Math.round(ms) + ' ms';

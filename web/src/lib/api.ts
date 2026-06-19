@@ -221,6 +221,22 @@ export interface NodeActivity {
 	days: number;
 }
 
+export interface ObserverAnalytics {
+	id: string;
+	region?: string;
+	windowHours: number;
+	totalPackets: number;
+	packetsPerHour: number;
+	activity: number[]; // per-hour receptions, oldest bucket first
+	payloadTypes: NameCount[];
+	snrHist: HistogramBin[];
+	avgSnr?: number;
+	distinctNodes: number;
+	directNodes: number;
+	clockSkewMs?: number;
+	neighbors: DirectLink[];
+}
+
 async function get<T>(path: string): Promise<T> {
 	const res = await fetch(path, { headers: { accept: 'application/json' } });
 	if (!res.ok) throw new Error(`${path}: ${res.status}`);
@@ -239,6 +255,9 @@ export const api = {
 	nodeHeatmap: (pubkey: string, days = 7) =>
 		get<NodeActivity>(`/api/nodes/${encodeURIComponent(pubkey)}/heatmap?days=${days}`),
 	observers: () => get<Observer[]>('/api/observers'),
+	/** One observer's feed metrics over the last sinceSec seconds (default 24h, max 7d). */
+	observerAnalytics: (id: string, sinceSec = 86400) =>
+		get<ObserverAnalytics>(`/api/observers/${encodeURIComponent(id)}/analytics?since=${sinceSec}`),
 	observations: (limit = 100) => get<Observation[]>(`/api/observations?limit=${limit}`),
 	/** Recent history (default last hour) in the live-event shape, newest first. */
 	recent: (sinceSec = 3600) => get<LiveEvent[]>(`/api/recent?since=${sinceSec}`),

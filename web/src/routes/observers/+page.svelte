@@ -1,15 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { api, type Observer } from '$lib/api';
-	import { ago, fmtNum } from '$lib/format';
+	import { api, type Observer, type ObserverCoverage } from '$lib/api';
+	import { ago, fmtNum, skewColor, fmtSkew } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Tooltip from '$lib/components/Tooltip.svelte';
 
 	let observers = $state<Observer[]>([]);
+	let coverage = $state<Record<string, ObserverCoverage>>({});
 	let loading = $state(true);
 
 	async function refresh() {
 		try {
-			observers = await api.observers();
+			const [obs, mesh] = await Promise.all([api.observers(), api.meshAnalytics().catch(() => null)]);
+			observers = obs;
+			if (mesh) coverage = Object.fromEntries(mesh.observers.map((o) => [o.id, o]));
 		} finally {
 			loading = false;
 		}
@@ -41,7 +45,12 @@
 	{:else}
 		<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 			{#each observers as o, i (o.id)}
-				<div class="panel panel-hover rise px-5 py-4" style="animation-delay:{i * 40}ms">
+				{@const cov = coverage[o.id]}
+				<a
+					href="/observers/{encodeURIComponent(o.id)}"
+					class="panel panel-hover rise block px-5 py-4"
+					style="animation-delay:{i * 40}ms"
+				>
 					<div class="flex items-start justify-between">
 						<div class="min-w-0">
 							<div class="font-mono text-fg truncate text-sm font-bold">{o.id}</div>
@@ -69,7 +78,15 @@
 							<div class="font-mono tnum text-fg-dim mt-1 text-sm">{ago(o.lastSeen)} ago</div>
 						</div>
 					</div>
-				</div>
+					<div class="border-line/60 mt-3 flex items-center justify-between border-t pt-3">
+						<Tooltip text="median receive-time deviation from consensus on shared packets (6h) — large = drifting clock">
+							<span class="label">Clock skew</span>
+						</Tooltip>
+						<span class="font-mono tnum text-sm" style="color:{skewColor(cov?.clockSkewMs)}">
+							{fmtSkew(cov?.clockSkewMs)}
+						</span>
+					</div>
+				</a>
 			{/each}
 		</div>
 	{/if}

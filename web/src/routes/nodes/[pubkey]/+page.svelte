@@ -5,6 +5,7 @@
 	import { shortKey } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
+	import FavoriteStar from '$lib/components/FavoriteStar.svelte';
 	import NodeDetail from '$lib/components/NodeDetail.svelte';
 
 	const pubkey = $derived(page.params.pubkey ?? '');
@@ -28,6 +29,7 @@
 </script>
 
 <PageHeader eyebrow="Node Detail" title={node?.name || shortKey(pubkey, 8, 4)}>
+	{#snippet titleLeft()}<FavoriteStar {pubkey} size="lg" />{/snippet}
 	{#if node}<RoleBadge role={node.role} />{/if}
 	<a href="/nodes" class="label hover:text-signal transition-colors">← All nodes</a>
 </PageHeader>

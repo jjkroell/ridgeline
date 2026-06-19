@@ -190,6 +190,7 @@
 {:else}
 	{#if heading}
 		<div class="mb-5 flex flex-wrap items-center gap-3">
+			<FavoriteStar {pubkey} />
 			<h2 class="font-display text-fg text-2xl font-700 tracking-tight">
 				{node.name || shortKey(pubkey, 8, 4)}
 			</h2>
@@ -198,9 +199,8 @@
 		</div>
 	{/if}
 
-	<!-- Public key strip + favorite toggle -->
+	<!-- Public key strip -->
 	<div class="mb-5 flex items-center gap-2">
-		<FavoriteStar {pubkey} />
 		<button onclick={copyKey} class="panel panel-hover flex flex-1 items-center gap-3 px-5 py-3 text-left">
 			<span class="label shrink-0">PUBKEY</span>
 			<span class="font-mono text-fg break-all text-xs md:text-sm">{pubkey}</span>

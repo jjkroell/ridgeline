@@ -3,14 +3,14 @@
 
 	interface Props {
 		pubkey: string;
-		size?: 'sm' | 'md';
+		size?: 'sm' | 'md' | 'lg';
 		/** Extra classes for the button. */
 		class?: string;
 	}
 	let { pubkey, size = 'md', class: cls = '' }: Props = $props();
 
 	const active = $derived(favorites.has(pubkey));
-	const dim = $derived(size === 'sm' ? 'h-4 w-4' : 'h-5 w-5');
+	const dim = $derived(size === 'sm' ? 'h-4 w-4' : size === 'lg' ? 'h-7 w-7' : 'h-5 w-5');
 
 	// Stop the click from triggering an enclosing link/button (rows are links).
 	function toggle(e: MouseEvent) {

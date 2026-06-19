@@ -29,11 +29,10 @@
 				<div class="label flex items-center gap-2">
 					<span class="bg-signal/70 inline-block h-px w-6"></span> Node Detail
 				</div>
-				<a href="/nodes/{pubkey}" class="label hover:text-signal ml-auto transition-colors">Open full page ↗</a>
-				<button onclick={onclose} class="text-fg-faint hover:text-fg shrink-0 text-xl leading-none" aria-label="Close">✕</button>
+				<button onclick={onclose} class="text-fg-faint hover:text-fg ml-auto shrink-0 text-xl leading-none" aria-label="Close">✕</button>
 			</div>
 			<div class="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-				<NodeDetail {pubkey} heading />
+				<NodeDetail {pubkey} heading compact />
 			</div>
 		</div>
 	</div>

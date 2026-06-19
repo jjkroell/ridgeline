@@ -5,7 +5,7 @@
 	// (e.g. /nodes/[pubkey]) without having visited a full map route first.
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import QRCode from 'qrcode';
-	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry } from '$lib/api';
+	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry, type NodeActivity } from '$lib/api';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus } from '$lib/format';
 	import PayloadTag from './PayloadTag.svelte';
@@ -19,8 +19,12 @@
 		nodes?: Node[];
 		/** Render a name + role heading (used in the modal; the page has its own). */
 		heading?: boolean;
+		/** Barebones snapshot: identity, location and key facts only — no QR,
+		 * sparkline, relay scores or the observers/packets/history/neighbour lists.
+		 * Used by the modal; the full page links from it for depth. */
+		compact?: boolean;
 	}
-	let { pubkey, nodes: nodesProp = undefined, heading = false }: Props = $props();
+	let { pubkey, nodes: nodesProp = undefined, heading = false, compact = false }: Props = $props();
 
 	let node = $state<Node | null>(null);
 	let detail = $state<NodeAnalytics | null>(null);
@@ -53,6 +57,21 @@
 		loadHistory();
 	}
 
+	// Weekday×hour activity heatmap (full page only).
+	let heatmap = $state<NodeActivity | null>(null);
+	async function loadHeatmap() {
+		try {
+			heatmap = await api.nodeHeatmap(pubkey, 7);
+		} catch {
+			heatmap = null;
+		}
+	}
+	const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+	function cellStyle(count: number, max: number): string {
+		if (count === 0) return 'background:var(--color-line);opacity:0.4';
+		return `background:var(--color-signal);opacity:${(0.2 + 0.8 * (count / Math.max(1, max))).toFixed(3)}`;
+	}
+
 	async function refresh() {
 		try {
 			const [resp, list] = await Promise.all([
@@ -68,7 +87,10 @@
 	}
 	onMount(() => {
 		refresh();
-		loadHistory();
+		if (!compact) {
+			loadHistory(); // snapshot view skips the history list + heatmap
+			loadHeatmap();
+		}
 		const t = setInterval(refresh, 15000);
 		return () => clearInterval(t);
 	});
@@ -117,6 +139,48 @@
 	const activityMax = $derived(Math.max(1, ...(detail?.activity ?? [1])));
 	const tl = $derived(trafficLabel(detail?.trafficShare ?? 0));
 	const bl = $derived(bridgeLabel(detail?.bridge ?? 0));
+
+	// Overview facts. Compact (modal snapshot) shows a key subset; the full page
+	// shows everything.
+	const facts = $derived.by(() => {
+		if (!node) return [];
+		const lastRelay = {
+			k: 'Last relay',
+			v: detail?.relay.lastRelayed
+				? ago(detail.relay.lastRelayed) + ' ago' + (detail.relay.count1h ? ` · ${detail.relay.count1h}× last hr` : '')
+				: 'none in 24h',
+			c: detail?.relay.lastRelayed ? 'var(--color-fg)' : 'var(--color-fg-faint)'
+		};
+		const packets6h = {
+			k: 'Packets (6h)',
+			v: detail ? `${detail.totalPackets}` + (detail.totalObservations !== detail.totalPackets ? ` (seen ${detail.totalObservations}×)` : '') : '—'
+		};
+		const avgSnr = { k: 'Avg SNR', v: detail?.avgSnr != null ? detail.avgSnr.toFixed(1) + ' dB' : '—' };
+		const location = { k: 'Location', v: fmtCoord(node.latitude, node.longitude) };
+		if (compact) {
+			return [
+				{ k: 'Status', v: status.label, c: status.color },
+				{ k: 'Last advert', v: ago(node.lastSeen) + ' ago' },
+				lastRelay,
+				packets6h,
+				avgSnr,
+				location
+			];
+		}
+		return [
+			{ k: 'Status', v: status.label, c: status.color },
+			{ k: 'Last advert', v: ago(node.lastSeen) + ' ago' },
+			lastRelay,
+			{ k: 'First seen', v: ago(node.firstSeen) + ' ago' },
+			packets6h,
+			{ k: 'Packets today', v: detail ? String(detail.packetsToday) : '—' },
+			{ k: 'Adverts (all-time)', v: String(node.advertCount) },
+			{ k: 'Advert cadence', v: cadence(detail?.advertIntervalSec) },
+			avgSnr,
+			{ k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' },
+			location
+		];
+	});
 
 	let copied = $state(false);
 	async function copyKey() {
@@ -200,19 +264,39 @@
 	<div class="mb-5 flex items-center gap-2">
 		<button onclick={copyKey} class="panel panel-hover flex flex-1 items-center gap-3 px-5 py-3 text-left">
 			<span class="label shrink-0">PUBKEY</span>
-			<span class="font-mono text-fg break-all text-xs md:text-sm">{pubkey}</span>
+			<span class="font-mono text-fg whitespace-nowrap text-[0.72rem] tracking-tight">{pubkey}</span>
 			<span class="label ml-auto shrink-0 {copied ? '!text-signal' : ''}">{copied ? 'COPIED' : 'COPY'}</span>
 		</button>
 	</div>
 
-	<div class="grid gap-5 lg:grid-cols-3">
-		<!-- LEFT: map, QR, overview, hash, scores -->
+	<div class="grid gap-5 {compact ? '' : 'lg:grid-cols-3'}">
+		<!-- LEFT: hash, map, QR, overview, scores -->
 		<div class="space-y-4 lg:col-span-1">
+			<!-- Hash ID -->
+			<div class="panel px-5 py-4">
+				<div class="label mb-3 flex items-center justify-between">
+					Hash ID
+					{#if hashId}<span class="font-mono text-fg-faint normal-case">{hashId.bytes}-byte</span>{/if}
+				</div>
+				{#if hashId}
+					<div class="flex items-baseline gap-3">
+						<span class="font-mono text-signal glow-signal text-2xl font-700 tracking-[0.15em]">{hashId.hex}</span>
+						{#if hashId.shared === 0}
+							<span class="font-mono text-signal bg-signal/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem]">unique</span>
+						{:else}
+							<span class="font-mono text-amber bg-amber/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem] tnum">+{hashId.shared} collision{hashId.shared > 1 ? 's' : ''}</span>
+						{/if}
+					</div>
+				{:else}
+					<div class="text-fg-faint text-sm">Unknown — not seen advertising yet.</div>
+				{/if}
+			</div>
+
 			{#if hasLoc}
 				<div bind:this={mapEl} class="border-line h-44 w-full overflow-hidden rounded-[var(--radius)] border"></div>
 			{/if}
 
-			{#if qrSvg}
+			{#if qrSvg && !compact}
 				<div class="panel flex flex-col items-center gap-2 px-5 py-4">
 					<div class="label self-start">MeshCore Contact</div>
 					<div class="qr w-36 rounded-[var(--radius)] bg-white p-2">{@html qrSvg}</div>
@@ -222,7 +306,7 @@
 
 			<!-- Overview -->
 			<div class="panel divide-line/40 divide-y">
-				{#each [{ k: 'Status', v: status.label, c: status.color }, { k: 'Last advert', v: ago(node.lastSeen) + ' ago' }, { k: 'Last relay', v: detail?.relay.lastRelayed ? ago(detail.relay.lastRelayed) + ' ago' + (detail.relay.count1h ? ` · ${detail.relay.count1h}× last hr` : '') : 'none in 24h', c: detail?.relay.lastRelayed ? 'var(--color-fg)' : 'var(--color-fg-faint)' }, { k: 'First seen', v: ago(node.firstSeen) + ' ago' }, { k: 'Packets (6h)', v: detail ? `${detail.totalPackets}` + (detail.totalObservations !== detail.totalPackets ? ` (seen ${detail.totalObservations}×)` : '') : '—' }, { k: 'Packets today', v: detail ? String(detail.packetsToday) : '—' }, { k: 'Adverts (all-time)', v: String(node.advertCount) }, { k: 'Advert cadence', v: cadence(detail?.advertIntervalSec) }, { k: 'Avg SNR', v: detail?.avgSnr != null ? detail.avgSnr.toFixed(1) + ' dB' : '—' }, { k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' }, { k: 'Location', v: fmtCoord(node.latitude, node.longitude) }] as f (f.k)}
+				{#each facts as f (f.k)}
 					<div class="flex items-center justify-between px-5 py-2.5">
 						<span class="label normal-case">{f.k}</span>
 						<span class="font-mono text-sm tnum" style="color:{f.c ?? 'var(--color-fg)'}">{f.v}</span>
@@ -231,7 +315,7 @@
 			</div>
 
 			<!-- Advert activity sparkline (per-hour over the window) -->
-			{#if detail?.activity?.length}
+			{#if detail?.activity?.length && !compact}
 				<div class="panel px-5 py-4">
 					<div class="label mb-3 flex items-center justify-between">
 						<span>Advert Activity</span>
@@ -256,28 +340,8 @@
 				</div>
 			{/if}
 
-			<!-- Hash ID -->
-			<div class="panel px-5 py-4">
-				<div class="label mb-3 flex items-center justify-between">
-					Hash ID
-					{#if hashId}<span class="font-mono text-fg-faint normal-case">{hashId.bytes}-byte</span>{/if}
-				</div>
-				{#if hashId}
-					<div class="flex items-baseline gap-3">
-						<span class="font-mono text-signal glow-signal text-2xl font-700 tracking-[0.15em]">{hashId.hex}</span>
-						{#if hashId.shared === 0}
-							<span class="font-mono text-signal bg-signal/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem]">unique</span>
-						{:else}
-							<span class="font-mono text-amber bg-amber/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem] tnum">+{hashId.shared} collision{hashId.shared > 1 ? 's' : ''}</span>
-						{/if}
-					</div>
-				{:else}
-					<div class="text-fg-faint text-sm">Unknown — not seen advertising yet.</div>
-				{/if}
-			</div>
-
 			<!-- Relay role + scores (repeaters / room servers) -->
-			{#if isRelay && detail}
+			{#if isRelay && detail && !compact}
 				<div class="panel px-5 py-4">
 					<div class="label mb-3">Relay Activity</div>
 					<div class="divide-line/40 divide-y text-sm">
@@ -312,10 +376,53 @@
 					</div>
 				</div>
 			{/if}
+
+			{#if compact}
+				<a href="/nodes/{pubkey}" class="panel panel-hover block px-5 py-3 text-center">
+					<span class="label">Heard by {detail?.observers.length ?? 0} · {detail?.neighbors.length ?? 0} neighbour{(detail?.neighbors.length ?? 0) === 1 ? '' : 's'}</span>
+					<span class="text-signal mt-1 block text-sm">Open full detail ↗</span>
+				</a>
+			{/if}
 		</div>
 
+		{#if !compact}
 		<!-- RIGHT: observers, recent packets, neighbors -->
 		<div class="space-y-4 lg:col-span-2">
+			<!-- Activity heatmap (weekday × hour) -->
+			<section class="panel">
+				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
+					<h3 class="font-display text-fg text-sm font-700 tracking-wide">ACTIVITY HEATMAP</h3>
+					<span class="label ml-auto normal-case">last 7d · UTC{heatmap ? ` · ${heatmap.total} pkt` : ''}</span>
+				</div>
+				{#if !heatmap || heatmap.total === 0}
+					<div class="text-fg-faint px-5 py-8 text-center text-sm">No activity in the last 7 days.</div>
+				{:else}
+					<div class="px-5 py-4">
+						<div class="flex flex-col gap-[3px]">
+							{#each heatmap.grid as row, d (d)}
+								<div class="flex items-center gap-2">
+									<span class="font-mono text-fg-faint w-7 shrink-0 text-[0.58rem]">{DAY[d]}</span>
+									<div class="grid flex-1 gap-[2px]" style="grid-template-columns:repeat(24,1fr)">
+										{#each row as count, h (h)}
+											<Tooltip text="{DAY[d]} {h.toString().padStart(2, '0')}:00 UTC · {count} packet{count === 1 ? '' : 's'}" class="block w-full">
+												<div class="h-[13px] w-full rounded-[1px]" style={cellStyle(count, heatmap.max)}></div>
+											</Tooltip>
+										{/each}
+									</div>
+								</div>
+							{/each}
+							<div class="text-fg-faint mt-0.5 flex gap-2 pl-9 font-mono text-[0.55rem]">
+								<div class="grid flex-1" style="grid-template-columns:repeat(24,1fr)">
+									{#each Array(24) as _, h (h)}
+										<span class="text-center">{h % 6 === 0 ? h : ''}</span>
+									{/each}
+								</div>
+							</div>
+						</div>
+					</div>
+				{/if}
+			</section>
+
 			<!-- Heard By -->
 			<section class="panel">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
@@ -421,6 +528,7 @@
 				{/if}
 			</section>
 		</div>
+		{/if}
 	</div>
 {/if}
 

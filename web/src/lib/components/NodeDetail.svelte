@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import maplibregl from 'maplibre-gl';
 	import QRCode from 'qrcode';
 	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry } from '$lib/api';
-	import { basemapStyleUrl } from '$lib/map-basemap';
+	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel } from '$lib/format';
 	import PayloadTag from './PayloadTag.svelte';
 	import RoleBadge from './RoleBadge.svelte';
@@ -128,23 +128,41 @@
 	// --- Inset map of the node's location ---
 	let mapEl = $state<HTMLDivElement>();
 	let map: maplibregl.Map | null = null;
+	let marker: maplibregl.Marker | null = null;
+	// Create the map ONCE. Gate on the memoized `hasLoc` boolean (not `node`,
+	// which refresh() reassigns to a fresh object every 15s — tracking it here
+	// would tear down and recreate the whole map on every poll, flickering the
+	// attribution back open and never letting the marker settle). Coords are
+	// read untracked so a node refresh can't retrigger this effect.
 	$effect(() => {
-		if (!mapEl || !node || node.latitude == null || node.longitude == null || map) return;
-		const light = document.documentElement.classList.contains('theme-light');
-		map = new maplibregl.Map({
-			container: mapEl,
-			style: basemapStyleUrl(light),
-			center: [node.longitude, node.latitude],
-			zoom: 11,
-			attributionControl: { compact: true }
+		if (!mapEl || !hasLoc || map) return;
+		untrack(() => {
+			const lng = node!.longitude!;
+			const lat = node!.latitude!;
+			const light = document.documentElement.classList.contains('theme-light');
+			map = new maplibregl.Map({
+				container: mapEl!,
+				style: basemapStyleUrl(light),
+				center: [lng, lat],
+				zoom: 11,
+				attributionControl: { compact: true }
+			});
+			marker = new maplibregl.Marker({ color: '#34e3c4' }).setLngLat([lng, lat]).addTo(map);
+			const m = map;
+			m.on('load', () => collapseAttribution(m));
+			setTimeout(() => m.resize(), 80);
 		});
-		new maplibregl.Marker({ color: '#34e3c4' }).setLngLat([node.longitude, node.latitude]).addTo(map);
-		const m = map;
-		setTimeout(() => m.resize(), 80);
 		return () => {
 			map?.remove();
 			map = null;
+			marker = null;
 		};
+	});
+	// Keep the marker on the node's current location without recreating the map.
+	$effect(() => {
+		const lat = node?.latitude;
+		const lng = node?.longitude;
+		if (map && marker && lat != null && lng != null) marker.setLngLat([lng, lat]);
 	});
 
 	// --- QR contact code (scannable by the MeshCore app) ---

@@ -7,3 +7,13 @@ export function basemapStyleUrl(light: boolean): string {
 		? 'https://tiles.openfreemap.org/styles/positron'
 		: 'https://tiles.openfreemap.org/styles/dark';
 }
+
+// MapLibre's compact AttributionControl renders expanded by default. Collapse it
+// to the ⓘ button so the credits stay out of the way (still expandable on click).
+// Safe to call once the control exists; it stays collapsed afterwards because
+// _updateCompact only re-opens when the 'maplibregl-compact' class is absent.
+export function collapseAttribution(map: { getContainer(): HTMLElement }): void {
+	const el = map.getContainer().querySelector('.maplibregl-ctrl-attrib');
+	el?.classList.remove('maplibregl-compact-show');
+	el?.removeAttribute('open');
+}

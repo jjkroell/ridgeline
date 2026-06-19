@@ -7,7 +7,7 @@
 	import { roleLabel } from '$lib/format';
 	import { theme } from '$lib/theme.svelte';
 	import { favorites } from '$lib/favorites.svelte';
-	import { basemapStyleUrl } from '$lib/map-basemap';
+	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
@@ -242,6 +242,7 @@
 		map.on('load', () => {
 			map?.resize();
 			ensureHillshade(map!, basemapLight);
+			collapseAttribution(map!);
 			addLayers();
 			bindEvents();
 			ready = true;

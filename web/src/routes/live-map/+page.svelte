@@ -7,7 +7,7 @@
 	import { live, groupLive, type LiveGroup } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import { favorites } from '$lib/favorites.svelte';
-	import { basemapStyleUrl } from '$lib/map-basemap';
+	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { ago, shortKey, fmtSnr, snrColor } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -508,6 +508,7 @@
 		map.on('load', () => {
 			map?.resize();
 			ensureHillshade(map!, basemapLight);
+			collapseAttribution(map!);
 			addLayers();
 			bindEvents();
 			ready = true;

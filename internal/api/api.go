@@ -57,6 +57,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/nodes/{pubkey}/heatmap", s.nodeHeatmap)
 	mux.HandleFunc("GET /api/mesh-analytics", s.meshAnalytics)
 	mux.HandleFunc("GET /api/observers", s.observers)
+	mux.HandleFunc("GET /api/observers/{id}/analytics", s.observerAnalytics)
 	mux.HandleFunc("GET /api/observations", s.observations)
 	mux.HandleFunc("GET /api/recent", s.recent)
 	mux.HandleFunc("GET /api/live", s.live)
@@ -338,6 +339,33 @@ func (s *Server) observers(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, obs)
+}
+
+// observerAnalytics returns one observer's feed metrics (throughput, payload mix,
+// SNR, RF neighbours, clock skew) over the last `since` seconds. On demand.
+func (s *Server) observerAnalytics(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	sinceSec := 24 * 3600 // 24h default
+	if v := r.URL.Query().Get("since"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			sinceSec = n
+		}
+	}
+	if sinceSec > 7*86400 {
+		sinceSec = 7 * 86400
+	}
+	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
+	nodes, err := s.store.ListNodes()
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	summary, err := analytics.ObserverSummary(s.store, nodes, id, cutoff, 0)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, summary)
 }
 
 func (s *Server) observations(w http.ResponseWriter, r *http.Request) {

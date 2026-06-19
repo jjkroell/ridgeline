@@ -122,14 +122,27 @@ func (e *Engine) Liveness() map[string]LiveSignal {
 	return out
 }
 
-// Recompute fetches the window of observations and rebuilds the snapshot.
+// relayWindowHours is the lookback for relay activity / liveness. It's wider
+// than the advert window (which drives the cadence sparkline) so relay counts
+// like Count24h and lastRelayed reflect a full day, not just the advert window.
+const relayWindowHours = 24
+
+// Recompute fetches the window of observations and rebuilds the snapshot. Relay
+// activity is scanned over relayWindowHours; advert stats are kept to the
+// (narrower) advert window via advertCutoff so the sparkline/cadence are unchanged.
 func (e *Engine) Recompute(st *store.Store, nodes []store.Node) error {
-	cutoff := time.Now().Add(-time.Duration(e.windowHours) * time.Hour).UTC().Format(time.RFC3339Nano)
+	lookback := e.windowHours
+	if relayWindowHours > lookback {
+		lookback = relayWindowHours
+	}
+	now := time.Now()
+	cutoff := now.Add(-time.Duration(lookback) * time.Hour).UTC().Format(time.RFC3339Nano)
+	advertCutoff := now.Add(-time.Duration(e.windowHours) * time.Hour).UTC().Format(time.RFC3339Nano)
 	raws, err := st.RawWindow(cutoff, 0)
 	if err != nil {
 		return err
 	}
-	details := build(raws, nodes, e.windowHours)
+	details := build(raws, nodes, e.windowHours, advertCutoff)
 	e.mu.Lock()
 	e.details = details
 	e.generatedAt = time.Now()
@@ -176,7 +189,10 @@ func newNodeAcc() *nodeAcc {
 }
 
 // build decodes the window once and produces per-node analytics.
-func build(raws []store.RawObservation, nodes []store.Node, windowHours int) map[string]*NodeDetail {
+// build computes the snapshot. raws span the relay window; advertCutoff (an
+// RFC3339Nano timestamp) bounds advert stats to the narrower advert window so
+// the cadence sparkline and per-node advert counts ignore older transmissions.
+func build(raws []store.RawObservation, nodes []store.Node, windowHours int, advertCutoff string) map[string]*NodeDetail {
 	now := time.Now()
 	today := now.UTC().Format("2006-01-02")
 
@@ -222,8 +238,9 @@ func build(raws []store.RawObservation, nodes []store.Node, windowHours int) map
 			txPaths[hash] = &txPath{hops: resolved, receivedAt: ro.ReceivedAt, advert: pkt.Advert != nil}
 		}
 
-		// Advert attribution → the advertising node's own stats.
-		if pkt.Advert != nil {
+		// Advert attribution → the advertising node's own stats. Bounded to the
+		// advert window so the wider relay scan doesn't inflate advert counts.
+		if pkt.Advert != nil && ro.ReceivedAt >= advertCutoff {
 			a := accFor(pkt.Advert.PublicKey)
 			a.obsCount++
 			if ro.SNR != nil {

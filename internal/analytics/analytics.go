@@ -288,7 +288,7 @@ func build(raws []store.RawObservation, nodes []store.Node, windowHours int) map
 	ensure := func(pk string) *NodeDetail {
 		d := details[pk]
 		if d == nil {
-			d = &NodeDetail{PublicKey: pk, WindowHours: windowHours, Observers: []ObserverStat{}, RecentPackets: []PacketRef{}, Neighbors: []NeighborStat{}}
+			d = &NodeDetail{PublicKey: pk, WindowHours: windowHours, Observers: []ObserverStat{}, RecentPackets: []PacketRef{}, Neighbors: []NeighborStat{}, Activity: []int{}}
 			details[pk] = d
 		}
 		return d

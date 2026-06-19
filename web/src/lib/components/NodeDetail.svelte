@@ -213,7 +213,7 @@
 			</div>
 
 			<!-- Advert activity sparkline (per-hour over the window) -->
-			{#if detail && detail.activity.length}
+			{#if detail?.activity?.length}
 				<div class="panel px-5 py-4">
 					<div class="label mb-3 flex items-center justify-between">
 						<span>Advert Activity</span>

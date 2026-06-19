@@ -28,6 +28,11 @@
 	// ── Low-key audio: a soft chime as each pulse reaches a node ───────────
 	let soundOn = $state(false);
 	const SOUND_KEY = 'ridgeline-livemap-sound';
+	// Overlay collapse state — both default minimized, persisted across visits.
+	const MAPCTRL_KEY = 'ridgeline-livemap-mapcontrol';
+	const PANEL_KEY = 'ridgeline-livemap-recent';
+	let mapCtrlOpen = $state(false);
+	let overlaysReady = $state(false); // gate persistence until localStorage is loaded
 	let actx: AudioContext | null = null;
 	let masterGain: GainNode | null = null;
 	let lastTickAt = 0;
@@ -76,7 +81,7 @@
 	}
 
 	// Recent packets overlay (grouped, max 15) with minimize/maximize.
-	let panelOpen = $state(true);
+	let panelOpen = $state(false);
 	let selected = $state<LiveGroup | null>(null);
 	let nodeKey = $state<string | null>(null);
 	const recent = $derived(groupLive(live.events).slice(0, 15));
@@ -405,12 +410,13 @@
 			source: 'nodes',
 			filter: ['==', ['get', 'fav'], true],
 			paint: {
-				// Ring hugging the dot: ~2px outside the node radius at each zoom.
+				// Ring hugging the dot tightly — sits right against the node radius
+				// (≈ node radius + 0.5px) so it reads as the dot's own outline.
 				'circle-radius': [
 					'interpolate', ['linear'], ['zoom'],
-					6, ['match', ['get', 'role'], 'Repeater', 4.2, 3.6],
-					11, ['match', ['get', 'role'], 'Repeater', 6.5, 4.8],
-					15, ['match', ['get', 'role'], 'Repeater', 9, 6.8]
+					6, ['match', ['get', 'role'], 'Repeater', 2.7, 2.1],
+					11, ['match', ['get', 'role'], 'Repeater', 5, 3.3],
+					15, ['match', ['get', 'role'], 'Repeater', 7.5, 5.3]
 				],
 				'circle-color': 'rgba(0,0,0,0)',
 				'circle-stroke-color': FAV_COLOR,
@@ -481,12 +487,28 @@
 		map.on('mouseleave', 'nodes', () => map && (map.getCanvas().style.cursor = ''));
 	}
 
-	onMount(() => {
+	// Persist overlay collapse state once loaded (default minimized on first visit).
+	$effect(() => {
+		const mc = mapCtrlOpen;
+		const rp = panelOpen;
+		if (!overlaysReady) return;
 		try {
-			soundOn = localStorage.getItem(SOUND_KEY) === '1';
+			localStorage.setItem(MAPCTRL_KEY, mc ? '1' : '0');
+			localStorage.setItem(PANEL_KEY, rp ? '1' : '0');
 		} catch {
 			/* storage unavailable */
 		}
+	});
+
+	onMount(() => {
+		try {
+			soundOn = localStorage.getItem(SOUND_KEY) === '1';
+			mapCtrlOpen = localStorage.getItem(MAPCTRL_KEY) === '1';
+			panelOpen = localStorage.getItem(PANEL_KEY) === '1';
+		} catch {
+			/* storage unavailable */
+		}
+		overlaysReady = true;
 		// If sound was left on, the AudioContext can only start after a user
 		// gesture — arm it on the first interaction.
 		if (soundOn) {
@@ -534,23 +556,6 @@
 			{#if live.connected}<span class="live-dot"></span>{/if}
 			<span class="text-fg-faint">{animCount} active</span>
 		</span>
-		<Tooltip text={soundOn ? 'Mute node chimes' : 'Play a soft chime as pulses reach nodes'}>
-			<button
-				onclick={toggleSound}
-				aria-pressed={soundOn}
-				class="flex items-center gap-1.5 rounded-[var(--radius)] border px-2.5 py-1 transition-colors {soundOn
-					? 'border-signal/50 text-signal'
-					: 'border-line text-fg-dim hover:text-fg'}"
-			>
-				{#if soundOn}
-					<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" /></svg>
-					<span>Sound</span>
-				{:else}
-					<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M22 9l-6 6M16 9l6 6" /></svg>
-					<span>Muted</span>
-				{/if}
-			</button>
-		</Tooltip>
 	</div>
 </PageHeader>
 
@@ -558,7 +563,26 @@
 	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
 		<div bind:this={mapEl} class="h-full w-full"></div>
 
-		<MapRoleFilter bind:selected={selectedRoles} />
+		<MapRoleFilter bind:selected={selectedRoles} title="Map Control" bind:open={mapCtrlOpen}>
+			<div class="label mb-1.5">Audio</div>
+			<Tooltip text={soundOn ? 'Mute node chimes' : 'Play a soft chime as pulses reach nodes'} class="block w-full">
+				<button
+					onclick={toggleSound}
+					aria-pressed={soundOn}
+					class="flex w-full items-center justify-center gap-1.5 rounded-[var(--radius)] border px-2 py-1 text-[0.68rem] font-medium transition-colors {soundOn
+						? 'border-signal/50 text-signal'
+						: 'border-line text-fg-dim hover:text-fg'}"
+				>
+					{#if soundOn}
+						<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" /></svg>
+						<span>Sound on</span>
+					{:else}
+						<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M22 9l-6 6M16 9l6 6" /></svg>
+						<span>Muted</span>
+					{/if}
+				</button>
+			</Tooltip>
+		</MapRoleFilter>
 
 		<!-- Recent packets overlay (bottom-left) -->
 		<div

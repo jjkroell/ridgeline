@@ -28,7 +28,7 @@
 	--color-role-repeater: #ff6b6b;
 	--color-role-companion: #5b9dff;
 	--color-role-room: #6ee7a8;
-	--color-role-sensor: #e8b454;
+	--color-role-sensor: #f472b6;
 	--color-role-observer: #a78bfa;
 
 	--font-display: 'Chivo', ui-sans-serif, system-ui, sans-serif;
@@ -68,7 +68,7 @@ html.theme-light {
 	--color-role-repeater: #d4302f;
 	--color-role-companion: #2563eb;
 	--color-role-room: #16a34a;
-	--color-role-sensor: #b07d1e;
+	--color-role-sensor: #db2777;
 	--color-role-observer: #7c5cf0;
 
 	--contour-color: rgba(141, 110, 74, 0.28);

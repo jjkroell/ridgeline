@@ -144,6 +144,83 @@ export interface NodeHistoryEntry {
 	hopIndex: number;
 }
 
+// --- Mesh-wide analytics (GET /api/mesh-analytics) ---
+export interface RadioParams {
+	SpreadingFactor: number;
+	BandwidthHz: number;
+	CodingRate: number;
+	PreambleSymbols: number;
+}
+export interface MeshKPIs {
+	activeNodes: number;
+	transmissions: number;
+	observations: number;
+	avgLinkScore?: number;
+	floodRedundancy?: number;
+	channelUtilPct: number;
+	congestionTier: string;
+}
+export interface NameCount {
+	label: string;
+	count: number;
+}
+export interface HistogramBin {
+	label: string;
+	count: number;
+}
+export interface AirtimeBucket {
+	timestamp: string;
+	airtimeMs: number;
+	utilPct: number;
+	transmissions: number;
+}
+export interface RelayRank {
+	publicKey: string;
+	name: string;
+	role: string;
+	relayed: number;
+	airtimeMs: number;
+}
+export interface ObserverCoverage {
+	id: string;
+	region?: string;
+	observations: number;
+	distinctNodes: number;
+	directNodes: number;
+	/** Median receive-time deviation from consensus (ms) — clock-drift signal. */
+	clockSkewMs?: number;
+}
+export interface DirectLink {
+	observer: string;
+	nodeKey: string;
+	nodeName: string;
+	role: string;
+	count: number;
+}
+export interface MeshAnalytics {
+	generatedAt: string;
+	windowHours: number;
+	radio: RadioParams;
+	kpis: MeshKPIs;
+	payloadTypes: NameCount[];
+	routeTypes: NameCount[];
+	linkScoreHist: HistogramBin[];
+	snrHist: HistogramBin[];
+	airtime: AirtimeBucket[];
+	topRelays: RelayRank[];
+	observers: ObserverCoverage[];
+	directLinks: DirectLink[];
+	directReach: HistogramBin[];
+	hashSizes: NameCount[];
+}
+
+export interface NodeActivity {
+	grid: number[][]; // [weekday 0=Sun][hour 0-23]
+	max: number;
+	total: number;
+	days: number;
+}
+
 async function get<T>(path: string): Promise<T> {
 	const res = await fetch(path, { headers: { accept: 'application/json' } });
 	if (!res.ok) throw new Error(`${path}: ${res.status}`);
@@ -158,8 +235,14 @@ export const api = {
 	/** A node's stored observations (own adverts + relayed packets) over the last sinceSec seconds, newest first. */
 	nodeHistory: (pubkey: string, sinceSec = 86400, limit = 300) =>
 		get<NodeHistoryEntry[]>(`/api/nodes/${encodeURIComponent(pubkey)}/history?since=${sinceSec}&limit=${limit}`),
+	/** A node's weekday×hour activity heatmap over the last `days` days. */
+	nodeHeatmap: (pubkey: string, days = 7) =>
+		get<NodeActivity>(`/api/nodes/${encodeURIComponent(pubkey)}/heatmap?days=${days}`),
 	observers: () => get<Observer[]>('/api/observers'),
 	observations: (limit = 100) => get<Observation[]>(`/api/observations?limit=${limit}`),
 	/** Recent history (default last hour) in the live-event shape, newest first. */
-	recent: (sinceSec = 3600) => get<LiveEvent[]>(`/api/recent?since=${sinceSec}`)
+	recent: (sinceSec = 3600) => get<LiveEvent[]>(`/api/recent?since=${sinceSec}`),
+	/** Mesh-wide analytics over the last sinceSec seconds (default 6h, max 24h). */
+	meshAnalytics: (sinceSec = 21600, bucketMin = 10) =>
+		get<MeshAnalytics>(`/api/mesh-analytics?since=${sinceSec}&bucket=${bucketMin}`)
 };

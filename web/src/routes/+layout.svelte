@@ -22,6 +22,7 @@
 		{ href: '/live', label: 'Live Feed', icon: 'pulse' },
 		{ href: '/map', label: 'Map', icon: 'map' },
 		{ href: '/live-map', label: 'Live Map', icon: 'signal' },
+		{ href: '/analytics', label: 'Analytics', icon: 'chart' },
 		{ href: '/channels', label: 'Channels', icon: 'hash' },
 		{ href: '/observers', label: 'Observers', icon: 'eye' }
 	];
@@ -38,6 +39,7 @@
 		map: 'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14',
 		signal: 'M12 12h.01M8.5 8.5a5 5 0 000 7M15.5 8.5a5 5 0 010 7M5.6 5.6a9 9 0 000 12.8M18.4 5.6a9 9 0 010 12.8',
 		hash: 'M10 3 8 21M16 3l-2 18M4 9h16M3 15h16',
+		chart: 'M3 3v18h18M7 14v4M12 9v9M17 5v13',
 		eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 9a3 3 0 100 6 3 3 0 000-6z'
 	};
 </script>

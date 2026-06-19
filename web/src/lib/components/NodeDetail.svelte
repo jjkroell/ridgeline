@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
 	import maplibregl from 'maplibre-gl';
+	// Needed for marker/control styling when this component is reached directly
+	// (e.g. /nodes/[pubkey]) without having visited a full map route first.
+	import 'maplibre-gl/dist/maplibre-gl.css';
 	import QRCode from 'qrcode';
 	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry } from '$lib/api';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { api, type Observer, type ObserverAnalytics } from '$lib/api';
+	import { api, type Observer, type ObserverAnalytics, type ObserverStatus } from '$lib/api';
 	import { ago, fmtNum, skewColor, fmtSkew, snrColor, roleColor, roleLabel } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -44,6 +44,58 @@
 	function fresh(lastSeen?: string): boolean {
 		return !!lastSeen && Date.now() - new Date(lastSeen).getTime() < 5 * 60 * 1000;
 	}
+
+	function fmtDuration(secs?: number): string {
+		if (secs == null) return '—';
+		const d = Math.floor(secs / 86400);
+		const h = Math.floor((secs % 86400) / 3600);
+		const m = Math.floor((secs % 3600) / 60);
+		if (d) return `${d}d ${h}h`;
+		if (h) return `${h}h ${m}m`;
+		return `${m}m`;
+	}
+	// Noise floor: lower (more negative) is quieter/better → greener.
+	function noiseColor(dbm?: number): string {
+		if (dbm == null) return 'var(--color-fg)';
+		if (dbm <= -105) return 'var(--color-lime)';
+		if (dbm <= -98) return 'var(--color-signal)';
+		if (dbm <= -92) return 'var(--color-amber)';
+		return 'var(--color-coral)';
+	}
+	function fmtRadio(s?: ObserverStatus): string {
+		if (!s) return '—';
+		const parts: string[] = [];
+		if (s.freqMhz != null) parts.push(`${(+s.freqMhz.toFixed(3)).toString()} MHz`);
+		if (s.bandwidthKhz != null) parts.push(`${s.bandwidthKhz}k`);
+		if (s.spreadingFactor != null) parts.push(`SF${s.spreadingFactor}`);
+		if (s.codingRate != null) parts.push(`CR${s.codingRate}`);
+		return parts.join(' · ') || s.radio || '—';
+	}
+
+	const st = $derived(observer?.status);
+	// Short numeric metrics → grid; long device strings → full-width rows.
+	const metricFacts = $derived(
+		st
+			? [
+					{ k: 'State', v: st.state ? st.state[0].toUpperCase() + st.state.slice(1) : '—', c: st.state === 'online' ? 'var(--color-signal)' : 'var(--color-fg-faint)' },
+					{ k: 'Battery', v: st.batteryMv && st.batteryMv > 0 ? (st.batteryMv / 1000).toFixed(2) + ' V' : '— (mains)' },
+					{ k: 'Uptime', v: fmtDuration(st.uptimeSecs) },
+					{ k: 'Noise floor', v: st.noiseFloor != null ? st.noiseFloor.toFixed(0) + ' dBm' : '—', c: st.noiseFloor != null ? noiseColor(st.noiseFloor) : undefined },
+					{ k: 'TX airtime', v: st.txAirSecs != null ? fmtDuration(st.txAirSecs) : '—' },
+					{ k: 'RX airtime', v: st.rxAirSecs != null ? fmtDuration(st.rxAirSecs) : '—' },
+					{ k: 'Recv errors', v: st.recvErrors != null ? fmtNum(st.recvErrors) : '—' }
+				]
+			: []
+	);
+	const deviceFacts = $derived(
+		st
+			? [
+					{ k: 'Model', v: st.model || '—' },
+					{ k: 'Firmware', v: st.firmware || '—' },
+					{ k: 'Client', v: st.clientVersion || '—' }
+				]
+			: []
+	);
 
 	const kpis = $derived([
 		{ label: 'Packets', value: data ? fmtNum(data.totalPackets) : '—', accent: true },
@@ -115,6 +167,42 @@
 				</div>
 			{/each}
 		</div>
+
+		<!-- Radio & device telemetry (from the observer's /status message) -->
+		<section class="panel rise mt-6" style="animation-delay:100ms">
+			<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
+				<h2 class="font-display text-fg text-sm font-700 tracking-wide">RADIO & DEVICE</h2>
+				<span class="font-mono text-fg-faint text-[0.68rem]">
+					{observer.lastStatusAt ? `status ${ago(observer.lastStatusAt)} ago` : 'no status reported'}
+				</span>
+			</div>
+			{#if !st}
+				<div class="text-fg-faint px-5 py-8 text-center text-sm">
+					This observer hasn't published a status message yet.
+				</div>
+			{:else}
+				<div class="px-5 py-4">
+					<div class="label mb-1">Radio config</div>
+					<div class="font-mono text-signal glow-signal text-lg font-700 tracking-tight">{fmtRadio(st)}</div>
+				</div>
+				<div class="border-line/50 grid grid-cols-2 gap-x-6 border-t px-5 py-1 md:grid-cols-3">
+					{#each metricFacts as f (f.k)}
+						<div class="border-line/30 flex items-center justify-between gap-3 border-b py-2">
+							<span class="label normal-case shrink-0">{f.k}</span>
+							<span class="font-mono text-right text-xs tnum" style="color:{f.c ?? 'var(--color-fg)'}">{f.v}</span>
+						</div>
+					{/each}
+				</div>
+				<div class="border-line/50 divide-line/30 divide-y border-t">
+					{#each deviceFacts as f (f.k)}
+						<div class="flex items-center justify-between gap-4 px-5 py-2">
+							<span class="label normal-case shrink-0">{f.k}</span>
+							<span class="font-mono text-fg-dim min-w-0 truncate text-right text-xs">{f.v}</span>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</section>
 
 		<!-- Feed throughput timeline -->
 		<section class="panel rise mt-6" style="animation-delay:120ms">

@@ -22,10 +22,31 @@ export interface Node {
 	hashSize: number;
 	/** Coordinates are a statistical outlier — likely corrupt GPS. */
 	gpsSuspect?: boolean;
+	/** "freq,bw,sf,cr" config, inherited from the observer that heard it. */
+	radio?: string;
 	/** Most recent time this node relayed a packet (within the analytics window). */
 	lastRelayed?: string;
 	/** Packets this node relayed in the last hour. */
 	relayCount1h?: number;
+}
+
+export interface ObserverStatus {
+	state?: string; // online | offline
+	radio?: string; // raw "freq,bw,sf,cr"
+	freqMhz?: number;
+	bandwidthKhz?: number;
+	spreadingFactor?: number;
+	codingRate?: number;
+	model?: string;
+	firmware?: string;
+	clientVersion?: string;
+	batteryMv?: number;
+	uptimeSecs?: number;
+	noiseFloor?: number;
+	txAirSecs?: number;
+	rxAirSecs?: number;
+	recvErrors?: number;
+	queueLen?: number;
 }
 
 export interface Observer {
@@ -34,6 +55,9 @@ export interface Observer {
 	firstSeen: string;
 	lastSeen: string;
 	packetCount: number;
+	/** Latest self-reported device telemetry from the observer's /status message. */
+	status?: ObserverStatus;
+	lastStatusAt?: string;
 }
 
 export interface Observation {

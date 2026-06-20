@@ -112,6 +112,10 @@ func (in *Ingestor) Stop() {
 }
 
 func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
+	if strings.HasSuffix(msg.Topic(), "/status") {
+		in.handleStatus(msg)
+		return
+	}
 	var env envelope
 	if err := json.Unmarshal(msg.Payload(), &env); err != nil {
 		in.log.Debug("bad envelope", "topic", msg.Topic(), "err", err)
@@ -157,6 +161,112 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 	if in.OnObservation != nil {
 		in.OnObservation(obs)
 	}
+}
+
+// statusEnvelope is the JSON an observer publishes on its /status topic: device
+// identity, radio config ("freq,bw,sf,cr") and a stats block. Field names mirror
+// the real MeshCore observer status messages.
+type statusEnvelope struct {
+	Status          string `json:"status"`
+	Origin          string `json:"origin"`
+	OriginID        string `json:"origin_id"`
+	Region          string `json:"region"`
+	Radio           string `json:"radio"`
+	Model           string `json:"model"`
+	FirmwareVersion string `json:"firmware_version"`
+	ClientVersion   string `json:"client_version"`
+	Stats           struct {
+		BatteryMV  *int     `json:"battery_mv"`
+		UptimeSecs *int64   `json:"uptime_secs"`
+		NoiseFloor *float64 `json:"noise_floor"`
+		TxAirSecs  *float64 `json:"tx_air_secs"`
+		RxAirSecs  *float64 `json:"rx_air_secs"`
+		RecvErrors *int     `json:"recv_errors"`
+		Errors     *int     `json:"errors"` // some clients use "errors"
+		QueueLen   *int     `json:"queue_len"`
+	} `json:"stats"`
+}
+
+// handleStatus parses an observer /status message and stores its latest device
+// telemetry. The observer is keyed by its friendly origin name (matching the
+// packet path), so status attaches to the same observer row.
+func (in *Ingestor) handleStatus(msg mqtt.Message) {
+	var env statusEnvelope
+	if err := json.Unmarshal(msg.Payload(), &env); err != nil {
+		in.log.Debug("bad status envelope", "topic", msg.Topic(), "err", err)
+		return
+	}
+	observerKey, region := topicMeta(msg.Topic())
+	if region == "" {
+		region = env.Region
+	}
+	observerID := env.Origin
+	if observerID == "" {
+		observerID = observerKey
+	}
+	if observerID == "" {
+		return
+	}
+
+	st := store.ObserverStatus{
+		State:         env.Status,
+		Radio:         env.Radio,
+		Model:         env.Model,
+		Firmware:      env.FirmwareVersion,
+		ClientVersion: env.ClientVersion,
+		BatteryMV:     env.Stats.BatteryMV,
+		UptimeSecs:    env.Stats.UptimeSecs,
+		NoiseFloor:    env.Stats.NoiseFloor,
+		TxAirSecs:     env.Stats.TxAirSecs,
+		RxAirSecs:     env.Stats.RxAirSecs,
+		RecvErrors:    firstNonNil(env.Stats.RecvErrors, env.Stats.Errors),
+		QueueLen:      env.Stats.QueueLen,
+	}
+	parseRadio(env.Radio, &st)
+
+	b, err := json.Marshal(st)
+	if err != nil {
+		return
+	}
+	pubkey := env.OriginID
+	if pubkey == "" {
+		pubkey = observerKey
+	}
+	if err := in.store.UpsertObserverStatus(observerID, region, pubkey, string(b), env.Radio, time.Now().UTC().Format(time.RFC3339)); err != nil {
+		in.log.Error("store observer status failed", "err", err)
+	}
+}
+
+// parseRadio splits the "freq,bw,sf,cr" radio string into typed fields.
+func parseRadio(radio string, st *store.ObserverStatus) {
+	parts := strings.Split(strings.TrimSpace(radio), ",")
+	if len(parts) >= 1 {
+		if f, err := strconv.ParseFloat(parts[0], 64); err == nil {
+			st.FreqMHz = &f
+		}
+	}
+	if len(parts) >= 2 {
+		if f, err := strconv.ParseFloat(parts[1], 64); err == nil {
+			st.BandwidthKHz = &f
+		}
+	}
+	if len(parts) >= 3 {
+		if n, err := strconv.Atoi(strings.TrimSpace(parts[2])); err == nil {
+			st.SpreadingFactor = &n
+		}
+	}
+	if len(parts) >= 4 {
+		if n, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil {
+			st.CodingRate = &n
+		}
+	}
+}
+
+func firstNonNil(a, b *int) *int {
+	if a != nil {
+		return a
+	}
+	return b
 }
 
 // topicMeta extracts region and observer id from a meshcore/{region}/{observer}/packets

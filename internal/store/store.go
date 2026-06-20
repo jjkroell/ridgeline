@@ -88,7 +88,29 @@ func Open(path string) (*Store, error) {
 	// Errors are expected (and ignored) when the column is already present.
 	db.Exec(`ALTER TABLE observers ADD COLUMN pubkey TEXT`)
 	db.Exec(`ALTER TABLE nodes ADD COLUMN hash_size INTEGER NOT NULL DEFAULT 0`)
+	db.Exec(`ALTER TABLE observers ADD COLUMN status_json TEXT`)
+	db.Exec(`ALTER TABLE observers ADD COLUMN last_status_at TEXT`)
+	db.Exec(`ALTER TABLE observers ADD COLUMN radio TEXT`)
+	db.Exec(`ALTER TABLE nodes ADD COLUMN radio TEXT`)
 	return &Store{db: db}, nil
+}
+
+// UpsertObserverStatus records an observer's latest self-reported status (radio
+// config + device telemetry) from its /status message, creating the observer row
+// if a status arrives before any packet. statusJSON is the marshalled
+// ObserverStatus; receivedAt is the server's receipt time (RFC3339).
+func (s *Store) UpsertObserverStatus(id, region, pubkey, statusJSON, radio, receivedAt string) error {
+	_, err := s.db.Exec(`
+		INSERT INTO observers (id, region, pubkey, first_seen, last_seen, packet_count, status_json, last_status_at, radio)
+		VALUES (?,?,?,?,?,0,?,?,?)
+		ON CONFLICT(id) DO UPDATE SET
+			status_json    = excluded.status_json,
+			last_status_at = excluded.last_status_at,
+			radio          = COALESCE(NULLIF(excluded.radio,''), observers.radio),
+			region         = COALESCE(NULLIF(excluded.region,''), observers.region),
+			pubkey         = COALESCE(NULLIF(excluded.pubkey,''), observers.pubkey)`,
+		id, region, pubkey, receivedAt, receivedAt, statusJSON, receivedAt, radio)
+	return err
 }
 
 // Close closes the underlying database.
@@ -157,14 +179,21 @@ func (s *Store) Record(o Observation) error {
 		if a.HasLocation {
 			lat, lon = a.Latitude, a.Longitude
 		}
+		// A node inherits the radio config of the observer that heard it — its
+		// own freq/bw/sf/cr aren't in the packet (they're a PHY setting), but the
+		// observing observer reports them via /status. Prep for network filtering.
+		var observerRadio string
+		if o.ObserverID != "" {
+			tx.QueryRow(`SELECT COALESCE(radio,'') FROM observers WHERE id = ?`, o.ObserverID).Scan(&observerRadio)
+		}
 		// The advert's path-length byte carries the originating node's own
 		// hash size (1, 2, or 3 bytes) — the length of the key prefix by which
 		// this node is identified in packet paths.
 		if _, err := tx.Exec(`
 			INSERT INTO nodes
 				(pubkey, name, role, latitude, longitude, has_location,
-				 first_seen, last_seen, last_advert, advert_count, hash_size)
-			VALUES (?,?,?,?,?,?,?,?,?,1,?)
+				 first_seen, last_seen, last_advert, advert_count, hash_size, radio)
+			VALUES (?,?,?,?,?,?,?,?,?,1,?,?)
 			ON CONFLICT(pubkey) DO UPDATE SET
 				name         = COALESCE(NULLIF(excluded.name,''), nodes.name),
 				role         = excluded.role,
@@ -174,9 +203,10 @@ func (s *Store) Record(o Observation) error {
 				last_seen    = excluded.last_seen,
 				last_advert  = excluded.last_advert,
 				advert_count = nodes.advert_count + 1,
-				hash_size    = excluded.hash_size`,
+				hash_size    = excluded.hash_size,
+				radio        = COALESCE(NULLIF(excluded.radio,''), nodes.radio)`,
 			a.PublicKey, nullStr(a.Name), a.DeviceRole.String(),
-			lat, lon, boolInt(a.HasLocation), ts, ts, ts, p.PathHashSize,
+			lat, lon, boolInt(a.HasLocation), ts, ts, ts, p.PathHashSize, nullStr(observerRadio),
 		); err != nil {
 			return fmt.Errorf("store: upsert node: %w", err)
 		}

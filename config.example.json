@@ -4,6 +4,6 @@
   "mqtt": {
     "broker": "tcp://localhost:1883",
     "clientID": "ridgelined",
-    "topics": ["meshcore/+/+/packets", "meshcore/#"]
+    "topics": ["meshcore/+/+/packets", "meshcore/+/+/status"]
   }
 }

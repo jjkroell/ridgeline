@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"math"
 	"sort"
 )
@@ -23,6 +24,9 @@ type Node struct {
 	// GpsSuspect marks a located node whose coordinates are a statistical
 	// outlier versus the rest of the mesh — likely corrupt GPS.
 	GpsSuspect bool `json:"gpsSuspect"`
+	// Radio is the node's "freq,bw,sf,cr" config, inherited from the observer
+	// that heard it (nodes don't broadcast their own). Empty until known.
+	Radio string `json:"radio,omitempty"`
 }
 
 // flagGpsOutliers marks located nodes whose latitude or longitude falls beyond
@@ -74,7 +78,7 @@ func (s *Store) ListNodes() ([]Node, error) {
 		SELECT pubkey, COALESCE(name,''), COALESCE(role,''),
 		       latitude, longitude, has_location,
 		       first_seen, last_seen, COALESCE(last_advert,''), advert_count,
-		       COALESCE(hash_size, 0)
+		       COALESCE(hash_size, 0), COALESCE(radio,'')
 		FROM nodes
 		ORDER BY last_seen DESC`)
 	if err != nil {
@@ -88,7 +92,7 @@ func (s *Store) ListNodes() ([]Node, error) {
 		var hasLoc int
 		if err := rows.Scan(&n.PublicKey, &n.Name, &n.Role,
 			&n.Latitude, &n.Longitude, &hasLoc,
-			&n.FirstSeen, &n.LastSeen, &n.LastAdvert, &n.AdvertCount, &n.HashSize); err != nil {
+			&n.FirstSeen, &n.LastSeen, &n.LastAdvert, &n.AdvertCount, &n.HashSize, &n.Radio); err != nil {
 			return nil, err
 		}
 		n.HasLocation = hasLoc != 0
@@ -125,14 +129,37 @@ func (s *Store) Stats() (Stats, error) {
 // Observer is a row from the observers table. Latitude/Longitude are resolved
 // by matching the observer's public key to an advertised node, when available.
 type Observer struct {
-	ID          string   `json:"id"`
-	Region      string   `json:"region"`
-	PublicKey   string   `json:"publicKey,omitempty"`
-	Latitude    *float64 `json:"latitude,omitempty"`
-	Longitude   *float64 `json:"longitude,omitempty"`
-	FirstSeen   string   `json:"firstSeen"`
-	LastSeen    string   `json:"lastSeen"`
-	PacketCount int      `json:"packetCount"`
+	ID           string          `json:"id"`
+	Region       string          `json:"region"`
+	PublicKey    string          `json:"publicKey,omitempty"`
+	Latitude     *float64        `json:"latitude,omitempty"`
+	Longitude    *float64        `json:"longitude,omitempty"`
+	FirstSeen    string          `json:"firstSeen"`
+	LastSeen     string          `json:"lastSeen"`
+	PacketCount  int             `json:"packetCount"`
+	Status       *ObserverStatus `json:"status,omitempty"`
+	LastStatusAt string          `json:"lastStatusAt,omitempty"`
+}
+
+// ObserverStatus is an observer's latest self-reported device telemetry, parsed
+// from its /status message (radio config + battery/uptime/noise/airtime/errors).
+type ObserverStatus struct {
+	State           string   `json:"state,omitempty"` // online | offline
+	Radio           string   `json:"radio,omitempty"` // raw "freq,bw,sf,cr"
+	FreqMHz         *float64 `json:"freqMhz,omitempty"`
+	BandwidthKHz    *float64 `json:"bandwidthKhz,omitempty"`
+	SpreadingFactor *int     `json:"spreadingFactor,omitempty"`
+	CodingRate      *int     `json:"codingRate,omitempty"`
+	Model           string   `json:"model,omitempty"`
+	Firmware        string   `json:"firmware,omitempty"`
+	ClientVersion   string   `json:"clientVersion,omitempty"`
+	BatteryMV       *int     `json:"batteryMv,omitempty"`
+	UptimeSecs      *int64   `json:"uptimeSecs,omitempty"`
+	NoiseFloor      *float64 `json:"noiseFloor,omitempty"`
+	TxAirSecs       *float64 `json:"txAirSecs,omitempty"`
+	RxAirSecs       *float64 `json:"rxAirSecs,omitempty"`
+	RecvErrors      *int     `json:"recvErrors,omitempty"`
+	QueueLen        *int     `json:"queueLen,omitempty"`
 }
 
 // ListObservers returns all observers, most recently active first, with a
@@ -140,7 +167,8 @@ type Observer struct {
 func (s *Store) ListObservers() ([]Observer, error) {
 	rows, err := s.db.Query(`
 		SELECT o.id, COALESCE(o.region,''), COALESCE(o.pubkey,''),
-		       n.latitude, n.longitude, o.first_seen, o.last_seen, o.packet_count
+		       n.latitude, n.longitude, o.first_seen, o.last_seen, o.packet_count,
+		       o.status_json, COALESCE(o.last_status_at,'')
 		FROM observers o
 		LEFT JOIN nodes n ON n.pubkey = o.pubkey
 		ORDER BY o.last_seen DESC`)
@@ -152,9 +180,17 @@ func (s *Store) ListObservers() ([]Observer, error) {
 	out := []Observer{}
 	for rows.Next() {
 		var o Observer
+		var statusJSON *string
 		if err := rows.Scan(&o.ID, &o.Region, &o.PublicKey,
-			&o.Latitude, &o.Longitude, &o.FirstSeen, &o.LastSeen, &o.PacketCount); err != nil {
+			&o.Latitude, &o.Longitude, &o.FirstSeen, &o.LastSeen, &o.PacketCount,
+			&statusJSON, &o.LastStatusAt); err != nil {
 			return nil, err
+		}
+		if statusJSON != nil && *statusJSON != "" {
+			var st ObserverStatus
+			if json.Unmarshal([]byte(*statusJSON), &st) == nil {
+				o.Status = &st
+			}
 		}
 		out = append(out, o)
 	}

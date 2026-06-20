@@ -157,6 +157,7 @@
 		};
 		const avgSnr = { k: 'Avg SNR', v: detail?.avgSnr != null ? detail.avgSnr.toFixed(1) + ' dB' : '—' };
 		const location = { k: 'Location', v: fmtCoord(node.latitude, node.longitude) };
+		const radio = { k: 'Radio', v: fmtRadio(node.radio), c: node.radio ? 'var(--color-signal)' : undefined };
 		if (compact) {
 			return [
 				{ k: 'Status', v: status.label, c: status.color },
@@ -164,6 +165,7 @@
 				lastRelay,
 				packets6h,
 				avgSnr,
+				radio,
 				location
 			];
 		}
@@ -178,9 +180,22 @@
 			{ k: 'Advert cadence', v: cadence(detail?.advertIntervalSec) },
 			avgSnr,
 			{ k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' },
+			radio,
 			location
 		];
 	});
+
+	// Format "freq,bw,sf,cr" → "910.425 MHz · 62.5k · SF7 · CR5".
+	function fmtRadio(r?: string): string {
+		if (!r) return '—';
+		const [f, b, s, c] = r.split(',');
+		const parts: string[] = [];
+		if (f) parts.push(`${+(+f).toFixed(3)} MHz`);
+		if (b) parts.push(`${b}k`);
+		if (s) parts.push(`SF${s}`);
+		if (c) parts.push(`CR${c}`);
+		return parts.join(' · ') || '—';
+	}
 
 	let copied = $state(false);
 	async function copyKey() {

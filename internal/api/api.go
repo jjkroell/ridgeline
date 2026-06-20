@@ -236,8 +236,40 @@ func (s *Server) nodeDetail(w http.ResponseWriter, r *http.Request) {
 		if !gen.IsZero() {
 			resp.GeneratedAt = gen.UTC().Format(time.RFC3339)
 		}
+		// Fall back to the radio of the observers that heard this node when the
+		// stored value isn't set yet (e.g. node hasn't re-advertised since the
+		// observer's radio became known). Most common wins.
+		if node.Radio == "" && d != nil && len(d.Observers) > 0 {
+			node.Radio = resolveRadioFromObservers(s.store, d.Observers)
+		}
 	}
 	writeJSON(w, resp)
+}
+
+// resolveRadioFromObservers returns the most common radio config among the
+// observers that heard a node, used when the node's own stored radio is unset.
+func resolveRadioFromObservers(st *store.Store, heard []analytics.ObserverStat) string {
+	obs, err := st.ListObservers()
+	if err != nil {
+		return ""
+	}
+	radioByID := make(map[string]string, len(obs))
+	for _, o := range obs {
+		if o.Status != nil && o.Status.Radio != "" {
+			radioByID[o.ID] = o.Status.Radio
+		}
+	}
+	counts := map[string]int{}
+	best, bestN := "", 0
+	for _, h := range heard {
+		if r := radioByID[h.ID]; r != "" {
+			counts[r]++
+			if counts[r] > bestN {
+				best, bestN = r, counts[r]
+			}
+		}
+	}
+	return best
 }
 
 // nodeHistory returns a node's stored observations over an arbitrary time range

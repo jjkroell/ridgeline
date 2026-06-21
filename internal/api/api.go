@@ -83,21 +83,21 @@ type LiveEvent struct {
 	HashSize       int    `json:"hashSize"`
 	// Path holds the per-hop relay key prefixes (uppercase hex) the packet
 	// accumulated as it flooded — the chain of repeaters that relayed it.
-	Path           []string  `json:"path,omitempty"`
+	Path           []string   `json:"path,omitempty"`
 	TransportCodes *[2]uint16 `json:"transportCodes,omitempty"`
-	PayloadRaw     string    `json:"payloadRaw,omitempty"`
-	Raw            string    `json:"raw,omitempty"`
+	PayloadRaw     string     `json:"payloadRaw,omitempty"`
+	Raw            string     `json:"raw,omitempty"`
 	// GroupText channel fields. ChannelHash is always set for GroupText; the
 	// rest are populated only when the message decrypts (e.g. public channel).
-	ChannelHash string `json:"channelHash,omitempty"`
-	Channel     string `json:"channel,omitempty"`
-	Sender      string `json:"sender,omitempty"`
-	Text        string `json:"text,omitempty"`
-	ObserverID  string `json:"observerId,omitempty"`
-	Region         string    `json:"region,omitempty"`
-	SNR            *float64  `json:"snr,omitempty"`
-	RSSI           *float64  `json:"rssi,omitempty"`
-	ReceivedAt     string    `json:"receivedAt"`
+	ChannelHash string   `json:"channelHash,omitempty"`
+	Channel     string   `json:"channel,omitempty"`
+	Sender      string   `json:"sender,omitempty"`
+	Text        string   `json:"text,omitempty"`
+	ObserverID  string   `json:"observerId,omitempty"`
+	Region      string   `json:"region,omitempty"`
+	SNR         *float64 `json:"snr,omitempty"`
+	RSSI        *float64 `json:"rssi,omitempty"`
+	ReceivedAt  string   `json:"receivedAt"`
 	// Node is populated for Advert packets.
 	Node *LiveNode `json:"node,omitempty"`
 }
@@ -277,21 +277,8 @@ func resolveRadioFromObservers(st *store.Store, heard []analytics.ObserverStat) 
 // fixed-window analytics snapshot, this queries the database on demand.
 func (s *Server) nodeHistory(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
-	sinceSec := 86400 // 24h
-	if v := r.URL.Query().Get("since"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			sinceSec = n
-		}
-	}
-	if sinceSec > 7*86400 {
-		sinceSec = 7 * 86400
-	}
-	limit := 200
-	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			limit = n
-		}
-	}
+	sinceSec := queryInt(r, "since", 86400, 1, 7*86400)
+	limit := queryInt(r, "limit", 200, 1, 1000)
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 
 	nodes, err := s.store.ListNodes()
@@ -310,12 +297,7 @@ func (s *Server) nodeHistory(w http.ResponseWriter, r *http.Request) {
 // nodeHeatmap returns a node's weekday×hour activity grid over the last `days`.
 func (s *Server) nodeHeatmap(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
-	days := 7
-	if v := r.URL.Query().Get("days"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 30 {
-			days = n
-		}
-	}
+	days := queryInt(r, "days", 7, 1, 30)
 	cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
 	nodes, err := s.store.ListNodes()
 	if err != nil {
@@ -334,21 +316,8 @@ func (s *Server) nodeHeatmap(w http.ResponseWriter, r *http.Request) {
 // channel utilisation, busiest relays) over a selectable window. Computed on
 // demand from stored raw_hex, like nodeHistory.
 func (s *Server) meshAnalytics(w http.ResponseWriter, r *http.Request) {
-	sinceSec := 6 * 3600 // 6h default
-	if v := r.URL.Query().Get("since"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			sinceSec = n
-		}
-	}
-	if sinceSec > 24*3600 {
-		sinceSec = 24 * 3600
-	}
-	bucketMin := 10
-	if v := r.URL.Query().Get("bucket"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			bucketMin = n
-		}
-	}
+	sinceSec := queryInt(r, "since", 6*3600, 1, 24*3600)
+	bucketMin := queryInt(r, "bucket", 10, 1, 1440)
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 
 	nodes, err := s.store.ListNodes()
@@ -377,15 +346,7 @@ func (s *Server) observers(w http.ResponseWriter, _ *http.Request) {
 // SNR, RF neighbours, clock skew) over the last `since` seconds. On demand.
 func (s *Server) observerAnalytics(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sinceSec := 24 * 3600 // 24h default
-	if v := r.URL.Query().Get("since"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			sinceSec = n
-		}
-	}
-	if sinceSec > 7*86400 {
-		sinceSec = 7 * 86400
-	}
+	sinceSec := queryInt(r, "since", 24*3600, 1, 7*86400)
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 	nodes, err := s.store.ListNodes()
 	if err != nil {
@@ -401,12 +362,7 @@ func (s *Server) observerAnalytics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) observations(w http.ResponseWriter, r *http.Request) {
-	limit := 100
-	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			limit = n
-		}
-	}
+	limit := queryInt(r, "limit", 100, 1, 500)
 	obs, err := s.store.RecentObservations(limit)
 	if err != nil {
 		s.fail(w, err)
@@ -419,15 +375,7 @@ func (s *Server) observations(w http.ResponseWriter, r *http.Request) {
 // re-decoded into the same shape as live WebSocket events, newest first, so the
 // feed can render history identically without waiting for fresh packets.
 func (s *Server) recent(w http.ResponseWriter, r *http.Request) {
-	sinceSec := 3600
-	if v := r.URL.Query().Get("since"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			sinceSec = n
-		}
-	}
-	if sinceSec > 6*3600 {
-		sinceSec = 6 * 3600
-	}
+	sinceSec := queryInt(r, "since", 3600, 1, 6*3600)
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 
 	raws, err := s.store.RecentRaw(cutoff, 3000)
@@ -482,4 +430,22 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
+}
+
+// queryInt reads an integer query parameter, falling back to def when absent or
+// unparseable, then clamps the result to [min, max].
+func queryInt(r *http.Request, key string, def, min, max int) int {
+	v := def
+	if s := r.URL.Query().Get(key); s != "" {
+		if n, err := strconv.Atoi(s); err == nil {
+			v = n
+		}
+	}
+	if v < min {
+		v = min
+	}
+	if v > max {
+		v = max
+	}
+	return v
 }

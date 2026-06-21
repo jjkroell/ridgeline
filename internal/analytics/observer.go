@@ -57,8 +57,7 @@ func ObserverSummary(st *store.Store, nodes []store.Node, id, sinceISO string, s
 	payload := map[string]int{}
 	advHeard := map[string]bool{}
 	directCount := map[string]int{} // node → zero-hop hear count
-	snrEdges := []float64{-20, -15, -10, -5, 0, 5, 10}
-	snrBins := make([]int, len(snrEdges)+1)
+	snr := newSNRHist()
 	var snrSum float64
 	var snrN int
 	txObs := map[string][]obsTime{} // messageHash → (observer, time) across ALL observers, for skew
@@ -88,7 +87,7 @@ func ObserverSummary(st *store.Store, nodes []store.Node, id, sinceISO string, s
 		if ro.SNR != nil {
 			snrSum += *ro.SNR
 			snrN++
-			snrBins[snrBinIndex(*ro.SNR, snrEdges)]++
+			snr.add(*ro.SNR)
 		}
 		if ro.Region != "" {
 			out.Region = ro.Region
@@ -110,48 +109,18 @@ func ObserverSummary(st *store.Store, nodes []store.Node, id, sinceISO string, s
 		out.AvgSNR = &v
 	}
 	out.PayloadTypes = sortedCounts(payload)
-	for i, c := range snrBins {
-		out.SNRHist = append(out.SNRHist, HistogramBin{Label: snrBinLabel(i, snrEdges), Count: c})
-	}
+	out.SNRHist = snr.result()
 
 	// Zero-hop RF neighbours, by hear count.
 	for nk, c := range directCount {
 		n := byKey[nk]
-		name := n.Name
-		if name == "" {
-			name = nk
-		}
-		out.Neighbors = append(out.Neighbors, DirectLink{Observer: id, NodeKey: nk, NodeName: name, Role: n.Role, Count: c})
+		out.Neighbors = append(out.Neighbors, DirectLink{Observer: id, NodeKey: nk, NodeName: displayName(n, nk), Role: n.Role, Count: c})
 	}
 	sort.Slice(out.Neighbors, func(i, j int) bool { return out.Neighbors[i].Count > out.Neighbors[j].Count })
 
-	// Clock skew vs consensus on shared packets.
-	var devs []float64
-	for _, grp := range txObs {
-		seen := map[string]bool{}
-		has := false
-		for _, e := range grp {
-			seen[e.obs] = true
-			if e.obs == id {
-				has = true
-			}
-		}
-		if !has || len(seen) < 2 {
-			continue
-		}
-		ms := make([]float64, len(grp))
-		for i, e := range grp {
-			ms[i] = float64(e.t.UnixNano()) / 1e6
-		}
-		consensus := medianFloat(ms)
-		for i, e := range grp {
-			if e.obs == id {
-				devs = append(devs, ms[i]-consensus)
-			}
-		}
-	}
-	if len(devs) >= 5 {
-		v := medianFloat(devs)
+	// Clock skew vs consensus on shared packets (same method as the mesh-wide
+	// analytics; we only surface this observer's value).
+	if v, ok := clockSkew(txObs, 5)[id]; ok {
 		out.ClockSkewMs = &v
 	}
 

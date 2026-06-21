@@ -33,3 +33,11 @@ func newPrefixResolver(nodes []store.Node) func(hop string) string {
 		return ""
 	}
 }
+
+// displayName returns a node's name, falling back to its key when unnamed.
+func displayName(n store.Node, key string) string {
+	if n.Name != "" {
+		return n.Name
+	}
+	return key
+}

@@ -486,13 +486,7 @@ func medianInterval(times []time.Time) *float64 {
 	for i := 1; i < len(ts); i++ {
 		diffs = append(diffs, ts[i].Sub(ts[i-1]).Seconds())
 	}
-	sort.Float64s(diffs)
-	var med float64
-	if n := len(diffs); n%2 == 1 {
-		med = diffs[n/2]
-	} else {
-		med = (diffs[n/2-1] + diffs[n/2]) / 2
-	}
+	med := medianFloat(diffs)
 	return &med
 }
 

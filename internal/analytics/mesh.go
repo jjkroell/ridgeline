@@ -16,12 +16,12 @@ import (
 // busy-ness and the busiest relays. Computed on demand from stored raw_hex so the
 // window is caller-selectable.
 type MeshAnalytics struct {
-	GeneratedAt   string         `json:"generatedAt"`
-	WindowHours   float64        `json:"windowHours"`
-	Radio         RadioParams    `json:"radio"`
-	KPIs          MeshKPIs       `json:"kpis"`
-	PayloadTypes  []NameCount    `json:"payloadTypes"`
-	RouteTypes    []NameCount    `json:"routeTypes"`
+	GeneratedAt   string             `json:"generatedAt"`
+	WindowHours   float64            `json:"windowHours"`
+	Radio         RadioParams        `json:"radio"`
+	KPIs          MeshKPIs           `json:"kpis"`
+	PayloadTypes  []NameCount        `json:"payloadTypes"`
+	RouteTypes    []NameCount        `json:"routeTypes"`
 	LinkScoreHist []HistogramBin     `json:"linkScoreHist"`
 	SNRHist       []HistogramBin     `json:"snrHist"`
 	Airtime       []AirtimeBucket    `json:"airtime"`
@@ -36,11 +36,11 @@ type MeshAnalytics struct {
 // distinct nodes' adverts reached it, and how many of those it heard directly
 // (zero-hop) — i.e. its true RF neighbours.
 type ObserverCoverage struct {
-	ID            string   `json:"id"`
-	Region        string   `json:"region,omitempty"`
-	Observations  int      `json:"observations"`
-	DistinctNodes int      `json:"distinctNodes"`
-	DirectNodes   int      `json:"directNodes"`
+	ID            string `json:"id"`
+	Region        string `json:"region,omitempty"`
+	Observations  int    `json:"observations"`
+	DistinctNodes int    `json:"distinctNodes"`
+	DirectNodes   int    `json:"directNodes"`
 	// ClockSkewMs is the observer's median receive-time deviation from consensus
 	// across packets it heard alongside other observers — a clock-drift / data-
 	// quality signal. Nil when it shared too few packets to estimate.
@@ -59,9 +59,9 @@ type DirectLink struct {
 
 // MeshKPIs are the single-number headline tiles.
 type MeshKPIs struct {
-	ActiveNodes     int      `json:"activeNodes"`     // distinct nodes that originated or relayed
-	Transmissions   int      `json:"transmissions"`   // unique logical packets (by messageHash)
-	Observations    int      `json:"observations"`    // raw reception rows
+	ActiveNodes     int      `json:"activeNodes"`   // distinct nodes that originated or relayed
+	Transmissions   int      `json:"transmissions"` // unique logical packets (by messageHash)
+	Observations    int      `json:"observations"`  // raw reception rows
 	AvgLinkScore    *float64 `json:"avgLinkScore,omitempty"`
 	FloodRedundancy *float64 `json:"floodRedundancy,omitempty"` // observations / transmission
 	ChannelUtilPct  float64  `json:"channelUtilPct"`            // est. logical airtime / window
@@ -135,22 +135,21 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 		byKey[n.PublicKey] = n
 	}
 
-	txs := map[string]*txAgg{}      // messageHash → collapsed transmission
-	active := map[string]bool{}     // distinct participating pubkeys
+	txs := map[string]*txAgg{}                // messageHash → collapsed transmission
+	active := map[string]bool{}               // distinct participating pubkeys
 	relayHits := map[string]map[string]bool{} // pubkey → set of messageHashes relayed
 	var scoreSum float64
 	var scoreN int
 	linkBins := make([]int, 5) // [0-.2,.2-.4,.4-.6,.6-.8,.8-1]
-	snrEdges := []float64{-20, -15, -10, -5, 0, 5, 10}
-	snrBins := make([]int, len(snrEdges)+1)
+	snr := newSNRHist()
 	observations := 0
 
 	// Per-observer RF coverage + direct (zero-hop) adjacency.
-	obsCount := map[string]int{}                  // observer → total receptions
-	obsRegion := map[string]string{}              // observer → region
-	advHeard := map[string]map[string]bool{}      // observer → distinct advert nodes heard
-	directLink := map[string]map[string]int{}     // observer → node → zero-hop hear count
-	txObs := map[string][]obsTime{}               // messageHash → (observer, time) for clock skew
+	obsCount := map[string]int{}              // observer → total receptions
+	obsRegion := map[string]string{}          // observer → region
+	advHeard := map[string]map[string]bool{}  // observer → distinct advert nodes heard
+	directLink := map[string]map[string]int{} // observer → node → zero-hop hear count
+	txObs := map[string][]obsTime{}           // messageHash → (observer, time) for clock skew
 
 	for _, ro := range raws {
 		pkt, err := meshcore.DecodeHex(ro.RawHex)
@@ -177,7 +176,7 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 			scoreSum += sc
 			scoreN++
 			linkBins[linkBinIndex(sc)]++
-			snrBins[snrBinIndex(*ro.SNR, snrEdges)]++
+			snr.add(*ro.SNR)
 		}
 
 		// Collapse to a transmission (first sighting wins for type/length).
@@ -292,18 +291,13 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 	for i, c := range linkBins {
 		out.LinkScoreHist = append(out.LinkScoreHist, HistogramBin{Label: linkLabels[i], Count: c})
 	}
-	for i, c := range snrBins {
-		out.SNRHist = append(out.SNRHist, HistogramBin{Label: snrBinLabel(i, snrEdges), Count: c})
-	}
+	out.SNRHist = snr.result()
 
 	// Top relays.
 	ranks := make([]RelayRank, 0, len(relayHits))
 	for pk, hashes := range relayHits {
 		n := byKey[pk]
-		name := n.Name
-		if name == "" {
-			name = pk
-		}
+		name := displayName(n, pk)
 		var air float64
 		for h := range hashes {
 			if t := txs[h]; t != nil {
@@ -339,11 +333,7 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 		for nk, c := range nodes {
 			reachByNode[nk]++
 			n := byKey[nk]
-			name := n.Name
-			if name == "" {
-				name = nk
-			}
-			links = append(links, DirectLink{Observer: obsID, NodeKey: nk, NodeName: name, Role: n.Role, Count: c})
+			links = append(links, DirectLink{Observer: obsID, NodeKey: nk, NodeName: displayName(n, nk), Role: n.Role, Count: c})
 		}
 	}
 	sort.Slice(links, func(i, j int) bool { return links[i].Count > links[j].Count })
@@ -371,31 +361,13 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 		out.DirectReach = append(out.DirectReach, HistogramBin{Label: reachLabels[i], Count: c})
 	}
 
-	// Clock skew: for each transmission heard by ≥2 observers, the consensus time
-	// is the median; each observer's signed deviation feeds its per-observer
-	// median. Surfaces drifting observer clocks.
-	obsDev := map[string][]float64{}
-	for _, grp := range txObs {
-		seen := map[string]bool{}
-		for _, e := range grp {
-			seen[e.obs] = true
-		}
-		if len(seen) < 2 {
-			continue
-		}
-		ms := make([]float64, len(grp))
-		for i, e := range grp {
-			ms[i] = float64(e.t.UnixNano()) / 1e6
-		}
-		consensus := medianFloat(ms)
-		for i, e := range grp {
-			obsDev[e.obs] = append(obsDev[e.obs], ms[i]-consensus)
-		}
-	}
+	// Clock skew: per-observer median deviation from each transmission's consensus
+	// time, surfacing drifting observer clocks.
+	skew := clockSkew(txObs, 5)
 	for i := range out.Observers {
-		if devs, ok := obsDev[out.Observers[i].ID]; ok && len(devs) >= 5 {
-			v := medianFloat(devs)
-			out.Observers[i].ClockSkewMs = &v
+		if v, ok := skew[out.Observers[i].ID]; ok {
+			vv := v
+			out.Observers[i].ClockSkewMs = &vv
 		}
 	}
 
@@ -404,7 +376,7 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 	for _, n := range nodes {
 		switch n.HashSize {
 		case 1, 2, 3:
-			hashCounts[itoa(n.HashSize)+"-byte"]++
+			hashCounts[strconv.Itoa(n.HashSize)+"-byte"]++
 		default:
 			hashCounts["unknown"]++
 		}
@@ -450,7 +422,56 @@ func medianFloat(v []float64) float64 {
 	return (s[n/2-1] + s[n/2]) / 2
 }
 
-func itoa(n int) string { return strconv.Itoa(n) }
+// clockSkew computes each observer's median receive-time deviation (ms) from the
+// per-transmission consensus (median) time, over transmissions heard by at least
+// two observers. Observers with fewer than minSamples deviations are omitted, as
+// too few shared packets give an unreliable estimate. Shared by the mesh-wide and
+// per-observer analytics.
+func clockSkew(txObs map[string][]obsTime, minSamples int) map[string]float64 {
+	dev := map[string][]float64{}
+	for _, grp := range txObs {
+		seen := map[string]bool{}
+		for _, e := range grp {
+			seen[e.obs] = true
+		}
+		if len(seen) < 2 {
+			continue
+		}
+		ms := make([]float64, len(grp))
+		for i, e := range grp {
+			ms[i] = float64(e.t.UnixNano()) / 1e6
+		}
+		consensus := medianFloat(ms)
+		for i, e := range grp {
+			dev[e.obs] = append(dev[e.obs], ms[i]-consensus)
+		}
+	}
+	out := map[string]float64{}
+	for obs, ds := range dev {
+		if len(ds) >= minSamples {
+			out[obs] = medianFloat(ds)
+		}
+	}
+	return out
+}
+
+// snrHist accumulates SNR observations into a fixed set of dB buckets shared by
+// the mesh-wide and per-observer SNR distributions.
+type snrHist struct{ bins []int }
+
+var snrHistEdges = []float64{-20, -15, -10, -5, 0, 5, 10}
+
+func newSNRHist() *snrHist { return &snrHist{bins: make([]int, len(snrHistEdges)+1)} }
+
+func (h *snrHist) add(v float64) { h.bins[snrBinIndex(v, snrHistEdges)]++ }
+
+func (h *snrHist) result() []HistogramBin {
+	out := make([]HistogramBin, len(h.bins))
+	for i, c := range h.bins {
+		out[i] = HistogramBin{Label: snrBinLabel(i, snrHistEdges), Count: c}
+	}
+	return out
+}
 
 // linkBinIndex maps a 0..1 link score to one of 5 equal bins; 1.0 lands in the
 // top bin.

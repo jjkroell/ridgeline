@@ -5,7 +5,7 @@
 	import { ago, shortKey, fmtSnr, snrColor, roleColor, roleLabel, fmtCoord } from '$lib/format';
 	import { buildPacketFields, parseTrace, type ByteRange } from '$lib/packet-fields';
 	import PayloadTag from './PayloadTag.svelte';
-	import Tooltip from './Tooltip.svelte';
+	import HopChips from './HopChips.svelte';
 
 	interface Props {
 		group: LiveGroup | null;
@@ -27,8 +27,6 @@
 		void group;
 		repeat = null;
 	});
-
-	const resolveHop = (hop: string): Node | undefined => nodes.find((n) => n.publicKey.startsWith(hop));
 
 	// Observations sorted by arrival (first heard first).
 	const events = $derived(
@@ -359,25 +357,7 @@
 							<section>
 								<div class="label mb-2">Traced Route · {tr.routeHashes.length} {tr.routeHashes.length === 1 ? 'node' : 'nodes'}</div>
 								{#if tr.routeHashes.length}
-									<div class="flex flex-wrap items-center gap-1.5">
-										{#each tr.routeHashes as hop, i (i)}
-											{#if i > 0}<span class="text-fg-faint">→</span>{/if}
-											{@const n = resolveHop(hop)}
-											{#if n}
-												<a
-													href="/nodes/{n.publicKey}"
-													onclick={onclose}
-													class="border-line bg-panel-2/60 hover:border-signal/50 rounded-[var(--radius)] border px-2 py-1 text-xs"
-													style="color:{roleColor(n.role)}">{n.name || shortKey(n.publicKey)}</a
-												>
-											{:else}
-												<Tooltip text="no located node with this key prefix"><span
-														class="border-line/60 font-mono text-fg-faint rounded-[var(--radius)] border border-dashed px-2 py-1 text-xs"
-														>{hop}</span
-													></Tooltip>
-											{/if}
-										{/each}
-									</div>
+									<HopChips hops={tr.routeHashes} {nodes} onnavigate={onclose} />
 								{:else}
 									<div class="text-fg-faint text-sm">No route hashes in payload.</div>
 								{/if}
@@ -405,25 +385,7 @@
 								<span>Path · {ev.path?.length} hops</span>
 								{#if distinctPaths > 1}<span class="text-amber normal-case">{distinctPaths} variants across repeats</span>{/if}
 							</div>
-							<div class="flex flex-wrap items-center gap-1.5">
-								{#each ev.path ?? [] as hop, i (i)}
-									{#if i > 0}<span class="text-fg-faint">→</span>{/if}
-									{@const n = resolveHop(hop)}
-									{#if n}
-										<a
-											href="/nodes/{n.publicKey}"
-											onclick={onclose}
-											class="border-line bg-panel-2/60 hover:border-signal/50 rounded-[var(--radius)] border px-2 py-1 text-xs"
-											style="color:{roleColor(n.role)}">{n.name || shortKey(n.publicKey)}</a
-										>
-									{:else}
-										<Tooltip text="no located node with this key prefix"><span
-												class="border-line/60 font-mono text-fg-faint rounded-[var(--radius)] border border-dashed px-2 py-1 text-xs"
-												>{hop}</span
-											></Tooltip>
-									{/if}
-								{/each}
-							</div>
+							<HopChips hops={ev.path ?? []} {nodes} onnavigate={onclose} />
 						</section>
 					{/if}
 

@@ -9,11 +9,10 @@
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { ensureHillshade } from '$lib/map-hillshade';
+	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
 	import NodeModal from '$lib/components/NodeModal.svelte';
-
-	const FAV_COLOR = '#e8b454'; // amber ring on favorited nodes
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -24,18 +23,6 @@
 	let nodeKey = $state<string | null>(null);
 
 	const visible = $derived(allLocated.filter((n) => selectedRoles.has(n.role)));
-
-	const ROLE_HEX: Record<string, string> = {
-		Repeater: '#ff6b6b',
-		ChatNode: '#5b9dff',
-		RoomServer: '#6ee7a8',
-		Sensor: '#e8b454',
-		Observer: '#a78bfa'
-	};
-
-	const isLight = () => document.documentElement.classList.contains('theme-light');
-	const inkColor = () =>
-		getComputedStyle(document.documentElement).getPropertyValue('--color-ink').trim() || '#070a0e';
 
 	function nodeFeatures(): FeatureCollection {
 		return {
@@ -213,15 +200,7 @@
 	async function plot() {
 		if (!map) return;
 		const nodes = await api.nodes();
-		allLocated = nodes.filter(
-			(n) =>
-				n.hasLocation &&
-				!n.gpsSuspect &&
-				n.latitude != null &&
-				n.longitude != null &&
-				Math.abs(n.latitude) <= 90 &&
-				Math.abs(n.longitude) <= 180
-		);
+		allLocated = locatedNodes(nodes);
 		if (ready) updateSource();
 		if (!didFit && allLocated.length > 0) {
 			fitToNodes();
@@ -284,12 +263,5 @@
 	:global(.maplibregl-popup-tip) {
 		border-top-color: var(--color-line-bright) !important;
 		border-bottom-color: var(--color-line-bright) !important;
-	}
-	:global(.maplibregl-ctrl-group) {
-		background: var(--color-panel);
-		border: 1px solid var(--color-line);
-	}
-	:global(.maplibregl-ctrl-group button + button) {
-		border-top: 1px solid var(--color-line);
 	}
 </style>

@@ -109,3 +109,8 @@ export function fmtCoord(lat?: number, lon?: number): string {
 	if (lat == null || lon == null) return '—';
 	return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
 }
+
+/** True when a timestamp is within the last 5 minutes (an observer "reporting"). */
+export function isFresh(iso?: string): boolean {
+	return !!iso && Date.now() - new Date(iso).getTime() < 5 * 60 * 1000;
+}

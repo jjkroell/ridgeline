@@ -5,6 +5,9 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
+	import BarRow from '$lib/components/BarRow.svelte';
+	import KpiStrip from '$lib/components/KpiStrip.svelte';
+	import WindowToggle from '$lib/components/WindowToggle.svelte';
 
 	interface DirectLinkRef {
 		key: string;
@@ -155,16 +158,6 @@
 	);
 </script>
 
-{#snippet barRow(label: string, count: number, max: number, color: string)}
-	<div class="flex items-center gap-3 px-5 py-1.5">
-		<div class="text-fg-dim w-28 shrink-0 truncate text-xs">{label}</div>
-		<div class="bg-line/40 relative h-3 flex-1 overflow-hidden rounded-[var(--radius)]">
-			<div class="h-full rounded-[var(--radius)]" style="width:{(count / max) * 100}%;background:{color}"></div>
-		</div>
-		<div class="font-mono tnum text-fg-dim w-12 shrink-0 text-right text-xs">{fmtNum(count)}</div>
-	</div>
-{/snippet}
-
 <PageHeader eyebrow="Network Observatory" title="Mesh Analytics">
 	<div class="flex items-center gap-3">
 		{#if data}
@@ -176,16 +169,7 @@
 				>
 			</Tooltip>
 		{/if}
-		<div class="bg-panel border-line flex overflow-hidden rounded-[var(--radius)] border text-xs">
-			{#each windows as w (w.sec)}
-				<button
-					onclick={() => (windowSec = w.sec)}
-					class="font-mono px-3 py-1.5 transition-colors {windowSec === w.sec
-						? 'bg-signal/15 text-signal'
-						: 'text-fg-dim hover:text-fg'}">{w.label}</button
-				>
-			{/each}
-		</div>
+		<WindowToggle options={windows} bind:value={windowSec} />
 	</div>
 </PageHeader>
 
@@ -200,28 +184,7 @@
 		<div class="text-fg-faint px-5 py-16 text-center text-sm">Computing mesh analytics…</div>
 	{:else if data}
 		<!-- KPI strip -->
-		<div class="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-			{#each kpis as c, i (c.label)}
-				<div class="panel rise relative overflow-hidden px-4 py-4" style="animation-delay:{i * 40}ms">
-					{#if c.accent}
-						<div class="from-signal/[0.07] absolute inset-0 bg-gradient-to-br to-transparent"></div>
-					{/if}
-					<div class="relative">
-						<div class="label flex items-center gap-1">
-							{c.label}
-							{#if c.hint}
-								<Tooltip text={c.hint}>
-									<span class="text-fg-faint cursor-help text-[0.6rem]">ⓘ</span>
-								</Tooltip>
-							{/if}
-						</div>
-						<div class="font-display tnum mt-2 text-2xl font-700 lg:text-3xl {c.accent ? 'text-signal glow-signal' : 'text-fg'}">
-							{c.value}
-						</div>
-					</div>
-				</div>
-			{/each}
-		</div>
+		<KpiStrip items={kpis} />
 
 		<!-- Channel utilisation timeline -->
 		<section class="panel rise mt-6" style="animation-delay:120ms">
@@ -260,7 +223,7 @@
 				</div>
 				<div class="py-3">
 					{#each data.payloadTypes as p (p.label)}
-						{@render barRow(p.label, p.count, maxPayload, 'var(--color-signal)')}
+						<BarRow label={p.label} count={p.count} max={maxPayload} color="var(--color-signal)" />
 					{/each}
 				</div>
 			</section>
@@ -270,7 +233,7 @@
 				</div>
 				<div class="py-3">
 					{#each data.routeTypes as p (p.label)}
-						{@render barRow(p.label, p.count, maxRoute, 'var(--color-sky)')}
+						<BarRow label={p.label} count={p.count} max={maxRoute} color="var(--color-sky)" />
 					{/each}
 				</div>
 			</section>
@@ -285,7 +248,7 @@
 				</div>
 				<div class="py-3">
 					{#each data.linkScoreHist as b (b.label)}
-						{@render barRow(b.label, b.count, maxLink, 'var(--color-lime)')}
+						<BarRow label={b.label} count={b.count} max={maxLink} color="var(--color-lime)" />
 					{/each}
 				</div>
 			</section>
@@ -296,7 +259,7 @@
 				</div>
 				<div class="py-3">
 					{#each data.snrHist as b (b.label)}
-						{@render barRow(b.label, b.count, maxSnr, 'var(--color-amber)')}
+						<BarRow label={b.label} count={b.count} max={maxSnr} color="var(--color-amber)" />
 					{/each}
 				</div>
 			</section>
@@ -422,7 +385,7 @@
 				</div>
 				<div class="py-3">
 					{#each data.hashSizes as b (b.label)}
-						{@render barRow(b.label, b.count, maxHash, b.label === 'unknown' ? 'var(--color-fg-faint)' : 'var(--color-sky)')}
+						<BarRow label={b.label} count={b.count} max={maxHash} color={b.label === 'unknown' ? 'var(--color-fg-faint)' : 'var(--color-sky)'} />
 					{/each}
 				</div>
 				<p class="text-fg-faint border-line/50 mt-1 border-t px-5 py-3 text-[0.7rem] leading-relaxed">
@@ -437,7 +400,7 @@
 				</div>
 				<div class="py-3">
 					{#each data.directReach as b (b.label)}
-						{@render barRow(b.label, b.count, maxReach, 'var(--color-violet)')}
+						<BarRow label={b.label} count={b.count} max={maxReach} color="var(--color-violet)" />
 					{/each}
 				</div>
 				<p class="text-fg-faint border-line/50 mt-1 border-t px-5 py-3 text-[0.7rem] leading-relaxed">

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api, type Observer, type ObserverCoverage } from '$lib/api';
-	import { ago, fmtNum, skewColor, fmtSkew } from '$lib/format';
+	import { ago, fmtNum, skewColor, fmtSkew, isFresh } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
 
@@ -23,10 +23,6 @@
 		const t = setInterval(refresh, 8000);
 		return () => clearInterval(t);
 	});
-
-	function fresh(lastSeen: string): boolean {
-		return Date.now() - new Date(lastSeen).getTime() < 5 * 60 * 1000;
-	}
 </script>
 
 <PageHeader eyebrow="Listening Posts" title="Observers">
@@ -59,7 +55,7 @@
 							{/if}
 						</div>
 						<div class="flex items-center gap-1.5">
-							{#if fresh(o.lastSeen)}
+							{#if isFresh(o.lastSeen)}
 								<span class="live-dot"></span>
 							{:else}
 								<span class="bg-fg-faint/60 h-2 w-2 rounded-full"></span>

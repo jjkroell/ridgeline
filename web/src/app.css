@@ -219,3 +219,13 @@ html.theme-light {
 		font-variant-numeric: tabular-nums;
 	}
 }
+
+/* MapLibre navigation control, themed to match the panels. Shared by every map
+   view (/map, /live-map, node inset) so it lives here rather than per-page. */
+.maplibregl-ctrl-group {
+	background: var(--color-panel);
+	border: 1px solid var(--color-line);
+}
+.maplibregl-ctrl-group button + button {
+	border-top: 1px solid var(--color-line);
+}

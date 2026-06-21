@@ -7,6 +7,7 @@
 	import QRCode from 'qrcode';
 	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry, type NodeActivity } from '$lib/api';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
+	import { isLight } from '$lib/map-util';
 	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus } from '$lib/format';
 	import PayloadTag from './PayloadTag.svelte';
 	import RoleBadge from './RoleBadge.svelte';
@@ -218,7 +219,7 @@
 		untrack(() => {
 			const lng = node!.longitude!;
 			const lat = node!.latitude!;
-			const light = document.documentElement.classList.contains('theme-light');
+			const light = isLight();
 			map = new maplibregl.Map({
 				container: mapEl!,
 				style: basemapStyleUrl(light),

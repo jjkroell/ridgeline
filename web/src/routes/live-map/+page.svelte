@@ -9,6 +9,7 @@
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { ensureHillshade } from '$lib/map-hillshade';
+	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
 	import { ago, shortKey, fmtSnr, snrColor } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PayloadTag from '$lib/components/PayloadTag.svelte';
@@ -86,18 +87,6 @@
 	let nodeKey = $state<string | null>(null);
 	const recent = $derived(groupLive(live.events).slice(0, 15));
 
-	const isLight = () => document.documentElement.classList.contains('theme-light');
-	const inkColor = () =>
-		getComputedStyle(document.documentElement).getPropertyValue('--color-ink').trim() || '#070a0e';
-	const FAV_COLOR = '#e8b454'; // amber ring on favorited nodes
-
-	const ROLE_COLOR: Record<string, string> = {
-		Repeater: '#ff6b6b',
-		ChatNode: '#5b9dff',
-		RoomServer: '#6ee7a8',
-		Sensor: '#e8b454',
-		Observer: '#a78bfa'
-	};
 	const PAYLOAD_COLOR: Record<string, string> = {
 		Advert: '#34e3c4',
 		TextMessage: '#5b9dff',
@@ -354,7 +343,7 @@
 					geometry: { type: 'Point', coordinates: [n.longitude!, n.latitude!] },
 					properties: {
 						role: n.role,
-						color: ROLE_COLOR[n.role] ?? '#8394a1',
+						color: ROLE_HEX[n.role] ?? '#8394a1',
 						name: n.name,
 						pubkey: n.publicKey,
 						fav: favorites.has(n.publicKey)
@@ -372,15 +361,7 @@
 
 	async function loadNodes() {
 		nodes = await api.nodes();
-		located = nodes.filter(
-			(n) =>
-				n.hasLocation &&
-				!n.gpsSuspect &&
-				n.latitude != null &&
-				n.longitude != null &&
-				Math.abs(n.latitude) <= 90 &&
-				Math.abs(n.longitude) <= 180
-		);
+		located = locatedNodes(nodes);
 		if (map && ready) (map.getSource('nodes') as maplibregl.GeoJSONSource)?.setData(nodeFeatures());
 	}
 
@@ -650,13 +631,3 @@
 
 <LiveGroupModal group={selected} onclose={() => (selected = null)} />
 <NodeModal pubkey={nodeKey} onclose={() => (nodeKey = null)} />
-
-<style>
-	:global(.maplibregl-ctrl-group) {
-		background: var(--color-panel);
-		border: 1px solid var(--color-line);
-	}
-	:global(.maplibregl-ctrl-group button + button) {
-		border-top: 1px solid var(--color-line);
-	}
-</style>

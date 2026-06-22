@@ -10,6 +10,7 @@
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
+	import { computeCoverage, inCoverage, distKm, type CoverageResult } from '$lib/coverage';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
 	import NodeModal from '$lib/components/NodeModal.svelte';
@@ -23,6 +24,72 @@
 	let nodeKey = $state<string | null>(null);
 
 	const visible = $derived(allLocated.filter((n) => selectedRoles.has(n.role)));
+
+	// ── RF coverage prediction (terrain line-of-sight from a planned repeater) ──
+	let coverageMode = $state(false);
+	let pin = $state<{ lat: number; lon: number } | null>(null);
+	let txHeight = $state(6);
+	let rxHeight = $state(2);
+	let rangeKm = $state(15);
+	let computing = $state(false);
+	let coverage = $state<CoverageResult | null>(null);
+	let pinMarker: maplibregl.Marker | null = null;
+
+	// Known located nodes that fall inside the computed coverage, nearest first.
+	const nodesInCoverage = $derived(
+		coverage && pin
+			? allLocated
+					.filter((n) => inCoverage(coverage!, n.longitude!, n.latitude!))
+					.map((n) => ({ n, d: distKm(pin!.lat, pin!.lon, n.latitude!, n.longitude!) }))
+					.sort((a, b) => a.d - b.d)
+			: []
+	);
+
+	function placePin(lat: number, lon: number) {
+		pin = { lat, lon };
+		if (!pinMarker) {
+			pinMarker = new maplibregl.Marker({ color: '#e8b454', draggable: true })
+				.setLngLat([lon, lat])
+				.addTo(map!);
+			pinMarker.on('dragend', () => {
+				const ll = pinMarker!.getLngLat();
+				pin = { lat: ll.lat, lon: ll.lng };
+				runCoverage();
+			});
+		} else pinMarker.setLngLat([lon, lat]);
+	}
+	function drawCoverage() {
+		(map?.getSource('coverage') as maplibregl.GeoJSONSource | undefined)?.setData(
+			coverage ? coverage.polygon : { type: 'FeatureCollection', features: [] }
+		);
+	}
+	async function runCoverage() {
+		if (!pin) return;
+		computing = true;
+		try {
+			coverage = await computeCoverage({
+				lat: pin.lat,
+				lon: pin.lon,
+				txHeightM: txHeight,
+				rxHeightM: rxHeight,
+				maxRangeKm: rangeKm
+			});
+			drawCoverage();
+		} finally {
+			computing = false;
+		}
+	}
+	function clearCoverage() {
+		coverage = null;
+		pin = null;
+		pinMarker?.remove();
+		pinMarker = null;
+		drawCoverage();
+	}
+	function toggleCoverage() {
+		coverageMode = !coverageMode;
+		if (!coverageMode) clearCoverage();
+	}
 
 	function nodeFeatures(): FeatureCollection {
 		return {
@@ -54,6 +121,7 @@
 		if (map.getSource('nodes')) return;
 		addLayers();
 		updateSource();
+		drawCoverage();
 	}
 
 	$effect(() => {
@@ -76,6 +144,10 @@
 
 	function addLayers() {
 		if (!map) return;
+		// Coverage overlay sits beneath the nodes/clusters.
+		map.addSource('coverage', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+		map.addLayer({ id: 'coverage-fill', type: 'fill', source: 'coverage', paint: { 'fill-color': '#34e3c4', 'fill-opacity': 0.16 } });
+		map.addLayer({ id: 'coverage-line', type: 'line', source: 'coverage', paint: { 'line-color': '#34e3c4', 'line-width': 1.5, 'line-opacity': 0.75 } });
 		map.addSource('nodes', {
 			type: 'geojson',
 			data: nodeFeatures(),
@@ -161,10 +233,17 @@
 			const zoom = await src.getClusterExpansionZoom(id);
 			map!.easeTo({ center: (f.geometry as GeoJSON.Point).coordinates as [number, number], zoom });
 		});
-		// Node click → full node-detail modal.
+		// Node click → full node-detail modal (suppressed in coverage mode).
 		map.on('click', 'unclustered', (e) => {
+			if (coverageMode) return;
 			const p = e.features![0].properties as { pubkey?: string };
 			if (p?.pubkey) nodeKey = p.pubkey;
+		});
+		// Coverage mode: a map click drops/moves the transmitter pin and recomputes.
+		map.on('click', (e) => {
+			if (!coverageMode) return;
+			placePin(e.lngLat.lat, e.lngLat.lng);
+			runCoverage();
 		});
 		for (const layer of ['clusters', 'unclustered']) {
 			map.on('mouseenter', layer, () => (map!.getCanvas().style.cursor = 'pointer'));
@@ -247,6 +326,70 @@
 	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
 		<div bind:this={mapEl} class="h-full w-full"></div>
 		<MapRoleFilter bind:selected={selectedRoles} />
+
+		<!-- Coverage prediction control -->
+		<div class="absolute top-3 left-3 z-10 w-64 max-w-[80vw]">
+			<button
+				onclick={toggleCoverage}
+				class="panel flex w-full items-center gap-2 px-3 py-2 text-sm font-600 transition-colors {coverageMode ? 'border-signal/50 text-signal' : 'text-fg-dim hover:text-fg'}"
+			>
+				<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2M8 8a5 5 0 0 0 0 8M16 8a5 5 0 0 1 0 8M12 11.2a1 1 0 1 0 0 1.6 1 1 0 0 0 0-1.6z" /></svg>
+				Coverage prediction
+				<span class="ml-auto text-xs">{coverageMode ? '×' : '+'}</span>
+			</button>
+
+			{#if coverageMode}
+				<div class="panel rise mt-2 px-4 py-3">
+					<p class="text-fg-faint mb-3 text-xs">
+						{pin ? 'Drag the pin or tap to move it.' : 'Tap the map to drop a planned repeater.'}
+					</p>
+					<div class="flex gap-2">
+						<label class="flex-1">
+							<span class="label">Antenna m</span>
+							<input type="number" min="0" bind:value={txHeight} onchange={runCoverage} class="border-line bg-ink-2 text-fg focus:border-signal mt-1 w-full rounded-[var(--radius)] border px-2 py-1 font-mono text-sm outline-none" />
+						</label>
+						<label class="flex-1">
+							<span class="label">Range km</span>
+							<input type="number" min="1" max="60" bind:value={rangeKm} onchange={runCoverage} class="border-line bg-ink-2 text-fg focus:border-signal mt-1 w-full rounded-[var(--radius)] border px-2 py-1 font-mono text-sm outline-none" />
+						</label>
+					</div>
+
+					<div class="mt-3 flex items-center gap-2">
+						<button onclick={runCoverage} disabled={!pin || computing} class="border-signal/40 bg-signal/15 text-signal flex-1 rounded-[var(--radius)] border px-3 py-1.5 text-xs font-600 disabled:opacity-50">
+							{computing ? 'Computing…' : 'Recompute'}
+						</button>
+						{#if pin}<button onclick={clearCoverage} class="border-line text-fg-dim hover:text-coral rounded-[var(--radius)] border px-3 py-1.5 text-xs font-600">Clear</button>{/if}
+					</div>
+
+					{#if coverage}
+						<div class="border-line/60 text-fg-faint mt-3 border-t pt-2 font-mono text-[0.62rem]">
+							ground {Number.isFinite(coverage.groundElevM) ? coverage.groundElevM.toFixed(0) + ' m' : '—'} · reaches up to {Math.max(...coverage.rangesKm).toFixed(1)} km
+						</div>
+
+						<!-- Nodes reachable inside the coverage -->
+						<div class="border-line/60 mt-2 border-t pt-2">
+							<div class="label mb-1.5 flex items-center justify-between">
+								<span>Nodes in coverage</span>
+								<span class="text-signal tnum">{nodesInCoverage.length}</span>
+							</div>
+							{#if nodesInCoverage.length === 0}
+								<div class="text-fg-faint text-xs">No known nodes inside.</div>
+							{:else}
+								<div class="-mr-1 max-h-48 space-y-0.5 overflow-y-auto pr-1">
+									{#each nodesInCoverage as { n, d } (n.publicKey)}
+										<button onclick={() => (nodeKey = n.publicKey)} class="hover:bg-panel-2/50 flex w-full items-center gap-2 rounded-[var(--radius)] px-1.5 py-1 text-left">
+											<span class="h-2 w-2 shrink-0 rounded-full" style="background:{ROLE_HEX[n.role] ?? '#8394a1'}"></span>
+											<span class="text-fg-dim min-w-0 flex-1 truncate text-xs">{n.name || n.publicKey.slice(0, 10)}</span>
+											<span class="text-fg-faint font-mono text-[0.62rem] tnum">{d.toFixed(1)} km</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{/if}
+				</div>
+			{/if}
+		</div>
 	</div>
 </div>
 

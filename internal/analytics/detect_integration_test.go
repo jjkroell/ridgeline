@@ -33,7 +33,7 @@ func TestDetectInjectionIntegration(t *testing.T) {
 	}
 	t.Logf("bridges=%d injectors=%d", len(rep.Bridges), len(rep.Injectors))
 	for _, b := range rep.Bridges {
-		t.Logf("  BRIDGE %s (%s) foreign=%d through=%d spec=%.2f", b.Name, b.NodeKey[:12], b.ForeignCount, b.ThroughTotal, b.Specificity)
+		t.Logf("  BRIDGE %s (%s) captive=%d/%d capFrac=%.2f km=%.0f", b.Name, b.NodeKey[:12], b.CaptiveCount, b.ForeignThrough, b.CaptiveFraction, b.ForeignKm)
 	}
 	for _, in := range rep.Injectors {
 		t.Logf("  INJECTOR %s exclusive=%d", in.Observer, in.ExclusiveCount)

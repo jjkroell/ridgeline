@@ -10,6 +10,7 @@
 	import { roleColor, roleLabel } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import WindowToggle from '$lib/components/WindowToggle.svelte';
+	import Tooltip from '$lib/components/Tooltip.svelte';
 
 	const TOKEN_KEY = 'ridgeline-admin-token';
 
@@ -94,17 +95,19 @@
 		busy = b.nodeKey;
 		msg = '';
 		try {
-			// Block the bridge AND its foreign cluster so the whole injected set
-			// disappears from maps/lists, not just the bridge node itself.
+			// Block the bridge AND its CAPTIVE foreign nodes (the ones with no
+			// alternative route) so the injected set disappears from maps/lists.
+			// Non-captive nodes are left alone — they reach the mesh other ways too.
+			const captive = b.foreign.filter((f) => f.captive).map((f) => f.key);
 			await admin.block(token, {
 				kind: 'bridge',
 				key: b.nodeKey,
 				name: b.name,
 				reason: 'RF bridge (detected)',
-				nodes: b.foreign.map((f) => f.key)
+				nodes: captive
 			});
 			await refreshBlocks();
-			msg = `Quarantined ${b.name} + ${b.foreign.length} foreign nodes — hidden from maps/feed and dropped at ingest.`;
+			msg = `Quarantined ${b.name} + ${captive.length} captive nodes — hidden from maps/feed and dropped at ingest.`;
 		} catch (e) {
 			msg = `quarantine: ${(e as Error).message}`;
 		} finally {
@@ -127,12 +130,13 @@
 	}
 
 	async function purgeBridge(b: BridgeCandidate) {
-		if (!confirm(`Permanently delete ${b.name} and its ${b.foreignCount} injected nodes plus all their stored packets? This cannot be undone.`))
+		const captive = b.foreign.filter((f) => f.captive).map((f) => f.key);
+		if (!confirm(`Permanently delete ${b.name} and its ${captive.length} captive nodes plus all their stored packets? This cannot be undone.`))
 			return;
 		busy = b.nodeKey;
 		msg = '';
 		try {
-			const res = await admin.purge(token, { bridges: [b.nodeKey], nodes: b.foreign.map((f) => f.key) });
+			const res = await admin.purge(token, { bridges: [b.nodeKey], nodes: captive });
 			await refreshBlocks();
 			report = null;
 			msg = `Purged ${b.name}: deleted ${res.observations} observations and ${res.nodes} node rows.`;
@@ -270,10 +274,14 @@
 									<span class="h-2 w-2 shrink-0 rounded-full" style="background:var(--color-coral)"></span>
 									<a href="/nodes/{b.nodeKey}" class="text-fg hover:text-signal font-600">{b.name}</a>
 									<span class="font-mono text-fg-faint text-[0.62rem]">{b.nodeKey.slice(0, 12)}…</span>
-									<span class="label normal-case tnum text-coral">{b.foreignCount} foreign</span>
-									<span class="label normal-case tnum text-fg-faint">{(b.specificity * 100).toFixed(0)}% specific</span>
+									<Tooltip text="foreign nodes with no alternative route — ≥95% of their traffic transits this node">
+										<span class="label normal-case tnum text-coral">{b.captiveCount}/{b.foreignThrough} captive</span>
+									</Tooltip>
+									<span class="label normal-case tnum text-fg-faint">{(b.captiveFraction * 100).toFixed(0)}% of foreign</span>
 									{#if b.foreignKm > 5}
-										<span class="label normal-case tnum text-amber">{b.foreignKm.toFixed(0)} km away</span>
+										<Tooltip text="distance of the captive cluster from the mesh — a hint only, not used for ranking">
+											<span class="label normal-case tnum text-fg-faint">{b.foreignKm.toFixed(0)} km</span>
+										</Tooltip>
 									{/if}
 									<div class="ml-auto flex items-center gap-2">
 										<button onclick={() => (expanded[b.nodeKey] = !expanded[b.nodeKey])} class="label hover:text-signal">
@@ -304,12 +312,18 @@
 								{#if expanded[b.nodeKey]}
 									<div class="mt-2 flex flex-wrap gap-1.5 pl-5">
 										{#each b.foreign as f (f.key)}
-											<span class="border-line/60 text-fg-dim flex items-center gap-1.5 rounded-[var(--radius)] border px-2 py-0.5 text-[0.68rem]">
+											<span
+												class="flex items-center gap-1.5 rounded-[var(--radius)] border px-2 py-0.5 text-[0.68rem] {f.captive ? 'border-coral/40 text-fg-dim' : 'border-line/40 text-fg-faint'}"
+											>
 												<span class="h-1.5 w-1.5 rounded-full" style="background:{roleColor(f.role ?? '')}"></span>
 												{f.name}
+												<span class="tnum {f.captive ? 'text-coral' : 'text-fg-faint'}">{(f.transitPct ?? 0).toFixed(0)}%</span>
 											</span>
 										{/each}
 									</div>
+									<p class="text-fg-faint mt-1.5 pl-5 text-[0.62rem]">
+										% = share of that node's traffic transiting this candidate; <span class="text-coral">coral</span> = captive (≥95%, no alternative route). Quarantine/Purge act on captive nodes only.
+									</p>
 								{/if}
 							</div>
 						{/each}

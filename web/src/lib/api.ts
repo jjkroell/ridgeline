@@ -309,14 +309,16 @@ export interface ForeignNode {
 	role?: string;
 	latitude?: number;
 	longitude?: number;
+	transitPct?: number; // % of this node's observed paths through the candidate
+	captive?: boolean; // transitPct >= 95% (no alternative route)
 }
 export interface BridgeCandidate {
 	nodeKey: string;
 	name: string;
-	foreignCount: number;
-	throughTotal: number;
-	specificity: number;
-	foreignKm: number; // geographic displacement of the foreign cluster from the mesh
+	captiveCount: number; // foreign nodes ≥95% captive to this node
+	foreignThrough: number; // foreign nodes routed through it at all
+	captiveFraction: number; // captiveCount / foreignThrough
+	foreignKm: number; // geographic displacement — shown as a hint, not ranked
 	foreign: ForeignNode[];
 }
 export interface InjectorCandidate {

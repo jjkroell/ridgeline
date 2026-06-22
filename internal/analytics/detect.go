@@ -13,10 +13,11 @@ import (
 // Detection thresholds. Deliberately conservative — these surface *candidates*
 // for an admin to confirm, not auto-bans.
 const (
-	minForeignThrough = 3   // foreign nodes entering via a node, to flag it a bridge
-	minBridgeSpecific = 0.8 // fraction of through-traffic that must be foreign (a real
-	// bridge is ~all foreign; legit hubs carry mixed traffic)
-	minExclusiveNodes = 3 // nodes sourced by only one observer, to flag an injector
+	captiveTransit = 0.95 // a foreign node is "captive" to a relay if ≥95% of its
+	// individual observed paths transit that relay (no alt route)
+	minCaptiveNodes    = 3   // captive foreign nodes needed to flag a bridge
+	minCaptiveFraction = 0.6 // captive must be a majority of the relay's foreign set
+	minExclusiveNodes  = 3   // nodes sourced by only one observer, to flag an injector
 )
 
 // InjectionReport lists detected ingress points for foreign/injected traffic.
@@ -33,21 +34,28 @@ type ForeignNode struct {
 	Role      string   `json:"role,omitempty"`
 	Latitude  *float64 `json:"latitude,omitempty"`
 	Longitude *float64 `json:"longitude,omitempty"`
+	// TransitPct is the share of this node's observed paths that go through the
+	// candidate (bridge candidates only); Captive marks ≥captiveTransit.
+	TransitPct float64 `json:"transitPct,omitempty"`
+	Captive    bool    `json:"captive,omitempty"`
 }
 
-// BridgeCandidate is a node through which a population of never-directly-heard
-// nodes enters the mesh — the RF-bridge signature.
+// BridgeCandidate is a node that is the sole ingress for a cluster of
+// never-directly-heard nodes — the RF-bridge signature. The discriminating
+// signal is captivity: a true bridge is on ~100% of each foreign node's observed
+// paths (no alternative route), whereas a legitimate relay serving an
+// observer-less area has foreign nodes reachable by many other routes.
 type BridgeCandidate struct {
-	NodeKey      string  `json:"nodeKey"`
-	Name         string  `json:"name"`
-	ForeignCount int     `json:"foreignCount"` // distinct foreign origins entering via it
-	ThroughTotal int     `json:"throughTotal"` // all origins routed through it
-	Specificity  float64 `json:"specificity"`  // foreign / through (1.0 = only foreign)
-	// ForeignKm is how far the foreign set's geographic centroid sits from the
-	// mesh centroid. A cross-mesh bridge imports a geographically displaced
-	// cluster (the strongest corroborator); 0 when locations are unknown.
+	NodeKey         string  `json:"nodeKey"`
+	Name            string  `json:"name"`
+	CaptiveCount    int     `json:"captiveCount"`    // foreign nodes ≥95% captive to it
+	ForeignThrough  int     `json:"foreignThrough"`  // foreign nodes routed through it at all
+	CaptiveFraction float64 `json:"captiveFraction"` // captiveCount / foreignThrough
+	// ForeignKm is the geographic displacement of the captive cluster from the
+	// mesh centroid. Shown as a corroborator only — NOT used for ranking, so an
+	// overlapping (co-located) bridge ranks the same as a distant one.
 	ForeignKm float64       `json:"foreignKm"`
-	Foreign   []ForeignNode `json:"foreign"`
+	Foreign   []ForeignNode `json:"foreign"` // foreign nodes through it, by transit share desc
 }
 
 // InjectorCandidate is an observer that is the sole source of a population of
@@ -61,9 +69,11 @@ type InjectorCandidate struct {
 // DetectInjection scans a window of observations and flags likely ingress points
 // for foreign traffic, by two independent signatures:
 //
-//   - RF bridge: a node that sits on the flood path of many origins that are
-//     never heard zero-hop by any observer, and whose through-traffic is mostly
-//     such foreign origins (high specificity vs. a legitimate hub relay).
+//   - RF bridge: a node that is the captive ingress for ≥3 never-directly-heard
+//     nodes — i.e. ≥95% of each such node's observed paths transit it AND those
+//     captive nodes are the majority of its foreign through-traffic. This is a
+//     physical consequence of the foreign nodes being on another frequency (no
+//     alternative route in), so it holds regardless of geography.
 //   - MQTT injector: an observer that is the *only* source of many origins no
 //     other observer ever reports.
 //
@@ -83,9 +93,12 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 	}
 	resolve := newPrefixResolver(nodes)
 
-	directlyHeard := map[string]bool{}                // origin heard at zero hops
-	reporters := map[string]map[string]bool{}         // origin -> set of observer ids
-	txHops := map[string]map[string]map[string]bool{} // origin -> msgHash -> set of resolved relay keys
+	directlyHeard := map[string]bool{}        // origin heard at zero hops
+	reporters := map[string]map[string]bool{} // origin -> set of observer ids
+	obsTotal := map[string]int{}              // origin -> # of its observed (pathed) adverts
+	// via[relay][origin] = # of origin's observed paths that include relay. The
+	// per-observation count (not a union) is what lets us measure captivity.
+	via := map[string]map[string]int{}
 
 	for _, ro := range raws {
 		pkt, err := meshcore.DecodeHex(ro.RawHex)
@@ -103,56 +116,25 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 			directlyHeard[origin] = true
 			continue
 		}
-		if txHops[origin] == nil {
-			txHops[origin] = map[string]map[string]bool{}
-		}
-		hops := txHops[origin][pkt.MessageHash]
-		if hops == nil {
-			hops = map[string]bool{}
-			txHops[origin][pkt.MessageHash] = hops
-		}
+		obsTotal[origin]++
+		seen := map[string]bool{} // dedupe relays within this one observation
 		for _, h := range pkt.Path {
-			if k := resolve(h); k != "" {
-				hops[strings.ToUpper(k)] = true
-			}
-		}
-	}
-
-	relayOnly := func(origin string) bool { return !directlyHeard[origin] }
-
-	// For each origin, the relays present in EVERY one of its transmissions.
-	through := map[string]map[string]bool{}        // relay -> set of origins routed through it
-	foreignThrough := map[string]map[string]bool{} // relay -> set of foreign origins
-	for origin, txs := range txHops {
-		var always map[string]bool
-		for _, hops := range txs {
-			if always == nil {
-				always = map[string]bool{}
-				for k := range hops {
-					always[k] = true
-				}
+			k := resolve(h)
+			if k == "" {
 				continue
 			}
-			for k := range always {
-				if !hops[k] {
-					delete(always, k)
-				}
+			ku := strings.ToUpper(k)
+			if seen[ku] {
+				continue
 			}
-		}
-		for r := range always {
-			if through[r] == nil {
-				through[r] = map[string]bool{}
-				foreignThrough[r] = map[string]bool{}
+			seen[ku] = true
+			if via[ku] == nil {
+				via[ku] = map[string]int{}
 			}
-			through[r][origin] = true
-			if relayOnly(origin) {
-				foreignThrough[r][origin] = true
-			}
+			via[ku][origin]++
 		}
 	}
 
-	// Initialise the slices empty (not nil) so an empty result marshals to JSON
-	// [] rather than null — the frontend reads .length on them.
 	report := &InjectionReport{
 		WindowHours: windowHoursFrom(sinceISO),
 		Bridges:     []BridgeCandidate{},
@@ -160,45 +142,59 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 	}
 	meshLat, meshLon, haveMesh := centroid(nodes)
 
-	// Bridge candidates.
-	for r, fset := range foreignThrough {
-		if len(fset) < minForeignThrough {
+	// Bridge candidates by captivity.
+	for relay, origins := range via {
+		var foreign []ForeignNode
+		captive := 0
+		for origin, cnt := range origins {
+			if directlyHeard[origin] {
+				continue // a local node — not foreign
+			}
+			frac := float64(cnt) / float64(max(1, obsTotal[origin]))
+			n := byKey[origin]
+			fn := ForeignNode{
+				Key: origin, Name: displayName(n, origin), Role: n.Role,
+				Latitude: n.Latitude, Longitude: n.Longitude,
+				TransitPct: frac * 100, Captive: frac >= captiveTransit,
+			}
+			foreign = append(foreign, fn)
+			if fn.Captive {
+				captive++
+			}
+		}
+		if captive < minCaptiveNodes {
 			continue
 		}
-		if st.IsAllowed(r) {
-			continue // admin dismissed this node as a known-good relay
+		capFrac := float64(captive) / float64(max(1, len(foreign)))
+		if capFrac < minCaptiveFraction {
+			continue // most of its foreign traffic has alternative routes → legit relay
 		}
-		tot := len(through[r])
-		spec := float64(len(fset)) / float64(max(1, tot))
-		if spec < minBridgeSpecific {
-			continue // a legitimate hub relays mostly local traffic
-		}
-		foreign := foreignNodes(fset, byKey)
+		sort.Slice(foreign, func(i, j int) bool { return foreign[i].TransitPct > foreign[j].TransitPct })
 		bc := BridgeCandidate{
-			NodeKey:      r,
-			Name:         displayName(byKey[r], r),
-			ForeignCount: len(fset),
-			ThroughTotal: tot,
-			Specificity:  spec,
-			Foreign:      foreign,
+			NodeKey:         relay,
+			Name:            displayName(byKey[relay], relay),
+			CaptiveCount:    captive,
+			ForeignThrough:  len(foreign),
+			CaptiveFraction: capFrac,
+			Foreign:         foreign,
 		}
 		if haveMesh {
-			if fLat, fLon, ok := foreignCentroid(foreign); ok {
+			if fLat, fLon, ok := captiveCentroid(foreign); ok {
 				bc.ForeignKm = haversineKm(meshLat, meshLon, fLat, fLon)
 			}
 		}
 		report.Bridges = append(report.Bridges, bc)
 	}
-	// Rank by a composite: more foreign origins, higher specificity, and greater
-	// geographic displacement all raise suspicion of a real cross-mesh bridge.
-	score := func(b BridgeCandidate) float64 {
-		return float64(b.ForeignCount) * b.Specificity * (1 + b.ForeignKm/50)
-	}
+	// Rank by captive count, then captive fraction. Geography is NOT a factor.
 	sort.Slice(report.Bridges, func(i, j int) bool {
-		return score(report.Bridges[i]) > score(report.Bridges[j])
+		if report.Bridges[i].CaptiveCount != report.Bridges[j].CaptiveCount {
+			return report.Bridges[i].CaptiveCount > report.Bridges[j].CaptiveCount
+		}
+		return report.Bridges[i].CaptiveFraction > report.Bridges[j].CaptiveFraction
 	})
 
 	// MQTT injector candidates: observers that are the sole source of foreign nodes.
+	relayOnly := func(origin string) bool { return !directlyHeard[origin] }
 	exclusive := map[string]map[string]bool{} // observer -> origins only it reports
 	for origin, reps := range reporters {
 		if len(reps) != 1 || !relayOnly(origin) {
@@ -258,9 +254,13 @@ func centroid(nodes []store.Node) (lat, lon float64, ok bool) {
 	return median(lats), median(lons), true
 }
 
-func foreignCentroid(fs []ForeignNode) (lat, lon float64, ok bool) {
+// captiveCentroid is the median location of a candidate's captive foreign nodes.
+func captiveCentroid(fs []ForeignNode) (lat, lon float64, ok bool) {
 	var lats, lons []float64
 	for _, f := range fs {
+		if !f.Captive {
+			continue
+		}
 		if f.Latitude != nil && f.Longitude != nil && (*f.Latitude != 0 || *f.Longitude != 0) {
 			lats = append(lats, *f.Latitude)
 			lons = append(lons, *f.Longitude)

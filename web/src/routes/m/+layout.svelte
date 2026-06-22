@@ -1,9 +1,30 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { live } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
 
 	let { children } = $props();
+
+	// Being in the app clears any "use desktop site" preference, so the next time
+	// a desktop section is opened on this phone it routes back to the app.
+	onMount(() => {
+		try {
+			localStorage.removeItem('ridgeline-force-desktop');
+		} catch {
+			/* ignore */
+		}
+	});
+
+	function useDesktopSite() {
+		try {
+			localStorage.setItem('ridgeline-force-desktop', '1');
+		} catch {
+			/* ignore */
+		}
+		goto('/');
+	}
 
 	// Primary bottom-tab destinations (5). Secondary live in the "More" sheet.
 	const tabs = [
@@ -145,6 +166,10 @@
 				</a>
 			{/each}
 		</div>
+		<button onclick={useDesktopSite} class="text-fg-faint active:text-fg mt-1 flex w-full items-center justify-center gap-1.5 py-3 text-xs">
+			Desktop site
+			<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>
+		</button>
 	</div>
 {/if}
 </div>

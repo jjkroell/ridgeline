@@ -54,13 +54,9 @@
 								<div class="label mt-1">{o.region}</div>
 							{/if}
 						</div>
-						<div class="flex items-center gap-1.5">
-							{#if isFresh(o.lastSeen)}
-								<span class="live-dot"></span>
-							{:else}
-								<span class="bg-fg-faint/60 h-2 w-2 rounded-full"></span>
-							{/if}
-						</div>
+						<span class="label shrink-0 {isFresh(o.lastSeen) ? '!text-signal' : '!text-fg-faint'}">
+							{isFresh(o.lastSeen) ? 'Reporting' : 'Silent'}
+						</span>
 					</div>
 					<div class="border-line/60 mt-4 flex items-end justify-between border-t pt-3">
 						<div>

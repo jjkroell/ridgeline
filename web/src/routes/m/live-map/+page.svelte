@@ -40,6 +40,25 @@
 	let pulses: Pulse[] = [];
 	const PULSE_MS = 1600;
 
+	// active trails: the polyline through a packet's resolved path hops, fading out.
+	type Trail = { coords: [number, number][]; color: string; start: number };
+	let trails: Trail[] = [];
+	const TRAIL_MS = 2600;
+
+	function trailFeatures(now: number): FeatureCollection {
+		return {
+			type: 'FeatureCollection',
+			features: trails.map((t) => {
+				const age = (now - t.start) / TRAIL_MS; // 0..1
+				return {
+					type: 'Feature',
+					geometry: { type: 'LineString', coordinates: t.coords },
+					properties: { color: t.color, o: Math.max(0, 1 - age) * 0.85 }
+				};
+			})
+		};
+	}
+
 	function pulseFeatures(now: number): FeatureCollection {
 		return {
 			type: 'FeatureCollection',
@@ -58,18 +77,25 @@
 		if (!ev.path?.length) return;
 		const color = ev.payloadType === 'GroupText' ? '#5b9dff' : ev.payloadType === 'Advert' ? '#34e3c4' : '#e8b454';
 		const now = performance.now();
+		const coords: [number, number][] = [];
 		ev.path.forEach((hop, i) => {
 			const c = resolveHop(hop);
-			if (c) pulses.push({ lng: c[0], lat: c[1], color, start: now + i * 180 });
+			if (c) {
+				coords.push(c);
+				pulses.push({ lng: c[0], lat: c[1], color, start: now + i * 180 });
+			}
 		});
+		if (coords.length >= 2) trails.push({ coords, color, start: now });
 	}
 
 	let raf = 0;
 	function frame() {
 		const now = performance.now();
 		pulses = pulses.filter((p) => now - p.start < PULSE_MS);
+		trails = trails.filter((t) => now - t.start < TRAIL_MS);
 		pulseCount = pulses.length;
 		(map?.getSource('pulses') as maplibregl.GeoJSONSource | undefined)?.setData(pulseFeatures(now));
+		(map?.getSource('trails') as maplibregl.GeoJSONSource | undefined)?.setData(trailFeatures(now));
 		raf = requestAnimationFrame(frame);
 	}
 
@@ -91,6 +117,12 @@
 		if (!map || map.getSource('nodes')) return;
 		map.addSource('nodes', { type: 'geojson', data: nodeFeatures() });
 		map.addSource('pulses', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+		map.addSource('trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+		map.addLayer({
+			id: 'pulse-lines', type: 'line', source: 'trails',
+			layout: { 'line-cap': 'round', 'line-join': 'round' },
+			paint: { 'line-color': ['get', 'color'], 'line-width': 2, 'line-opacity': ['get', 'o'], 'line-blur': 0.5 }
+		});
 		map.addLayer({
 			id: 'pulse-rings', type: 'circle', source: 'pulses',
 			paint: { 'circle-radius': ['get', 'r'], 'circle-color': 'transparent', 'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': 2, 'circle-stroke-opacity': ['get', 'o'] }

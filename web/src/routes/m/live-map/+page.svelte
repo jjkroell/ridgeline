@@ -1,2 +1,160 @@
-<script lang="ts">import Soon from '$lib/mobile/Soon.svelte';</script>
-<Soon name="Live Map" desc="Animated packet propagation across repeaters — next build pass." />
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import maplibregl from 'maplibre-gl';
+	import 'maplibre-gl/dist/maplibre-gl.css';
+	import type { FeatureCollection } from 'geojson';
+	import { api, type Node } from '$lib/api';
+	import { live } from '$lib/live.svelte';
+	import { theme } from '$lib/theme.svelte';
+	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
+	import { ensureHillshade } from '$lib/map-hillshade';
+	import { ROLE_HEX, locatedNodes } from '$lib/map-util';
+
+	let mapEl: HTMLDivElement;
+	let map: maplibregl.Map | null = null;
+	let nodes = $state<Node[]>([]);
+	let basemapLight = false;
+	let didFit = false;
+	let pulseCount = $state(0);
+
+	// resolve a path-hop prefix to a located node's coordinates (unique prefix)
+	function resolveHop(hop: string): [number, number] | null {
+		const h = hop.toUpperCase();
+		const hit = nodes.filter((n) => n.publicKey.toUpperCase().startsWith(h));
+		return hit.length === 1 ? [hit[0].longitude!, hit[0].latitude!] : null;
+	}
+
+	function nodeFeatures(): FeatureCollection {
+		return {
+			type: 'FeatureCollection',
+			features: nodes.map((n) => ({
+				type: 'Feature',
+				geometry: { type: 'Point', coordinates: [n.longitude!, n.latitude!] },
+				properties: { color: ROLE_HEX[n.role] ?? '#8394a1' }
+			}))
+		};
+	}
+
+	// active pulses: a node coord + colour + start time
+	type Pulse = { lng: number; lat: number; color: string; start: number };
+	let pulses: Pulse[] = [];
+	const PULSE_MS = 1600;
+
+	function pulseFeatures(now: number): FeatureCollection {
+		return {
+			type: 'FeatureCollection',
+			features: pulses.map((p) => {
+				const age = (now - p.start) / PULSE_MS; // 0..1
+				return {
+					type: 'Feature',
+					geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+					properties: { color: p.color, r: 4 + age * 22, o: Math.max(0, 1 - age) }
+				};
+			})
+		};
+	}
+
+	function spawn(ev: { path?: string[]; payloadType: string }) {
+		if (!ev.path?.length) return;
+		const color = ev.payloadType === 'GroupText' ? '#5b9dff' : ev.payloadType === 'Advert' ? '#34e3c4' : '#e8b454';
+		const now = performance.now();
+		ev.path.forEach((hop, i) => {
+			const c = resolveHop(hop);
+			if (c) pulses.push({ lng: c[0], lat: c[1], color, start: now + i * 180 });
+		});
+	}
+
+	let raf = 0;
+	function frame() {
+		const now = performance.now();
+		pulses = pulses.filter((p) => now - p.start < PULSE_MS);
+		pulseCount = pulses.length;
+		(map?.getSource('pulses') as maplibregl.GeoJSONSource | undefined)?.setData(pulseFeatures(now));
+		raf = requestAnimationFrame(frame);
+	}
+
+	// watch the live store for new events
+	let lastSeen = 0;
+	$effect(() => {
+		const evs = live.events;
+		void evs.length;
+		if (!map) return;
+		const now = Date.now();
+		for (const ev of evs) {
+			const t = +new Date(ev.receivedAt);
+			if (t > lastSeen && now - t < 20000) spawn(ev);
+		}
+		lastSeen = Math.max(lastSeen, ...evs.map((e) => +new Date(e.receivedAt)), lastSeen);
+	});
+
+	function addLayers() {
+		if (!map || map.getSource('nodes')) return;
+		map.addSource('nodes', { type: 'geojson', data: nodeFeatures() });
+		map.addSource('pulses', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+		map.addLayer({
+			id: 'pulse-rings', type: 'circle', source: 'pulses',
+			paint: { 'circle-radius': ['get', 'r'], 'circle-color': 'transparent', 'circle-stroke-color': ['get', 'color'], 'circle-stroke-width': 2, 'circle-stroke-opacity': ['get', 'o'] }
+		});
+		map.addLayer({
+			id: 'node-dots', type: 'circle', source: 'nodes',
+			paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 2.5, 11, 5], 'circle-color': ['get', 'color'], 'circle-opacity': 0.85 }
+		});
+	}
+	function ensureOverlays() {
+		if (!map || !map.isStyleLoaded()) return;
+		ensureHillshade(map, basemapLight);
+		if (!map.getSource('nodes')) addLayers();
+	}
+	function fit() {
+		if (!map || didFit || nodes.length === 0) return;
+		const b = new maplibregl.LngLatBounds();
+		for (const n of nodes) b.extend([n.longitude!, n.latitude!]);
+		map.fitBounds(b, { padding: 56, maxZoom: 11, duration: 0 });
+		didFit = true;
+	}
+
+	$effect(() => {
+		void theme.mode;
+		if (!map) return;
+		const light = theme.mode === 'light';
+		if (light === basemapLight) return;
+		basemapLight = light;
+		map.setStyle(basemapStyleUrl(light));
+		map.once('idle', ensureOverlays);
+	});
+
+	async function refresh() {
+		try {
+			nodes = locatedNodes(await api.nodes());
+			(map?.getSource('nodes') as maplibregl.GeoJSONSource | undefined)?.setData(nodeFeatures());
+			fit();
+		} catch {
+			/* keep */
+		}
+	}
+
+	onMount(() => {
+		basemapLight = theme.mode === 'light';
+		map = new maplibregl.Map({ container: mapEl, style: basemapStyleUrl(basemapLight), center: [-123.65, 49.25], zoom: 7, attributionControl: { compact: true } });
+		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+		map.on('load', () => {
+			if (!map) return;
+			map.resize();
+			ensureHillshade(map, basemapLight);
+			addLayers();
+			collapseAttribution(map);
+			refresh();
+			raf = requestAnimationFrame(frame);
+		});
+		const t = setInterval(refresh, 15000);
+		return () => { clearInterval(t); cancelAnimationFrame(raf); map?.remove(); map = null; };
+	});
+</script>
+
+<div class="relative h-full w-full">
+	<div bind:this={mapEl} class="h-full w-full"></div>
+	<div class="border-line/60 bg-ink-2/80 absolute top-3 left-3 z-10 flex items-center gap-2 rounded-full border px-3 py-1.5 backdrop-blur-md">
+		{#if live.connected}<span class="live-dot"></span>{:else}<span class="bg-coral/70 h-2 w-2 rounded-full"></span>{/if}
+		<span class="text-fg-dim font-mono text-[0.62rem] tnum">{nodes.length} nodes · {pulseCount} live</span>
+	</div>
+</div>

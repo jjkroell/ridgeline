@@ -33,6 +33,10 @@
 		return exact ? p === href : p === href || p.startsWith(href + '/');
 	}
 
+	// The mobile app (/m/*) supplies its own chrome — skip the desktop sidebar/topbar
+	// but keep the shared init above (theme, channels, favorites, live store).
+	const isMobileApp = $derived(page.url.pathname === '/m' || page.url.pathname.startsWith('/m/'));
+
 	const icons: Record<string, string> = {
 		grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
 		node: 'M12 2v6m0 8v6M2 12h6m8 0h6M12 8a4 4 0 100 8 4 4 0 000-8z',
@@ -46,6 +50,9 @@
 	};
 </script>
 
+{#if isMobileApp}
+	{@render children()}
+{:else}
 <div class="flex min-h-screen">
 	<!-- Sidebar -->
 	<aside
@@ -176,3 +183,4 @@
 		</main>
 	</div>
 </div>
+{/if}

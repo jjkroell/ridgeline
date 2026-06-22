@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { live } from '$lib/live.svelte';
@@ -7,23 +6,12 @@
 
 	let { children } = $props();
 
-	// Being in the app clears any "use desktop site" preference, so the next time
-	// a desktop section is opened on this phone it routes back to the app.
-	onMount(() => {
-		try {
-			localStorage.removeItem('ridgeline-force-desktop');
-		} catch {
-			/* ignore */
-		}
-	});
-
-	function useDesktopSite() {
-		try {
-			localStorage.setItem('ridgeline-force-desktop', '1');
-		} catch {
-			/* ignore */
-		}
-		goto('/');
+	// Detail routes (node/observer) show a back button instead of the logo, since
+	// an installed PWA has no browser back chrome.
+	const isDetail = $derived(/^\/m\/(nodes|observers)\/.+/.test(page.url.pathname));
+	function goBack() {
+		if (history.length > 1) history.back();
+		else goto('/m/' + (page.url.pathname.split('/')[2] ?? ''));
 	}
 
 	// Primary bottom-tab destinations (5). Secondary live in the "More" sheet.
@@ -91,10 +79,16 @@
 		class="border-line/70 bg-ink-2/85 z-20 flex shrink-0 items-center gap-3 border-b px-4 backdrop-blur-md"
 		style="padding-top:calc(env(safe-area-inset-top) + 0.6rem);padding-bottom:0.6rem"
 	>
-		<svg viewBox="0 0 32 32" class="h-6 w-6 shrink-0" aria-hidden="true">
-			<path d="M3 23 11 11 16 17 22 7 29 23" fill="none" stroke="var(--color-signal)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" />
-			<path d="M3 27 11 17 16 22 22 14 29 27" fill="none" stroke="var(--color-amber)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.6" />
-		</svg>
+		{#if isDetail}
+			<button onclick={goBack} aria-label="Back" class="text-fg-dim active:text-fg -ml-1 p-1">
+				<svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+			</button>
+		{:else}
+			<svg viewBox="0 0 32 32" class="h-6 w-6 shrink-0" aria-hidden="true">
+				<path d="M3 23 11 11 16 17 22 7 29 23" fill="none" stroke="var(--color-signal)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" />
+				<path d="M3 27 11 17 16 22 22 14 29 27" fill="none" stroke="var(--color-amber)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.6" />
+			</svg>
+		{/if}
 		<h1 class="font-display text-fg text-[1.15rem] font-900 tracking-tight">{title}</h1>
 		<div class="ml-auto flex items-center gap-3">
 			<div class="flex items-center gap-1.5">
@@ -166,10 +160,6 @@
 				</a>
 			{/each}
 		</div>
-		<button onclick={useDesktopSite} class="text-fg-faint active:text-fg mt-1 flex w-full items-center justify-center gap-1.5 py-3 text-xs">
-			Desktop site
-			<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>
-		</button>
 	</div>
 {/if}
 </div>

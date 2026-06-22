@@ -327,8 +327,8 @@
 		<div bind:this={mapEl} class="h-full w-full"></div>
 		<MapRoleFilter bind:selected={selectedRoles} />
 
-		<!-- Coverage prediction control -->
-		<div class="absolute top-3 left-3 z-10 w-64 max-w-[80vw]">
+		<!-- Coverage prediction control (bottom-left; panel expands upward) -->
+		<div class="absolute bottom-3 left-3 z-10 flex w-64 max-w-[80vw] flex-col-reverse gap-2">
 			<button
 				onclick={toggleCoverage}
 				class="panel flex w-full items-center gap-2 px-3 py-2 text-sm font-600 transition-colors {coverageMode ? 'border-signal/50 text-signal' : 'text-fg-dim hover:text-fg'}"
@@ -339,7 +339,7 @@
 			</button>
 
 			{#if coverageMode}
-				<div class="panel rise mt-2 px-4 py-3">
+				<div class="panel rise px-4 py-3">
 					<p class="text-fg-faint mb-3 text-xs">
 						{pin ? 'Drag the pin or tap to move it.' : 'Tap the map to drop a planned repeater.'}
 					</p>

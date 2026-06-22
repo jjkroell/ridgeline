@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import type { FeatureCollection } from 'geojson';
@@ -30,7 +31,7 @@
 			features: nodes.map((n) => ({
 				type: 'Feature',
 				geometry: { type: 'Point', coordinates: [n.longitude!, n.latitude!] },
-				properties: { color: ROLE_HEX[n.role] ?? '#8394a1' }
+				properties: { color: ROLE_HEX[n.role] ?? '#8394a1', pubkey: n.publicKey }
 			}))
 		};
 	}
@@ -131,6 +132,16 @@
 			id: 'node-dots', type: 'circle', source: 'nodes',
 			paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 2.5, 11, 5], 'circle-color': ['get', 'color'], 'circle-opacity': 0.85 }
 		});
+		// Transparent, larger hit target so the small dots are tappable on a phone.
+		map.addLayer({
+			id: 'node-hit', type: 'circle', source: 'nodes',
+			paint: { 'circle-radius': 13, 'circle-color': 'transparent' }
+		});
+		map.on('click', 'node-hit', (e) => {
+			const pk = e.features?.[0]?.properties?.pubkey as string | undefined;
+			if (pk) goto('/m/nodes/' + pk);
+		});
+		map.on('mouseenter', 'node-hit', () => { if (map) map.getCanvas().style.cursor = 'pointer'; });
 	}
 	function ensureOverlays() {
 		if (!map || !map.isStyleLoaded()) return;

@@ -127,15 +127,15 @@ func (s *Server) adminPurge(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "nothing to purge")
 		return
 	}
-	// Block first so nothing re-ingests between the scan and the next packet.
+	// Block only the INGRESS points (bridges + observers) so they can't re-ingest;
+	// these remain on the blocklist. The nodes they brought in are deleted
+	// permanently with NO block — once the bridge/observer is blocked their traffic
+	// can't return anyway, so there's no need to keep an entry for each one.
 	for _, o := range req.Observers {
 		s.store.AddBlock("observer", o, o, "purged")
 	}
 	for _, b := range req.Bridges {
 		s.store.AddBlock("bridge", b, "", "purged")
-	}
-	for _, n := range req.Nodes {
-		s.store.AddBlock("node", n, "", "purged")
 	}
 	res, err := s.store.PurgeTargets(req.Observers, req.Bridges, req.Nodes)
 	if err != nil {
@@ -144,6 +144,31 @@ func (s *Server) adminPurge(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Info("admin purged", "observers", len(req.Observers), "bridges", len(req.Bridges),
 		"nodes", len(req.Nodes), "observationsDeleted", res.Observations, "nodesDeleted", res.Nodes)
+	writeJSON(w, res)
+}
+
+// adminDelete permanently deletes nodes (their adverts + node rows) with NO
+// blocklist entry — a clean removal, distinct from purge which keeps the ingress
+// blocked. If the node still transmits (and isn't behind a blocked bridge), it
+// will re-appear on its next advert.
+func (s *Server) adminDelete(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Nodes []string `json:"nodes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad request body")
+		return
+	}
+	if len(req.Nodes) == 0 {
+		writeErr(w, http.StatusBadRequest, "no nodes to delete")
+		return
+	}
+	res, err := s.store.PurgeTargets(nil, nil, req.Nodes)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	s.log.Info("admin deleted nodes", "nodes", len(req.Nodes), "observationsDeleted", res.Observations, "nodesDeleted", res.Nodes)
 	writeJSON(w, res)
 }
 

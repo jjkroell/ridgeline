@@ -135,7 +135,7 @@
 
 	async function purgeBridge(b: BridgeCandidate) {
 		const captive = b.foreign.filter((f) => f.captive).map((f) => f.key);
-		if (!confirm(`Permanently delete ${b.name} and its ${captive.length} captive nodes plus all their stored packets? This cannot be undone.`))
+		if (!confirm(`Permanently delete ${captive.length} captive nodes (removed for good) and block the bridge ${b.name} so it can't re-inject (it stays on the Purged list)? This cannot be undone.`))
 			return;
 		busy = b.nodeKey;
 		msg = '';
@@ -190,6 +190,24 @@
 			await refreshBlocks();
 		} catch (e) {
 			msg = `unblock: ${(e as Error).message}`;
+		} finally {
+			busy = '';
+		}
+	}
+
+	// Permanently delete a purged entry: sweep any stored data and drop the
+	// blocklist row, so it disappears from the list entirely.
+	async function deletePurged(b: BlockEntry) {
+		if (!confirm(`Permanently delete ${b.name || b.key} and remove it from the list? Any remaining stored data is swept and the block is lifted. This cannot be undone.`))
+			return;
+		busy = b.kind + b.key;
+		msg = '';
+		try {
+			await admin.deleteNodes(token, [b.key]);
+			await admin.unblock(token, b.kind, b.key);
+			await refreshBlocks();
+		} catch (e) {
+			msg = `delete: ${(e as Error).message}`;
 		} finally {
 			busy = '';
 		}
@@ -437,6 +455,12 @@
 								class="label hover:text-signal disabled:opacity-50"
 								title="Lift the block (data is already deleted; the node could re-ingest on its next advert)"
 							>unblock</button>
+							<button
+								onclick={() => deletePurged(b)}
+								disabled={busy === b.kind + b.key}
+								class="label hover:text-coral disabled:opacity-50"
+								title="Permanently delete and remove from this list"
+							>delete</button>
 						</div>
 					{/each}
 				</div>

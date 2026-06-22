@@ -73,6 +73,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/block", s.requireAdmin(s.adminBlock))
 	mux.HandleFunc("DELETE /api/admin/block", s.requireAdmin(s.adminUnblock))
 	mux.HandleFunc("POST /api/admin/purge", s.requireAdmin(s.adminPurge))
+	mux.HandleFunc("POST /api/admin/delete", s.requireAdmin(s.adminDelete))
 
 	if s.webDir != "" {
 		if info, err := os.Stat(s.webDir); err == nil && info.IsDir() {

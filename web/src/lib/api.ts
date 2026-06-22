@@ -384,9 +384,13 @@ export const admin = {
 			`/api/admin/block?kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}`,
 			'DELETE'
 		),
-	/** Hard delete stored data for the targets (also blocks them). */
+	/** Purge: delete stored data; blocks the INGRESS points (bridges/observers)
+	 *  but deletes `nodes` permanently with no block. */
 	purge: (token: string, body: { observers?: string[]; bridges?: string[]; nodes?: string[] }) =>
-		adminReq<PurgeResult>(token, '/api/admin/purge', 'POST', body)
+		adminReq<PurgeResult>(token, '/api/admin/purge', 'POST', body),
+	/** Permanently delete nodes (adverts + rows) with no blocklist entry. */
+	deleteNodes: (token: string, nodes: string[]) =>
+		adminReq<PurgeResult>(token, '/api/admin/delete', 'POST', { nodes })
 };
 
 export const api = {

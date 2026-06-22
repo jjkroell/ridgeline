@@ -151,7 +151,13 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 		}
 	}
 
-	report := &InjectionReport{WindowHours: windowHoursFrom(sinceISO)}
+	// Initialise the slices empty (not nil) so an empty result marshals to JSON
+	// [] rather than null — the frontend reads .length on them.
+	report := &InjectionReport{
+		WindowHours: windowHoursFrom(sinceISO),
+		Bridges:     []BridgeCandidate{},
+		Injectors:   []InjectorCandidate{},
+	}
 	meshLat, meshLon, haveMesh := centroid(nodes)
 
 	// Bridge candidates.

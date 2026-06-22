@@ -229,9 +229,9 @@
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
 					<h2 class="font-display text-fg text-sm font-700 tracking-wide">RF BRIDGE CANDIDATES</h2>
 					<span class="label normal-case text-fg-faint">nodes funnelling never-heard-direct traffic in</span>
-					<span class="label ml-auto tnum">{report.bridges.length}</span>
+					<span class="label ml-auto tnum">{report.bridges?.length ?? 0}</span>
 				</div>
-				{#if report.bridges.length === 0}
+				{#if (report.bridges?.length ?? 0) === 0}
 					<div class="text-fg-faint px-5 py-8 text-center text-sm">No RF bridge signature detected in this window.</div>
 				{:else}
 					<div class="divide-line/40 divide-y">
@@ -287,9 +287,9 @@
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
 					<h2 class="font-display text-fg text-sm font-700 tracking-wide">MQTT INJECTOR CANDIDATES</h2>
 					<span class="label normal-case text-fg-faint">observers that are the sole source of nodes</span>
-					<span class="label ml-auto tnum">{report.injectors.length}</span>
+					<span class="label ml-auto tnum">{report.injectors?.length ?? 0}</span>
 				</div>
-				{#if report.injectors.length === 0}
+				{#if (report.injectors?.length ?? 0) === 0}
 					<div class="text-fg-faint px-5 py-8 text-center text-sm">No rogue MQTT publisher detected in this window.</div>
 				{:else}
 					<div class="divide-line/40 divide-y">

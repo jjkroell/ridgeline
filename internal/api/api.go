@@ -58,6 +58,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/mesh-analytics", s.meshAnalytics)
 	mux.HandleFunc("GET /api/observers", s.observers)
 	mux.HandleFunc("GET /api/observers/{id}/analytics", s.observerAnalytics)
+	mux.HandleFunc("GET /api/observers/{id}/telemetry", s.observerTelemetry)
 	mux.HandleFunc("GET /api/observations", s.observations)
 	mux.HandleFunc("GET /api/recent", s.recent)
 	mux.HandleFunc("GET /api/live", s.live)
@@ -359,6 +360,25 @@ func (s *Server) observerAnalytics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, summary)
+}
+
+// observerTelemetry returns an observer's device-telemetry time series (battery,
+// noise floor, airtime, errors) plus a derived health summary (battery/noise
+// trends, reboot count) over the last `since` seconds.
+func (s *Server) observerTelemetry(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	sinceSec := queryInt(r, "since", 24*3600, 1, 7*86400)
+	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
+	points, err := s.store.ObserverTelemetry(id, cutoff, 0)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, analytics.ObserverTelemetryReport{
+		ID:      id,
+		Points:  points,
+		Summary: analytics.SummarizeTelemetry(points),
+	})
 }
 
 func (s *Server) observations(w http.ResponseWriter, r *http.Request) {

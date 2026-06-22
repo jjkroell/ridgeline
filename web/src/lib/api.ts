@@ -261,6 +261,37 @@ export interface ObserverAnalytics {
 	neighbors: DirectLink[];
 }
 
+export interface TelemetryPoint {
+	recordedAt: string;
+	batteryMv?: number;
+	uptimeSecs?: number;
+	noiseFloor?: number;
+	txAirSecs?: number;
+	rxAirSecs?: number;
+	recvErrors?: number;
+	queueLen?: number;
+}
+
+export interface TelemetrySummary {
+	samples: number;
+	spanHours: number;
+	batteryMv?: number;
+	batteryTrendMvHr?: number;
+	batteryDir?: string; // charging | discharging | stable
+	reboots: number;
+	noiseFloor?: number;
+	noiseTrendDbHr?: number;
+	noiseMin?: number;
+	noiseMax?: number;
+	noiseAvg?: number;
+}
+
+export interface ObserverTelemetry {
+	id: string;
+	points: TelemetryPoint[];
+	summary: TelemetrySummary;
+}
+
 async function get<T>(path: string): Promise<T> {
 	const res = await fetch(path, { headers: { accept: 'application/json' } });
 	if (!res.ok) throw new Error(`${path}: ${res.status}`);
@@ -282,6 +313,9 @@ export const api = {
 	/** One observer's feed metrics over the last sinceSec seconds (default 24h, max 7d). */
 	observerAnalytics: (id: string, sinceSec = 86400) =>
 		get<ObserverAnalytics>(`/api/observers/${encodeURIComponent(id)}/analytics?since=${sinceSec}`),
+	/** One observer's device-telemetry time series + derived health summary (default 24h, max 7d). */
+	observerTelemetry: (id: string, sinceSec = 86400) =>
+		get<ObserverTelemetry>(`/api/observers/${encodeURIComponent(id)}/telemetry?since=${sinceSec}`),
 	observations: (limit = 100) => get<Observation[]>(`/api/observations?limit=${limit}`),
 	/** Recent history (default last hour) in the live-event shape, newest first. */
 	recent: (sinceSec = 3600) => get<LiveEvent[]>(`/api/recent?since=${sinceSec}`),

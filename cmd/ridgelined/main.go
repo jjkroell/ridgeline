@@ -84,6 +84,7 @@ func run(log *slog.Logger, configPath string) error {
 	defer stop()
 
 	go runAnalytics(ctx, engine, st, log)
+	go runRetention(ctx, st, log)
 
 	<-ctx.Done()
 
@@ -115,6 +116,38 @@ func runAnalytics(ctx context.Context, engine *analytics.Engine, st *store.Store
 			return
 		case <-t.C:
 			recompute()
+		}
+	}
+}
+
+// telemetryRetention is how long observer telemetry samples are kept. Two weeks
+// leaves room for week-over-week comparison while bounding table growth (~12
+// observers × one sample / 5 min ≈ a few thousand rows/day).
+const telemetryRetention = 14 * 24 * time.Hour
+
+// runRetention prunes aged observer-telemetry samples immediately, then daily,
+// until ctx is cancelled.
+func runRetention(ctx context.Context, st *store.Store, log *slog.Logger) {
+	prune := func() {
+		before := time.Now().Add(-telemetryRetention).UTC().Format(time.RFC3339Nano)
+		n, err := st.PruneTelemetry(before)
+		if err != nil {
+			log.Warn("retention: prune telemetry", "err", err)
+			return
+		}
+		if n > 0 {
+			log.Info("retention: pruned telemetry", "rows", n)
+		}
+	}
+	prune()
+	t := time.NewTicker(24 * time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			prune()
 		}
 	}
 }

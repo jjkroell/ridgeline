@@ -53,6 +53,25 @@ CREATE TABLE IF NOT EXISTS observations (
 );
 CREATE INDEX IF NOT EXISTS idx_obs_hash ON observations(message_hash);
 CREATE INDEX IF NOT EXISTS idx_obs_received ON observations(received_at DESC);
+
+-- observer_telemetry is an append-only time series of each observer's
+-- self-reported device telemetry. The observers row only keeps the LATEST
+-- /status (overwritten in place); this log preserves history so battery/noise/
+-- airtime can be trended. Only the non-reconstructable device fields live here
+-- (radio config is static and stays on the observers row).
+CREATE TABLE IF NOT EXISTS observer_telemetry (
+	id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	observer_id  TEXT NOT NULL,
+	recorded_at  TEXT NOT NULL,
+	battery_mv   INTEGER,
+	uptime_secs  INTEGER,
+	noise_floor  REAL,
+	tx_air_secs  REAL,
+	rx_air_secs  REAL,
+	recv_errors  INTEGER,
+	queue_len    INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_tel_obs_time ON observer_telemetry(observer_id, recorded_at DESC);
 `
 
 // Store wraps a SQLite database.

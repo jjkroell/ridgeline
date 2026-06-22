@@ -232,8 +232,14 @@ func (in *Ingestor) handleStatus(msg mqtt.Message) {
 	if pubkey == "" {
 		pubkey = observerKey
 	}
-	if err := in.store.UpsertObserverStatus(observerID, region, pubkey, string(b), env.Radio, time.Now().UTC().Format(time.RFC3339)); err != nil {
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := in.store.UpsertObserverStatus(observerID, region, pubkey, string(b), env.Radio, now); err != nil {
 		in.log.Error("store observer status failed", "err", err)
+	}
+	// Append a point to the telemetry time series (rate-floored in the store) so
+	// battery/noise/airtime can be trended — the observer row only keeps the latest.
+	if err := in.store.RecordObserverTelemetry(observerID, now, st); err != nil {
+		in.log.Error("store observer telemetry failed", "err", err)
 	}
 }
 

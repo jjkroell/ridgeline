@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { api, type Observer, type ObserverAnalytics, type ObserverStatus } from '$lib/api';
+	import { api, type Observer, type ObserverAnalytics, type ObserverStatus, type ObserverTelemetry } from '$lib/api';
 	import { ago, fmtNum, skewColor, fmtSkew, snrColor, roleColor, roleLabel, isFresh } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
 	import BarRow from '$lib/components/BarRow.svelte';
 	import KpiStrip from '$lib/components/KpiStrip.svelte';
 	import WindowToggle from '$lib/components/WindowToggle.svelte';
+	import Sparkline from '$lib/components/Sparkline.svelte';
 
 	const id = $derived(page.params.id ?? '');
 
@@ -20,16 +21,19 @@
 
 	let observer = $state<Observer | null>(null);
 	let data = $state<ObserverAnalytics | null>(null);
+	let telemetry = $state<ObserverTelemetry | null>(null);
 	let loading = $state(true);
 
 	async function refresh() {
 		try {
-			const [obs, a] = await Promise.all([
+			const [obs, a, tel] = await Promise.all([
 				api.observers(),
-				api.observerAnalytics(id, windowSec).catch(() => null)
+				api.observerAnalytics(id, windowSec).catch(() => null),
+				api.observerTelemetry(id, windowSec).catch(() => null)
 			]);
 			observer = obs.find((o) => o.id === id) ?? null;
 			data = a;
+			telemetry = tel;
 		} finally {
 			loading = false;
 		}
@@ -105,6 +109,32 @@
 		{ label: 'Clock skew', value: fmtSkew(data?.clockSkewMs), color: skewColor(data?.clockSkewMs), hint: 'median receive-time deviation from consensus on shared packets — large = drifting clock' }
 	]);
 
+	// Device trends (from the telemetry time series).
+	const sum = $derived(telemetry?.summary);
+	const batterySeries = $derived((telemetry?.points ?? []).map((p) => (p.batteryMv && p.batteryMv > 0 ? p.batteryMv / 1000 : null)));
+	const noiseSeries = $derived((telemetry?.points ?? []).map((p) => p.noiseFloor ?? null));
+	const hasBattery = $derived(batterySeries.some((v) => v != null));
+	const hasNoise = $derived(noiseSeries.some((v) => v != null));
+	const hasTelemetry = $derived((telemetry?.summary.samples ?? 0) > 0 && (hasBattery || hasNoise));
+
+	function batteryDirLabel(s?: typeof sum): { text: string; color: string } {
+		if (!s?.batteryDir || s.batteryTrendMvHr == null) return { text: '—', color: 'var(--color-fg-faint)' };
+		const mvhr = Math.abs(s.batteryTrendMvHr).toFixed(0);
+		if (s.batteryDir === 'charging') return { text: `▲ charging +${mvhr} mV/h`, color: 'var(--color-lime)' };
+		if (s.batteryDir === 'discharging') return { text: `▼ draining −${mvhr} mV/h`, color: 'var(--color-coral)' };
+		return { text: 'stable', color: 'var(--color-signal)' };
+	}
+	// Noise trend: rising (positive) is bad (getting noisier).
+	function noiseTrendLabel(s?: typeof sum): { text: string; color: string } {
+		if (!s || s.noiseTrendDbHr == null) return { text: '—', color: 'var(--color-fg-faint)' };
+		const v = s.noiseTrendDbHr;
+		if (v > 0.1) return { text: `▲ rising +${v.toFixed(2)} dB/h`, color: 'var(--color-coral)' };
+		if (v < -0.1) return { text: `▼ falling ${v.toFixed(2)} dB/h`, color: 'var(--color-lime)' };
+		return { text: 'steady', color: 'var(--color-signal)' };
+	}
+	const batDir = $derived(batteryDirLabel(sum));
+	const noiseDir = $derived(noiseTrendLabel(sum));
+
 	const maxAct = $derived(Math.max(1, ...(data?.activity ?? []).map((c) => c)));
 	const maxPayload = $derived(Math.max(1, ...(data?.payloadTypes ?? []).map((p) => p.count)));
 	const maxSnr = $derived(Math.max(1, ...(data?.snrHist ?? []).map((b) => b.count)));
@@ -166,6 +196,63 @@
 							<span class="font-mono text-fg-dim min-w-0 truncate text-right text-xs">{f.v}</span>
 						</div>
 					{/each}
+				</div>
+			{/if}
+		</section>
+
+		<!-- Device trends (battery / noise floor over time, from the telemetry log) -->
+		<section class="panel rise mt-6" style="animation-delay:110ms">
+			<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
+				<h2 class="font-display text-fg text-sm font-700 tracking-wide">DEVICE TRENDS</h2>
+				<span class="font-mono text-fg-faint text-[0.68rem]">
+					{#if sum && sum.samples > 0}
+						{sum.samples} samples · {sum.spanHours.toFixed(1)}h{#if sum.reboots > 0} · {sum.reboots} reboot{sum.reboots === 1 ? '' : 's'}{/if}
+					{:else}
+						from /status over time
+					{/if}
+				</span>
+			</div>
+			{#if !hasTelemetry}
+				<div class="text-fg-faint px-5 py-8 text-center text-sm">
+					No telemetry history yet — samples accumulate from each /status report (one per ~5&nbsp;min). Check back shortly.
+				</div>
+			{:else}
+				<div class="grid gap-px md:grid-cols-2">
+					<!-- Battery -->
+					<div class="px-5 py-4">
+						<div class="mb-1 flex items-baseline justify-between">
+							<span class="label normal-case">Battery</span>
+							<span class="font-mono text-xs tnum" style="color:{batDir.color}">{batDir.text}</span>
+						</div>
+						{#if hasBattery}
+							<div class="font-mono text-fg text-lg font-700 tracking-tight">
+								{sum?.batteryMv ? (sum.batteryMv / 1000).toFixed(2) + ' V' : '—'}
+							</div>
+							<div class="mt-2"><Sparkline values={batterySeries} color="var(--color-signal)" /></div>
+						{:else}
+							<div class="text-fg-faint py-3 text-sm">Mains-powered (no battery reported).</div>
+						{/if}
+					</div>
+					<!-- Noise floor -->
+					<div class="border-line/40 px-5 py-4 md:border-l">
+						<div class="mb-1 flex items-baseline justify-between">
+							<span class="label normal-case">Noise floor</span>
+							<span class="font-mono text-xs tnum" style="color:{noiseDir.color}">{noiseDir.text}</span>
+						</div>
+						{#if hasNoise}
+							<div class="font-mono text-lg font-700 tracking-tight" style="color:{noiseColor(sum?.noiseFloor)}">
+								{sum?.noiseFloor != null ? sum.noiseFloor.toFixed(0) + ' dBm' : '—'}
+							</div>
+							<div class="mt-2"><Sparkline values={noiseSeries} color="var(--color-amber)" /></div>
+							<div class="text-fg-faint mt-2 flex justify-between font-mono text-[0.62rem] tnum">
+								<span>min {sum?.noiseMin?.toFixed(0) ?? '—'}</span>
+								<span>avg {sum?.noiseAvg?.toFixed(1) ?? '—'}</span>
+								<span>max {sum?.noiseMax?.toFixed(0) ?? '—'}</span>
+							</div>
+						{:else}
+							<div class="text-fg-faint py-3 text-sm">No noise-floor readings reported.</div>
+						{/if}
+					</div>
 				</div>
 			{/if}
 		</section>

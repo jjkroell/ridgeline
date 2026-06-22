@@ -12,7 +12,14 @@ const (
 	BlockObserver = "observer" // rogue MQTT publisher (observer id)
 	BlockBridge   = "bridge"   // RF bridge node (pubkey) — drops anything it relays
 	BlockNode     = "node"     // a single injected node (pubkey) — drops its own adverts
+	BlockAllow    = "allow"    // dismissed candidate (pubkey) — excluded from detection, NOT blocked
 )
+
+// pubkeyKind reports whether a block kind's key is a node pubkey (so it should be
+// stored/compared upper-cased) rather than a free-form observer id.
+func pubkeyKind(kind string) bool {
+	return kind == BlockNode || kind == BlockBridge || kind == BlockAllow
+}
 
 // BlockEntry is one blocklist row.
 type BlockEntry struct {
@@ -32,6 +39,7 @@ func (s *Store) loadBlocklist() error {
 	defer rows.Close()
 	obs := map[string]bool{}
 	nodes := map[string]bool{}
+	allow := map[string]bool{}
 	var bridges []string
 	for rows.Next() {
 		var kind, key string
@@ -47,13 +55,15 @@ func (s *Store) loadBlocklist() error {
 			bridges = append(bridges, k)
 		case BlockNode:
 			nodes[strings.ToUpper(key)] = true
+		case BlockAllow:
+			allow[strings.ToUpper(key)] = true
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
 	s.blockMu.Lock()
-	s.blockedObservers, s.blockedNodes, s.blockedBridges = obs, nodes, bridges
+	s.blockedObservers, s.blockedNodes, s.blockedBridges, s.allowedNodes = obs, nodes, bridges, allow
 	s.blockMu.Unlock()
 	return nil
 }
@@ -101,9 +111,18 @@ func (s *Store) IsNodeBlocked(pubkey string) bool {
 	return s.blockedNodes[strings.ToUpper(pubkey)]
 }
 
+// IsAllowed reports whether a node pubkey has been dismissed as a detection
+// candidate (allowlisted). Such nodes are excluded from injection detection but
+// are NOT blocked.
+func (s *Store) IsAllowed(pubkey string) bool {
+	s.blockMu.RLock()
+	defer s.blockMu.RUnlock()
+	return s.allowedNodes[strings.ToUpper(pubkey)]
+}
+
 // AddBlock inserts (or updates) a blocklist entry and refreshes the cache.
 func (s *Store) AddBlock(kind, key, name, reason string) error {
-	if kind == BlockNode || kind == BlockBridge {
+	if pubkeyKind(kind) {
 		key = strings.ToUpper(key)
 	}
 	s.mu.Lock()
@@ -123,7 +142,7 @@ func (s *Store) AddBlock(kind, key, name, reason string) error {
 
 // RemoveBlock deletes a blocklist entry (un-quarantine) and refreshes the cache.
 func (s *Store) RemoveBlock(kind, key string) error {
-	if kind == BlockNode || kind == BlockBridge {
+	if pubkeyKind(kind) {
 		key = strings.ToUpper(key)
 	}
 	s.mu.Lock()

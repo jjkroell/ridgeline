@@ -229,6 +229,10 @@ func (s *Server) nodes(w http.ResponseWriter, _ *http.Request) {
 // nodeDetail returns one node's row plus its computed analytics snapshot.
 func (s *Server) nodeDetail(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
+	if s.store.IsNodeBlocked(pubkey) {
+		http.NotFound(w, r) // quarantined — hidden from the node-detail page
+		return
+	}
 	nodes, err := s.store.ListNodes()
 	if err != nil {
 		s.fail(w, err)
@@ -423,6 +427,11 @@ func (s *Server) recent(w http.ResponseWriter, r *http.Request) {
 	for _, ro := range raws {
 		pkt, err := meshcore.DecodeHex(ro.RawHex)
 		if err != nil || pkt == nil {
+			continue
+		}
+		// Hide quarantined traffic from feed history too (live WS is already
+		// clean — blocked packets are dropped at ingest before broadcast).
+		if s.store.ShouldDrop(pkt, ro.ObserverID) {
 			continue
 		}
 		out = append(out, newLiveEvent(pkt, ro.RawHex, ro.ObserverID, ro.Region, ro.ReceivedAt, ro.SNR, ro.RSSI))

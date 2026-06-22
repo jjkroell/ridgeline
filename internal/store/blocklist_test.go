@@ -80,6 +80,29 @@ func TestBlocklistShouldDrop(t *testing.T) {
 	}
 }
 
+func TestAllowlistDoesNotBlock(t *testing.T) {
+	st := testStore(t)
+	pk := "A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8F90"
+	if err := st.AddBlock(BlockAllow, pk, "Legit Hub", "dismissed"); err != nil {
+		t.Fatal(err)
+	}
+	if !st.IsAllowed(pk) {
+		t.Error("IsAllowed false after allow")
+	}
+	if st.IsNodeBlocked(pk) {
+		t.Error("allow must not block the node")
+	}
+	if st.ShouldDrop(advertPkt(pk), "o") {
+		t.Error("allow must not drop the node's traffic")
+	}
+	if err := st.RemoveBlock(BlockAllow, "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"); err != nil {
+		t.Fatal(err)
+	}
+	if st.IsAllowed(pk) {
+		t.Error("still allowed after release (case-insensitive remove)")
+	}
+}
+
 func TestBlocklistCaseInsensitiveNodeKey(t *testing.T) {
 	st := testStore(t)
 	pk := "AbCdEf0123456789AbCdEf0123456789AbCdEf0123456789AbCdEf0123456789"

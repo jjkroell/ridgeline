@@ -366,9 +366,13 @@ export const admin = {
 	detect: (token: string, sinceSec = 86400) =>
 		adminReq<InjectionReport>(token, `/api/admin/detect?since=${sinceSec}`),
 	blocklist: (token: string) => adminReq<BlockEntry[]>(token, '/api/admin/blocklist'),
-	/** Quarantine (reversible): drop at ingest + hide; does not delete stored rows. */
-	block: (token: string, body: { kind: string; key: string; name?: string; reason?: string }) =>
-		adminReq<{ ok: boolean }>(token, '/api/admin/block', 'POST', body),
+	/** Quarantine (reversible): drop at ingest + hide; does not delete stored rows.
+	 *  `nodes` optionally blocks extra node pubkeys (a bridge's foreign cluster).
+	 *  kind "allow" dismisses a detection candidate without blocking it. */
+	block: (
+		token: string,
+		body: { kind: string; key: string; name?: string; reason?: string; nodes?: string[] }
+	) => adminReq<{ ok: boolean }>(token, '/api/admin/block', 'POST', body),
 	unblock: (token: string, kind: string, key: string) =>
 		adminReq<{ ok: boolean }>(
 			token,

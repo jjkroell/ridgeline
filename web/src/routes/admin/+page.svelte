@@ -84,16 +84,43 @@
 
 	const isBlocked = (kind: string, key: string) =>
 		blocks.some((b) => b.kind === kind && b.key.toUpperCase() === key.toUpperCase());
+	const isAllowed = (key: string) =>
+		blocks.some((b) => b.kind === 'allow' && b.key.toUpperCase() === key.toUpperCase());
+
+	// Bridge candidates minus any the admin has dismissed as known-good.
+	const visibleBridges = $derived((report?.bridges ?? []).filter((b) => !isAllowed(b.nodeKey)));
 
 	async function quarantineBridge(b: BridgeCandidate) {
 		busy = b.nodeKey;
 		msg = '';
 		try {
-			await admin.block(token, { kind: 'bridge', key: b.nodeKey, name: b.name, reason: 'RF bridge (detected)' });
+			// Block the bridge AND its foreign cluster so the whole injected set
+			// disappears from maps/lists, not just the bridge node itself.
+			await admin.block(token, {
+				kind: 'bridge',
+				key: b.nodeKey,
+				name: b.name,
+				reason: 'RF bridge (detected)',
+				nodes: b.foreign.map((f) => f.key)
+			});
 			await refreshBlocks();
-			msg = `Quarantined bridge ${b.name} — its injected traffic will now be dropped at ingest.`;
+			msg = `Quarantined ${b.name} + ${b.foreign.length} foreign nodes — hidden from maps/feed and dropped at ingest.`;
 		} catch (e) {
 			msg = `quarantine: ${(e as Error).message}`;
+		} finally {
+			busy = '';
+		}
+	}
+
+	async function dismissBridge(b: BridgeCandidate) {
+		busy = b.nodeKey;
+		msg = '';
+		try {
+			await admin.block(token, { kind: 'allow', key: b.nodeKey, name: b.name, reason: 'dismissed — not a bridge' });
+			await refreshBlocks();
+			msg = `Dismissed ${b.name} — it won't be flagged as a candidate again.`;
+		} catch (e) {
+			msg = `dismiss: ${(e as Error).message}`;
 		} finally {
 			busy = '';
 		}
@@ -163,8 +190,10 @@
 	const kindColor: Record<string, string> = {
 		bridge: 'var(--color-coral)',
 		observer: 'var(--color-amber)',
-		node: 'var(--color-fg-dim)'
+		node: 'var(--color-fg-dim)',
+		allow: 'var(--color-signal)'
 	};
+	const kindLabel = (k: string) => (k === 'allow' ? 'dismissed' : k);
 </script>
 
 <PageHeader eyebrow="Restricted" title="Admin — Injection Control">
@@ -229,13 +258,13 @@
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
 					<h2 class="font-display text-fg text-sm font-700 tracking-wide">RF BRIDGE CANDIDATES</h2>
 					<span class="label normal-case text-fg-faint">nodes funnelling never-heard-direct traffic in</span>
-					<span class="label ml-auto tnum">{report.bridges?.length ?? 0}</span>
+					<span class="label ml-auto tnum">{visibleBridges.length}</span>
 				</div>
-				{#if (report.bridges?.length ?? 0) === 0}
+				{#if visibleBridges.length === 0}
 					<div class="text-fg-faint px-5 py-8 text-center text-sm">No RF bridge signature detected in this window.</div>
 				{:else}
 					<div class="divide-line/40 divide-y">
-						{#each report.bridges as b (b.nodeKey)}
+						{#each visibleBridges as b (b.nodeKey)}
 							<div class="px-5 py-3">
 								<div class="flex flex-wrap items-center gap-3">
 									<span class="h-2 w-2 shrink-0 rounded-full" style="background:var(--color-coral)"></span>
@@ -253,6 +282,12 @@
 										{#if isBlocked('bridge', b.nodeKey)}
 											<span class="label text-amber">quarantined</span>
 										{:else}
+											<button
+												onclick={() => dismissBridge(b)}
+												disabled={busy === b.nodeKey}
+												class="border-line/60 text-fg-faint hover:text-fg hover:bg-line/30 rounded-[var(--radius)] border px-3 py-1 text-xs font-600 transition-colors disabled:opacity-50"
+												title="Not a bridge — stop flagging this node"
+											>Dismiss</button>
 											<button
 												onclick={() => quarantineBridge(b)}
 												disabled={busy === b.nodeKey}
@@ -337,16 +372,16 @@
 		<section class="panel rise mt-6">
 			<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
 				<h2 class="font-display text-fg text-sm font-700 tracking-wide">QUARANTINE LIST</h2>
-				<span class="label normal-case text-fg-faint">dropped at ingest + hidden</span>
+				<span class="label normal-case text-fg-faint">blocked = dropped at ingest + hidden · dismissed = excluded from detection</span>
 				<span class="label ml-auto tnum">{blocks.length}</span>
 			</div>
 			{#if blocks.length === 0}
-				<div class="text-fg-faint px-5 py-8 text-center text-sm">Nothing quarantined.</div>
+				<div class="text-fg-faint px-5 py-8 text-center text-sm">Nothing quarantined or dismissed.</div>
 			{:else}
 				<div class="divide-line/40 divide-y">
 					{#each blocks as b (b.kind + b.key)}
 						<div class="flex items-center gap-3 px-5 py-2.5 text-sm">
-							<span class="label !text-[0.58rem]" style="color:{kindColor[b.kind] ?? 'var(--color-fg-dim)'}">{b.kind}</span>
+							<span class="label !text-[0.58rem]" style="color:{kindColor[b.kind] ?? 'var(--color-fg-dim)'}">{kindLabel(b.kind)}</span>
 							<span class="text-fg min-w-0 flex-1 truncate">{b.name || b.key}</span>
 							{#if b.reason}<span class="text-fg-faint text-xs">{b.reason}</span>{/if}
 							<button

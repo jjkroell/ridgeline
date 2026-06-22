@@ -77,7 +77,7 @@ CREATE INDEX IF NOT EXISTS idx_tel_obs_time ON observer_telemetry(observer_id, r
 -- traffic (RF bridge or rogue MQTT publisher). Entries drop matching data at
 -- ingest and hide it from the API; purging additionally hard-deletes stored rows.
 CREATE TABLE IF NOT EXISTS blocklist (
-	kind       TEXT NOT NULL,            -- observer | bridge | node
+	kind       TEXT NOT NULL,            -- observer | bridge | node | allow (allow = dismissed candidate)
 	key        TEXT NOT NULL,            -- observer id, or node/bridge pubkey
 	name       TEXT,                     -- friendly label captured at block time
 	reason     TEXT,
@@ -98,6 +98,7 @@ type Store struct {
 	blockedObservers map[string]bool // observer id (exact)
 	blockedNodes     map[string]bool // node/bridge pubkey (UPPER) — origin-advert block
 	blockedBridges   []string        // bridge pubkeys (UPPER) — path-prefix block
+	allowedNodes     map[string]bool // node pubkey (UPPER) — dismissed detection candidates
 }
 
 // Open opens (creating if needed) the SQLite database at path, enables WAL

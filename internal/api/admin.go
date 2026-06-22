@@ -61,10 +61,13 @@ func (s *Server) adminBlocklist(w http.ResponseWriter, _ *http.Request) {
 
 // blockReq is the body for POST /api/admin/block (quarantine, reversible).
 type blockReq struct {
-	Kind   string `json:"kind"` // observer | bridge | node
+	Kind   string `json:"kind"` // observer | bridge | node | allow
 	Key    string `json:"key"`
 	Name   string `json:"name"`
 	Reason string `json:"reason"`
+	// Nodes optionally blocks additional node pubkeys as kind "node" alongside
+	// the main entry — used to hide a bridge's whole foreign cluster at once.
+	Nodes []string `json:"nodes,omitempty"`
 }
 
 func (s *Server) adminBlock(w http.ResponseWriter, r *http.Request) {
@@ -74,14 +77,19 @@ func (s *Server) adminBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validKind(req.Kind) || req.Key == "" {
-		writeErr(w, http.StatusBadRequest, "kind must be observer|bridge|node and key required")
+		writeErr(w, http.StatusBadRequest, "kind must be observer|bridge|node|allow and key required")
 		return
 	}
 	if err := s.store.AddBlock(req.Kind, req.Key, req.Name, req.Reason); err != nil {
 		s.fail(w, err)
 		return
 	}
-	s.log.Info("admin quarantined", "kind", req.Kind, "key", req.Key, "reason", req.Reason)
+	for _, n := range req.Nodes {
+		if n != "" {
+			s.store.AddBlock("node", n, "", "foreign node via "+req.Name)
+		}
+	}
+	s.log.Info("admin quarantined", "kind", req.Kind, "key", req.Key, "extraNodes", len(req.Nodes), "reason", req.Reason)
 	writeJSON(w, map[string]bool{"ok": true})
 }
 
@@ -140,7 +148,7 @@ func (s *Server) adminPurge(w http.ResponseWriter, r *http.Request) {
 }
 
 func validKind(k string) bool {
-	return k == "observer" || k == "bridge" || k == "node"
+	return k == "observer" || k == "bridge" || k == "node" || k == "allow"
 }
 
 func writeErr(w http.ResponseWriter, code int, msg string) {

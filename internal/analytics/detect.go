@@ -165,6 +165,9 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 		if len(fset) < minForeignThrough {
 			continue
 		}
+		if st.IsAllowed(r) {
+			continue // admin dismissed this node as a known-good relay
+		}
 		tot := len(through[r])
 		spec := float64(len(fset)) / float64(max(1, tot))
 		if spec < minBridgeSpecific {

@@ -202,6 +202,11 @@
 		allow: 'var(--color-signal)'
 	};
 	const kindLabel = (k: string) => (k === 'allow' ? 'dismissed' : k);
+
+	// Purged entries are deleted (not "quarantined") — they stay blocked so they
+	// can't re-ingest, but they belong in their own section, not the quarantine list.
+	const quarantineEntries = $derived(blocks.filter((b) => b.reason !== 'purged'));
+	const purgedEntries = $derived(blocks.filter((b) => b.reason === 'purged'));
 </script>
 
 <PageHeader eyebrow="Restricted" title="Admin — Injection Control">
@@ -386,18 +391,18 @@
 			</section>
 		{/if}
 
-		<!-- Current blocklist -->
+		<!-- Active quarantines -->
 		<section class="panel rise mt-6">
 			<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
 				<h2 class="font-display text-fg text-sm font-700 tracking-wide">QUARANTINE LIST</h2>
 				<span class="label normal-case text-fg-faint">blocked = dropped at ingest + hidden · dismissed = excluded from detection</span>
-				<span class="label ml-auto tnum">{blocks.length}</span>
+				<span class="label ml-auto tnum">{quarantineEntries.length}</span>
 			</div>
-			{#if blocks.length === 0}
+			{#if quarantineEntries.length === 0}
 				<div class="text-fg-faint px-5 py-8 text-center text-sm">Nothing quarantined or dismissed.</div>
 			{:else}
 				<div class="divide-line/40 divide-y">
-					{#each blocks as b (b.kind + b.key)}
+					{#each quarantineEntries as b (b.kind + b.key)}
 						<div class="flex items-center gap-3 px-5 py-2.5 text-sm">
 							<span class="label !text-[0.58rem]" style="color:{kindColor[b.kind] ?? 'var(--color-fg-dim)'}">{kindLabel(b.kind)}</span>
 							<span class="text-fg min-w-0 flex-1 truncate">{b.name || b.key}</span>
@@ -412,5 +417,30 @@
 				</div>
 			{/if}
 		</section>
+
+		<!-- Purged (deleted + still blocked so they can't re-ingest) -->
+		{#if purgedEntries.length > 0}
+			<section class="panel rise mt-6">
+				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
+					<h2 class="font-display text-fg-dim text-sm font-700 tracking-wide">PURGED</h2>
+					<span class="label normal-case text-fg-faint">deleted · still blocked so they can't re-ingest</span>
+					<span class="label ml-auto tnum">{purgedEntries.length}</span>
+				</div>
+				<div class="divide-line/40 divide-y">
+					{#each purgedEntries as b (b.kind + b.key)}
+						<div class="flex items-center gap-3 px-5 py-2.5 text-sm opacity-70">
+							<span class="label !text-[0.58rem]" style="color:{kindColor[b.kind] ?? 'var(--color-fg-dim)'}">{kindLabel(b.kind)}</span>
+							<span class="text-fg-dim min-w-0 flex-1 truncate">{b.name || b.key}</span>
+							<button
+								onclick={() => removeBlock(b)}
+								disabled={busy === b.kind + b.key}
+								class="label hover:text-signal disabled:opacity-50"
+								title="Lift the block (data is already deleted; the node could re-ingest on its next advert)"
+							>unblock</button>
+						</div>
+					{/each}
+				</div>
+			</section>
+		{/if}
 	{/if}
 </div>

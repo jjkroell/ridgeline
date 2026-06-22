@@ -5,7 +5,7 @@
 	// (e.g. /nodes/[pubkey]) without having visited a full map route first.
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import QRCode from 'qrcode';
-	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry, type NodeActivity } from '$lib/api';
+	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry, type NodeActivity, type BlockEntry } from '$lib/api';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { isLight } from '$lib/map-util';
 	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus } from '$lib/format';
@@ -31,6 +31,8 @@
 	let detail = $state<NodeAnalytics | null>(null);
 	let nodesList = $state<Node[]>(nodesProp ?? []);
 	let loaded = $state(false);
+	let quarantined = $state(false);
+	let block = $state<BlockEntry | null>(null);
 
 	// On-demand stored history (own adverts + relayed packets) over a chosen range.
 	const ranges = [
@@ -81,6 +83,8 @@
 			]);
 			node = resp.node;
 			detail = resp.detail;
+			quarantined = !!resp.quarantined;
+			block = resp.block ?? null;
 			nodesList = list;
 		} finally {
 			loaded = true;
@@ -260,6 +264,53 @@
 
 {#if !loaded}
 	<div class="panel text-fg-faint px-5 py-12 text-center text-sm">Loading…</div>
+{:else if quarantined}
+	<div class="panel rise border-coral/40 overflow-hidden">
+		<div class="bg-coral/10 border-coral/30 flex items-center gap-2.5 border-b px-5 py-3.5">
+			<svg viewBox="0 0 24 24" class="text-coral h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+			</svg>
+			<h2 class="font-display text-coral text-sm font-700 tracking-wide">QUARANTINED NODE</h2>
+		</div>
+		<div class="px-5 py-6">
+			<p class="text-fg text-sm leading-relaxed">
+				This node is currently <span class="text-coral font-600">quarantined</span> — it's suspected
+				of acting as an <span class="font-600">RF bridge</span> or
+				<span class="font-600">MQTT injector</span>, feeding traffic from another mesh into this network.
+				Its data has been hidden from the maps, node list, and live feed pending review.
+			</p>
+
+			<div class="border-line/50 mt-5 grid gap-x-6 gap-y-2 border-t pt-4 text-sm sm:grid-cols-2">
+				<div class="flex items-center justify-between gap-3">
+					<span class="label normal-case">Identity</span>
+					<span class="font-mono text-fg-dim text-xs">{block?.name || shortKey(pubkey, 8, 4)}</span>
+				</div>
+				<div class="flex items-center justify-between gap-3">
+					<span class="label normal-case">Classified as</span>
+					<span class="font-mono text-coral text-xs">{block?.kind === 'bridge' ? 'RF bridge' : 'injected node'}</span>
+				</div>
+				<div class="flex items-center justify-between gap-3">
+					<span class="label normal-case">Reason</span>
+					<span class="font-mono text-fg-dim text-xs">{block?.reason || '—'}</span>
+				</div>
+				<div class="flex items-center justify-between gap-3">
+					<span class="label normal-case">Since</span>
+					<span class="font-mono text-fg-dim text-xs">{block?.createdAt ? ago(block.createdAt) + ' ago' : '—'}</span>
+				</div>
+				<div class="flex items-center justify-between gap-3 sm:col-span-2">
+					<span class="label normal-case shrink-0">Public key</span>
+					<span class="font-mono text-fg-faint min-w-0 truncate text-[0.7rem]">{pubkey}</span>
+				</div>
+			</div>
+
+			<p class="text-fg-faint mt-5 text-xs leading-relaxed">
+				If this is a legitimate node on your mesh, an administrator can release it from the
+				<a href="/admin" class="text-signal hover:underline">Admin panel</a> — releasing restores it
+				everywhere; the detection list also offers <span class="text-fg-dim">Dismiss</span> to mark a
+				node as known-good without quarantining it.
+			</p>
+		</div>
+	</div>
 {:else if !node}
 	<div class="panel text-fg-faint px-5 py-12 text-center text-sm">
 		Node not found. It may not have advertised yet.

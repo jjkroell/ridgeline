@@ -151,6 +151,9 @@ export interface NodeDetailResponse {
 	node: Node | null;
 	detail: NodeAnalytics | null;
 	generatedAt?: string;
+	/** Set when the node is quarantined as suspected injected traffic. */
+	quarantined?: boolean;
+	block?: BlockEntry;
 }
 
 // One stored observation attributable to a node (GET /api/nodes/{pubkey}/history).

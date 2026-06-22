@@ -230,7 +230,12 @@ func (s *Server) nodes(w http.ResponseWriter, _ *http.Request) {
 func (s *Server) nodeDetail(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
 	if s.store.IsNodeBlocked(pubkey) {
-		http.NotFound(w, r) // quarantined — hidden from the node-detail page
+		// Quarantined — return a marker (not the node) so the UI can show a
+		// "suspected bridge" notice instead of node detail.
+		writeJSON(w, struct {
+			Quarantined bool              `json:"quarantined"`
+			Block       *store.BlockEntry `json:"block,omitempty"`
+		}{Quarantined: true, Block: s.store.NodeBlock(pubkey)})
 		return
 	}
 	nodes, err := s.store.ListNodes()

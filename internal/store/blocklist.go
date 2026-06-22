@@ -111,6 +111,22 @@ func (s *Store) IsNodeBlocked(pubkey string) bool {
 	return s.blockedNodes[strings.ToUpper(pubkey)]
 }
 
+// NodeBlock returns the blocklist entry that quarantines a node/bridge pubkey,
+// or nil if it isn't blocked. Prefers a "bridge" entry over a plain "node" one.
+func (s *Store) NodeBlock(pubkey string) *BlockEntry {
+	var e BlockEntry
+	err := s.db.QueryRow(`
+		SELECT kind, key, COALESCE(name,''), COALESCE(reason,''), created_at
+		FROM blocklist
+		WHERE key = ? AND kind IN ('node','bridge')
+		ORDER BY CASE kind WHEN 'bridge' THEN 0 ELSE 1 END
+		LIMIT 1`, strings.ToUpper(pubkey)).Scan(&e.Kind, &e.Key, &e.Name, &e.Reason, &e.CreatedAt)
+	if err != nil {
+		return nil
+	}
+	return &e
+}
+
 // IsAllowed reports whether a node pubkey has been dismissed as a detection
 // candidate (allowlisted). Such nodes are excluded from injection detection but
 // are NOT blocked.

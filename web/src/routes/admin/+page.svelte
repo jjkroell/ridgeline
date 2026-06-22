@@ -19,11 +19,15 @@
 	let authError = $state('');
 	let checking = $state(true);
 
-	let windowSec = $state(86400);
+	// Shorter windows catch freshly-set-up bridges: a node just moved to the other
+	// mesh still has recent zero-hop adverts on its old frequency, which read as
+	// "local" until they age out — so a long window hides a new bridge.
+	let windowSec = $state(21600);
 	const windows = [
+		{ label: '1h', sec: 3600 },
+		{ label: '6h', sec: 21600 },
 		{ label: '24h', sec: 86400 },
-		{ label: '3d', sec: 259200 },
-		{ label: '7d', sec: 604800 }
+		{ label: '3d', sec: 259200 }
 	];
 
 	let report = $state<InjectionReport | null>(null);
@@ -248,7 +252,7 @@
 				{detecting ? 'Scanning…' : 'Run detection'}
 			</button>
 			<WindowToggle options={windows} bind:value={windowSec} />
-			<span class="text-fg-faint text-xs">Scans adverts for foreign-traffic ingress points.</span>
+			<span class="text-fg-faint text-xs">Scans adverts for ingress points. Use a short window (1–6h) to catch a freshly-moved bridge.</span>
 		</div>
 
 		{#if msg}

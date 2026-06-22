@@ -20,27 +20,30 @@ import (
 
 // Server holds API dependencies and serves HTTP.
 type Server struct {
-	store     *store.Store
-	log       *slog.Logger
-	version   string
-	webDir    string
-	hub       *hub
-	up        websocket.Upgrader
-	analytics *analytics.Engine
+	store      *store.Store
+	log        *slog.Logger
+	version    string
+	webDir     string
+	hub        *hub
+	up         websocket.Upgrader
+	analytics  *analytics.Engine
+	adminToken string
 }
 
 // SetAnalytics attaches the analytics engine used by the node-detail endpoint.
 func (s *Server) SetAnalytics(e *analytics.Engine) { s.analytics = e }
 
 // New creates an API Server. If webDir is non-empty and exists, the built SPA
-// is served from it with an index.html fallback for client routes.
-func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
+// is served from it with an index.html fallback for client routes. adminToken
+// gates the /api/admin/* endpoints; empty disables them.
+func New(st *store.Store, log *slog.Logger, version, webDir, adminToken string) *Server {
 	return &Server{
-		store:   st,
-		log:     log,
-		version: version,
-		webDir:  webDir,
-		hub:     newHub(),
+		store:      st,
+		log:        log,
+		version:    version,
+		webDir:     webDir,
+		adminToken: adminToken,
+		hub:        newHub(),
 		// Dev: allow any origin. Tighten before exposing publicly.
 		up: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 	}
@@ -62,6 +65,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/observations", s.observations)
 	mux.HandleFunc("GET /api/recent", s.recent)
 	mux.HandleFunc("GET /api/live", s.live)
+
+	// Admin (auth-gated): injection detection + quarantine/purge.
+	mux.HandleFunc("GET /api/admin/check", s.requireAdmin(s.adminCheck))
+	mux.HandleFunc("GET /api/admin/detect", s.requireAdmin(s.adminDetect))
+	mux.HandleFunc("GET /api/admin/blocklist", s.requireAdmin(s.adminBlocklist))
+	mux.HandleFunc("POST /api/admin/block", s.requireAdmin(s.adminBlock))
+	mux.HandleFunc("DELETE /api/admin/block", s.requireAdmin(s.adminUnblock))
+	mux.HandleFunc("POST /api/admin/purge", s.requireAdmin(s.adminPurge))
 
 	if s.webDir != "" {
 		if info, err := os.Stat(s.webDir); err == nil && info.IsDir() {
@@ -200,13 +211,17 @@ func (s *Server) nodes(w http.ResponseWriter, _ *http.Request) {
 	if s.analytics != nil {
 		live = s.analytics.Liveness()
 	}
-	out := make([]nodeWithLiveness, len(nodes))
-	for i, n := range nodes {
-		out[i] = nodeWithLiveness{Node: n}
-		if sig, ok := live[n.PublicKey]; ok {
-			out[i].LastRelayed = sig.LastRelayed
-			out[i].RelayCount1h = sig.RelayCount1h
+	out := make([]nodeWithLiveness, 0, len(nodes))
+	for _, n := range nodes {
+		if s.store.IsNodeBlocked(n.PublicKey) {
+			continue // quarantined injected node — hidden from public views
 		}
+		nw := nodeWithLiveness{Node: n}
+		if sig, ok := live[n.PublicKey]; ok {
+			nw.LastRelayed = sig.LastRelayed
+			nw.RelayCount1h = sig.RelayCount1h
+		}
+		out = append(out, nw)
 	}
 	writeJSON(w, out)
 }

@@ -18,6 +18,11 @@ type Config struct {
 	WebDir string `json:"webDir"`
 	// MQTT configures the upstream packet source.
 	MQTT MQTT `json:"mqtt"`
+	// AdminToken gates the /api/admin/* endpoints (detection, quarantine,
+	// purge). The admin panel sends it as a Bearer token. Empty disables the
+	// admin API entirely (safe default). Serve over TLS — this token grants
+	// destructive powers.
+	AdminToken string `json:"adminToken"`
 }
 
 // MQTT configures the connection to a MeshCore observer broker.

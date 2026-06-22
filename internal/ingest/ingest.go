@@ -142,6 +142,13 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 		observerID = observerKey
 	}
 
+	// Drop blocklisted traffic (quarantined RF bridges / rogue MQTT publishers)
+	// before it ever reaches the store.
+	if in.store.ShouldDrop(packet, observerID) {
+		in.log.Debug("dropped blocklisted packet", "observer", observerID)
+		return
+	}
+
 	obs := store.Observation{
 		Packet:         packet,
 		RawHex:         env.Raw,

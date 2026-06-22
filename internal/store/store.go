@@ -72,12 +72,32 @@ CREATE TABLE IF NOT EXISTS observer_telemetry (
 	queue_len    INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_tel_obs_time ON observer_telemetry(observer_id, recorded_at DESC);
+
+-- blocklist holds nodes/observers/bridges an admin has quarantined as injected
+-- traffic (RF bridge or rogue MQTT publisher). Entries drop matching data at
+-- ingest and hide it from the API; purging additionally hard-deletes stored rows.
+CREATE TABLE IF NOT EXISTS blocklist (
+	kind       TEXT NOT NULL,            -- observer | bridge | node
+	key        TEXT NOT NULL,            -- observer id, or node/bridge pubkey
+	name       TEXT,                     -- friendly label captured at block time
+	reason     TEXT,
+	created_at TEXT NOT NULL,
+	PRIMARY KEY (kind, key)
+);
 `
 
 // Store wraps a SQLite database.
 type Store struct {
 	db *sql.DB
 	mu sync.Mutex // serializes writes (single-writer model)
+
+	// Blocklist cache, consulted on the hot ingest path. Guarded separately
+	// from mu so reads don't contend with writes. Refreshed from the table on
+	// open and after every mutation.
+	blockMu          sync.RWMutex
+	blockedObservers map[string]bool // observer id (exact)
+	blockedNodes     map[string]bool // node/bridge pubkey (UPPER) — origin-advert block
+	blockedBridges   []string        // bridge pubkeys (UPPER) — path-prefix block
 }
 
 // Open opens (creating if needed) the SQLite database at path, enables WAL
@@ -111,7 +131,12 @@ func Open(path string) (*Store, error) {
 	db.Exec(`ALTER TABLE observers ADD COLUMN last_status_at TEXT`)
 	db.Exec(`ALTER TABLE observers ADD COLUMN radio TEXT`)
 	db.Exec(`ALTER TABLE nodes ADD COLUMN radio TEXT`)
-	return &Store{db: db}, nil
+	s := &Store{db: db}
+	if err := s.loadBlocklist(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: load blocklist: %w", err)
+	}
+	return s, nil
 }
 
 // UpsertObserverStatus records an observer's latest self-reported status (radio

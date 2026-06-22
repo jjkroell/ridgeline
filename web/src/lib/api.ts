@@ -298,6 +298,88 @@ async function get<T>(path: string): Promise<T> {
 	return res.json() as Promise<T>;
 }
 
+// ---- Admin (auth-gated injection detection + quarantine/purge) ----
+
+export interface ForeignNode {
+	key: string;
+	name: string;
+	role?: string;
+	latitude?: number;
+	longitude?: number;
+}
+export interface BridgeCandidate {
+	nodeKey: string;
+	name: string;
+	foreignCount: number;
+	throughTotal: number;
+	specificity: number;
+	foreignKm: number; // geographic displacement of the foreign cluster from the mesh
+	foreign: ForeignNode[];
+}
+export interface InjectorCandidate {
+	observer: string;
+	exclusiveCount: number;
+	exclusive: ForeignNode[];
+}
+export interface InjectionReport {
+	windowHours: number;
+	bridges: BridgeCandidate[];
+	injectors: InjectorCandidate[];
+}
+export interface BlockEntry {
+	kind: string; // observer | bridge | node
+	key: string;
+	name?: string;
+	reason?: string;
+	createdAt: string;
+}
+export interface PurgeResult {
+	observations: number;
+	nodes: number;
+}
+
+async function adminReq<T>(token: string, path: string, method = 'GET', body?: unknown): Promise<T> {
+	const res = await fetch(path, {
+		method,
+		headers: {
+			accept: 'application/json',
+			authorization: `Bearer ${token}`,
+			...(body ? { 'content-type': 'application/json' } : {})
+		},
+		body: body ? JSON.stringify(body) : undefined
+	});
+	if (!res.ok) {
+		let msg = `${res.status}`;
+		try {
+			msg = (await res.json()).error ?? msg;
+		} catch {
+			/* ignore */
+		}
+		throw new Error(msg);
+	}
+	return res.json() as Promise<T>;
+}
+
+export const admin = {
+	/** Validate the admin token; throws on failure. */
+	check: (token: string) => adminReq<{ ok: boolean }>(token, '/api/admin/check'),
+	detect: (token: string, sinceSec = 86400) =>
+		adminReq<InjectionReport>(token, `/api/admin/detect?since=${sinceSec}`),
+	blocklist: (token: string) => adminReq<BlockEntry[]>(token, '/api/admin/blocklist'),
+	/** Quarantine (reversible): drop at ingest + hide; does not delete stored rows. */
+	block: (token: string, body: { kind: string; key: string; name?: string; reason?: string }) =>
+		adminReq<{ ok: boolean }>(token, '/api/admin/block', 'POST', body),
+	unblock: (token: string, kind: string, key: string) =>
+		adminReq<{ ok: boolean }>(
+			token,
+			`/api/admin/block?kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}`,
+			'DELETE'
+		),
+	/** Hard delete stored data for the targets (also blocks them). */
+	purge: (token: string, body: { observers?: string[]; bridges?: string[]; nodes?: string[] }) =>
+		adminReq<PurgeResult>(token, '/api/admin/purge', 'POST', body)
+};
+
 export const api = {
 	stats: () => get<Stats>('/api/stats'),
 	nodes: () => get<Node[]>('/api/nodes'),

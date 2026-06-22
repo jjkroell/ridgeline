@@ -56,7 +56,7 @@ func run(log *slog.Logger, configPath string) error {
 	}
 	defer st.Close()
 
-	apiServer := api.New(st, log, version, cfg.WebDir)
+	apiServer := api.New(st, log, version, cfg.WebDir, cfg.AdminToken)
 
 	// Per-node analytics snapshot, recomputed periodically over a rolling window.
 	engine := analytics.New(6)

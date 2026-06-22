@@ -5,5 +5,6 @@
     "broker": "tcp://localhost:1883",
     "clientID": "ridgelined",
     "topics": ["meshcore/+/+/packets", "meshcore/+/+/status"]
-  }
+  },
+  "adminToken": "set-a-long-random-secret-to-enable-the-admin-panel"
 }

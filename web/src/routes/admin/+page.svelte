@@ -37,6 +37,10 @@
 	let msg = $state('');
 	let expanded = $state<Record<string, boolean>>({});
 
+	// Manual node scrub (paste a public key → delete the node + all its data).
+	let scrubKey = $state('');
+	let scrubbing = $state(false);
+
 	onMount(async () => {
 		const saved = sessionStorage.getItem(TOKEN_KEY);
 		if (saved) {
@@ -213,6 +217,34 @@
 		}
 	}
 
+	// Scrub a node from the database by public key: deletes its adverts + node row
+	// (no blocklist entry — it re-appears if it transmits again). Irreversible.
+	async function scrubNode() {
+		const key = scrubKey.trim().toUpperCase();
+		if (!key) return;
+		if (!/^[0-9A-F]{6,64}$/.test(key)) {
+			msg = 'scrub: enter a hex public key (paste the full key for an exact match).';
+			return;
+		}
+		if (!confirm(`Permanently delete the node ${key} and all of its stored data points? This cannot be undone.`))
+			return;
+		scrubbing = true;
+		msg = '';
+		try {
+			const res = await admin.deleteNodes(token, [key]);
+			msg =
+				res.nodes > 0
+					? `Scrubbed ${key}: removed ${res.nodes} node row + ${res.observations} data points.`
+					: `No node row matched ${key} (removed ${res.observations} data points). Check the key — deletion needs the full public key.`;
+			scrubKey = '';
+			await refreshBlocks();
+		} catch (e) {
+			msg = `scrub: ${(e as Error).message}`;
+		} finally {
+			scrubbing = false;
+		}
+	}
+
 	const kindColor: Record<string, string> = {
 		bridge: 'var(--color-coral)',
 		observer: 'var(--color-amber)',
@@ -281,6 +313,37 @@
 		{#if msg}
 			<div class="panel border-signal/40 text-fg-dim mt-4 px-4 py-2.5 text-sm">{msg}</div>
 		{/if}
+
+		<!-- Manual node scrub: delete a node + all its data by public key -->
+		<div class="panel mt-4 px-5 py-4">
+			<div class="label normal-case text-fg-faint mb-1">Scrub node by key</div>
+			<p class="text-fg-faint mb-3 text-xs">
+				Permanently delete a node and all of its stored data points (its adverts + node row). Paste the
+				full public key. Irreversible; the node re-appears if it transmits again.
+			</p>
+			<form
+				class="flex flex-wrap items-center gap-2"
+				onsubmit={(e) => {
+					e.preventDefault();
+					scrubNode();
+				}}
+			>
+				<input
+					bind:value={scrubKey}
+					placeholder="public key (hex)"
+					spellcheck="false"
+					autocomplete="off"
+					class="border-line bg-ink-2 text-fg focus:border-coral min-w-0 flex-1 rounded-[var(--radius)] border px-3 py-2 font-mono text-xs outline-none"
+				/>
+				<button
+					type="submit"
+					disabled={scrubbing || !scrubKey.trim()}
+					class="bg-coral/15 text-coral border-coral/40 hover:bg-coral/25 rounded-[var(--radius)] border px-4 py-2 text-sm font-600 transition-colors disabled:opacity-50"
+				>
+					{scrubbing ? 'Scrubbing…' : 'Scrub node'}
+				</button>
+			</form>
+		</div>
 
 		<!-- Detection results -->
 		{#if report}

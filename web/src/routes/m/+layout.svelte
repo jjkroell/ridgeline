@@ -18,12 +18,12 @@
 	const tabs = [
 		{ href: '/m', label: 'Home', exact: true, icon: 'home' },
 		{ href: '/m/nodes', label: 'Nodes', icon: 'nodes' },
-		{ href: '/m/live', label: 'Live', icon: 'live' },
-		{ href: '/m/map', label: 'Map', icon: 'map' },
+		{ href: '/m/live', label: 'Feed', icon: 'live' },
+		{ href: '/m/live-map', label: 'Live Map', icon: 'livemap' },
 		{ href: '/m/more', label: 'More', icon: 'more', sheet: true }
 	];
 	const more = [
-		{ href: '/m/live-map', label: 'Live Map', icon: 'livemap', desc: 'Animated packet propagation' },
+		{ href: '/m/map', label: 'Map', icon: 'map', desc: 'Node locations & coverage' },
 		{ href: '/m/analytics', label: 'Analytics', icon: 'analytics', desc: 'Mesh-wide health & traffic' },
 		{ href: '/m/channels', label: 'Channels', icon: 'channels', desc: 'Decrypted group chat' },
 		{ href: '/m/observers', label: 'Observers', icon: 'observers', desc: 'Listening posts & telemetry' },
@@ -55,7 +55,7 @@
 		if (p === '/m') return 'Overview';
 		if (p.startsWith('/m/nodes')) return p === '/m/nodes' ? 'Nodes' : 'Node';
 		if (p.startsWith('/m/live-map')) return 'Live Map';
-		if (p.startsWith('/m/live')) return 'Live Feed';
+		if (p.startsWith('/m/live')) return 'Feed';
 		if (p.startsWith('/m/map')) return 'Map';
 		if (p.startsWith('/m/analytics')) return 'Analytics';
 		if (p.startsWith('/m/channels')) return 'Channels';
@@ -126,13 +126,13 @@
 				<button onclick={() => (moreOpen = !moreOpen)} class="relative flex flex-col items-center gap-1 py-2.5">
 					{#if on}<span class="bg-signal absolute top-0 h-[2px] w-7 rounded-full"></span>{/if}
 					<svg viewBox="0 0 24 24" class="h-[22px] w-[22px] {on ? 'text-signal' : 'text-fg-faint'}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d={icons[t.icon]} /></svg>
-					<span class="text-[0.62rem] font-medium {on ? 'text-signal' : 'text-fg-faint'}">{t.label}</span>
+					<span class="text-[0.62rem] font-medium whitespace-nowrap {on ? 'text-signal' : 'text-fg-faint'}">{t.label}</span>
 				</button>
 			{:else}
 				<a href={t.href} class="relative flex flex-col items-center gap-1 py-2.5">
 					{#if on}<span class="bg-signal absolute top-0 h-[2px] w-7 rounded-full"></span>{/if}
 					<svg viewBox="0 0 24 24" class="h-[22px] w-[22px] {on ? 'text-signal' : 'text-fg-faint'}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d={icons[t.icon]} /></svg>
-					<span class="text-[0.62rem] font-medium {on ? 'text-signal' : 'text-fg-faint'}">{t.label}</span>
+					<span class="text-[0.62rem] font-medium whitespace-nowrap {on ? 'text-signal' : 'text-fg-faint'}">{t.label}</span>
 				</a>
 			{/if}
 		{/each}

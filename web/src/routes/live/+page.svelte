@@ -104,7 +104,7 @@
 	}
 </script>
 
-<PageHeader eyebrow="Real-time Telemetry" title="Live Feed">
+<PageHeader eyebrow="Real-time Telemetry" title="Feed">
 	<Tooltip text="Toggle the Path column between node names and hash IDs">
 		<button
 			onclick={() => (showIds = !showIds)}

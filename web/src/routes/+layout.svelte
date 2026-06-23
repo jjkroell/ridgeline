@@ -19,7 +19,7 @@
 	const nav = [
 		{ href: '/', label: 'Overview', exact: true, icon: 'grid' },
 		{ href: '/nodes', label: 'Nodes', icon: 'node' },
-		{ href: '/live', label: 'Live Feed', icon: 'pulse' },
+		{ href: '/live', label: 'Feed', icon: 'pulse' },
 		{ href: '/map', label: 'Map', icon: 'map' },
 		{ href: '/live-map', label: 'Live Map', icon: 'signal' },
 		{ href: '/analytics', label: 'Analytics', icon: 'chart' },

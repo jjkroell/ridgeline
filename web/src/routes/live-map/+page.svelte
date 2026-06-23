@@ -623,10 +623,6 @@
 			{/if}
 		</div>
 	</div>
-	<p class="label mt-3">
-		Pulses trace each packet along the repeaters that relayed it · color = payload type · gaps
-		are hops whose repeater hasn't advertised a location yet
-	</p>
 </div>
 
 <LiveGroupModal group={selected} onclose={() => (selected = null)} />

@@ -16,8 +16,9 @@
 # Built daemon binary
 /ridgelined
 
-# Local dev config
+# Local dev/prod config (contain the admin token)
 /config.dev.json
+/config.prod.json
 
 # local session handoff — never commit
 handoff.md

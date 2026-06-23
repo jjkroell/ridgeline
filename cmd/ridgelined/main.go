@@ -85,6 +85,9 @@ func run(log *slog.Logger, configPath string) error {
 
 	go runAnalytics(ctx, engine, st, log)
 	go runRetention(ctx, st, log)
+	if cfg.ScrubArtifacts {
+		go runArtifactScrub(ctx, st, log)
+	}
 
 	<-ctx.Done()
 
@@ -148,6 +151,56 @@ func runRetention(ctx context.Context, st *store.Store, log *slog.Logger) {
 			return
 		case <-t.C:
 			prune()
+		}
+	}
+}
+
+// artifactScrubInterval is how often the corruption-artifact sweep runs. Daily is
+// plenty — artifacts are harmless until removed, and only high-confidence
+// (provably corrupt) records are ever deleted.
+const artifactScrubInterval = 24 * time.Hour
+
+// runArtifactScrub periodically removes high-confidence packet-corruption
+// artifacts — phantom node records whose public key arrived with bytes flipped,
+// the same records surfaced in the Hash-IDs UI. It deletes the node row + its
+// observations with NO blocklist entry: the exact corrupt key is random and
+// unlikely to recur, and if it does the next sweep catches it. Runs a couple of
+// minutes after startup, then every 24h.
+func runArtifactScrub(ctx context.Context, st *store.Store, log *slog.Logger) {
+	scrub := func() {
+		nodes, err := st.ListNodes()
+		if err != nil {
+			log.Warn("artifact scrub: list nodes", "err", err)
+			return
+		}
+		keys := analytics.HighConfidenceArtifactKeys(nodes)
+		if len(keys) == 0 {
+			return
+		}
+		res, err := st.PurgeTargets(nil, nil, keys)
+		if err != nil {
+			log.Warn("artifact scrub: purge", "err", err)
+			return
+		}
+		log.Info("artifact scrub: removed corruption artifacts",
+			"candidates", len(keys), "nodesDeleted", res.Nodes, "observationsDeleted", res.Observations)
+	}
+
+	// Let ingest/analytics settle before the first sweep.
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(2 * time.Minute):
+	}
+	scrub()
+	t := time.NewTicker(artifactScrubInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			scrub()
 		}
 	}
 }

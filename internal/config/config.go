@@ -23,6 +23,11 @@ type Config struct {
 	// admin API entirely (safe default). Serve over TLS — this token grants
 	// destructive powers.
 	AdminToken string `json:"adminToken"`
+	// ScrubArtifacts enables the periodic auto-removal of packet-corruption
+	// artifacts (phantom node records whose public key arrived corrupted). Only
+	// high-confidence artifacts are ever deleted. Defaults to true; set false to
+	// disable the sweep.
+	ScrubArtifacts bool `json:"scrubArtifacts"`
 }
 
 // MQTT configures the connection to a MeshCore observer broker.
@@ -38,9 +43,10 @@ type MQTT struct {
 // development against the dev MeshCore broker.
 func Default() Config {
 	return Config{
-		ListenAddr: ":8080",
-		DBPath:     "ridgeline.db",
-		WebDir:     "web/build",
+		ListenAddr:     ":8080",
+		DBPath:         "ridgeline.db",
+		WebDir:         "web/build",
+		ScrubArtifacts: true,
 		MQTT: MQTT{
 			Broker:   "tcp://localhost:1883",
 			ClientID: "ridgelined",

@@ -6,6 +6,7 @@
 	import QRCode from 'qrcode';
 	import { api, type Node, type NodeAnalytics, type BlockEntry } from '$lib/api';
 	import { ago, shortKey, fmtNum, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus } from '$lib/format';
+	import { nodeCollisionInfo } from '$lib/hash-ids';
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { theme } from '$lib/theme.svelte';
@@ -45,10 +46,16 @@
 
 	const hashId = $derived.by(() => {
 		const hs = node?.hashSize ?? 0;
-		if (!hs) return null;
-		const hex = pubkey.slice(0, hs * 2);
-		const shared = nodesList.filter((n) => n.publicKey !== pubkey && n.publicKey.toUpperCase().startsWith(hex)).length;
-		return { bytes: hs, hex, shared };
+		if (!hs || !node) return null;
+		const hex = pubkey.slice(0, hs * 2).toUpperCase();
+		const info = nodeCollisionInfo(nodesList, node);
+		return {
+			bytes: hs,
+			hex,
+			shared: info.genuinePeers.length,
+			artifactOf: info.artifactOf,
+			reason: info.reason
+		};
 	});
 
 	function cadence(sec?: number): string {
@@ -152,12 +159,25 @@
 			{#if hashId}
 				<div class="flex items-baseline gap-2.5">
 					<span class="font-mono text-signal glow-signal text-2xl font-700 tracking-[0.12em]">{hashId.hex}</span>
-					{#if hashId.shared === 0}
+					{#if hashId.artifactOf}
+						<span class="text-coral bg-coral/10 rounded px-1.5 py-0.5 font-mono text-[0.6rem]">corrupted copy</span>
+					{:else if hashId.shared === 0}
 						<span class="text-signal bg-signal/10 rounded px-1.5 py-0.5 font-mono text-[0.6rem]">unique</span>
 					{:else}
-						<span class="text-amber bg-amber/10 rounded px-1.5 py-0.5 font-mono text-[0.6rem] tnum">+{hashId.shared} collision{hashId.shared > 1 ? 's' : ''}</span>
+						<a
+							href="/m/identity?len={hashId.bytes}&id={hashId.hex}"
+							class="text-amber bg-amber/10 active:bg-amber/20 rounded px-1.5 py-0.5 font-mono text-[0.6rem] tnum"
+							>+{hashId.shared} collision{hashId.shared > 1 ? 's' : ''} ›</a
+						>
 					{/if}
 				</div>
+				{#if hashId.artifactOf}
+					<div class="text-coral/90 mt-2 text-xs leading-relaxed">
+						⚠ Likely a packet-corruption artifact of <span class="text-signal"
+							>{hashId.artifactOf.name || 'a real node'}</span
+						> — {hashId.reason}.
+					</div>
+				{/if}
 			{:else}
 				<div class="text-fg-faint text-sm">Unknown — not seen advertising yet.</div>
 			{/if}

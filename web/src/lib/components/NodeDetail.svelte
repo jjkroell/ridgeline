@@ -9,6 +9,7 @@
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { isLight } from '$lib/map-util';
 	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus } from '$lib/format';
+	import { nodeCollisionInfo } from '$lib/hash-ids';
 	import PayloadTag from './PayloadTag.svelte';
 	import RoleBadge from './RoleBadge.svelte';
 	import FavoriteStar from './FavoriteStar.svelte';
@@ -102,13 +103,22 @@
 
 	const hasLoc = $derived(!!node && node.latitude != null && node.longitude != null);
 
-	// Hash ID + collision count (within the known node set).
+	// Hash ID + collision count. Corruption artifacts (phantom records from packet
+	// corruption that share this prefix) are filtered out so the count reflects
+	// only genuinely distinct nodes — and if THIS record is itself a corrupted
+	// copy of a real node, we surface that instead.
 	const hashId = $derived.by(() => {
 		const hs = node?.hashSize ?? 0;
-		if (!hs) return null;
-		const hex = pubkey.slice(0, hs * 2);
-		const shared = nodesList.filter((n) => n.publicKey !== pubkey && n.publicKey.startsWith(hex)).length;
-		return { bytes: hs, hex, shared };
+		if (!hs || !node) return null;
+		const hex = pubkey.slice(0, hs * 2).toUpperCase();
+		const info = nodeCollisionInfo(nodesList, node);
+		return {
+			bytes: hs,
+			hex,
+			shared: info.genuinePeers.length,
+			artifactOf: info.artifactOf,
+			reason: info.reason
+		};
 	});
 
 	// Liveness from the most recent of advert or relay activity (see nodeStatus).
@@ -348,12 +358,29 @@
 				{#if hashId}
 					<div class="flex items-baseline gap-3">
 						<span class="font-mono text-signal glow-signal text-2xl font-700 tracking-[0.15em]">{hashId.hex}</span>
-						{#if hashId.shared === 0}
+						{#if hashId.artifactOf}
+							<span class="font-mono text-coral bg-coral/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem]">corrupted copy</span>
+						{:else if hashId.shared === 0}
 							<span class="font-mono text-signal bg-signal/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem]">unique</span>
 						{:else}
-							<span class="font-mono text-amber bg-amber/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem] tnum">+{hashId.shared} collision{hashId.shared > 1 ? 's' : ''}</span>
+							<Tooltip
+								text="{hashId.shared} other {hashId.bytes}-byte node{hashId.shared > 1 ? 's' : ''} share this hash ID. Open the Identity page to compare them."
+							>
+								<a
+									href="/identity?len={hashId.bytes}&id={hashId.hex}"
+									class="font-mono text-amber bg-amber/10 hover:bg-amber/20 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem] tnum underline-offset-2 transition-colors hover:underline"
+									>+{hashId.shared} collision{hashId.shared > 1 ? 's' : ''}</a
+								>
+							</Tooltip>
 						{/if}
 					</div>
+					{#if hashId.artifactOf}
+						<div class="text-coral/90 mt-2 text-xs leading-relaxed">
+							⚠ Likely a packet-corruption artifact of
+							<span class="text-signal">{hashId.artifactOf.name || 'a real node'}</span> — {hashId.reason}.
+							This isn't a real node; consider scrubbing it.
+						</div>
+					{/if}
 				{:else}
 					<div class="text-fg-faint text-sm">Unknown — not seen advertising yet.</div>
 				{/if}

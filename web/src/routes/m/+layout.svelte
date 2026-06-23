@@ -26,6 +26,7 @@
 		{ href: '/m/map', label: 'Map', icon: 'map', desc: 'Node locations & coverage' },
 		{ href: '/m/analytics', label: 'Analytics', icon: 'analytics', desc: 'Mesh-wide health & traffic' },
 		{ href: '/m/channels', label: 'Channels', icon: 'channels', desc: 'Decrypted group chat' },
+		{ href: '/m/identity', label: 'Identity', icon: 'keys', desc: 'Collisions & key generator' },
 		{ href: '/m/observers', label: 'Observers', icon: 'observers', desc: 'Listening posts & telemetry' },
 		{ href: '/m/admin', label: 'Admin', icon: 'admin', desc: 'Injection control (restricted)' }
 	];
@@ -40,7 +41,8 @@
 		analytics: 'M5 21V11M12 21V4M19 21v-7M3 21h18',
 		channels: 'M21 11.5a7.5 7.5 0 0 1-10.8 6.7L3.5 20l1.3-5A7.5 7.5 0 1 1 21 11.5z',
 		observers: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
-		admin: 'M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z'
+		admin: 'M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z',
+		keys: 'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3'
 	};
 
 	function activeTab(href: string, exact = false): boolean {
@@ -59,6 +61,7 @@
 		if (p.startsWith('/m/map')) return 'Map';
 		if (p.startsWith('/m/analytics')) return 'Analytics';
 		if (p.startsWith('/m/channels')) return 'Channels';
+		if (p.startsWith('/m/identity')) return 'Node Identity';
 		if (p.startsWith('/m/observers')) return p === '/m/observers' ? 'Observers' : 'Observer';
 		if (p.startsWith('/m/admin')) return 'Admin';
 		return 'Ridgeline';

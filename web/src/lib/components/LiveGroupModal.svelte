@@ -65,6 +65,12 @@
 	}
 	const absTime = (iso: string) => new Date(iso).toISOString().slice(11, 23) + 'Z';
 	const rel = (iso: string) => `+${((+new Date(iso) - firstAt) / 1000).toFixed(1)}s`;
+	// Plain-language version of rel() for the packet-detail header: how long after
+	// the first observer this one heard the same transmission.
+	const relWords = (iso: string) => {
+		const d = (+new Date(iso) - firstAt) / 1000;
+		return d < 0.05 ? 'first to hear it' : `${d.toFixed(1)}s after first`;
+	};
 
 	// Byte-level breakdown of the drilled-into packet's raw hex.
 	const breakdown = $derived(repeat ? buildPacketFields(repeat) : { fields: [], ranges: [] });
@@ -295,7 +301,7 @@
 						{#if summary}<div class="text-fg-dim mb-1 truncate text-sm">{summary}</div>{/if}
 						{#if srcDst}<div class="font-mono text-fg-faint mb-1 text-xs">{srcDst.src} <span class="text-fg-faint">→</span> {srcDst.dst}</div>{/if}
 						<h2 class="font-display text-fg truncate text-lg font-700">{ev.observerId ?? '—'}</h2>
-						<div class="font-mono text-fg-faint text-[0.68rem]">heard {ago(ev.receivedAt)} ago · {rel(ev.receivedAt)}</div>
+						<div class="font-mono text-fg-dim text-xs">heard {ago(ev.receivedAt)} ago{#if events.length > 1} · {relWords(ev.receivedAt)}{/if}</div>
 					</div>
 					<button onclick={onclose} class="text-fg-faint hover:text-fg shrink-0 text-xl leading-none" aria-label="Close">✕</button>
 				</div>

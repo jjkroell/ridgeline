@@ -143,10 +143,12 @@ html.theme-light {
 	/* Eyebrow / instrument label */
 	.label {
 		font-family: var(--font-mono);
-		font-size: 0.64rem;
-		letter-spacing: 0.22em;
+		font-size: 0.7rem;
+		letter-spacing: 0.14em;
 		text-transform: uppercase;
-		color: var(--color-fg-faint);
+		/* fg-dim (not fg-faint): the faint token is too low-contrast at this size
+		   in both themes; dim keeps the de-emphasized feel while staying readable. */
+		color: var(--color-fg-dim);
 	}
 
 	.panel {

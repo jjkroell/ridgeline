@@ -10,7 +10,7 @@
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
-	import { computeCoverage, inCoverage, distKm, type CoverageResult } from '$lib/coverage';
+	import { computeCoverage, covered, distKm, type CoverageResult } from '$lib/coverage';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
 	import NodeModal from '$lib/components/NodeModal.svelte';
@@ -39,7 +39,7 @@
 	const nodesInCoverage = $derived(
 		coverage && pin
 			? allLocated
-					.filter((n) => inCoverage(coverage!, n.longitude!, n.latitude!))
+					.filter((n) => covered(coverage!, n.longitude!, n.latitude!))
 					.map((n) => ({ n, d: distKm(pin!.lat, pin!.lon, n.latitude!, n.longitude!) }))
 					.sort((a, b) => a.d - b.d)
 			: []
@@ -59,9 +59,14 @@
 		} else pinMarker.setLngLat([lon, lat]);
 	}
 	function drawCoverage() {
-		(map?.getSource('coverage') as maplibregl.GeoJSONSource | undefined)?.setData(
-			coverage ? coverage.polygon : { type: 'FeatureCollection', features: [] }
-		);
+		const src = map?.getSource('coverage') as maplibregl.ImageSource | undefined;
+		if (!src) return;
+		if (coverage) {
+			src.updateImage({ url: coverage.dataUrl, coordinates: coverage.imageCoords });
+			map?.setLayoutProperty('coverage', 'visibility', 'visible');
+		} else {
+			map?.setLayoutProperty('coverage', 'visibility', 'none');
+		}
 	}
 	async function runCoverage() {
 		if (!pin) return;
@@ -144,10 +149,27 @@
 
 	function addLayers() {
 		if (!map) return;
-		// Coverage overlay sits beneath the nodes/clusters.
-		map.addSource('coverage', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-		map.addLayer({ id: 'coverage-fill', type: 'fill', source: 'coverage', paint: { 'fill-color': '#34e3c4', 'fill-opacity': 0.16 } });
-		map.addLayer({ id: 'coverage-line', type: 'line', source: 'coverage', paint: { 'line-color': '#34e3c4', 'line-width': 1.5, 'line-opacity': 0.75 } });
+		// Coverage viewshed (a teal raster with terrain shadows) sits beneath the
+		// nodes/clusters. Seeded with a transparent placeholder + hidden until computed.
+		const blank = document.createElement('canvas');
+		blank.width = blank.height = 1;
+		map.addSource('coverage', {
+			type: 'image',
+			url: blank.toDataURL(),
+			coordinates: [
+				[0, 0.001],
+				[0.001, 0.001],
+				[0.001, 0],
+				[0, 0]
+			]
+		});
+		map.addLayer({
+			id: 'coverage',
+			type: 'raster',
+			source: 'coverage',
+			layout: { visibility: 'none' },
+			paint: { 'raster-opacity': 0.85, 'raster-resampling': 'linear', 'raster-fade-duration': 0 }
+		});
 		map.addSource('nodes', {
 			type: 'geojson',
 			data: nodeFeatures(),
@@ -363,7 +385,7 @@
 
 					{#if coverage}
 						<div class="border-line/60 text-fg-faint mt-3 border-t pt-2 font-mono text-[0.62rem]">
-							ground {Number.isFinite(coverage.groundElevM) ? coverage.groundElevM.toFixed(0) + ' m' : '—'} · reaches up to {Math.max(...coverage.rangesKm).toFixed(1)} km
+							ground {Number.isFinite(coverage.groundElevM) ? coverage.groundElevM.toFixed(0) + ' m' : '—'} · reaches up to {coverage.maxReachKm.toFixed(1)} km
 						</div>
 
 						<!-- Nodes reachable inside the coverage -->

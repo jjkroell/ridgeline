@@ -1,19 +1,24 @@
 // Terrain-based RF coverage prediction, computed client-side from the AWS Open
 // Data "terrarium" elevation tiles (the same DEM used for the map hillshade).
 //
-// v1 model: terrain line-of-sight from the transmitter (ground + antenna height)
-// to a receiver (ground + rx height), corrected for earth curvature with the
-// standard 4/3 effective-earth radius. This is the dominant factor for VHF/UHF
-// mesh coverage. A future upgrade swaps the visibility test for an ITM/
-// Longley-Rice path-loss model (public-domain NTIA core) without changing this
-// module's interface.
-import type { Feature, Polygon } from 'geojson';
-
+// v2 model: a true 2-D terrain VIEWSHED. We march rays out from the transmitter
+// (ground + antenna height), maintaining a monotonically-rising horizon angle
+// corrected for earth curvature (standard 4/3 effective-earth radius), and stamp
+// the *visibility of every cell crossed* into a raster grid — not just the outer
+// horizon distance. This is what makes terrain SHADOWS appear: a ridge or island
+// peak raises the horizon, so lower ground behind it is marked not-visible, even
+// when farther terrain pokes back over the top (a disconnected far patch). The
+// older v1 produced one radius per azimuth (a star polygon) which structurally
+// could not represent shadows, interior holes, or disconnected coverage.
+//
+// A future upgrade swaps the boolean visibility test for an ITM/Longley-Rice
+// path-loss model (public-domain NTIA core) without changing this interface.
 const TILE = 256;
 const DEM_URL = (z: number, x: number, y: number) =>
 	`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
 const EARTH_R = 6371008.8; // mean earth radius (m)
 const EFF_EARTH_R = (4 / 3) * EARTH_R; // 4/3-earth for standard atmospheric refraction
+const RAD = Math.PI / 180;
 
 function lonToTileX(lon: number, z: number): number {
 	return ((lon + 180) / 360) * 2 ** z;
@@ -111,116 +116,166 @@ export class DemSampler {
 	}
 }
 
-// Forward geodesic: point at distance d (m) and bearing brng (deg) from lat/lon.
-function destination(lat: number, lon: number, brng: number, d: number): [number, number] {
-	const R = EARTH_R;
-	const δ = d / R;
-	const θ = (brng * Math.PI) / 180;
-	const φ1 = (lat * Math.PI) / 180,
-		λ1 = (lon * Math.PI) / 180;
-	const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
-	const λ2 =
-		λ1 +
-		Math.atan2(
-			Math.sin(θ) * Math.sin(δ) * Math.cos(φ1),
-			Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2)
-		);
-	return [(λ2 * 180) / Math.PI, (φ2 * 180) / Math.PI];
-}
-
 export interface CoverageParams {
 	lat: number;
 	lon: number;
 	txHeightM: number; // transmitter antenna height above ground
 	rxHeightM: number; // assumed receiver antenna height above ground
 	maxRangeKm: number;
-	azimuths?: number; // ray count (default 360)
 }
+
+// 4 image-source corners, [lon,lat], in MapLibre order: TL, TR, BR, BL.
+export type ImageCorners = [
+	[number, number],
+	[number, number],
+	[number, number],
+	[number, number]
+];
 
 export interface CoverageResult {
 	center: [number, number]; // [lon, lat]
 	groundElevM: number;
-	polygon: Feature<Polygon>;
-	rangesKm: number[]; // max visible range per azimuth (km)
-	maxRangeKm: number;
+	gridSize: number; // G — cells per side
+	grid: Uint8Array; // G*G, row-major; row 0 = north edge, 1 = visible
+	imageCoords: ImageCorners; // geo corners the grid maps onto
+	dataUrl: string; // teal viewshed rendered to a PNG for an image source
+	maxReachKm: number; // farthest visible range
+	maxRangeKm: number; // requested cap
 }
 
-/** Compute a terrain line-of-sight coverage polygon for a transmitter. */
+/** Compute a terrain viewshed (with shadows) for a transmitter. */
 export async function computeCoverage(
 	p: CoverageParams,
 	onProgress?: (frac: number) => void
 ): Promise<CoverageResult> {
-	const az = p.azimuths ?? 360;
 	const maxRange = p.maxRangeKm * 1000;
 	const sampler = new DemSampler(12);
 
 	// pad the bbox by ~maxRange around the pin
 	const dLat = (maxRange / EARTH_R) * (180 / Math.PI);
-	const dLon = dLat / Math.cos((p.lat * Math.PI) / 180);
+	const dLon = dLat / Math.cos(p.lat * RAD);
 	await sampler.ensure(p.lon - dLon, p.lat - dLat, p.lon + dLon, p.lat + dLat);
 
 	const ground = sampler.elev(p.lon, p.lat);
 	const obs = (Number.isFinite(ground) ? ground : 0) + p.txHeightM;
 
-	// step ≈ one DEM pixel on the ground at this latitude
-	const step = Math.max(20, (Math.cos((p.lat * Math.PI) / 180) * 40075016.7) / (2 ** sampler.z * TILE));
+	// Local equirectangular frame centred on the pin (accurate to ~50 km): east/
+	// north metres map linearly to lon/lat, so the raster aligns with a MapLibre
+	// image source by its 4 corners.
+	const mPerDegLat = 111320;
+	const mPerDegLon = 111320 * Math.cos(p.lat * RAD);
 
-	const ring: [number, number][] = [];
-	const ranges: number[] = [];
-	for (let a = 0; a < az; a++) {
-		const brng = (a * 360) / az;
-		let maxAng = -Infinity;
-		let maxVis = 0;
+	// DEM ground resolution at this latitude (~30–40 m at z12).
+	const demStep = Math.max(20, (Math.cos(p.lat * RAD) * 40075016.7) / (2 ** sampler.z * TILE));
+	// March in half-DEM steps for a smoother visibility boundary (the DEM is
+	// bilinearly interpolated, so sub-post samples are valid) and build a denser
+	// output grid so the overlay stays crisp when zoomed in. Capped for memory.
+	const step = demStep / 2;
+	const cell = Math.max(step, (2 * maxRange) / 1100);
+	const G = Math.max(64, Math.min(1400, Math.round((2 * maxRange) / cell)));
+	const grid = new Uint8Array(G * G);
+
+	const toCell = (east: number, north: number): number => {
+		const col = Math.floor(((east + maxRange) / (2 * maxRange)) * G);
+		const row = Math.floor(((maxRange - north) / (2 * maxRange)) * G); // north → top
+		if (col < 0 || col >= G || row < 0 || row >= G) return -1;
+		return row * G + col;
+	};
+
+	// Enough rays that adjacent rays are ≤ one cell apart at the rim (no gaps).
+	const nRays = Math.max(720, Math.ceil((2 * Math.PI * maxRange) / cell));
+	let maxReach = 0;
+
+	for (let a = 0; a < nRays; a++) {
+		const brng = (a * 2 * Math.PI) / nRays; // clockwise from north
+		const sinB = Math.sin(brng),
+			cosB = Math.cos(brng);
+		let maxAng = -Infinity; // rising horizon angle along this ray
 		for (let r = step; r <= maxRange; r += step) {
-			const [lon, lat] = destination(p.lat, p.lon, brng, r);
-			const terr = sampler.elev(lon, lat);
+			const east = sinB * r,
+				north = cosB * r;
+			const terr = sampler.elev(p.lon + east / mPerDegLon, p.lat + north / mPerDegLat);
 			if (!Number.isFinite(terr)) continue;
-			const drop = (r * r) / (2 * EFF_EARTH_R); // earth-curvature drop
-			const effTerr = terr - drop;
+			const effTerr = terr - (r * r) / (2 * EFF_EARTH_R); // earth-curvature drop
+			// A receiver here is visible if it clears the horizon raised by all
+			// nearer terrain — this is exactly what shadows a valley behind a peak.
 			const rxAng = Math.atan2(effTerr + p.rxHeightM - obs, r);
-			if (rxAng >= maxAng) maxVis = r; // receiver clears the horizon
+			const visible = rxAng >= maxAng;
 			const terrAng = Math.atan2(effTerr - obs, r);
-			if (terrAng > maxAng) maxAng = terrAng; // raise the horizon for farther points
+			if (terrAng > maxAng) maxAng = terrAng;
+			if (visible) {
+				const idx = toCell(east, north);
+				if (idx >= 0) grid[idx] = 1;
+				if (r > maxReach) maxReach = r;
+			}
 		}
-		const rr = maxVis > 0 ? maxVis : step * 0.5;
-		ring.push(destination(p.lat, p.lon, brng, rr));
-		ranges.push(rr / 1000);
-		if (onProgress && a % 20 === 0) onProgress(a / az);
+		if (onProgress && a % 64 === 0) onProgress(a / nRays);
 	}
-	ring.push(ring[0]);
+	const c0 = toCell(0, 0);
+	if (c0 >= 0) grid[c0] = 1; // the transmitter site itself
+
+	// Render the visible cells to a translucent teal raster (transparent = shadow).
+	const raw = document.createElement('canvas');
+	raw.width = raw.height = G;
+	const rctx = raw.getContext('2d')!;
+	const img = rctx.createImageData(G, G);
+	for (let i = 0; i < G * G; i++) {
+		if (grid[i]) {
+			img.data[i * 4] = 52; // #34e3c4 signal-teal
+			img.data[i * 4 + 1] = 227;
+			img.data[i * 4 + 2] = 196;
+			img.data[i * 4 + 3] = 140; // ~0.55 alpha; layer raster-opacity tunes the rest
+		}
+	}
+	rctx.putImageData(img, 0, 0);
+
+	// Feather the cell edges so the overlay reads as a soft signal field rather
+	// than blocky pixels when zoomed in (paired with linear raster resampling).
+	const canvas = document.createElement('canvas');
+	canvas.width = canvas.height = G;
+	const ctx = canvas.getContext('2d')!;
+	ctx.filter = 'blur(1.4px)';
+	ctx.drawImage(raw, 0, 0);
+
+	const halfLat = maxRange / mPerDegLat;
+	const halfLon = maxRange / mPerDegLon;
+	const imageCoords: ImageCorners = [
+		[p.lon - halfLon, p.lat + halfLat], // TL
+		[p.lon + halfLon, p.lat + halfLat], // TR
+		[p.lon + halfLon, p.lat - halfLat], // BR
+		[p.lon - halfLon, p.lat - halfLat] // BL
+	];
 
 	return {
 		center: [p.lon, p.lat],
 		groundElevM: ground,
-		polygon: {
-			type: 'Feature',
-			properties: {},
-			geometry: { type: 'Polygon', coordinates: [ring] }
-		},
-		rangesKm: ranges,
+		gridSize: G,
+		grid,
+		imageCoords,
+		dataUrl: canvas.toDataURL(),
+		maxReachKm: maxReach / 1000,
 		maxRangeKm: p.maxRangeKm
 	};
 }
 
-/** Ray-casting point-in-polygon for the (single-ring) coverage polygon. */
-export function inCoverage(cov: CoverageResult, lon: number, lat: number): boolean {
-	const ring = cov.polygon.geometry.coordinates[0];
-	let inside = false;
-	for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-		const [xi, yi] = ring[i];
-		const [xj, yj] = ring[j];
-		if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
-	}
-	return inside;
+/** Is the given point inside the visible (non-shadowed) coverage? Grid lookup. */
+export function covered(cov: CoverageResult, lon: number, lat: number): boolean {
+	const tl = cov.imageCoords[0];
+	const br = cov.imageCoords[2];
+	const fx = (lon - tl[0]) / (br[0] - tl[0]); // 0 (west) → 1 (east)
+	const fy = (lat - tl[1]) / (br[1] - tl[1]); // 0 (north) → 1 (south)
+	if (fx < 0 || fx >= 1 || fy < 0 || fy >= 1) return false;
+	const col = Math.floor(fx * cov.gridSize);
+	const row = Math.floor(fy * cov.gridSize);
+	return cov.grid[row * cov.gridSize + col] === 1;
 }
 
 /** Great-circle distance in km. */
 export function distKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-	const rad = Math.PI / 180;
-	const dLat = (lat2 - lat1) * rad,
-		dLon = (lon2 - lon1) * rad;
+	const dLat = (lat2 - lat1) * RAD,
+		dLon = (lon2 - lon1) * RAD;
 	const a =
 		Math.sin(dLat / 2) ** 2 +
-		Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
-	return EARTH_R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) / 1000;
+		Math.cos(lat1 * RAD) * Math.cos(lat2 * RAD) * Math.sin(dLon / 2) ** 2;
+	return (EARTH_R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))) / 1000;
 }

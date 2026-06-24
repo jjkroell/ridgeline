@@ -23,7 +23,8 @@
 		GroupText: 'Grp Msg',
 		Request: 'Req',
 		Response: 'Resp',
-		Control: 'Ctrl'
+		Control: 'Ctrl',
+		AnonRequest: 'AnonRqst'
 	};
 	const label = $derived(abbr[type] ?? type);
 </script>

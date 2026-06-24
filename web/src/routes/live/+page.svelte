@@ -161,7 +161,10 @@
 						class="panel-hover group grid w-full grid-cols-[34px_64px_140px_64px_160px_minmax(0,1fr)] items-center gap-x-3 px-5 py-2.5 text-left text-sm md:grid-cols-[34px_64px_140px_370px_64px_160px_minmax(0,1fr)]"
 					>
 						<span class="font-mono text-fg-faint text-xs tnum">{ago(g.latest)}</span>
-						<span><PayloadTag type={g.payloadType} /></span>
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<span onmousemove={(e) => { e.stopPropagation(); hideTip(); }}>
+							<PayloadTag type={g.payloadType} />
+						</span>
 						<span class="text-fg truncate">{trunc15(firstObserver(g))}</span>
 						<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 						<span

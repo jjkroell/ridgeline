@@ -10,7 +10,8 @@
 		usedPrefixes,
 		prefixStatus,
 		suggestFreePrefix,
-		nodePrefix
+		nodePrefix,
+		isPathNode
 	} from '$lib/hash-ids';
 	import { keygen } from '$lib/keygen.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -55,10 +56,13 @@
 	const status = $derived(prefixStatus(nodes, byteLen, prefix));
 	const want = $derived(byteLen * 2);
 
-	// Same-length nodes occupying the typed prefix (shown when it's already in use).
+	// Same-length path nodes occupying the typed prefix (shown when it's in use).
 	const occupants = $derived(
 		status === 'used'
-			? nodes.filter((n) => n.hashSize === byteLen && nodePrefix(n, byteLen) === prefix.toUpperCase())
+			? nodes.filter(
+					(n) =>
+						isPathNode(n) && n.hashSize === byteLen && nodePrefix(n, byteLen) === prefix.toUpperCase()
+				)
 			: []
 	);
 
@@ -187,10 +191,11 @@
 				<span class="text-fg-dim tnum">{used.size.toLocaleString()} of {space.toLocaleString()}</span
 				>
 				IDs are taken by the {cohorts[byteLen].toLocaleString()}
-				node{cohorts[byteLen] === 1 ? '' : 's'} at this length.{#if cohorts.unknown}
+				routing node{cohorts[byteLen] === 1 ? '' : 's'} at this length.{#if cohorts.unknown}
 					<span class="text-fg-dim"
 						>{cohorts.unknown} node{cohorts.unknown === 1 ? '' : 's'} haven't advertised a length yet.</span
 					>{/if}
+				Companions are excluded — they don't repeat packets, so they never appear in a path.
 			{/if}
 		</div>
 	</div>
@@ -302,6 +307,8 @@
 		</div>
 	{/if}
 
+	<!-- Pick an unused hash ID + Generate key pair — side by side on desktop -->
+	<div class="grid items-stretch gap-4 {compact ? '' : 'md:grid-cols-2'}">
 	<!-- Pick an unused hash ID -->
 	<div class="panel rise px-5 py-4" style="animation-delay:80ms">
 		<div class="label mb-3">Pick an unused hash ID</div>
@@ -370,7 +377,7 @@
 							>
 						</div>
 						<div
-							class="border-line bg-ink rounded-[var(--radius)] border px-3 py-2 font-mono text-xs break-all
+							class="border-line bg-ink truncate rounded-[var(--radius)] border px-3 py-2 font-mono text-xs
 							{row.field === 'private' ? 'text-amber' : 'text-fg'}"
 						>
 							{row.value}
@@ -457,5 +464,6 @@
 				<div class="text-coral mt-2 text-xs">{keygen.error}</div>
 			{/if}
 		{/if}
+	</div>
 	</div>
 </div>

@@ -29,6 +29,13 @@ export function isHex(s: string): boolean {
 	return /^[0-9a-fA-F]*$/.test(s);
 }
 
+// Companions (ChatNode role) don't repeat packets, so their hash ID never shows
+// up in a routing path — they can't cause a path-hash collision. All collision
+// analysis considers only path-participating nodes (repeaters, room servers).
+export function isPathNode(n: Pick<Node, 'role'>): boolean {
+	return n.role !== 'ChatNode';
+}
+
 // A node only collides with other nodes that share its *configured* hash-ID
 // length: a node set to 3-byte IDs is identified by 3 bytes and can't be confused
 // with a 1-byte node, and vice-versa. So all collision analysis is scoped to the
@@ -38,32 +45,33 @@ function inCohort(n: Node, byteLen: HashByteLen): boolean {
 	return n.hashSize === byteLen;
 }
 
-/** How many nodes are configured at each hash-ID length (and how many unknown). */
+/** How many path-participating nodes are configured at each hash-ID length. */
 export function cohortCounts(nodes: Node[]): { 1: number; 2: number; 3: number; unknown: number } {
 	const c = { 1: 0, 2: 0, 3: 0, unknown: 0 };
 	for (const n of nodes) {
+		if (!isPathNode(n)) continue;
 		if (n.hashSize === 1 || n.hashSize === 2 || n.hashSize === 3) c[n.hashSize]++;
 		else c.unknown++;
 	}
 	return c;
 }
 
-/** Every prefix occupied by a node *configured at this length*. */
+/** Every prefix occupied by a path node *configured at this length*. */
 export function usedPrefixes(nodes: Node[], byteLen: HashByteLen): Set<string> {
 	const set = new Set<string>();
 	for (const n of nodes) {
-		if (!inCohort(n, byteLen)) continue;
+		if (!isPathNode(n) || !inCohort(n, byteLen)) continue;
 		const p = nodePrefix(n, byteLen);
 		if (p.length === byteLen * 2) set.add(p);
 	}
 	return set;
 }
 
-/** Groups of two-or-more same-length nodes that share their hash-ID prefix. */
+/** Groups of two-or-more same-length path nodes that share their hash-ID prefix. */
 export function collisionGroups(nodes: Node[], byteLen: HashByteLen): CollisionGroup[] {
 	const buckets = new Map<string, Node[]>();
 	for (const n of nodes) {
-		if (!inCohort(n, byteLen)) continue;
+		if (!isPathNode(n) || !inCohort(n, byteLen)) continue;
 		const p = nodePrefix(n, byteLen);
 		if (p.length !== byteLen * 2) continue;
 		const arr = buckets.get(p);
@@ -309,11 +317,15 @@ export function nodeCollisionInfo(
 	node: Node
 ): { genuinePeers: Node[]; artifactOf: Node | null; reason?: string } {
 	const hs = node.hashSize;
-	if (hs !== 1 && hs !== 2 && hs !== 3) return { genuinePeers: [], artifactOf: null };
+	// Companions never route, so their hash ID can't collide.
+	if (!isPathNode(node) || (hs !== 1 && hs !== 2 && hs !== 3))
+		return { genuinePeers: [], artifactOf: null };
 	const byteLen = hs as HashByteLen;
 	const prefix = nodePrefix(node, byteLen);
-	// Only nodes configured at the same length can collide with this one.
-	const members = nodes.filter((n) => inCohort(n, byteLen) && nodePrefix(n, byteLen) === prefix);
+	// Only path nodes configured at the same length can collide with this one.
+	const members = nodes.filter(
+		(n) => isPathNode(n) && inCohort(n, byteLen) && nodePrefix(n, byteLen) === prefix
+	);
 	if (members.length < 2) return { genuinePeers: [], artifactOf: null };
 
 	const { real, artifacts } = classifyGroup(members, byteLen);

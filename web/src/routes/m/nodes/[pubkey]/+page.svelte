@@ -5,7 +5,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import QRCode from 'qrcode';
 	import { api, type Node, type NodeAnalytics, type BlockEntry } from '$lib/api';
-	import { ago, shortKey, fmtNum, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus } from '$lib/format';
+	import { ago, shortKey, fmtNum, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, fmtRadio, fmtCoord } from '$lib/format';
 	import { nodeCollisionInfo } from '$lib/hash-ids';
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
@@ -67,14 +67,15 @@
 		node
 			? [
 					{ k: 'Status', v: status.label, c: status.color },
+					{ k: 'Radio', v: fmtRadio(node.radio) },
+					{ k: 'Location', v: fmtCoord(node.latitude, node.longitude) },
 					{ k: 'Last advert', v: ago(node.lastAdvert || node.lastSeen) + ' ago' },
 					{ k: 'Last relay', v: detail?.relay.lastRelayed ? ago(detail.relay.lastRelayed) + ' ago' : '—' },
 					{ k: 'Packets', v: detail ? `${fmtNum(detail.totalPackets)} · seen ${fmtNum(detail.totalObservations)}×` : '—' },
 					{ k: 'Adverts (all-time)', v: fmtNum(node.advertCount) },
 					{ k: 'Avg SNR', v: detail?.avgSnr != null ? detail.avgSnr.toFixed(1) + ' dB' : '—', c: snrColor(detail?.avgSnr) },
 					{ k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' },
-					{ k: 'Advert cadence', v: cadence(detail?.advertIntervalSec) },
-					{ k: 'Radio', v: node.radio || '—' }
+					{ k: 'Advert cadence', v: cadence(detail?.advertIntervalSec) }
 				]
 			: []
 	);

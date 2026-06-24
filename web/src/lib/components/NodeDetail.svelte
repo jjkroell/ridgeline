@@ -8,7 +8,7 @@
 	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry, type NodeActivity, type BlockEntry } from '$lib/api';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { isLight } from '$lib/map-util';
-	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus } from '$lib/format';
+	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, fmtRadio } from '$lib/format';
 	import { nodeCollisionInfo } from '$lib/hash-ids';
 	import PayloadTag from './PayloadTag.svelte';
 	import RoleBadge from './RoleBadge.svelte';
@@ -156,8 +156,8 @@
 	const bl = $derived(bridgeLabel(detail?.bridge ?? 0));
 
 	// Overview facts. Compact (modal snapshot) shows a key subset; the full page
-	// shows everything.
-	const facts = $derived.by(() => {
+	// shows everything. `c` is an optional value colour.
+	const facts = $derived.by((): { k: string; v: string; c?: string }[] => {
 		if (!node) return [];
 		const lastRelay = {
 			k: 'Last relay',
@@ -172,20 +172,22 @@
 		};
 		const avgSnr = { k: 'Avg SNR', v: detail?.avgSnr != null ? detail.avgSnr.toFixed(1) + ' dB' : '—' };
 		const location = { k: 'Location', v: fmtCoord(node.latitude, node.longitude) };
-		const radio = { k: 'Radio', v: fmtRadio(node.radio), c: node.radio ? 'var(--color-signal)' : undefined };
+		const radio = { k: 'Radio', v: fmtRadio(node.radio) };
 		if (compact) {
 			return [
 				{ k: 'Status', v: status.label, c: status.color },
+				radio,
+				location,
 				{ k: 'Last advert', v: ago(node.lastSeen) + ' ago' },
 				lastRelay,
 				packets6h,
-				avgSnr,
-				radio,
-				location
+				avgSnr
 			];
 		}
 		return [
 			{ k: 'Status', v: status.label, c: status.color },
+			radio,
+			location,
 			{ k: 'Last advert', v: ago(node.lastSeen) + ' ago' },
 			lastRelay,
 			{ k: 'First seen', v: ago(node.firstSeen) + ' ago' },
@@ -194,24 +196,11 @@
 			{ k: 'Adverts (all-time)', v: String(node.advertCount) },
 			{ k: 'Advert cadence', v: cadence(detail?.advertIntervalSec) },
 			avgSnr,
-			{ k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' },
-			radio,
-			location
+			{ k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' }
 		];
 	});
 
 	// Format "freq,bw,sf,cr" → "910.425 MHz · 62.5k · SF7 · CR5".
-	function fmtRadio(r?: string): string {
-		if (!r) return '—';
-		const [f, b, s, c] = r.split(',');
-		const parts: string[] = [];
-		if (f) parts.push(`${+(+f).toFixed(3)} MHz`);
-		if (b) parts.push(`${b}k`);
-		if (s) parts.push(`SF${s}`);
-		if (c) parts.push(`CR${c}`);
-		return parts.join(' · ') || '—';
-	}
-
 	let copied = $state(false);
 	async function copyKey() {
 		await navigator.clipboard.writeText(pubkey);
@@ -401,9 +390,13 @@
 			<!-- Overview -->
 			<div class="panel divide-line/40 divide-y">
 				{#each facts as f (f.k)}
-					<div class="flex items-center justify-between px-5 py-2.5">
-						<span class="label normal-case">{f.k}</span>
-						<span class="font-mono text-sm tnum" style="color:{f.c ?? 'var(--color-fg)'}">{f.v}</span>
+					<div class="flex items-center justify-between gap-3 px-5 py-2.5">
+						<span class="label normal-case shrink-0">{f.k}</span>
+						<span
+							class="label normal-case tnum text-right"
+							style="color:{f.c ?? 'var(--color-fg)'}{f.k === 'Radio' ? ';letter-spacing:0' : ''}"
+							>{f.v}</span
+						>
 					</div>
 				{/each}
 			</div>

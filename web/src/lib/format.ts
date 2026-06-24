@@ -110,6 +110,19 @@ export function fmtCoord(lat?: number, lon?: number): string {
 	return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
 }
 
+/** Format a node's "freq,bw,sf,cr" radio config as "910.425 · 62.5k · SF7 · CR5"
+ *  (frequency rounded to 3 decimals). */
+export function fmtRadio(r?: string): string {
+	if (!r) return '—';
+	const [f, b, s, c] = r.split(',');
+	const parts: string[] = [];
+	if (f) parts.push(`${+(+f).toFixed(3)}`);
+	if (b) parts.push(`${b}k`);
+	if (s) parts.push(`SF${s}`);
+	if (c) parts.push(`CR${c}`);
+	return parts.join(' · ') || '—';
+}
+
 /** True when a timestamp is within the last 5 minutes (an observer "reporting"). */
 export function isFresh(iso?: string): boolean {
 	return !!iso && Date.now() - new Date(iso).getTime() < 5 * 60 * 1000;

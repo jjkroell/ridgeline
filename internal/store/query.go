@@ -18,6 +18,10 @@ type Node struct {
 	LastSeen    string   `json:"lastSeen"`
 	LastAdvert  string   `json:"lastAdvert,omitempty"`
 	AdvertCount int      `json:"advertCount"`
+	// AdvertTxCount is the number of actual advert *transmissions* — re-flood and
+	// multi-observer copies of one advert collapsed by a 30s gap — vs AdvertCount
+	// which counts every observation.
+	AdvertTxCount int `json:"advertTxCount"`
 	// HashSize is the node's path-hash length in bytes (1, 2, or 3), learned
 	// from its advert. 0 means not yet known.
 	HashSize int `json:"hashSize"`
@@ -77,7 +81,7 @@ func (s *Store) ListNodes() ([]Node, error) {
 	rows, err := s.db.Query(`
 		SELECT pubkey, COALESCE(name,''), COALESCE(role,''),
 		       latitude, longitude, has_location,
-		       first_seen, last_seen, COALESCE(last_advert,''), advert_count,
+		       first_seen, last_seen, COALESCE(last_advert,''), advert_count, advert_tx_count,
 		       COALESCE(hash_size, 0), COALESCE(radio,'')
 		FROM nodes
 		ORDER BY last_seen DESC`)
@@ -92,7 +96,7 @@ func (s *Store) ListNodes() ([]Node, error) {
 		var hasLoc int
 		if err := rows.Scan(&n.PublicKey, &n.Name, &n.Role,
 			&n.Latitude, &n.Longitude, &hasLoc,
-			&n.FirstSeen, &n.LastSeen, &n.LastAdvert, &n.AdvertCount, &n.HashSize, &n.Radio); err != nil {
+			&n.FirstSeen, &n.LastSeen, &n.LastAdvert, &n.AdvertCount, &n.AdvertTxCount, &n.HashSize, &n.Radio); err != nil {
 			return nil, err
 		}
 		n.HasLocation = hasLoc != 0
@@ -291,4 +295,54 @@ func (s *Store) rawSince(sinceISO string, limit int) ([]RawObservation, error) {
 		out = append(out, o)
 	}
 	return out, rows.Err()
+}
+
+// NeedsAdvertTxBackfill reports whether the advert_tx_count column was just added
+// on this open and should be seeded from history.
+func (s *Store) NeedsAdvertTxBackfill() bool { return s.needAdvertTxBackfill }
+
+// AdvertObservationsChrono returns every stored advert observation's raw hex and
+// reception time, oldest first — for the one-time backfill of advert_tx_count.
+func (s *Store) AdvertObservationsChrono() ([]RawObservation, error) {
+	rows, err := s.db.Query(`
+		SELECT raw_hex, received_at
+		FROM observations
+		WHERE payload_type = 'Advert'
+		ORDER BY received_at ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []RawObservation{}
+	for rows.Next() {
+		var o RawObservation
+		if err := rows.Scan(&o.RawHex, &o.ReceivedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// SetAdvertTxCounts bulk-updates per-node advert transmission counts (keyed by
+// pubkey) in a single transaction.
+func (s *Store) SetAdvertTxCounts(counts map[string]int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	stmt, err := tx.Prepare(`UPDATE nodes SET advert_tx_count = ? WHERE pubkey = ?`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for k, v := range counts {
+		if _, err := stmt.Exec(v, k); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }

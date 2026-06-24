@@ -56,6 +56,16 @@ func run(log *slog.Logger, configPath string) error {
 	}
 	defer st.Close()
 
+	// One-time seed of advert_tx_count (actual transmissions) from history when
+	// the column was just added, before ingest starts touching it.
+	if st.NeedsAdvertTxBackfill() {
+		if n, txs, err := analytics.BackfillAdvertTx(st); err != nil {
+			log.Warn("advert-tx backfill", "err", err)
+		} else {
+			log.Info("advert-tx backfill complete", "nodes", n, "transmissions", txs)
+		}
+	}
+
 	apiServer := api.New(st, log, version, cfg.WebDir, cfg.AdminToken)
 
 	// Per-node analytics snapshot, recomputed periodically over a rolling window.

@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS nodes (
 	last_seen    TEXT NOT NULL,
 	last_advert  TEXT,
 	advert_count INTEGER NOT NULL DEFAULT 0,
+	advert_tx_count INTEGER NOT NULL DEFAULT 0,
 	hash_size    INTEGER NOT NULL DEFAULT 0
 );
 
@@ -91,6 +92,10 @@ type Store struct {
 	db *sql.DB
 	mu sync.Mutex // serializes writes (single-writer model)
 
+	// needAdvertTxBackfill is set on open when the advert_tx_count column was
+	// just added, so a caller can seed it once from history.
+	needAdvertTxBackfill bool
+
 	// Blocklist cache, consulted on the hot ingest path. Guarded separately
 	// from mu so reads don't contend with writes. Refreshed from the table on
 	// open and after every mutation.
@@ -132,7 +137,13 @@ func Open(path string) (*Store, error) {
 	db.Exec(`ALTER TABLE observers ADD COLUMN last_status_at TEXT`)
 	db.Exec(`ALTER TABLE observers ADD COLUMN radio TEXT`)
 	db.Exec(`ALTER TABLE nodes ADD COLUMN radio TEXT`)
-	s := &Store{db: db}
+	// advert_tx_count counts actual advert *transmissions* (re-flood/multi-observer
+	// copies of one advert collapsed by a 30s gap), vs advert_count which counts
+	// raw observations. If the column is new on an existing DB, flag a one-time
+	// backfill from the stored observation history.
+	needAdvertTxBackfill := !columnExists(db, "nodes", "advert_tx_count")
+	db.Exec(`ALTER TABLE nodes ADD COLUMN advert_tx_count INTEGER NOT NULL DEFAULT 0`)
+	s := &Store{db: db, needAdvertTxBackfill: needAdvertTxBackfill}
 	if err := s.loadBlocklist(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("store: load blocklist: %w", err)
@@ -231,14 +242,19 @@ func (s *Store) Record(o Observation) error {
 		if o.ObserverID != "" {
 			tx.QueryRow(`SELECT COALESCE(radio,'') FROM observers WHERE id = ?`, o.ObserverID).Scan(&observerRadio)
 		}
+		// Count actual advert transmissions, not raw observations: re-floods and
+		// multi-observer copies of one advert all arrive within a few seconds, so
+		// this counts a new transmission only when it lands >30s after the node's
+		// previous advert. (Mirrors analytics.summarizeAdverts.)
+		txInc := advertTxIncrement(tx, a.PublicKey, o.ReceivedAt)
 		// The advert's path-length byte carries the originating node's own
 		// hash size (1, 2, or 3 bytes) — the length of the key prefix by which
 		// this node is identified in packet paths.
 		if _, err := tx.Exec(`
 			INSERT INTO nodes
 				(pubkey, name, role, latitude, longitude, has_location,
-				 first_seen, last_seen, last_advert, advert_count, hash_size, radio)
-			VALUES (?,?,?,?,?,?,?,?,?,1,?,?)
+				 first_seen, last_seen, last_advert, advert_count, advert_tx_count, hash_size, radio)
+			VALUES (?,?,?,?,?,?,?,?,?,1,?,?,?)
 			ON CONFLICT(pubkey) DO UPDATE SET
 				name         = COALESCE(NULLIF(excluded.name,''), nodes.name),
 				role         = excluded.role,
@@ -248,16 +264,66 @@ func (s *Store) Record(o Observation) error {
 				last_seen    = excluded.last_seen,
 				last_advert  = excluded.last_advert,
 				advert_count = nodes.advert_count + 1,
+				advert_tx_count = nodes.advert_tx_count + ?,
 				hash_size    = excluded.hash_size,
 				radio        = COALESCE(NULLIF(excluded.radio,''), nodes.radio)`,
 			a.PublicKey, nullStr(a.Name), a.DeviceRole.String(),
-			lat, lon, boolInt(a.HasLocation), ts, ts, ts, p.PathHashSize, nullStr(observerRadio),
+			lat, lon, boolInt(a.HasLocation), ts, ts, ts, txInc, p.PathHashSize, nullStr(observerRadio),
+			txInc,
 		); err != nil {
 			return fmt.Errorf("store: upsert node: %w", err)
 		}
 	}
 
 	return tx.Commit()
+}
+
+// advertTxGap is how far apart two adverts must land to count as separate
+// transmissions; closer ones are re-flood / multi-observer copies of the same
+// broadcast (late reflood through distant hops can trail the first copy by a
+// minute). Keep in sync with analytics.advertTxGap (backfill + cadence grouping).
+const advertTxGap = 90 * time.Second
+
+// advertTxIncrement returns 1 when this advert (at receivedAt) starts a new
+// transmission for the node — a brand-new node, or an advert landing more than
+// advertTxGap after the node's previous one — and 0 when it's just another
+// observation (re-flood / different observer) of the current transmission.
+func advertTxIncrement(tx *sql.Tx, pubkey string, receivedAt time.Time) int {
+	var prev string
+	tx.QueryRow(`SELECT COALESCE(last_advert,'') FROM nodes WHERE pubkey = ?`, pubkey).Scan(&prev)
+	if prev == "" {
+		return 1
+	}
+	pt, err := time.Parse(time.RFC3339Nano, prev)
+	if err != nil {
+		return 1
+	}
+	if receivedAt.UTC().Sub(pt) > advertTxGap {
+		return 1
+	}
+	return 0
+}
+
+// columnExists reports whether a table already has a column (used to gate
+// one-time backfills on a freshly-migrated column).
+func columnExists(db *sql.DB, table, col string) bool {
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, ctype string
+		var dflt interface{}
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false
+		}
+		if name == col {
+			return true
+		}
+	}
+	return false
 }
 
 func nullStr(s string) interface{} {

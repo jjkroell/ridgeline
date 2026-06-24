@@ -404,9 +404,14 @@ func build(raws []store.RawObservation, nodes []store.Node, windowHours int, adv
 	return details
 }
 
+// advertTxGap is how far apart two adverts must land to count as separate
+// transmissions; closer ones are re-flood / multi-observer copies of one
+// broadcast. Keep in sync with store.advertTxGap (the live ingest counter).
+const advertTxGap = 90 * time.Second
+
 // summarizeAdverts groups a node's advert observations into transmissions.
 // Because re-floods share a messageHash, observations of one hash are split
-// into separate transmissions wherever they're more than 30s apart. Returns the
+// into separate transmissions wherever they're more than advertTxGap apart. Returns the
 // transmission count, how many were today, up to 20 newest as PacketRefs
 // (best-SNR observation per transmission), and the transmission times (newest
 // first) for cadence/activity analysis.
@@ -442,7 +447,7 @@ func summarizeAdverts(advs []advObs, today string) (count, todayCount int, recen
 		}
 		var prev time.Time
 		for _, o := range group {
-			if len(cur) > 0 && !o.t.IsZero() && !prev.IsZero() && o.t.Sub(prev) > 30*time.Second {
+			if len(cur) > 0 && !o.t.IsZero() && !prev.IsZero() && o.t.Sub(prev) > advertTxGap {
 				flush()
 			}
 			cur = append(cur, o)

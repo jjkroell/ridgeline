@@ -22,12 +22,14 @@
 		{#if i > 0}<span class="text-fg-faint">→</span>{/if}
 		{@const n = resolveHop(hop)}
 		{#if n}
-			<a
-				href="/nodes/{n.publicKey}"
-				onclick={onnavigate}
-				class="border-line bg-panel-2/60 hover:border-signal/50 rounded-[var(--radius)] border px-2 py-1 text-xs"
-				style="color:{roleColor(n.role)}">{showIds ? hashId(n) : n.name || shortKey(n.publicKey)}</a
-			>
+			<Tooltip text={showIds ? n.name || shortKey(n.publicKey) : hashId(n)}>
+				<a
+					href="/nodes/{n.publicKey}"
+					onclick={onnavigate}
+					class="border-line bg-panel-2/60 hover:border-signal/50 rounded-[var(--radius)] border px-2 py-1 text-xs"
+					style="color:{roleColor(n.role)}">{showIds ? hashId(n) : n.name || shortKey(n.publicKey)}</a
+				>
+			</Tooltip>
 		{:else}
 			<Tooltip text="no located node with this key prefix"
 				><span

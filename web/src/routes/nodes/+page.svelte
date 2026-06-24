@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api, type Node } from '$lib/api';
-	import { shortKey, fmtCoord, fmtNum, nodeStatus } from '$lib/format';
+	import { shortKey, fmtCoord, fmtNum, nodeStatus, ago } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -113,13 +113,18 @@
 	<!-- Table -->
 	<div class="panel overflow-hidden">
 		<div
-			class="label border-line/70 grid grid-cols-[1fr_auto_auto_auto] gap-4 border-b px-5 py-3 md:grid-cols-[1.4fr_120px_1fr_80px_70px]"
+			class="label border-line/70 grid grid-cols-[1fr_auto_auto_auto] gap-4 border-b px-5 py-3 md:grid-cols-[1.4fr_120px_1fr_80px_70px_70px]"
 		>
 			<span>Node</span>
 			<span class="hidden md:block">Role</span>
 			<span class="hidden md:block">Location</span>
-			<span class="text-right">Adverts</span>
-			<span class="text-right">Status</span>
+			<span class="text-center">
+				<Tooltip text="Advert transmissions (re-flood and multi-observer copies of one advert collapsed)"
+					>Adverts</Tooltip
+				>
+			</span>
+			<span class="text-center">Heard</span>
+			<span class="text-center">Status</span>
 		</div>
 
 		{#if loading}
@@ -132,9 +137,10 @@
 			<div class="divide-line/50 divide-y">
 				{#each sorted as n (n.publicKey)}
 					{@const st = nodeStatus(n)}
+					{@const heard = n.lastRelayed && n.lastRelayed > n.lastSeen ? n.lastRelayed : n.lastSeen}
 					<a
 						href="/nodes/{n.publicKey}"
-						class="panel-hover grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-3 md:grid-cols-[1.4fr_120px_1fr_80px_70px] {n.gpsSuspect
+						class="panel-hover grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-3 md:grid-cols-[1.4fr_120px_1fr_80px_70px_70px] {n.gpsSuspect
 							? 'border-amber/60 bg-amber/[0.07] border-l-2'
 							: ''}"
 					>
@@ -160,8 +166,9 @@
 						<div class="font-mono text-fg-dim hidden text-xs md:block tnum">
 							{fmtCoord(n.latitude, n.longitude)}
 						</div>
-						<div class="font-mono tnum text-fg-dim text-right text-sm">{n.advertCount}</div>
-						<div class="font-mono tnum text-right text-xs" style="color:{st.color}">{st.label}</div>
+						<div class="font-mono tnum text-fg-dim text-center text-sm">{n.advertTxCount}</div>
+						<div class="font-mono tnum text-fg-dim text-center text-xs">{ago(heard)}</div>
+						<div class="font-mono tnum text-center text-xs" style="color:{st.color}">{st.label}</div>
 					</a>
 				{/each}
 			</div>

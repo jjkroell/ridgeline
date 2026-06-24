@@ -72,7 +72,7 @@
 					{ k: 'Last advert', v: ago(node.lastAdvert || node.lastSeen) + ' ago' },
 					{ k: 'Last relay', v: detail?.relay.lastRelayed ? ago(detail.relay.lastRelayed) + ' ago' : '—' },
 					{ k: 'Packets', v: detail ? `${fmtNum(detail.totalPackets)} · seen ${fmtNum(detail.totalObservations)}×` : '—' },
-					{ k: 'Adverts (all-time)', v: fmtNum(node.advertCount) },
+					{ k: 'Adverts (all-time)', v: fmtNum(node.advertTxCount) },
 					{ k: 'Avg SNR', v: detail?.avgSnr != null ? detail.avgSnr.toFixed(1) + ' dB' : '—', c: snrColor(detail?.avgSnr) },
 					{ k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' },
 					{ k: 'Advert cadence', v: cadence(detail?.advertIntervalSec) }

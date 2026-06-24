@@ -78,13 +78,14 @@
 		{:else}
 			{#each filtered as n (n.publicKey)}
 				{@const st = nodeStatus(n)}
+				{@const heard = n.lastRelayed && n.lastRelayed > n.lastSeen ? n.lastRelayed : n.lastSeen}
 				<a href="/m/nodes/{n.publicKey}" class="active:bg-line/40 flex items-center gap-3 px-4 py-3">
 					<span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background:{st.color}"></span>
 					<div class="min-w-0 flex-1">
 						<div class="text-fg truncate text-sm font-medium">{n.name || shortKey(n.publicKey)}</div>
 						<div class="mt-0.5 flex items-center gap-1.5 font-mono text-[0.62rem]">
 							<span style="color:{roleColor(n.role)}">{roleLabel(n.role)}</span>
-							<span class="text-fg-faint">· {st.label} · {ago(n.lastSeen)}</span>
+							<span class="text-fg-faint">· {st.label} · {ago(heard)}</span>
 						</div>
 					</div>
 					<button

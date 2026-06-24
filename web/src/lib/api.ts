@@ -18,6 +18,10 @@ export interface Node {
 	lastSeen: string;
 	lastAdvert?: string;
 	advertCount: number;
+	/** Actual advert transmissions (re-flood / multi-observer copies of one
+	 *  broadcast collapsed by a ~90s gap) — vs advertCount which counts every
+	 *  observation. */
+	advertTxCount: number;
 	/** Path-hash length in bytes (1, 2, or 3), from the node's advert; 0 = unknown. */
 	hashSize: number;
 	/** Coordinates are a statistical outlier — likely corrupt GPS. */

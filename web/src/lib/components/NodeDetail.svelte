@@ -193,7 +193,7 @@
 			{ k: 'First seen', v: ago(node.firstSeen) + ' ago' },
 			packets6h,
 			{ k: 'Packets today', v: detail ? String(detail.packetsToday) : '—' },
-			{ k: 'Adverts (all-time)', v: String(node.advertCount) },
+			{ k: 'Adverts (all-time)', v: String(node.advertTxCount) },
 			{ k: 'Advert cadence', v: cadence(detail?.advertIntervalSec) },
 			avgSnr,
 			{ k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' }

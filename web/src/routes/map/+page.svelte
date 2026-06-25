@@ -7,12 +7,14 @@
 	import { roleLabel } from '$lib/format';
 	import { theme } from '$lib/theme.svelte';
 	import { favorites } from '$lib/favorites.svelte';
-	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
+	import { basemapStyle, basemapHasHillshade, collapseAttribution } from '$lib/map-basemap';
+	import { basemap } from '$lib/basemap.svelte';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
 	import { computeCoverage, covered, distKm, type CoverageResult } from '$lib/coverage';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
+	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
 	import NodeModal from '$lib/components/NodeModal.svelte';
 
 	let mapEl: HTMLDivElement;
@@ -118,11 +120,12 @@
 		(map?.getSource('nodes') as maplibregl.GeoJSONSource | undefined)?.setData(nodeFeatures());
 	}
 
-	// Re-add overlays after a basemap style swap (theme change) removes them.
+	// Re-add overlays after a basemap style swap (theme or basemap change) drops them.
 	let basemapLight = false;
+	let currentBasemap = basemap.id;
 	function ensureOverlays() {
 		if (!map || !map.isStyleLoaded()) return;
-		ensureHillshade(map, basemapLight);
+		if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
 		if (map.getSource('nodes')) return;
 		addLayers();
 		updateSource();
@@ -134,9 +137,19 @@
 		const light = isLight();
 		if (!map || light === basemapLight) return;
 		basemapLight = light;
-		map.setStyle(basemapStyleUrl(light));
+		map.setStyle(basemapStyle(currentBasemap, light));
 		// styledata fires mid-load with isStyleLoaded()===false, so ensureOverlays
 		// bails; `idle` is guaranteed once the new style has fully settled.
+		map.once('idle', ensureOverlays);
+	});
+
+	// Swap the basemap when the user picks a different one.
+	$effect(() => {
+		const id = basemap.id;
+		if (!map || id === currentBasemap) return;
+		currentBasemap = id;
+		basemapLight = isLight();
+		map.setStyle(basemapStyle(id, basemapLight));
 		map.once('idle', ensureOverlays);
 	});
 
@@ -310,10 +323,12 @@
 	}
 
 	onMount(() => {
+		basemap.init();
+		currentBasemap = basemap.id;
 		basemapLight = isLight();
 		map = new maplibregl.Map({
 			container: mapEl,
-			style: basemapStyleUrl(basemapLight),
+			style: basemapStyle(currentBasemap, basemapLight),
 			center: [-123.65, 49.25],
 			zoom: 9,
 			attributionControl: { compact: true }
@@ -321,7 +336,7 @@
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 		map.on('load', () => {
 			map?.resize();
-			ensureHillshade(map!, basemapLight);
+			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map!, basemapLight);
 			collapseAttribution(map!);
 			addLayers();
 			bindEvents();
@@ -348,6 +363,7 @@
 	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
 		<div bind:this={mapEl} class="h-full w-full"></div>
 		<MapRoleFilter bind:selected={selectedRoles} />
+		<BasemapSelector />
 
 		<!-- Coverage prediction control (bottom-left; panel expands upward) -->
 		<div class="absolute bottom-3 left-3 z-10 flex w-64 max-w-[80vw] flex-col-reverse gap-2">

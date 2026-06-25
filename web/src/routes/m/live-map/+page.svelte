@@ -7,9 +7,11 @@
 	import { api, type Node } from '$lib/api';
 	import { live } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
-	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
+	import { basemapStyle, basemapHasHillshade, collapseAttribution } from '$lib/map-basemap';
+	import { basemap } from '$lib/basemap.svelte';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { ROLE_HEX, locatedNodes } from '$lib/map-util';
+	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -143,9 +145,10 @@
 		});
 		map.on('mouseenter', 'node-hit', () => { if (map) map.getCanvas().style.cursor = 'pointer'; });
 	}
+	let currentBasemap = basemap.id;
 	function ensureOverlays() {
 		if (!map || !map.isStyleLoaded()) return;
-		ensureHillshade(map, basemapLight);
+		if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
 		if (!map.getSource('nodes')) addLayers();
 	}
 	function fit() {
@@ -162,7 +165,17 @@
 		const light = theme.mode === 'light';
 		if (light === basemapLight) return;
 		basemapLight = light;
-		map.setStyle(basemapStyleUrl(light));
+		map.setStyle(basemapStyle(currentBasemap, light));
+		map.once('idle', ensureOverlays);
+	});
+
+	// Swap the basemap when the user picks a different one.
+	$effect(() => {
+		const id = basemap.id;
+		if (!map || id === currentBasemap) return;
+		currentBasemap = id;
+		basemapLight = theme.mode === 'light';
+		map.setStyle(basemapStyle(id, basemapLight));
 		map.once('idle', ensureOverlays);
 	});
 
@@ -177,13 +190,15 @@
 	}
 
 	onMount(() => {
+		basemap.init();
+		currentBasemap = basemap.id;
 		basemapLight = theme.mode === 'light';
-		map = new maplibregl.Map({ container: mapEl, style: basemapStyleUrl(basemapLight), center: [-123.65, 49.25], zoom: 7, attributionControl: { compact: true } });
+		map = new maplibregl.Map({ container: mapEl, style: basemapStyle(currentBasemap, basemapLight), center: [-123.65, 49.25], zoom: 7, attributionControl: { compact: true } });
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 		map.on('load', () => {
 			if (!map) return;
 			map.resize();
-			ensureHillshade(map, basemapLight);
+			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
 			addLayers();
 			collapseAttribution(map);
 			refresh();
@@ -200,4 +215,5 @@
 		{#if live.connected}<span class="live-dot"></span>{:else}<span class="bg-coral/70 h-2 w-2 rounded-full"></span>{/if}
 		<span class="text-fg-dim font-mono text-[0.62rem] tnum">{nodes.length} nodes · {pulseCount} live</span>
 	</div>
+	<BasemapSelector compact posClass="top-14 left-3" />
 </div>

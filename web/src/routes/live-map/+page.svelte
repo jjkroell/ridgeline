@@ -7,7 +7,8 @@
 	import { live, groupLive, type LiveGroup } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import { favorites } from '$lib/favorites.svelte';
-	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
+	import { basemapStyle, basemapHasHillshade, collapseAttribution } from '$lib/map-basemap';
+	import { basemap } from '$lib/basemap.svelte';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
 	import { ago, shortKey, fmtSnr, snrColor } from '$lib/format';
@@ -16,6 +17,7 @@
 	import Tooltip from '$lib/components/Tooltip.svelte';
 	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
+	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
 	import NodeModal from '$lib/components/NodeModal.svelte';
 
 	let mapEl: HTMLDivElement;
@@ -311,23 +313,34 @@
 		for (const [k, t] of fired) if (t < cutoff) fired.delete(k);
 	});
 
-	// react to theme changes → swap the OpenFreeMap basemap style
+	// react to theme changes → swap the basemap style
 	let basemapLight = false;
+	let currentBasemap = basemap.id;
 	$effect(() => {
 		void theme.mode;
 		const light = isLight();
 		if (!map || light === basemapLight) return;
 		basemapLight = light;
-		map.setStyle(basemapStyleUrl(light));
+		map.setStyle(basemapStyle(currentBasemap, light));
 		// styledata fires mid-load with isStyleLoaded()===false, so ensureOverlays
 		// bails; `idle` is guaranteed once the new style has fully settled.
 		map.once('idle', ensureOverlays);
 	});
 
-	// Re-add overlays after a basemap style swap (theme change) removes them.
+	// Swap the basemap when the user picks a different one.
+	$effect(() => {
+		const id = basemap.id;
+		if (!map || id === currentBasemap) return;
+		currentBasemap = id;
+		basemapLight = isLight();
+		map.setStyle(basemapStyle(id, basemapLight));
+		map.once('idle', ensureOverlays);
+	});
+
+	// Re-add overlays after a basemap style swap (theme or basemap change) drops them.
 	function ensureOverlays() {
 		if (!map || !map.isStyleLoaded()) return;
-		ensureHillshade(map, basemapLight);
+		if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
 		if (map.getSource('nodes')) return;
 		addLayers();
 		(map.getSource('nodes') as maplibregl.GeoJSONSource | undefined)?.setData(nodeFeatures());
@@ -500,10 +513,12 @@
 			window.addEventListener('pointerdown', unlock);
 		}
 
+		basemap.init();
+		currentBasemap = basemap.id;
 		basemapLight = isLight();
 		map = new maplibregl.Map({
 			container: mapEl,
-			style: basemapStyleUrl(basemapLight),
+			style: basemapStyle(currentBasemap, basemapLight),
 			center: [-123.9, 49.2],
 			zoom: 8.4,
 			attributionControl: { compact: true }
@@ -511,7 +526,7 @@
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 		map.on('load', () => {
 			map?.resize();
-			ensureHillshade(map!, basemapLight);
+			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map!, basemapLight);
 			collapseAttribution(map!);
 			addLayers();
 			bindEvents();
@@ -543,6 +558,7 @@
 <div class="px-6 py-6 md:px-10">
 	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
 		<div bind:this={mapEl} class="h-full w-full"></div>
+		<BasemapSelector />
 
 		<MapRoleFilter bind:selected={selectedRoles} title="Map Control" bind:open={mapCtrlOpen}>
 			<div class="label mb-1.5">Audio</div>

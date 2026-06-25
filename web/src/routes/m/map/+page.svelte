@@ -8,10 +8,12 @@
 	import { roleLabel } from '$lib/format';
 	import { theme } from '$lib/theme.svelte';
 	import { favorites } from '$lib/favorites.svelte';
-	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
+	import { basemapStyle, basemapHasHillshade, collapseAttribution } from '$lib/map-basemap';
+	import { basemap } from '$lib/basemap.svelte';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
 	import { computeCoverage, covered, distKm, type CoverageResult } from '$lib/coverage';
+	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -162,9 +164,10 @@
 		map.on('mouseenter', 'node-dots', () => { if (map) map.getCanvas().style.cursor = 'pointer'; });
 	}
 
+	let currentBasemap = basemap.id;
 	function ensureOverlays() {
 		if (!map || !map.isStyleLoaded()) return;
-		ensureHillshade(map, basemapLight);
+		if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
 		if (!map.getSource('nodes')) { addLayers(); updateSource(); drawCoverage(); }
 	}
 
@@ -175,7 +178,17 @@
 		const light = theme.mode === 'light';
 		if (light === basemapLight) return;
 		basemapLight = light;
-		map.setStyle(basemapStyleUrl(light));
+		map.setStyle(basemapStyle(currentBasemap, light));
+		map.once('idle', ensureOverlays);
+	});
+
+	// Swap the basemap when the user picks a different one.
+	$effect(() => {
+		const id = basemap.id;
+		if (!map || id === currentBasemap) return;
+		currentBasemap = id;
+		basemapLight = theme.mode === 'light';
+		map.setStyle(basemapStyle(id, basemapLight));
 		map.once('idle', ensureOverlays);
 	});
 
@@ -189,10 +202,12 @@
 	}
 
 	onMount(() => {
+		basemap.init();
+		currentBasemap = basemap.id;
 		basemapLight = theme.mode === 'light';
 		map = new maplibregl.Map({
 			container: mapEl,
-			style: basemapStyleUrl(basemapLight),
+			style: basemapStyle(currentBasemap, basemapLight),
 			center: [-123.65, 49.25],
 			zoom: 7,
 			attributionControl: { compact: true }
@@ -201,7 +216,7 @@
 		map.on('load', () => {
 			if (!map) return;
 			map.resize();
-			ensureHillshade(map, basemapLight);
+			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
 			addLayers();
 			updateSource();
 			collapseAttribution(map);
@@ -218,6 +233,8 @@
 	<div class="border-line/60 bg-ink-2/80 pointer-events-none absolute top-3 left-3 z-10 rounded-full border px-3 py-1.5 backdrop-blur-md">
 		<span class="text-fg-dim font-mono text-[0.62rem] tnum">{nodes.length} located</span>
 	</div>
+
+	<BasemapSelector compact posClass="top-14 left-3" />
 
 	<!-- Coverage toggle -->
 	<button

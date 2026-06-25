@@ -6,6 +6,7 @@
 	import { theme } from '$lib/theme.svelte';
 	import { channels } from '$lib/channels.svelte';
 	import { favorites } from '$lib/favorites.svelte';
+	import { basemap } from '$lib/basemap.svelte';
 
 	let { children } = $props();
 
@@ -13,6 +14,7 @@
 		theme.init();
 		channels.init();
 		favorites.init();
+		basemap.init();
 		live.start();
 	});
 

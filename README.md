@@ -6,7 +6,7 @@ Ridgeline ingests packets from MeshCore observer nodes over MQTT, decodes them,
 and turns them into a live picture of your mesh: nodes, links, hops, channels,
 and the terrain-shaped RF reality in between.
 
-Built for the Salish Sea / Southwest BC mesh, designed for any MeshCore region.
+Built for a Southwest BC coastal mesh, designed for any MeshCore region.
 
 ## Architecture
 

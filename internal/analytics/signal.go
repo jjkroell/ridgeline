@@ -4,7 +4,7 @@ import "math"
 
 // RadioParams are the LoRa PHY settings the mesh runs on. They drive the airtime
 // estimate and (via SF) the link-score SNR threshold. Defaults match the MeshCore
-// "USA/Canada (Recommended)" preset the Salish mesh uses — SF7 / BW62.5kHz / CR5,
+// "USA/Canada (Recommended)" preset this mesh uses — SF7 / BW62.5kHz / CR5,
 // preamble 17. Frequency is irrelevant to both formulas so it is not modelled.
 type RadioParams struct {
 	SpreadingFactor int // SF7..SF12
@@ -13,7 +13,7 @@ type RadioParams struct {
 	PreambleSymbols int // preamble length in symbols
 }
 
-// DefaultRadio is the Salish-mesh radio config (MeshCore USA/Canada recommended).
+// DefaultRadio is the default mesh radio config (MeshCore USA/Canada recommended).
 func DefaultRadio() RadioParams {
 	return RadioParams{SpreadingFactor: 7, BandwidthHz: 62500, CodingRate: 5, PreambleSymbols: 17}
 }

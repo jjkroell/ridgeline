@@ -72,7 +72,7 @@ func TestDecodeAnonRequest(t *testing.T) {
 }
 
 func TestDecodePath(t *testing.T) {
-	// A real PATH (0x08) packet captured from the Salish mesh. Header 0x22 =
+	// A real PATH (0x08) packet captured live from the mesh. Header 0x22 =
 	// Direct | Path<<2, then a 3-byte header hop (9A3C2E), then the encrypted
 	// return-path envelope: dest 6E, src F4, MAC 46FB, ciphertext rest. The path
 	// list itself is inside the ciphertext, so only the envelope is decoded.

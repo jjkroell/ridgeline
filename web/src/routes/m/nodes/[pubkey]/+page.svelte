@@ -99,7 +99,7 @@
 		const lat = untrack(() => node!.latitude!);
 		const lng = untrack(() => node!.longitude!);
 		const light = theme.mode === 'light';
-		map = new maplibregl.Map({ container: mapEl, style: basemapStyleUrl(light), center: [lng, lat], zoom: 11, attributionControl: { compact: true }, interactive: true });
+		map = new maplibregl.Map({ container: mapEl, style: basemapStyleUrl(light), center: [lng, lat], zoom: 11, attributionControl: { compact: true }, interactive: false });
 		marker = new maplibregl.Marker({ color: '#34e3c4' }).setLngLat([lng, lat]).addTo(map);
 		map.on('load', () => { map?.resize(); if (map) collapseAttribution(map); });
 	});

@@ -215,7 +215,10 @@
 				style: basemapStyleUrl(light),
 				center: [lng, lat],
 				zoom: 11,
-				attributionControl: { compact: true }
+				attributionControl: { compact: true },
+				// Locked thumbnail: no scroll-zoom / drag / dbl-click — wheel events
+				// pass through so the page scrolls past it instead of the map moving.
+				interactive: false
 			});
 			marker = new maplibregl.Marker({ color: '#34e3c4' }).setLngLat([lng, lat]).addTo(map);
 			const m = map;

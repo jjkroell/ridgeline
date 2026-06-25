@@ -9,7 +9,7 @@
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { isLight } from '$lib/map-util';
 	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, fmtRadio } from '$lib/format';
-	import { nodeCollisionInfo } from '$lib/hash-ids';
+	import { nodeHashId } from '$lib/hash-ids';
 	import PayloadTag from './PayloadTag.svelte';
 	import RoleBadge from './RoleBadge.svelte';
 	import FavoriteStar from './FavoriteStar.svelte';
@@ -103,23 +103,10 @@
 
 	const hasLoc = $derived(!!node && node.latitude != null && node.longitude != null);
 
-	// Hash ID + collision count. Corruption artifacts (phantom records from packet
-	// corruption that share this prefix) are filtered out so the count reflects
-	// only genuinely distinct nodes — and if THIS record is itself a corrupted
-	// copy of a real node, we surface that instead.
-	const hashId = $derived.by(() => {
-		const hs = node?.hashSize ?? 0;
-		if (!hs || !node) return null;
-		const hex = pubkey.slice(0, hs * 2).toUpperCase();
-		const info = nodeCollisionInfo(nodesList, node);
-		return {
-			bytes: hs,
-			hex,
-			shared: info.genuinePeers.length,
-			artifactOf: info.artifactOf,
-			reason: info.reason
-		};
-	});
+	// Hash ID + collision count. Corruption artifacts are filtered out so the
+	// count reflects only genuinely distinct nodes — and if THIS record is itself
+	// a corrupted copy of a real node, we surface that instead.
+	const hashId = $derived(nodeHashId(nodesList, node, pubkey));
 
 	// Liveness from the most recent of advert or relay activity (see nodeStatus).
 	const status = $derived(

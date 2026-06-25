@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api, type Node } from '$lib/api';
-	import { shortKey, fmtCoord, fmtNum, nodeStatus, ago } from '$lib/format';
+	import { shortKey, fmtCoord, fmtNum, nodeStatus, ago, lastHeard } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -137,7 +137,7 @@
 			<div class="divide-line/50 divide-y">
 				{#each sorted as n (n.publicKey)}
 					{@const st = nodeStatus(n)}
-					{@const heard = n.lastRelayed && n.lastRelayed > n.lastSeen ? n.lastRelayed : n.lastSeen}
+					{@const heard = lastHeard(n)}
 					<a
 						href="/nodes/{n.publicKey}"
 						class="panel-hover grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-3 md:grid-cols-[1.4fr_120px_1fr_80px_70px_70px] {n.gpsSuspect

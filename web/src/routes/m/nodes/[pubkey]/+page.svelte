@@ -6,7 +6,7 @@
 	import QRCode from 'qrcode';
 	import { api, type Node, type NodeAnalytics, type BlockEntry } from '$lib/api';
 	import { ago, shortKey, fmtNum, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, fmtRadio, fmtCoord } from '$lib/format';
-	import { nodeCollisionInfo } from '$lib/hash-ids';
+	import { nodeHashId } from '$lib/hash-ids';
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { theme } from '$lib/theme.svelte';
@@ -44,19 +44,7 @@
 	const isRelay = $derived(node?.role === 'Repeater' || node?.role === 'RoomServer');
 	const hasLoc = $derived(!!node && node.latitude != null && node.longitude != null);
 
-	const hashId = $derived.by(() => {
-		const hs = node?.hashSize ?? 0;
-		if (!hs || !node) return null;
-		const hex = pubkey.slice(0, hs * 2).toUpperCase();
-		const info = nodeCollisionInfo(nodesList, node);
-		return {
-			bytes: hs,
-			hex,
-			shared: info.genuinePeers.length,
-			artifactOf: info.artifactOf,
-			reason: info.reason
-		};
-	});
+	const hashId = $derived(nodeHashId(nodesList, node, pubkey));
 
 	function cadence(sec?: number): string {
 		if (sec == null) return '—';

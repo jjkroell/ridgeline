@@ -14,6 +14,11 @@ export interface NodeStatus {
 // node is up and working. Thresholds: Online <6h, Idle <33h (one advert cycle +
 // grace), Offline beyond that.
 const HOUR = 3_600_000;
+/** The most recent time a node was heard — its latest advert or relay. */
+export function lastHeard(n: { lastSeen?: string; lastRelayed?: string }): string | undefined {
+	return n.lastRelayed && (!n.lastSeen || n.lastRelayed > n.lastSeen) ? n.lastRelayed : n.lastSeen;
+}
+
 export function nodeStatus(n: {
 	lastSeen?: string;
 	lastRelayed?: string;

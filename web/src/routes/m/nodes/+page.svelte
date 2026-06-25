@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api, type Node } from '$lib/api';
-	import { ago, shortKey, nodeStatus, roleColor, roleLabel } from '$lib/format';
+	import { ago, shortKey, nodeStatus, roleColor, roleLabel, lastHeard } from '$lib/format';
 	import { favorites } from '$lib/favorites.svelte';
 
 	let nodes = $state<Node[]>([]);
@@ -78,7 +78,7 @@
 		{:else}
 			{#each filtered as n (n.publicKey)}
 				{@const st = nodeStatus(n)}
-				{@const heard = n.lastRelayed && n.lastRelayed > n.lastSeen ? n.lastRelayed : n.lastSeen}
+				{@const heard = lastHeard(n)}
 				<a href="/m/nodes/{n.publicKey}" class="active:bg-line/40 flex items-center gap-3 px-4 py-3">
 					<span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background:{st.color}"></span>
 					<div class="min-w-0 flex-1">

@@ -342,6 +342,30 @@ export function nodeCollisionInfo(
 }
 
 /**
+ * Hash-ID display info for a node's detail view: its prefix at its configured
+ * length, the count of genuine (non-artifact) colliding peers, and — if this
+ * record is itself a corruption artifact — the real node it duplicates. Null
+ * when the node's length isn't known yet. Shared by the desktop and mobile
+ * node-detail views.
+ */
+export function nodeHashId(
+	nodes: Node[],
+	node: Node | null,
+	pubkey: string
+): { bytes: number; hex: string; shared: number; artifactOf: Node | null; reason?: string } | null {
+	const hs = node?.hashSize ?? 0;
+	if (!hs || !node) return null;
+	const info = nodeCollisionInfo(nodes, node);
+	return {
+		bytes: hs,
+		hex: pubkey.slice(0, hs * 2).toUpperCase(),
+		shared: info.genuinePeers.length,
+		artifactOf: info.artifactOf,
+		reason: info.reason
+	};
+}
+
+/**
  * Suggest a random free (and non-reserved) prefix at this length. For 1-byte the
  * space is tiny (256, minus 2 reserved) and often crowded, so we scan it
  * exhaustively; for 2/3-byte the space is huge so random sampling finds one fast.

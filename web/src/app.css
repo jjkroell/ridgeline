@@ -5,12 +5,12 @@
    A dark "topographic instrument": near-black blue-green ink, contour-line
    textures, a luminous signal-teal accent, mono data readouts. */
 @theme {
-	--color-ink: #070a0e;
-	--color-ink-2: #0a0e13;
-	--color-panel: #0e141b;
-	--color-panel-2: #131c25;
-	--color-line: #1c2730;
-	--color-line-bright: #2b3b48;
+	--color-ink: #0e151b;
+	--color-ink-2: #121a21;
+	--color-panel: #161f28;
+	--color-panel-2: #1d2630;
+	--color-line: #283441;
+	--color-line-bright: #364655;
 
 	--color-fg: #dde7ed;
 	--color-fg-dim: #8394a1;
@@ -46,8 +46,8 @@
 /* ── Light theme: a "topographic paper" inverse — warm off-white ground,
    ink text, brown contour lines, a deeper teal accent that reads on white. */
 html.theme-light {
-	--color-ink: #eef1ee;
-	--color-ink-2: #e7ece9;
+	--color-ink: #e1e5e0;
+	--color-ink-2: #d8ddd7;
 	--color-panel: #fbfcfa;
 	--color-panel-2: #eef2ef;
 	--color-line: #d4dbd6;

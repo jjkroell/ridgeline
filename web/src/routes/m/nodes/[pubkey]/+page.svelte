@@ -69,13 +69,15 @@
 	);
 	const activityMax = $derived(Math.max(1, ...(detail?.activity ?? [])));
 
-	// QR
+	// QR — meshcore://contact/add per spec; lowercase 64-hex key (canonical),
+	// type 1=Companion 2=Repeater 3=RoomServer 4=Sensor. EC 'L' keeps the code
+	// low-density so it scans easily even for long / emoji node names.
 	$effect(() => {
 		if (!node) return;
 		const n = node;
 		const role = n.role === 'Repeater' ? 2 : n.role === 'RoomServer' ? 3 : n.role === 'Sensor' ? 4 : 1;
-		const url = `meshcore://contact/add?name=${encodeURIComponent(n.name || 'Unknown')}&public_key=${n.publicKey}&type=${role}`;
-		QRCode.toString(url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }).then((s) => (qrSvg = s)).catch(() => (qrSvg = ''));
+		const url = `meshcore://contact/add?name=${encodeURIComponent(n.name || 'Unknown')}&public_key=${n.publicKey.toLowerCase()}&type=${role}`;
+		QRCode.toString(url, { type: 'svg', margin: 1, errorCorrectionLevel: 'L' }).then((s) => (qrSvg = s)).catch(() => (qrSvg = ''));
 	});
 
 	async function copyKey() {
@@ -183,8 +185,8 @@
 		{#if qrSvg}
 			<div class="border-line/60 bg-panel mb-3 flex flex-col items-center gap-2 rounded-2xl border px-4 py-4">
 				<span class="label self-start">MeshCore Contact</span>
-				<div class="w-40 rounded-lg bg-white p-2">{@html qrSvg}</div>
-				<span class="text-fg-faint text-center text-[0.62rem]">Scan in the MeshCore app to add</span>
+				<div class="w-48 rounded-lg bg-white p-2.5">{@html qrSvg}</div>
+				<span class="text-fg-faint text-center text-[0.62rem]">Scan from the MeshCore app: Contacts → + → Scan QR</span>
 			</div>
 		{/if}
 

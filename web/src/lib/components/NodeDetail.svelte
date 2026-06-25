@@ -235,14 +235,20 @@
 		if (map && marker && lat != null && lng != null) marker.setLngLat([lng, lat]);
 	});
 
-	// --- QR contact code (scannable by the MeshCore app) ---
+	// --- QR contact code (scanned by the MeshCore app's in-app contact scanner) ---
+	// URI per the MeshCore spec: meshcore://contact/add?name=&public_key=&type=
+	// public_key is the canonical lowercase 64-hex key (the spec's example is
+	// lowercase; some clients parse it strictly), name is URL-encoded, type is
+	// 1=Companion 2=Repeater 3=RoomServer 4=Sensor. errorCorrectionLevel 'L'
+	// keeps the module count (and density) lowest so the on-screen code stays
+	// easy to scan even for nodes with long / emoji names.
 	let qrSvg = $state('');
 	$effect(() => {
 		if (!node) return;
 		const typeMap: Record<string, number> = { ChatNode: 1, Repeater: 2, RoomServer: 3, Sensor: 4 };
 		const t = typeMap[node.role] ?? 2;
-		const url = `meshcore://contact/add?name=${encodeURIComponent(node.name || 'Unknown')}&public_key=${node.publicKey}&type=${t}`;
-		QRCode.toString(url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })
+		const url = `meshcore://contact/add?name=${encodeURIComponent(node.name || 'Unknown')}&public_key=${node.publicKey.toLowerCase()}&type=${t}`;
+		QRCode.toString(url, { type: 'svg', margin: 1, errorCorrectionLevel: 'L' })
 			.then((s) => (qrSvg = s))
 			.catch(() => (qrSvg = ''));
 	});
@@ -369,8 +375,8 @@
 			{#if qrSvg && !compact}
 				<div class="panel flex flex-col items-center gap-2 px-5 py-4">
 					<div class="label self-start">MeshCore Contact</div>
-					<div class="qr w-36 rounded-[var(--radius)] bg-white p-2">{@html qrSvg}</div>
-					<div class="text-fg-faint text-center text-[0.62rem]">Scan in the MeshCore app to add</div>
+					<div class="qr w-44 rounded-[var(--radius)] bg-white p-2.5">{@html qrSvg}</div>
+					<div class="text-fg-faint text-center text-[0.62rem]">Scan from the MeshCore app: Contacts → + → Scan QR</div>
 				</div>
 			{/if}
 

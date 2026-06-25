@@ -24,8 +24,8 @@ func nd(k, name string, adv, hs int) store.Node {
 func TestFindArtifacts(t *testing.T) {
 	nodes := []store.Node{
 		// 3-byte cohort: corrupted copy sharing 4 leading bytes → HIGH.
-		nd("ABCDEF12", "Cougar", 100, 3),   // canonical
-		nd("ABCDEF1299", "Cougar?", 1, 3),  // shares ABCDEF12 (4 bytes) → high
+		nd("ABCDEF12", "Cougar", 100, 3),  // canonical
+		nd("ABCDEF1299", "Cougar?", 1, 3), // shares ABCDEF12 (4 bytes) → high
 		// 1-byte cohort: genuine distinct collision (share 1 byte, real names) → NOT flagged.
 		nd("AA", "Node Alpha", 50, 1),
 		nd("AABB", "Node Beta", 40, 1),

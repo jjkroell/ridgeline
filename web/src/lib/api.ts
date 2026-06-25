@@ -204,6 +204,25 @@ export interface AirtimeBucket {
 	airtimeMs: number;
 	utilPct: number;
 	transmissions: number;
+	/** Transmissions in the slice that were relayed (≥1 hop). */
+	relayTx: number;
+	/** Mean per-reception link score in the slice (relay-health trend). */
+	avgLinkScore?: number;
+}
+export interface TopologyNode {
+	publicKey: string;
+	name: string;
+	role: string;
+	relayed: number;
+}
+export interface TopologyEdge {
+	a: string;
+	b: string;
+	weight: number;
+}
+export interface Topology {
+	nodes: TopologyNode[];
+	edges: TopologyEdge[];
 }
 export interface RelayRank {
 	publicKey: string;
@@ -243,6 +262,7 @@ export interface MeshAnalytics {
 	directLinks: DirectLink[];
 	directReach: HistogramBin[];
 	hashSizes: NameCount[];
+	topology: Topology;
 }
 
 export interface NodeActivity {

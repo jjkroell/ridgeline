@@ -30,6 +30,33 @@ type MeshAnalytics struct {
 	DirectLinks   []DirectLink       `json:"directLinks"`
 	DirectReach   []HistogramBin     `json:"directReach"`
 	HashSizes     []NameCount        `json:"hashSizes"`
+	Topology      Topology           `json:"topology"`
+}
+
+// Topology is the mesh relay graph: nodes that forwarded traffic and the
+// node-to-node edges where one relayed a packet immediately after another in an
+// observed flood path. Unlike the observer↔node RF graph (direct, zero-hop
+// links), this is the inferred repeater backbone — who hands off to whom.
+type Topology struct {
+	Nodes []TopologyNode `json:"nodes"`
+	Edges []TopologyEdge `json:"edges"`
+}
+
+// TopologyNode is one relaying node in the mesh graph. Relayed is the number of
+// distinct transmissions it forwarded in the window (its weight/size in the viz).
+type TopologyNode struct {
+	PublicKey string `json:"publicKey"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	Relayed   int    `json:"relayed"`
+}
+
+// TopologyEdge is an undirected adjacency between two relays, weighted by how
+// many flood paths placed them consecutively. A and B are pubkeys (A < B).
+type TopologyEdge struct {
+	A      string `json:"a"`
+	B      string `json:"b"`
+	Weight int    `json:"weight"`
 }
 
 // ObserverCoverage summarises one observer's RF reach: how much it heard, how many
@@ -80,12 +107,16 @@ type HistogramBin struct {
 	Count int    `json:"count"`
 }
 
-// AirtimeBucket is one time slice of estimated channel airtime.
+// AirtimeBucket is one time slice of estimated channel airtime, with the
+// relay-health signals (forwarded transmissions and mean link score) over the
+// same slice so the timeline doubles as a trend of how the mesh is performing.
 type AirtimeBucket struct {
-	Timestamp     string  `json:"timestamp"` // bucket start, RFC3339
-	AirtimeMs     float64 `json:"airtimeMs"`
-	UtilPct       float64 `json:"utilPct"`
-	Transmissions int     `json:"transmissions"`
+	Timestamp     string   `json:"timestamp"` // bucket start, RFC3339
+	AirtimeMs     float64  `json:"airtimeMs"`
+	UtilPct       float64  `json:"utilPct"`
+	Transmissions int      `json:"transmissions"`
+	RelayTx       int      `json:"relayTx"`                // transmissions that were relayed (≥1 hop)
+	AvgLinkScore  *float64 `json:"avgLinkScore,omitempty"` // mean per-reception link score in slice
 }
 
 // RelayRank is one node on the busiest-relays leaderboard.
@@ -105,6 +136,7 @@ type txAgg struct {
 	routeType   string
 	lengthBytes int
 	firstSeen   time.Time
+	relayed     bool // any observation of it carried ≥1 relay hop
 }
 
 // obsTime is one observer's reception time of a transmission, for clock-skew.
@@ -138,11 +170,21 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 	txs := map[string]*txAgg{}                // messageHash → collapsed transmission
 	active := map[string]bool{}               // distinct participating pubkeys
 	relayHits := map[string]map[string]bool{} // pubkey → set of messageHashes relayed
+	relayPath := map[string][]string{}        // messageHash → resolved consecutive hop sequence
 	var scoreSum float64
 	var scoreN int
 	linkBins := make([]int, 5) // [0-.2,.2-.4,.4-.6,.6-.8,.8-1]
 	snr := newSNRHist()
 	observations := 0
+
+	// Per-bucket link-score accumulator (filled per observation by receive time),
+	// merged into the airtime buckets below for the relay-health trend.
+	bucketSec := int64(bucketMinutes * 60)
+	type linkAcc struct {
+		sum float64
+		n   int
+	}
+	bucketLink := map[int64]*linkAcc{}
 
 	// Per-observer RF coverage + direct (zero-hop) adjacency.
 	obsCount := map[string]int{}              // observer → total receptions
@@ -177,6 +219,16 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 			scoreN++
 			linkBins[linkBinIndex(sc)]++
 			snr.add(*ro.SNR)
+			if !recv.IsZero() {
+				b := (recv.Unix() / bucketSec) * bucketSec
+				la := bucketLink[b]
+				if la == nil {
+					la = &linkAcc{}
+					bucketLink[b] = la
+				}
+				la.sum += sc
+				la.n++
+			}
 		}
 
 		// Collapse to a transmission (first sighting wins for type/length).
@@ -189,6 +241,9 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 			}
 		} else if t := txs[pkt.MessageHash]; !recv.IsZero() && (t.firstSeen.IsZero() || recv.Before(t.firstSeen)) {
 			t.firstSeen = recv
+		}
+		if len(pkt.Path) > 0 {
+			txs[pkt.MessageHash].relayed = true
 		}
 
 		// Participation: advert originator + uniquely-resolved relay hops.
@@ -210,6 +265,7 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 				}
 			}
 		}
+		var seq []string
 		for _, hop := range pkt.Path {
 			rk := strings.ToUpper(resolve(hop))
 			if rk == "" {
@@ -220,6 +276,14 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 				relayHits[rk] = map[string]bool{}
 			}
 			relayHits[rk][pkt.MessageHash] = true
+			seq = append(seq, rk)
+		}
+		// Record one representative resolved hop sequence per transmission, for the
+		// node-to-node topology graph (avoids inflating edges by observer count).
+		if len(seq) > 1 {
+			if _, ok := relayPath[pkt.MessageHash]; !ok {
+				relayPath[pkt.MessageHash] = seq
+			}
 		}
 	}
 
@@ -253,7 +317,6 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 	payload := map[string]int{}
 	route := map[string]int{}
 	buckets := map[int64]*AirtimeBucket{}
-	bucketSec := int64(bucketMinutes * 60)
 	var totalAirtime float64
 	for _, t := range txs {
 		payload[t.payloadType]++
@@ -269,6 +332,9 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 			}
 			bk.AirtimeMs += ms
 			bk.Transmissions++
+			if t.relayed {
+				bk.RelayTx++
+			}
 		}
 	}
 	out.PayloadTypes = sortedCounts(payload)
@@ -279,8 +345,12 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 
 	// Airtime time series, chronological, with per-bucket utilisation.
 	bk := make([]AirtimeBucket, 0, len(buckets))
-	for _, v := range buckets {
+	for ts, v := range buckets {
 		v.UtilPct = v.AirtimeMs / (float64(bucketSec) * 1000.0) * 100.0
+		if la := bucketLink[ts]; la != nil && la.n > 0 {
+			avg := la.sum / float64(la.n)
+			v.AvgLinkScore = &avg
+		}
 		bk = append(bk, *v)
 	}
 	sort.Slice(bk, func(i, j int) bool { return bk[i].Timestamp < bk[j].Timestamp })
@@ -391,7 +461,67 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 	// thresholds are tuned to this mesh's observed range).
 	out.KPIs.CongestionTier = congestionTier(out.KPIs.ChannelUtilPct)
 
+	// Relay backbone (node-to-node topology) from the representative flood paths.
+	out.Topology = buildTopology(relayPath, relayHits, byKey, 60)
+
 	return out, nil
+}
+
+// buildTopology turns the per-transmission resolved hop sequences into an
+// undirected relay graph: an edge for each consecutive pair of hops, weighted by
+// how many paths used it. Nodes are ranked by distinct transmissions forwarded
+// and capped at maxNodes; edges are kept only between surviving nodes so the
+// payload (and the viz) stays legible on a busy mesh.
+func buildTopology(relayPath map[string][]string, relayHits map[string]map[string]bool, byKey map[string]store.Node, maxNodes int) Topology {
+	// Aggregate undirected edge weights from consecutive hops.
+	edgeW := map[[2]string]int{}
+	for _, seq := range relayPath {
+		for i := 0; i+1 < len(seq); i++ {
+			a, b := seq[i], seq[i+1]
+			if a == b {
+				continue
+			}
+			if a > b {
+				a, b = b, a
+			}
+			edgeW[[2]string{a, b}]++
+		}
+	}
+
+	// Rank relaying nodes by distinct transmissions forwarded; keep the top set.
+	type nr struct {
+		key string
+		n   int
+	}
+	ranked := make([]nr, 0, len(relayHits))
+	for pk, hashes := range relayHits {
+		ranked = append(ranked, nr{key: pk, n: len(hashes)})
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].n != ranked[j].n {
+			return ranked[i].n > ranked[j].n
+		}
+		return ranked[i].key < ranked[j].key
+	})
+	if maxNodes > 0 && len(ranked) > maxNodes {
+		ranked = ranked[:maxNodes]
+	}
+	keep := make(map[string]bool, len(ranked))
+	out := Topology{Nodes: []TopologyNode{}, Edges: []TopologyEdge{}}
+	for _, r := range ranked {
+		keep[r.key] = true
+		n := byKey[r.key]
+		out.Nodes = append(out.Nodes, TopologyNode{
+			PublicKey: r.key, Name: displayName(n, r.key), Role: n.Role, Relayed: r.n,
+		})
+	}
+	for e, w := range edgeW {
+		if keep[e[0]] && keep[e[1]] {
+			out.Edges = append(out.Edges, TopologyEdge{A: e[0], B: e[1], Weight: w})
+		}
+	}
+	sort.Slice(out.Edges, func(i, j int) bool { return out.Edges[i].Weight > out.Edges[j].Weight })
+	return out
 }
 
 // congestionTier buckets estimated channel utilisation into a coarse mesh-load

@@ -25,10 +25,11 @@ services:
     image: ridgeline:latest
     container_name: ridgeline-app
     restart: unless-stopped
-    # Run as the host user that owns ./data (uid 1000 = jesse locally / ve7kod on
-    # the VM) so the bind-mounted DB dir + migrated ridgeline.db are writable
-    # without a chown. Verify the target box's user with `id -u` (adjust if not 1000).
-    user: "1000:1000"
+    # Run as the host user that owns ./data so the bind-mounted DB dir + migrated
+    # ridgeline.db are writable without a chown. Defaults to 1000 (jesse locally);
+    # the VM user ve7kod is 1001, so create deploy/.env with the box's real ids:
+    #   printf 'RIDGELINE_UID=%s\nRIDGELINE_GID=%s\n' "$(id -u)" "$(id -g)" > .env
+    user: "${RIDGELINE_UID:-1000}:${RIDGELINE_GID:-1000}"
     depends_on:
       - mosquitto
     volumes:

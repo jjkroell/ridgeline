@@ -53,7 +53,11 @@ cd ~/ridgeline/deploy
 cp config.example.json config.json
 # set "adminToken" to a real secret (reuse the local config.prod.json token if you want parity)
 mkdir -p data
+# capture this box's uid/gid so the container can write the bind-mounted DB dir
+printf 'RIDGELINE_UID=%s\nRIDGELINE_GID=%s\n' "$(id -u)" "$(id -g)" > .env
 ```
+> The `.env` is required: `ve7kod` is uid **1001**, and the container must run as
+> that id to write `./data`. The compose `user:` reads `RIDGELINE_UID/GID` from it.
 
 ### 3. Migrate the database safely (no writes during copy)
 On the **local** machine — stop the daemon so the WAL checkpoints into the .db,

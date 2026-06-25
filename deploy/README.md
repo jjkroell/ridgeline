@@ -10,8 +10,12 @@ local file). Cloudflare terminates TLS at the edge; the origin serves plain HTTP
 
 ```
 ridgeline.ve7kod.ca  → CF edge (TLS) → tunnel → localhost:8088 → caddy → ridgelined:8080
-mqtt-dev.ve7kod.ca   → CF edge (TLS) → tunnel → localhost:9001 → mosquitto (websockets, anonymous)
+mqtt-dev.ve7kod.ca   → CF edge (TLS) → tunnel → localhost:9101 → mosquitto (websockets, anonymous)
 ```
+
+Ridgeline binds **8088** (web) and **9101** (broker) so it runs alongside CoreScope
+(80/443/1883/9001) with no port clash — a parallel transition, not a hard cut.
+CoreScope is torn down only in step 7, after Ridgeline is confirmed healthy.
 
 Compose stack (`docker compose`, this directory): `mosquitto` + `ridgelined` + `caddy`.
 - Broker is **open / anonymous** (no observer auth), matching the `ve7kod-dev`
@@ -53,14 +57,16 @@ mkdir -p data
 
 ### 3. Migrate the database safely (no writes during copy)
 On the **local** machine — stop the daemon so the WAL checkpoints into the .db,
-then copy the quiesced files (the -wal/-shm may be absent after a clean stop;
-copy whatever exists):
+copy the quiesced files (the -wal/-shm may be absent after a clean stop; copy
+whatever exists), then **restart the local daemon** so this box stays an intact,
+live fallback:
 ```bash
 systemctl --user stop ridgeline
 rsync -az /home/jesse/ridgeline/data/ridgeline.db* \
   ve7kod@lnuvm159.ubc.bcwarn.net:~/ridgeline/deploy/data/
+systemctl --user start ridgeline   # local stays a clean rollback copy
 ```
-(Leave the local daemon stopped — it's being retired. Restart it only to roll back.)
+The copy is read-only against the local DB — the local box is never mutated.
 
 ### 4. Build the image on the VM (still safe — old stack keeps running)
 ```bash
@@ -68,30 +74,30 @@ cd ~/ridgeline/deploy
 docker compose build
 ```
 
-### 5. Cut over — stop CoreScope, free the ports, start Ridgeline
-CoreScope's stack holds 80/443/1883/9001; taking it down frees 9001 + the rest
-for Ridgeline. Brief observer gap until the tunnel route is switched (step 6).
+### 5. Bring Ridgeline up — alongside CoreScope (no downtime)
+Ridgeline's ports (8088/9101) don't clash with CoreScope (80/443/1883/9001), so
+both run in parallel. CoreScope keeps serving until you're satisfied (step 7).
 ```bash
-cd ~/CoreScope && docker compose down        # stops corescope-master/umami/db/mosquitto
 cd ~/ridgeline/deploy && docker compose up -d
 docker compose ps
 curl -s localhost:8088/api/stats             # expect your migrated node/observer counts
 curl -s localhost:8088/ | grep -o '<title>[^<]*</title>'
-docker compose logs -f ridgelined            # watch for ingest once the tunnel is switched
+docker compose logs -f ridgelined            # watch for ingest once the tunnel + observers point here
 ```
 
-### 6. Switch the Cloudflare Tunnel routes — **DASHBOARD (manual)**
+### 6. Add the Cloudflare Tunnel routes — **DASHBOARD (manual)**
 Cloudflare dashboard → Zero Trust → Networks → Tunnels → the VM's tunnel →
-**Public Hostnames**:
+**Public Hostnames** (these are NEW hostnames, so adding them doesn't disturb the
+running CoreScope routes):
 - **Add** `ridgeline.ve7kod.ca` → `HTTP` → `localhost:8088`
   (this hostname currently routes to the *local machine's* tunnel — remove it
   there, or it will keep resolving to the old box).
-- **Add** `mqtt-dev.ve7kod.ca` → `HTTP` → `localhost:9001`
-- **Remove** the retired CoreScope hostnames (`analyzer.ve7kod.ca`,
-  `mqtt.ve7kod.ca`, `425.ve7kod.ca`) once you've confirmed Ridgeline is healthy.
+- **Add** `mqtt-dev.ve7kod.ca` → `HTTP` → `localhost:9101`
 
 Then verify publicly: `https://ridgeline.ve7kod.ca` loads, `/api/live` WS connects,
 and observers (pointed at `mqtt-dev.ve7kod.ca`) start landing packets in the logs.
+Migrate observers to `mqtt-dev.ve7kod.ca` at your own pace — CoreScope's broker
+stays up until step 7.
 
 ### 7. Decommission CoreScope (after Ridgeline is confirmed healthy)
 ```bash
@@ -99,8 +105,11 @@ cd ~/CoreScope && docker compose down -v      # drop CoreScope volumes (umami db
 docker image rm corescope:latest 2>/dev/null; docker image prune -f
 rm -rf ~/CoreScope ~/meshcore-data            # reclaims ~5.5G — only after you're satisfied
 ```
-Local box: `systemctl --user disable --now ridgeline`, and remove the
-`ridgeline.ve7kod.ca` hostname from the local cloudflared tunnel.
+Cloudflare dashboard: **remove** the retired CoreScope hostnames
+(`analyzer.ve7kod.ca`, `mqtt.ve7kod.ca`, `425.ve7kod.ca`).
+Local box: keep it intact as a rollback until you're fully confident; when ready,
+`systemctl --user disable --now ridgeline` and remove `ridgeline.ve7kod.ca` from
+the local cloudflared tunnel.
 
 ## Deploying updates later
 ```bash

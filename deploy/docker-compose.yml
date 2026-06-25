@@ -11,7 +11,9 @@ services:
     container_name: ridgeline-mosquitto
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9001:9001" # observer websockets, reached via the tunnel
+      # Host 9101 (CoreScope's broker still holds 9001 during the parallel
+      # transition) -> container 9001. Tunnel: mqtt-dev.ve7kod.ca -> localhost:9101.
+      - "127.0.0.1:9101:9001" # observer websockets, reached via the tunnel
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto-data:/mosquitto/data

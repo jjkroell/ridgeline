@@ -18,10 +18,10 @@
 <div class="absolute {posClass} z-10">
 	<button
 		onclick={() => (open = !open)}
-		class="border-line bg-ink-2/85 hover:bg-panel-2/70 flex items-center gap-2 rounded-[var(--radius)] border px-3 py-2 backdrop-blur-md transition-colors {compact ? '' : 'w-[176px] max-w-[60vw]'}"
+		class="border-line bg-ink-2/85 hover:bg-panel-2/70 flex items-center gap-2 rounded-[var(--radius)] border backdrop-blur-md transition-colors {compact ? 'p-2.5' : 'w-[176px] max-w-[60vw] px-3 py-2'}"
 		aria-label="Base map: {current.label}"
 	>
-		<svg viewBox="0 0 24 24" class="text-fg-dim h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+		<svg viewBox="0 0 24 24" class="shrink-0 {compact ? 'text-fg h-6 w-6' : 'text-fg-dim h-4 w-4'}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
 			<path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
 		</svg>
 		{#if !compact}

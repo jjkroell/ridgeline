@@ -113,8 +113,14 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("store: open: %w", err)
 	}
-	// WAL allows concurrent readers alongside the single writer; busy_timeout
-	// avoids spurious SQLITE_BUSY under brief contention.
+	// Pin to a single connection. SQLite pragmas (busy_timeout, WAL) are
+	// per-connection, so with database/sql's default pool the timeout never
+	// reaches the extra connections it opens for concurrent queries — which is
+	// what produced spurious SQLITE_BUSY errors. One connection serializes all
+	// access (writes are already single-writer via s.mu, and the workload is
+	// low-volume), and guarantees every statement runs with the pragmas below.
+	db.SetMaxOpenConns(1)
+	// WAL keeps reads fast; busy_timeout is belt-and-suspenders for any retry.
 	for _, pragma := range []string{
 		"PRAGMA journal_mode=WAL",
 		"PRAGMA busy_timeout=5000",

@@ -112,6 +112,15 @@ func (in *Ingestor) Stop() {
 }
 
 func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
+	// This callback runs in a paho goroutine on untrusted, attacker-influenceable
+	// payloads (raw packet hex, observer status). An unrecovered panic here would
+	// be fatal to the whole daemon, so contain it: log and drop the one message.
+	defer func() {
+		if rec := recover(); rec != nil {
+			in.log.Error("recovered from panic in ingest handler", "topic", msg.Topic(), "panic", rec)
+		}
+	}()
+
 	if strings.HasSuffix(msg.Topic(), "/status") {
 		in.handleStatus(msg)
 		return

@@ -1,0 +1,4 @@
+# Deployment secrets / runtime state — never commit.
+config.json
+passwd
+data/

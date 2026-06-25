@@ -1,0 +1,17 @@
+# Origin sits behind the Cloudflare Tunnel, so Caddy serves plain HTTP on :80
+# (Cloudflare terminates TLS at the edge) and just adds baseline security
+# headers + compression, then proxies everything — including the /api/live
+# WebSocket, which Caddy upgrades automatically — to the Ridgeline daemon.
+:80 {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
+		-Server
+	}
+
+	reverse_proxy ridgelined:8080
+}

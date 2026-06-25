@@ -1,0 +1,53 @@
+name: ridgeline
+
+# Ridgeline production stack for the VM (lnuvm159). All public access arrives
+# through the existing Cloudflare Tunnel, so services bind to localhost only and
+# Cloudflare terminates TLS at the edge:
+#   ridgeline.ve7kod.ca  -> tunnel -> localhost:8088 (caddy -> ridgelined)
+#   mqtt-dev.ve7kod.ca   -> tunnel -> localhost:9001 (mosquitto websockets)
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: ridgeline-mosquitto
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9001:9001" # observer websockets, reached via the tunnel
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+
+  ridgelined:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: ridgeline:latest
+    container_name: ridgeline-app
+    restart: unless-stopped
+    # Run as the host user that owns ./data (uid 1000 = jesse locally / ve7kod on
+    # the VM) so the bind-mounted DB dir + migrated ridgeline.db are writable
+    # without a chown. Verify the target box's user with `id -u` (adjust if not 1000).
+    user: "1000:1000"
+    depends_on:
+      - mosquitto
+    volumes:
+      - ./config.json:/config/config.json:ro
+      - ./data:/data # migrated ridgeline.db lives here (bind mount)
+    # No host port: caddy reaches it over the compose network as ridgelined:8080.
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ridgeline-caddy
+    restart: unless-stopped
+    depends_on:
+      - ridgelined
+    ports:
+      - "127.0.0.1:8088:80" # ingress, reached via the tunnel
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  mosquitto-data:
+  caddy-data:
+  caddy-config:

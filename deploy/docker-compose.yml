@@ -13,7 +13,10 @@ services:
     ports:
       # Host 9101 (CoreScope's broker still holds 9001 during the parallel
       # transition) -> container 9001. Tunnel: mqtt-dev.ve7kod.ca -> localhost:9101.
+      # Bind BOTH loopbacks: on this VM `localhost` resolves to ::1 (IPv6) only,
+      # so cloudflared dialing localhost:9101 needs the IPv6 bind or it 502s.
       - "127.0.0.1:9101:9001" # observer websockets, reached via the tunnel
+      - "[::1]:9101:9001"
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto-data:/mosquitto/data

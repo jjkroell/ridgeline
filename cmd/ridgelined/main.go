@@ -95,6 +95,9 @@ func run(log *slog.Logger, configPath string) error {
 
 	go runAnalytics(ctx, engine, st, log)
 	go runRetention(ctx, st, log)
+	if cfg.NodeRetentionDays > 0 {
+		go runNodeRetention(ctx, st, engine, cfg.NodeRetentionDays, log)
+	}
 	if cfg.ScrubArtifacts {
 		go runArtifactScrub(ctx, st, log)
 	}
@@ -151,6 +154,54 @@ func runRetention(ctx context.Context, st *store.Store, log *slog.Logger) {
 		if n > 0 {
 			log.Info("retention: pruned telemetry", "rows", n)
 		}
+	}
+	prune()
+	t := time.NewTicker(24 * time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			prune()
+		}
+	}
+}
+
+// runNodeRetention removes nodes that have gone silent past the retention
+// threshold — no advert for retentionDays, and not currently relaying (the
+// analytics liveness snapshot guards still-active relays whose advert is stale).
+// A pruned node's row and stored adverts go; it reappears the moment it
+// transmits again, so this only clears genuinely-departed nodes. Like the
+// artifact sweep it waits for ingest/analytics to settle, then runs daily.
+func runNodeRetention(ctx context.Context, st *store.Store, engine *analytics.Engine, retentionDays int, log *slog.Logger) {
+	prune := func() {
+		nodes, err := st.ListNodes()
+		if err != nil {
+			log.Warn("node retention: list nodes", "err", err)
+			return
+		}
+		cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
+		keys := analytics.StaleNodeKeys(nodes, engine.Liveness(), cutoff)
+		if len(keys) == 0 {
+			return
+		}
+		res, err := st.PurgeTargets(nil, nil, keys)
+		if err != nil {
+			log.Warn("node retention: purge", "err", err)
+			return
+		}
+		log.Info("node retention: removed silent nodes",
+			"thresholdDays", retentionDays, "candidates", len(keys),
+			"nodesDeleted", res.Nodes, "observationsDeleted", res.Observations)
+	}
+
+	// Let ingest/analytics settle so liveness reflects current relays before the
+	// first sweep (a cold snapshot would under-protect active relays).
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(3 * time.Minute):
 	}
 	prune()
 	t := time.NewTicker(24 * time.Hour)

@@ -28,6 +28,11 @@ type Config struct {
 	// high-confidence artifacts are ever deleted. Defaults to true; set false to
 	// disable the sweep.
 	ScrubArtifacts bool `json:"scrubArtifacts"`
+	// NodeRetentionDays is how long a node may go without advertising before the
+	// daily retention sweep removes it (a node still relaying within the last day
+	// is kept regardless). A removed node reappears the moment it transmits again,
+	// so this only clears the genuinely-departed. Defaults to 30; set 0 to disable.
+	NodeRetentionDays int `json:"nodeRetentionDays"`
 }
 
 // MQTT configures the connection to a MeshCore observer broker.
@@ -43,10 +48,11 @@ type MQTT struct {
 // development against the dev MeshCore broker.
 func Default() Config {
 	return Config{
-		ListenAddr:     ":8080",
-		DBPath:         "ridgeline.db",
-		WebDir:         "web/build",
-		ScrubArtifacts: true,
+		ListenAddr:        ":8080",
+		DBPath:            "ridgeline.db",
+		WebDir:            "web/build",
+		ScrubArtifacts:    true,
+		NodeRetentionDays: 30,
 		MQTT: MQTT{
 			Broker:   "tcp://localhost:1883",
 			ClientID: "ridgelined",

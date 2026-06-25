@@ -271,7 +271,11 @@ func (s *Store) Record(o Observation) error {
 				last_advert  = excluded.last_advert,
 				advert_count = nodes.advert_count + 1,
 				advert_tx_count = nodes.advert_tx_count + ?,
-				hash_size    = excluded.hash_size,
+				-- Only set hash_size from an advert while it's still unknown. A
+				-- single advert with a corrupt path-length byte must not flip an
+				-- established size; the periodic consensus pass (analytics) owns
+				-- corrections from there, voting over many adverts.
+				hash_size    = CASE WHEN nodes.hash_size = 0 THEN excluded.hash_size ELSE nodes.hash_size END,
 				radio        = COALESCE(NULLIF(excluded.radio,''), nodes.radio)`,
 			a.PublicKey, nullStr(a.Name), a.DeviceRole.String(),
 			lat, lon, boolInt(a.HasLocation), ts, ts, ts, txInc, p.PathHashSize, nullStr(observerRadio),

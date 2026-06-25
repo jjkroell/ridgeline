@@ -94,6 +94,7 @@ func run(log *slog.Logger, configPath string) error {
 	defer stop()
 
 	go runAnalytics(ctx, engine, st, log)
+	go runHashSizeConsensus(ctx, st, log)
 	go runRetention(ctx, st, log)
 	if cfg.NodeRetentionDays > 0 {
 		go runNodeRetention(ctx, st, engine, cfg.NodeRetentionDays, log)
@@ -132,6 +133,77 @@ func runAnalytics(ctx context.Context, engine *analytics.Engine, st *store.Store
 			return
 		case <-t.C:
 			recompute()
+		}
+	}
+}
+
+// hashSizeConsensusWindow is how far back the hash-size vote looks. A node's
+// hash size is fixed and adverts are sparse (tens of minutes to hours apart), so
+// a wide window gathers enough adverts — direct and relayed copies all carry the
+// originator's size — to outvote a rare corrupt one.
+const hashSizeConsensusWindow = 48 * time.Hour
+
+// hashSizeConsensusInterval is how often the vote re-runs. Frequent enough to
+// repair a misread size promptly, cheap enough to scan the window each time.
+const hashSizeConsensusInterval = 6 * time.Hour
+
+// runHashSizeConsensus periodically repairs each node's stored hash size by
+// majority vote over its recent adverts. Ingest sets hash_size only while it's
+// unknown (a corrupt path-length byte can no longer flip an established size),
+// but the very first advert seen for a node could itself be corrupt — so this
+// pass owns corrections, voting over the window and overriding the stored value
+// when a clear winner disagrees with it. Runs shortly after startup, then on a
+// fixed interval.
+func runHashSizeConsensus(ctx context.Context, st *store.Store, log *slog.Logger) {
+	reconcile := func() {
+		cutoff := time.Now().Add(-hashSizeConsensusWindow).UTC().Format(time.RFC3339Nano)
+		consensus, err := analytics.ConsensusHashSizes(st, cutoff)
+		if err != nil {
+			log.Warn("hash-size consensus: compute", "err", err)
+			return
+		}
+		nodes, err := st.ListNodes()
+		if err != nil {
+			log.Warn("hash-size consensus: list nodes", "err", err)
+			return
+		}
+		current := make(map[string]int, len(nodes))
+		for _, n := range nodes {
+			current[n.PublicKey] = n.HashSize
+		}
+		// Only write where the verdict differs from what's stored (also fills an
+		// unknown 0). Keeps the update small and the log meaningful.
+		corrections := map[string]int{}
+		for pk, size := range consensus {
+			if cur, ok := current[pk]; ok && cur != size {
+				corrections[pk] = size
+			}
+		}
+		if len(corrections) == 0 {
+			return
+		}
+		if err := st.SetHashSizes(corrections); err != nil {
+			log.Warn("hash-size consensus: update", "err", err)
+			return
+		}
+		log.Info("hash-size consensus: corrected node hash sizes", "nodes", len(corrections))
+	}
+
+	// Let ingest settle so the window holds recent adverts before the first vote.
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(2 * time.Minute):
+	}
+	reconcile()
+	t := time.NewTicker(hashSizeConsensusInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			reconcile()
 		}
 	}
 }

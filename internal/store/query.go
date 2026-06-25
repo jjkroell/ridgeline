@@ -346,3 +346,27 @@ func (s *Store) SetAdvertTxCounts(counts map[string]int) error {
 	}
 	return tx.Commit()
 }
+
+// SetHashSizes bulk-updates per-node hash sizes (keyed by pubkey) in a single
+// transaction. Used by the periodic consensus correction to repair a stored
+// hash size that a corrupt advert (flipped path-length byte) flipped at ingest.
+func (s *Store) SetHashSizes(sizes map[string]int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	stmt, err := tx.Prepare(`UPDATE nodes SET hash_size = ? WHERE pubkey = ?`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for k, v := range sizes {
+		if _, err := stmt.Exec(v, k); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}

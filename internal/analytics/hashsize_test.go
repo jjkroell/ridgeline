@@ -87,3 +87,49 @@ func TestConsensusHashSizes(t *testing.T) {
 		t.Fatalf("consensus hash size = %d, want 1 (corrupt 3 outvoted)", got)
 	}
 }
+
+// TestConsensusHashSizesPerTransmission proves the vote counts one vote per
+// transmission, not per received copy: a single corrupt transmission heard by
+// many observers (a reflood burst) must NOT outweigh fewer genuine
+// transmissions. Counting raw copies here would be 12 corrupt vs 2 genuine and
+// pick the wrong size.
+func TestConsensusHashSizesPerTransmission(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "hsx.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	adv, _ := meshcore.DecodeHex(advertFixture)
+	pubkey := adv.Advert.PublicKey
+	corruptHex := "1180" + advertFixture[4:]
+	corrupt, _ := meshcore.DecodeHex(corruptHex)
+
+	now := time.Now().UTC()
+	rec := func(p *meshcore.Packet, hex, obs string, ago time.Duration) {
+		if err := st.Record(store.Observation{
+			Packet: p, RawHex: hex, ObserverID: obs, Region: "YVR",
+			ReceivedAt: now.Add(-ago),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Two genuine transmissions, days apart (one observer each) → 2 votes for 1.
+	rec(adv, advertFixture, "obs-A", 5*24*time.Hour)
+	rec(adv, advertFixture, "obs-B", 2*24*time.Hour)
+	// One corrupt transmission heard by 12 observers within seconds (a reflood
+	// burst) → a single vote for 3, not twelve.
+	for i := 0; i < 12; i++ {
+		rec(corrupt, corruptHex, "obsC"+string(rune('a'+i)), time.Hour+time.Duration(i)*time.Second)
+	}
+
+	cutoff := now.Add(-7 * 24 * time.Hour).Format(time.RFC3339Nano)
+	consensus, err := ConsensusHashSizes(st, cutoff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := consensus[pubkey]; got != 1 {
+		t.Fatalf("consensus hash size = %d, want 1 (one corrupt burst must not outvote two genuine transmissions)", got)
+	}
+}

@@ -137,11 +137,13 @@ func runAnalytics(ctx context.Context, engine *analytics.Engine, st *store.Store
 	}
 }
 
-// hashSizeConsensusWindow is how far back the hash-size vote looks. A node's
-// hash size is fixed and adverts are sparse (tens of minutes to hours apart), so
-// a wide window gathers enough adverts — direct and relayed copies all carry the
-// originator's size — to outvote a rare corrupt one.
-const hashSizeConsensusWindow = 48 * time.Hour
+// hashSizeConsensusWindow is how far back the hash-size vote looks. The vote is
+// per-transmission, and nodes advert only about once a day (~30h observed), so
+// the window must span several cadences to gather enough independent broadcasts
+// for a confident majority — one corrupt transmission must be a clear minority.
+// A week gives ~5 transmissions for a typical node while a quiet node simply
+// stays untouched until it has spoken enough.
+const hashSizeConsensusWindow = 7 * 24 * time.Hour
 
 // hashSizeConsensusInterval is how often the vote re-runs. Frequent enough to
 // repair a misread size promptly, cheap enough to scan the window each time.

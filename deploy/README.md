@@ -41,10 +41,18 @@ From the local repo (excludes git/node_modules/build/secrets via rsync filters):
 ```bash
 rsync -az --delete \
   --exclude '.git' --exclude '**/node_modules' --exclude 'web/build' \
-  --exclude 'web/.svelte-kit' --exclude 'data' --exclude '*.db*' \
-  --exclude 'config.dev.json' --exclude 'config.prod.json' \
-  /home/jesse/ridgeline/ ve7kod@lnuvm159.ubc.bcwarn.net:~/ridgeline/
+  --exclude 'web/.svelte-kit' --exclude 'data' --exclude '*.db' \
+  --exclude '*.db-wal' --exclude '*.db-shm' \
+  --exclude 'config.dev.json' --exclude 'config.prod.json' --exclude '/ridgelined' \
+  --exclude 'deploy/config.json' --exclude 'deploy/.env' --exclude 'deploy/data' \
+  /home/jesse/ridgeline/ ve7kod@lnuvm159.ubc.bcwarn.net:ridgeline/
 ```
+> Two non-obvious excludes, both learned the hard way:
+> - `/ridgelined` is anchored (leading slash) so it skips only the root build
+>   binary — an unanchored `ridgelined` also matches the `cmd/ridgelined/` dir
+>   and breaks the Go build.
+> - `deploy/config.json`, `deploy/.env`, `deploy/data` are VM-only runtime files;
+>   without excluding them, `--delete` wipes them on every re-sync.
 
 ### 2. Create the prod config on the VM
 ```bash

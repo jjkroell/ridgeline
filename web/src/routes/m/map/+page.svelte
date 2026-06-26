@@ -1,25 +1,31 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import maplibregl from 'maplibre-gl';
-	import 'maplibre-gl/dist/maplibre-gl.css';
-	import type { FeatureCollection } from 'geojson';
+	import Map from 'ol/Map';
+	import View from 'ol/View';
+	import { fromLonLat, toLonLat } from 'ol/proj';
+	import { boundingExtent } from 'ol/extent';
+	import { Attribution } from 'ol/control';
+	import { Translate } from 'ol/interaction';
+	import type { FeatureLike } from 'ol/Feature';
 	import { api, type Node } from '$lib/api';
-	import { roleLabel } from '$lib/format';
 	import { theme } from '$lib/theme.svelte';
 	import { favorites } from '$lib/favorites.svelte';
-	import { basemapStyle, basemapHasHillshade, collapseAttribution } from '$lib/map-basemap';
 	import { basemap } from '$lib/basemap.svelte';
-	import { ensureHillshade } from '$lib/map-hillshade';
-	import { ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
+	import { ROLE_HEX, isLight, locatedNodes } from '$lib/map-util';
+	import { applyBasemap, createCoverageLayer, setCoverage } from '$lib/ol/basemap';
+	import { createNodeLayer, createPinLayer } from '$lib/ol/nodes';
 	import { computeCoverage, covered, distKm, type CoverageResult } from '$lib/coverage';
 	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
 
 	let mapEl: HTMLDivElement;
-	let map: maplibregl.Map | null = null;
+	let map: Map | null = null;
 	let nodes = $state<Node[]>([]);
 	let didFit = false;
-	let basemapLight = false;
+
+	let nodeLayer: ReturnType<typeof createNodeLayer> | null = null;
+	let coverageLayer: ReturnType<typeof createCoverageLayer> | null = null;
+	let pinLayer: ReturnType<typeof createPinLayer> | null = null;
 
 	// RF coverage prediction
 	let coverageMode = $state(false);
@@ -28,7 +34,6 @@
 	let rangeKm = $state(15);
 	let computing = $state(false);
 	let coverage = $state<CoverageResult | null>(null);
-	let pinMarker: maplibregl.Marker | null = null;
 	let showNodes = $state(false);
 
 	const nodesInCoverage = $derived(
@@ -42,20 +47,10 @@
 
 	function placePin(lat: number, lon: number) {
 		pin = { lat, lon };
-		if (!pinMarker) {
-			pinMarker = new maplibregl.Marker({ color: '#e8b454', draggable: true }).setLngLat([lon, lat]).addTo(map!);
-			pinMarker.on('dragend', () => { const ll = pinMarker!.getLngLat(); pin = { lat: ll.lat, lon: ll.lng }; runCoverage(); });
-		} else pinMarker.setLngLat([lon, lat]);
+		pinLayer?.setPin(lon, lat);
 	}
 	function drawCoverage() {
-		const src = map?.getSource('coverage') as maplibregl.ImageSource | undefined;
-		if (!src) return;
-		if (coverage) {
-			src.updateImage({ url: coverage.dataUrl, coordinates: coverage.imageCoords });
-			map?.setLayoutProperty('coverage', 'visibility', 'visible');
-		} else {
-			map?.setLayoutProperty('coverage', 'visibility', 'none');
-		}
+		if (coverageLayer) setCoverage(coverageLayer, coverage);
 	}
 	async function runCoverage() {
 		if (!pin) return;
@@ -70,8 +65,7 @@
 	function clearCoverage() {
 		coverage = null;
 		pin = null;
-		pinMarker?.remove();
-		pinMarker = null;
+		pinLayer?.clear();
 		drawCoverage();
 	}
 	function toggleCoverage() {
@@ -79,123 +73,33 @@
 		if (!coverageMode) clearCoverage();
 	}
 
-	function features(): FeatureCollection {
-		return {
-			type: 'FeatureCollection',
-			features: nodes.map((n) => ({
-				type: 'Feature',
-				geometry: { type: 'Point', coordinates: [n.longitude!, n.latitude!] },
-				properties: {
-					color: ROLE_HEX[n.role] ?? '#8394a1',
-					name: n.name || n.publicKey.slice(0, 10),
-					roleLabel: roleLabel(n.role),
-					pubkey: n.publicKey,
-					fav: favorites.has(n.publicKey)
-				}
-			}))
-		};
-	}
-	function updateSource() {
-		(map?.getSource('nodes') as maplibregl.GeoJSONSource | undefined)?.setData(features());
-		fit();
-	}
-	function fit() {
-		if (!map || didFit || nodes.length === 0) return;
-		const b = new maplibregl.LngLatBounds();
-		for (const n of nodes) b.extend([n.longitude!, n.latitude!]);
-		map.fitBounds(b, { padding: 56, maxZoom: 11, duration: 0 });
-		didFit = true;
-	}
-
-	function addLayers() {
-		if (!map || map.getSource('nodes')) return;
-		const blank = document.createElement('canvas');
-		blank.width = blank.height = 1;
-		map.addSource('coverage', {
-			type: 'image',
-			url: blank.toDataURL(),
-			coordinates: [
-				[0, 0.001],
-				[0.001, 0.001],
-				[0.001, 0],
-				[0, 0]
-			]
-		});
-		map.addLayer({
-			id: 'coverage',
-			type: 'raster',
-			source: 'coverage',
-			layout: { visibility: 'none' },
-			paint: { 'raster-opacity': 0.85, 'raster-resampling': 'linear', 'raster-fade-duration': 0 }
-		});
-		map.addSource('nodes', { type: 'geojson', data: features() });
-		map.addLayer({
-			id: 'fav-halo',
-			type: 'circle',
-			source: 'nodes',
-			filter: ['==', ['get', 'fav'], true],
-			paint: {
-				'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 6, 11, 11],
-				'circle-color': 'transparent',
-				'circle-stroke-color': FAV_COLOR,
-				'circle-stroke-width': 2
-			}
-		});
-		map.addLayer({
-			id: 'node-dots',
-			type: 'circle',
-			source: 'nodes',
-			paint: {
-				'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 3.5, 11, 7],
-				'circle-color': ['get', 'color'],
-				'circle-stroke-color': 'rgba(0,0,0,0.4)',
-				'circle-stroke-width': 1
-			}
-		});
-		map.on('click', 'node-dots', (e) => {
-			if (coverageMode) return;
-			const f = e.features?.[0];
-			const pk = f?.properties?.pubkey as string | undefined;
-			if (pk) goto('/m/nodes/' + pk);
-		});
-		map.on('click', (e) => {
-			if (coverageMode) { placePin(e.lngLat.lat, e.lngLat.lng); runCoverage(); }
-		});
-		map.on('mouseenter', 'node-dots', () => { if (map) map.getCanvas().style.cursor = 'pointer'; });
-	}
-
-	let currentBasemap = basemap.id;
-	function ensureOverlays() {
-		if (!map || !map.isStyleLoaded()) return;
-		if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
-		if (!map.getSource('nodes')) { addLayers(); updateSource(); drawCoverage(); }
-	}
-
-	// Theme swap → restyle basemap, re-add overlays on idle.
-	$effect(() => {
-		void theme.mode;
-		if (!map) return;
-		const light = theme.mode === 'light';
-		if (light === basemapLight) return;
-		basemapLight = light;
-		map.setStyle(basemapStyle(currentBasemap, light));
-		map.once('idle', ensureOverlays);
-	});
-
-	// Swap the basemap when the user picks a different one.
+	// Swap basemap on theme/selector change; re-render dots for the new ink stroke.
 	$effect(() => {
 		const id = basemap.id;
-		if (!map || id === currentBasemap) return;
-		currentBasemap = id;
-		basemapLight = theme.mode === 'light';
-		map.setStyle(basemapStyle(id, basemapLight));
-		map.once('idle', ensureOverlays);
+		void theme.mode;
+		if (!map) return;
+		applyBasemap(map, id, isLight());
+		nodeLayer?.layer.changed();
 	});
+
+	// Re-render nodes when favorites change.
+	$effect(() => {
+		void favorites.keys;
+		if (map && nodeLayer) nodeLayer.setNodes(nodes, (pk) => favorites.has(pk));
+	});
+
+	function fit() {
+		if (!map || didFit || nodes.length === 0) return;
+		const ext = boundingExtent(nodes.map((n) => fromLonLat([n.longitude!, n.latitude!])));
+		map.getView().fit(ext, { padding: [56, 56, 56, 56], maxZoom: 11, duration: 0 });
+		didFit = true;
+	}
 
 	async function refresh() {
 		try {
 			nodes = locatedNodes(await api.nodes());
-			updateSource();
+			nodeLayer?.setNodes(nodes, (pk) => favorites.has(pk));
+			fit();
 		} catch {
 			/* keep */
 		}
@@ -203,27 +107,57 @@
 
 	onMount(() => {
 		basemap.init();
-		currentBasemap = basemap.id;
-		basemapLight = theme.mode === 'light';
-		map = new maplibregl.Map({
-			container: mapEl,
-			style: basemapStyle(currentBasemap, basemapLight),
-			center: [-123.65, 49.25],
-			zoom: 7,
-			attributionControl: { compact: true }
+		nodeLayer = createNodeLayer({ cluster: false });
+		coverageLayer = createCoverageLayer();
+		pinLayer = createPinLayer();
+
+		map = new Map({
+			target: mapEl,
+			layers: [coverageLayer, nodeLayer.layer, pinLayer.layer],
+			view: new View({ center: fromLonLat([-123.65, 49.25]), zoom: 7 }),
+			controls: [new Attribution({ collapsible: true, collapsed: true })]
 		});
-		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-		map.on('load', () => {
-			if (!map) return;
-			map.resize();
-			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
-			addLayers();
-			updateSource();
-			collapseAttribution(map);
+		applyBasemap(map, basemap.id, isLight());
+
+		map.on('click', (e) => {
+			if (coverageMode) {
+				const ll = toLonLat(e.coordinate);
+				placePin(ll[1], ll[0]);
+				runCoverage();
+				return;
+			}
+			map!.forEachFeatureAtPixel(
+				e.pixel,
+				(feat) => {
+					const pk = (feat as FeatureLike).get('pubkey') as string | undefined;
+					if (pk) {
+						goto('/m/nodes/' + pk);
+						return true;
+					}
+				},
+				{ layerFilter: (l) => l === nodeLayer!.layer, hitTolerance: 6 }
+			);
 		});
+
+		const translate = new Translate({ layers: [pinLayer.layer] });
+		translate.on('translateend', (e) => {
+			const f = e.features.item(0);
+			if (!f) return;
+			const ll = toLonLat((f.getGeometry() as import('ol/geom/Point').default).getCoordinates());
+			pin = { lat: ll[1], lon: ll[0] };
+			runCoverage();
+		});
+		map.addInteraction(translate);
+
+		setTimeout(() => map?.updateSize(), 80);
 		refresh();
 		const t = setInterval(refresh, 15000);
-		return () => { clearInterval(t); map?.remove(); map = null; };
+		return () => {
+			clearInterval(t);
+			map?.setTarget(undefined);
+			map?.dispose();
+			map = null;
+		};
 	});
 </script>
 
@@ -284,9 +218,3 @@
 		</div>
 	{/if}
 </div>
-
-<style>
-	:global(.maplibregl-ctrl-attrib) {
-		font-size: 9px;
-	}
-</style>

@@ -30,6 +30,8 @@
 		"@noble/hashes": "^1.8.0",
 		"crypto-js": "^4.2.0",
 		"maplibre-gl": "^5.24.0",
+		"ol": "^10.9.0",
+		"ol-mapbox-style": "^13.4.1",
 		"qrcode": "^1.5.4"
 	}
 }

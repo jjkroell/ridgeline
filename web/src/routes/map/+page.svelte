@@ -1,29 +1,37 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import maplibregl from 'maplibre-gl';
-	import 'maplibre-gl/dist/maplibre-gl.css';
-	import type { FeatureCollection } from 'geojson';
+	import Map from 'ol/Map';
+	import View from 'ol/View';
+	import { fromLonLat, toLonLat } from 'ol/proj';
+	import { boundingExtent } from 'ol/extent';
+	import { Attribution, Zoom } from 'ol/control';
+	import { Translate } from 'ol/interaction';
+	import type { FeatureLike } from 'ol/Feature';
 	import { api, type Node } from '$lib/api';
-	import { roleLabel } from '$lib/format';
 	import { theme } from '$lib/theme.svelte';
 	import { favorites } from '$lib/favorites.svelte';
-	import { basemapStyle, basemapHasHillshade, collapseAttribution } from '$lib/map-basemap';
 	import { basemap } from '$lib/basemap.svelte';
-	import { ensureHillshade } from '$lib/map-hillshade';
-	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
+	import { isLight, locatedNodes } from '$lib/map-util';
+	import { applyBasemap, createCoverageLayer, setCoverage } from '$lib/ol/basemap';
+	import { createNodeLayer, createPinLayer } from '$lib/ol/nodes';
 	import { computeCoverage, covered, distKm, type CoverageResult } from '$lib/coverage';
+	import { ROLE_HEX } from '$lib/map-util';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
 	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
 	import NodeModal from '$lib/components/NodeModal.svelte';
 
 	let mapEl: HTMLDivElement;
-	let map: maplibregl.Map | null = null;
+	let map: Map | null = null;
 	let ready = false;
 	let didFit = false;
 	let allLocated = $state<Node[]>([]);
 	let selectedRoles = $state(new Set(['Repeater', 'RoomServer', 'ChatNode', 'Sensor']));
 	let nodeKey = $state<string | null>(null);
+
+	let nodeLayer: ReturnType<typeof createNodeLayer> | null = null;
+	let coverageLayer: ReturnType<typeof createCoverageLayer> | null = null;
+	let pinLayer: ReturnType<typeof createPinLayer> | null = null;
 
 	const visible = $derived(allLocated.filter((n) => selectedRoles.has(n.role)));
 
@@ -35,7 +43,6 @@
 	let rangeKm = $state(15);
 	let computing = $state(false);
 	let coverage = $state<CoverageResult | null>(null);
-	let pinMarker: maplibregl.Marker | null = null;
 
 	// Known located nodes that fall inside the computed coverage, nearest first.
 	const nodesInCoverage = $derived(
@@ -49,26 +56,10 @@
 
 	function placePin(lat: number, lon: number) {
 		pin = { lat, lon };
-		if (!pinMarker) {
-			pinMarker = new maplibregl.Marker({ color: '#e8b454', draggable: true })
-				.setLngLat([lon, lat])
-				.addTo(map!);
-			pinMarker.on('dragend', () => {
-				const ll = pinMarker!.getLngLat();
-				pin = { lat: ll.lat, lon: ll.lng };
-				runCoverage();
-			});
-		} else pinMarker.setLngLat([lon, lat]);
+		pinLayer?.setPin(lon, lat);
 	}
 	function drawCoverage() {
-		const src = map?.getSource('coverage') as maplibregl.ImageSource | undefined;
-		if (!src) return;
-		if (coverage) {
-			src.updateImage({ url: coverage.dataUrl, coordinates: coverage.imageCoords });
-			map?.setLayoutProperty('coverage', 'visibility', 'visible');
-		} else {
-			map?.setLayoutProperty('coverage', 'visibility', 'none');
-		}
+		if (coverageLayer) setCoverage(coverageLayer, coverage);
 	}
 	async function runCoverage() {
 		if (!pin) return;
@@ -89,8 +80,7 @@
 	function clearCoverage() {
 		coverage = null;
 		pin = null;
-		pinMarker?.remove();
-		pinMarker = null;
+		pinLayer?.clear();
 		drawCoverage();
 	}
 	function toggleCoverage() {
@@ -98,193 +88,22 @@
 		if (!coverageMode) clearCoverage();
 	}
 
-	function nodeFeatures(): FeatureCollection {
-		return {
-			type: 'FeatureCollection',
-			features: visible.map((n) => ({
-				type: 'Feature',
-				geometry: { type: 'Point', coordinates: [n.longitude!, n.latitude!] },
-				properties: {
-					role: n.role,
-					color: ROLE_HEX[n.role] ?? '#8394a1',
-					name: n.name || n.publicKey.slice(0, 10),
-					roleLabel: roleLabel(n.role),
-					pubkey: n.publicKey,
-					fav: favorites.has(n.publicKey)
-				}
-			}))
-		};
-	}
-
-	function updateSource() {
-		(map?.getSource('nodes') as maplibregl.GeoJSONSource | undefined)?.setData(nodeFeatures());
-	}
-
-	// Re-add overlays after a basemap style swap (theme or basemap change) drops them.
-	let basemapLight = false;
-	let currentBasemap = basemap.id;
-	function ensureOverlays() {
-		if (!map || !map.isStyleLoaded()) return;
-		if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
-		if (map.getSource('nodes')) return;
-		addLayers();
-		updateSource();
-		drawCoverage();
-	}
-
-	$effect(() => {
-		void theme.mode;
-		const light = isLight();
-		if (!map || light === basemapLight) return;
-		basemapLight = light;
-		map.setStyle(basemapStyle(currentBasemap, light));
-		// styledata fires mid-load with isStyleLoaded()===false, so ensureOverlays
-		// bails; `idle` is guaranteed once the new style has fully settled.
-		map.once('idle', ensureOverlays);
-	});
-
-	// Swap the basemap when the user picks a different one.
+	// Swap the basemap on theme change or selector change; re-render node dots so
+	// their theme-derived ink stroke updates too.
 	$effect(() => {
 		const id = basemap.id;
-		if (!map || id === currentBasemap) return;
-		currentBasemap = id;
-		basemapLight = isLight();
-		map.setStyle(basemapStyle(id, basemapLight));
-		map.once('idle', ensureOverlays);
+		void theme.mode;
+		if (!map) return;
+		applyBasemap(map, id, isLight());
+		nodeLayer?.layer.changed();
 	});
 
-	// re-filter / re-style when the role selection or favorites change
+	// Re-filter / re-style when the role selection or favorites change.
 	$effect(() => {
 		void selectedRoles;
 		void favorites.keys;
-		if (ready) updateSource();
+		if (ready && nodeLayer) nodeLayer.setNodes(visible, (pk) => favorites.has(pk));
 	});
-
-	function addLayers() {
-		if (!map) return;
-		// Coverage viewshed (a teal raster with terrain shadows) sits beneath the
-		// nodes/clusters. Seeded with a transparent placeholder + hidden until computed.
-		const blank = document.createElement('canvas');
-		blank.width = blank.height = 1;
-		map.addSource('coverage', {
-			type: 'image',
-			url: blank.toDataURL(),
-			coordinates: [
-				[0, 0.001],
-				[0.001, 0.001],
-				[0.001, 0],
-				[0, 0]
-			]
-		});
-		map.addLayer({
-			id: 'coverage',
-			type: 'raster',
-			source: 'coverage',
-			layout: { visibility: 'none' },
-			paint: { 'raster-opacity': 0.85, 'raster-resampling': 'linear', 'raster-fade-duration': 0 }
-		});
-		map.addSource('nodes', {
-			type: 'geojson',
-			data: nodeFeatures(),
-			cluster: true,
-			clusterRadius: 46,
-			clusterMaxZoom: 11
-		});
-		map.addLayer({
-			id: 'clusters',
-			type: 'circle',
-			source: 'nodes',
-			filter: ['has', 'point_count'],
-			paint: {
-				'circle-color': '#159e8b',
-				'circle-opacity': 0.85,
-				'circle-radius': ['step', ['get', 'point_count'], 13, 10, 18, 30, 24],
-				'circle-stroke-width': 1.5,
-				'circle-stroke-color': '#34e3c4'
-			}
-		});
-		map.addLayer({
-			id: 'cluster-count',
-			type: 'symbol',
-			source: 'nodes',
-			filter: ['has', 'point_count'],
-			layout: {
-				'text-field': ['get', 'point_count_abbreviated'],
-				'text-font': ['Noto Sans Regular'],
-				'text-size': 12
-			},
-			paint: { 'text-color': '#04140f' }
-		});
-		// Amber ring around favorited individual nodes, drawn beneath the dots.
-		map.addLayer({
-			id: 'fav-halo',
-			type: 'circle',
-			source: 'nodes',
-			filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'fav'], true]],
-			paint: {
-				// Ring hugging the dot: ~2px outside the node radius at each zoom.
-				'circle-radius': [
-					'interpolate', ['linear'], ['zoom'],
-					6, ['match', ['get', 'role'], 'Repeater', 4.5, 3.8],
-					11, ['match', ['get', 'role'], 'Repeater', 7, 5.2],
-					15, ['match', ['get', 'role'], 'Repeater', 10, 7.5]
-				],
-				'circle-color': 'rgba(0,0,0,0)',
-				'circle-stroke-color': FAV_COLOR,
-				'circle-stroke-width': 1.75,
-				'circle-stroke-opacity': 0.95
-			}
-		});
-		map.addLayer({
-			id: 'unclustered',
-			type: 'circle',
-			source: 'nodes',
-			filter: ['!', ['has', 'point_count']],
-			paint: {
-				'circle-color': ['get', 'color'],
-				// Smaller when zoomed out, scaling up as you zoom in.
-				'circle-radius': [
-					'interpolate', ['linear'], ['zoom'],
-					6, ['match', ['get', 'role'], 'Repeater', 2.5, 1.8],
-					11, ['match', ['get', 'role'], 'Repeater', 5, 3.2],
-					15, ['match', ['get', 'role'], 'Repeater', 8, 5.5]
-				],
-				'circle-opacity': 0.9,
-				'circle-stroke-width': 1,
-				'circle-stroke-color': inkColor()
-			}
-		});
-	}
-
-	// Interaction handlers — bound once. MapLibre keeps layer-id listeners across
-	// removeLayer/addLayer, so they survive a basemap style swap.
-	function bindEvents() {
-		if (!map) return;
-		// Cluster click → zoom to expand.
-		map.on('click', 'clusters', async (e) => {
-			const f = map!.queryRenderedFeatures(e.point, { layers: ['clusters'] })[0];
-			const id = f.properties!.cluster_id;
-			const src = map!.getSource('nodes') as maplibregl.GeoJSONSource;
-			const zoom = await src.getClusterExpansionZoom(id);
-			map!.easeTo({ center: (f.geometry as GeoJSON.Point).coordinates as [number, number], zoom });
-		});
-		// Node click → full node-detail modal (suppressed in coverage mode).
-		map.on('click', 'unclustered', (e) => {
-			if (coverageMode) return;
-			const p = e.features![0].properties as { pubkey?: string };
-			if (p?.pubkey) nodeKey = p.pubkey;
-		});
-		// Coverage mode: a map click drops/moves the transmitter pin and recomputes.
-		map.on('click', (e) => {
-			if (!coverageMode) return;
-			placePin(e.lngLat.lat, e.lngLat.lng);
-			runCoverage();
-		});
-		for (const layer of ['clusters', 'unclustered']) {
-			map.on('mouseenter', layer, () => (map!.getCanvas().style.cursor = 'pointer'));
-			map.on('mouseleave', layer, () => (map!.getCanvas().style.cursor = ''));
-		}
-	}
 
 	// Fit to the bulk of nodes, rejecting geographic outliers (bad GPS or far
 	// regions) via the 1.5×IQR rule so the view focuses where the mesh is.
@@ -306,49 +125,97 @@
 				n.latitude! >= latLo && n.latitude! <= latHi && n.longitude! >= lonLo && n.longitude! <= lonHi
 		);
 		const pts = inliers.length ? inliers : allLocated;
-		const b = new maplibregl.LngLatBounds();
-		pts.forEach((n) => b.extend([n.longitude!, n.latitude!]));
-		map.fitBounds(b, { padding: 80, maxZoom: 12, duration: 600 });
+		const ext = boundingExtent(pts.map((n) => fromLonLat([n.longitude!, n.latitude!])));
+		map.getView().fit(ext, { padding: [80, 80, 80, 80], maxZoom: 12, duration: 600 });
 	}
 
 	async function plot() {
 		if (!map) return;
 		const nodes = await api.nodes();
 		allLocated = locatedNodes(nodes);
-		if (ready) updateSource();
+		if (ready && nodeLayer) nodeLayer.setNodes(visible, (pk) => favorites.has(pk));
 		if (!didFit && allLocated.length > 0) {
 			fitToNodes();
 			didFit = true;
 		}
 	}
 
+	function zoomToCluster(members: FeatureLike[]) {
+		if (!map) return;
+		const ext = boundingExtent(
+			members.map((f) => (f.getGeometry() as import('ol/geom/Point').default).getCoordinates())
+		);
+		map.getView().fit(ext, { padding: [100, 100, 100, 100], maxZoom: 14, duration: 400 });
+	}
+
 	onMount(() => {
 		basemap.init();
-		currentBasemap = basemap.id;
-		basemapLight = isLight();
-		map = new maplibregl.Map({
-			container: mapEl,
-			style: basemapStyle(currentBasemap, basemapLight),
-			center: [-123.65, 49.25],
-			zoom: 9,
-			attributionControl: { compact: true }
+		nodeLayer = createNodeLayer();
+		coverageLayer = createCoverageLayer();
+		pinLayer = createPinLayer();
+
+		map = new Map({
+			target: mapEl,
+			// Overlays bottom→top; applyBasemap then inserts the base below them.
+			layers: [coverageLayer, nodeLayer.layer, pinLayer.layer],
+			view: new View({ center: fromLonLat([-123.65, 49.25]), zoom: 9 }),
+			controls: [new Attribution({ collapsible: true, collapsed: true }), new Zoom()]
 		});
-		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
-		map.on('load', () => {
-			map?.resize();
-			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map!, basemapLight);
-			collapseAttribution(map!);
-			addLayers();
-			bindEvents();
-			ready = true;
-			plot();
+		applyBasemap(map, basemap.id, isLight());
+
+		// Click: drop/keep the coverage pin, else open a node or expand a cluster.
+		map.on('click', (e) => {
+			if (coverageMode) {
+				const ll = toLonLat(e.coordinate);
+				placePin(ll[1], ll[0]);
+				runCoverage();
+				return;
+			}
+			let handled = false;
+			map!.forEachFeatureAtPixel(
+				e.pixel,
+				(feat) => {
+					if (handled) return;
+					const members = feat.get('features') as FeatureLike[] | undefined;
+					if (!members) return;
+					if (members.length > 1) zoomToCluster(members);
+					else {
+						const pk = members[0].get('pubkey') as string | undefined;
+						if (pk) nodeKey = pk;
+					}
+					handled = true;
+				},
+				{ layerFilter: (l) => l === nodeLayer!.layer, hitTolerance: 4 }
+			);
 		});
-		// Re-add overlays after a basemap (theme) style swap drops them.
-		map.on('styledata', ensureOverlays);
+
+		// Pointer cursor over clusters/nodes.
+		map.on('pointermove', (e) => {
+			if (e.dragging) return;
+			const hit = map!.hasFeatureAtPixel(e.pixel, { layerFilter: (l) => l === nodeLayer!.layer });
+			map!.getTargetElement().style.cursor = hit ? 'pointer' : '';
+		});
+
+		// Coverage pin is draggable; recompute when it's dropped.
+		const translate = new Translate({ layers: [pinLayer.layer] });
+		translate.on('translateend', (e) => {
+			const f = e.features.item(0);
+			if (!f) return;
+			const ll = toLonLat((f.getGeometry() as import('ol/geom/Point').default).getCoordinates());
+			pin = { lat: ll[1], lon: ll[0] };
+			runCoverage();
+		});
+		map.addInteraction(translate);
+
+		ready = true;
+		setTimeout(() => map?.updateSize(), 80);
+		plot();
 		const t = setInterval(plot, 10000);
 		return () => {
 			clearInterval(t);
-			map?.remove();
+			map?.setTarget(undefined);
+			map?.dispose();
+			map = null;
 		};
 	});
 </script>
@@ -432,17 +299,3 @@
 </div>
 
 <NodeModal pubkey={nodeKey} onclose={() => (nodeKey = null)} />
-
-<style>
-	:global(.maplibregl-popup-content) {
-		background: var(--color-panel);
-		border: 1px solid var(--color-line-bright);
-		border-radius: 2px;
-		padding: 8px 10px;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-	}
-	:global(.maplibregl-popup-tip) {
-		border-top-color: var(--color-line-bright) !important;
-		border-bottom-color: var(--color-line-bright) !important;
-	}
-</style>

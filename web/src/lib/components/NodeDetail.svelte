@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import maplibregl from 'maplibre-gl';
-	// Needed for marker/control styling when this component is reached directly
-	// (e.g. /nodes/[pubkey]) without having visited a full map route first.
-	import 'maplibre-gl/dist/maplibre-gl.css';
+	import Map from 'ol/Map';
+	import View from 'ol/View';
+	import Overlay from 'ol/Overlay';
+	import { Attribution } from 'ol/control';
 	import QRCode from 'qrcode';
 	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry, type NodeActivity, type BlockEntry } from '$lib/api';
-	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
+	import { insetLayers, markerPin, lonLat } from '$lib/ol/basemap';
 	import { isLight } from '$lib/map-util';
+	import { theme } from '$lib/theme.svelte';
 	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, fmtRadio } from '$lib/format';
 	import { nodeHashId } from '$lib/hash-ids';
 	import PayloadTag from './PayloadTag.svelte';
@@ -197,8 +198,9 @@
 
 	// --- Inset map of the node's location ---
 	let mapEl = $state<HTMLDivElement>();
-	let map: maplibregl.Map | null = null;
-	let marker: maplibregl.Marker | null = null;
+	let map: Map | null = null;
+	let marker: Overlay | null = null;
+	let insetBase: { setTheme: (light: boolean) => void } | null = null;
 	// Create the map ONCE. Gate on the memoized `hasLoc` boolean (not `node`,
 	// which refresh() reassigns to a fresh object every 15s — tracking it here
 	// would tear down and recreate the whole map on every poll, flickering the
@@ -209,33 +211,44 @@
 		untrack(() => {
 			const lng = node!.longitude!;
 			const lat = node!.latitude!;
-			const light = isLight();
-			map = new maplibregl.Map({
-				container: mapEl!,
-				style: basemapStyleUrl(light),
-				center: [lng, lat],
-				zoom: 11,
-				attributionControl: { compact: true },
-				// Locked thumbnail: no scroll-zoom / drag / dbl-click — wheel events
-				// pass through so the page scrolls past it instead of the map moving.
-				interactive: false
+			const center = lonLat(lng, lat);
+			const pin = markerPin('#34e3c4');
+			pin.overlay.setPosition(center);
+			marker = pin.overlay;
+			const inset = insetLayers(isLight());
+			insetBase = inset;
+			map = new Map({
+				target: mapEl!,
+				layers: inset.layers,
+				overlays: [pin.overlay],
+				view: new View({ center, zoom: 11 }),
+				// Locked thumbnail: no interactions, so wheel/drag events pass through
+				// and the page scrolls past it instead of the map moving.
+				interactions: [],
+				controls: [new Attribution({ collapsible: true, collapsed: true })]
 			});
-			marker = new maplibregl.Marker({ color: '#34e3c4' }).setLngLat([lng, lat]).addTo(map);
 			const m = map;
-			m.on('load', () => collapseAttribution(m));
-			setTimeout(() => m.resize(), 80);
+			setTimeout(() => m.updateSize(), 80);
 		});
 		return () => {
-			map?.remove();
+			map?.setTarget(undefined);
+			map?.dispose();
 			map = null;
 			marker = null;
+			insetBase = null;
 		};
+	});
+	// Swap the inset's basemap tiles when the UI theme toggles (the CSS filter
+	// alone can't re-style the tiles). Reads the reactive theme store.
+	$effect(() => {
+		const light = theme.mode === 'light';
+		if (map && insetBase) insetBase.setTheme(light);
 	});
 	// Keep the marker on the node's current location without recreating the map.
 	$effect(() => {
 		const lat = node?.latitude;
 		const lng = node?.longitude;
-		if (map && marker && lat != null && lng != null) marker.setLngLat([lng, lat]);
+		if (map && marker && lat != null && lng != null) marker.setPosition(lonLat(lng, lat));
 	});
 
 	// --- QR contact code (scanned by the MeshCore app's in-app contact scanner) ---
@@ -372,7 +385,7 @@
 			</div>
 
 			{#if hasLoc}
-				<div bind:this={mapEl} class="border-line h-44 w-full overflow-hidden rounded-[var(--radius)] border"></div>
+				<div bind:this={mapEl} class="inset-map border-line h-44 w-full overflow-hidden rounded-[var(--radius)] border"></div>
 			{/if}
 
 			{#if qrSvg && !compact}
@@ -543,8 +556,8 @@
 							<div class="flex items-center gap-3 px-5 py-2 text-sm">
 								<Tooltip text={fmtAbs(p.receivedAt)} class="w-10 shrink-0"><span class="font-mono text-fg-faint text-xs tnum">{ago(p.receivedAt)}</span></Tooltip>
 								<PayloadTag type={p.payloadType} />
-								<span class="font-mono text-fg-faint min-w-0 flex-1 truncate text-xs">via {p.observerId ?? '—'}</span>
-								<span class="font-mono text-fg-faint text-xs tnum">{p.pathHops} hop{p.pathHops === 1 ? '' : 's'}</span>
+								<span class="font-mono text-fg-dim min-w-0 flex-1 truncate text-xs">via {p.observerId ?? '—'}</span>
+								<span class="font-mono text-fg-dim text-xs tnum">{p.pathHops} hop{p.pathHops === 1 ? '' : 's'}</span>
 								<span class="font-mono w-14 text-right text-xs tnum" style="color:{snrColor(p.snr)}">{fmtSnr(p.snr)} dB</span>
 							</div>
 						{/each}
@@ -577,8 +590,8 @@
 								<Tooltip text={fmtAbs(h.receivedAt)} class="w-10 shrink-0"><span class="font-mono text-fg-faint text-xs tnum">{ago(h.receivedAt)}</span></Tooltip>
 								<span class="label shrink-0 rounded px-1.5 py-0.5 text-[0.56rem] {h.kind === 'advert' ? 'text-signal bg-signal/10' : 'text-sky bg-sky/10'}">{h.kind === 'advert' ? 'SENT' : 'RELAY'}</span>
 								<PayloadTag type={h.payloadType} />
-								<span class="font-mono text-fg-faint min-w-0 flex-1 truncate text-xs">via {h.observerId ?? '—'}</span>
-								{#if h.kind === 'relay'}<Tooltip text="this node's position in the packet's path" class="shrink-0"><span class="font-mono text-fg-faint text-xs tnum">hop {h.hopIndex + 1}/{h.pathHops}</span></Tooltip>{/if}
+								<span class="font-mono text-fg-dim min-w-0 flex-1 truncate text-xs">via {h.observerId ?? '—'}</span>
+								{#if h.kind === 'relay'}<Tooltip text="this node's position in the packet's path" class="shrink-0"><span class="font-mono text-fg-dim text-xs tnum">hop {h.hopIndex + 1}/{h.pathHops}</span></Tooltip>{/if}
 								<span class="font-mono w-14 shrink-0 text-right text-xs tnum" style="color:{snrColor(h.snr)}">{fmtSnr(h.snr)} dB</span>
 							</div>
 						{/each}

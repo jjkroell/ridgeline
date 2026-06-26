@@ -14,7 +14,9 @@
 
 	--color-fg: #dde7ed;
 	--color-fg-dim: #8394a1;
-	--color-fg-faint: #55626d;
+	/* Lifted from #55626d for legibility — kept below fg-dim so it stays the
+	   lowest (faint) tier, just less washed out on the dark background. */
+	--color-fg-faint: #6c7884;
 
 	--color-signal: #34e3c4;
 	--color-signal-deep: #129e87;
@@ -55,7 +57,9 @@ html.theme-light {
 
 	--color-fg: #16242a;
 	--color-fg-dim: #4f5f66;
-	--color-fg-faint: #8a979c;
+	/* Darkened from #8a979c for legibility — kept above fg-dim so it stays the
+	   lowest (faint) tier, just less washed out on the light paper background. */
+	--color-fg-faint: #707e85;
 
 	--color-signal: #0f9e8a;
 	--color-signal-deep: #0c7a6c;
@@ -230,4 +234,68 @@ html.theme-light {
 }
 .maplibregl-ctrl-group button + button {
 	border-top: 1px solid var(--color-line);
+}
+
+/* Inset location thumbnails add a light Esri hillshade relief over the dark
+   vector base so they don't read as near-black. Esri's relief is a WARM grey,
+   though, which tints the dark thumbnail brown — so neutralise it to a cool grey
+   and lift it gently. Scoped to the inset so the full-screen maps are untouched. */
+	/* Light theme: nudge the bright positron base down a touch. */
+.inset-map .ol-layers canvas {
+	filter: brightness(0.9);
+}
+	/* Dark theme: neutralise Esri's warm relief to cool grey and keep it muted.
+	   saturate(0) (not grayscale(1)) because the CSS minifier rewrites
+	   grayscale(1)→grayscale(), whose meaning is engine-ambiguous; saturate(0)
+	   is the same neutral-grey result and survives minification intact. */
+html:not(.theme-light) .inset-map .ol-layers canvas {
+	filter: saturate(0);
+}
+
+/* OpenLayers controls (zoom + attribution), themed to match the panels and
+   positioned bottom-right like the old MapLibre nav. Shared by every full map. */
+.ol-control {
+	background: transparent;
+}
+.ol-control button {
+	background: var(--color-panel);
+	color: var(--color-fg-dim);
+	border: 1px solid var(--color-line);
+	border-radius: var(--radius);
+	font-size: 1rem;
+	width: 1.9rem;
+	height: 1.9rem;
+	transition: color 0.15s;
+}
+.ol-control button:hover,
+.ol-control button:focus {
+	background: var(--color-panel);
+	color: var(--color-fg);
+	outline: none;
+}
+.ol-zoom {
+	top: auto;
+	left: auto;
+	right: 0.5rem;
+	bottom: 2.1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.ol-attribution {
+	right: 0.5rem;
+	bottom: 0.4rem;
+	background: color-mix(in srgb, var(--color-panel) 80%, transparent);
+	border-radius: var(--radius);
+}
+.ol-attribution ul {
+	color: var(--color-fg-dim);
+	text-shadow: none;
+	font-size: 10px;
+}
+.ol-attribution a {
+	color: var(--color-fg);
+}
+.ol-attribution.ol-collapsed {
+	background: transparent;
 }

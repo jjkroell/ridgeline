@@ -1,14 +1,16 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
-	import maplibregl from 'maplibre-gl';
-	import 'maplibre-gl/dist/maplibre-gl.css';
+	import Map from 'ol/Map';
+	import View from 'ol/View';
+	import Overlay from 'ol/Overlay';
+	import { Attribution } from 'ol/control';
 	import QRCode from 'qrcode';
 	import { api, type Node, type NodeAnalytics, type BlockEntry } from '$lib/api';
 	import { ago, shortKey, fmtNum, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, fmtRadio, fmtCoord } from '$lib/format';
 	import { nodeHashId } from '$lib/hash-ids';
 	import { favorites } from '$lib/favorites.svelte';
-	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
+	import { insetLayers, markerPin, lonLat } from '$lib/ol/basemap';
 	import { theme } from '$lib/theme.svelte';
 
 	const pubkey = $derived((page.params.pubkey ?? '').toUpperCase());
@@ -92,21 +94,40 @@
 
 	// Inset map — created once when a location is known.
 	let mapEl = $state<HTMLDivElement>();
-	let map: maplibregl.Map | null = null;
-	let marker: maplibregl.Marker | null = null;
+	let map: Map | null = null;
+	let marker: Overlay | null = null;
+	let insetBase: { setTheme: (light: boolean) => void } | null = null;
 	$effect(() => {
 		if (!hasLoc || !mapEl || map) return;
 		const lat = untrack(() => node!.latitude!);
 		const lng = untrack(() => node!.longitude!);
-		const light = theme.mode === 'light';
-		map = new maplibregl.Map({ container: mapEl, style: basemapStyleUrl(light), center: [lng, lat], zoom: 11, attributionControl: { compact: true }, interactive: false });
-		marker = new maplibregl.Marker({ color: '#34e3c4' }).setLngLat([lng, lat]).addTo(map);
-		map.on('load', () => { map?.resize(); if (map) collapseAttribution(map); });
+		const center = lonLat(lng, lat);
+		const pin = markerPin('#34e3c4');
+		pin.overlay.setPosition(center);
+		marker = pin.overlay;
+		const inset = insetLayers(theme.mode === 'light');
+		insetBase = inset;
+		map = new Map({
+			target: mapEl,
+			layers: inset.layers,
+			overlays: [pin.overlay],
+			view: new View({ center, zoom: 11 }),
+			interactions: [],
+			controls: [new Attribution({ collapsible: true, collapsed: true })]
+		});
+		const m = map;
+		setTimeout(() => m.updateSize(), 80);
 	});
 	$effect(() => {
-		if (map && marker && node?.latitude != null && node?.longitude != null) marker.setLngLat([node.longitude, node.latitude]);
+		if (map && marker && node?.latitude != null && node?.longitude != null)
+			marker.setPosition(lonLat(node.longitude, node.latitude));
 	});
-	onMount(() => () => { map?.remove(); map = null; });
+	// Swap basemap tiles on theme toggle.
+	$effect(() => {
+		const light = theme.mode === 'light';
+		if (map && insetBase) insetBase.setTheme(light);
+	});
+	onMount(() => () => { map?.setTarget(undefined); map?.dispose(); map = null; insetBase = null; });
 </script>
 
 <div class="px-4 py-4">
@@ -177,7 +198,7 @@
 		<!-- location -->
 		{#if hasLoc}
 			<div class="border-line/60 mb-3 h-48 w-full overflow-hidden rounded-2xl border">
-				<div bind:this={mapEl} class="h-full w-full"></div>
+				<div bind:this={mapEl} class="inset-map h-full w-full"></div>
 			</div>
 		{/if}
 
@@ -262,7 +283,7 @@
 				{#each detail.recentPackets.slice(0, 12) as pk (pk.messageHash)}
 					<div class="flex items-center gap-2.5 px-4 py-2">
 						<span class="text-fg-dim w-20 shrink-0 truncate text-xs">{pk.payloadType}</span>
-						<span class="text-fg-faint flex-1 truncate font-mono text-[0.62rem]">{pk.pathHops} hop{pk.pathHops === 1 ? '' : 's'}</span>
+						<span class="text-fg-dim flex-1 truncate font-mono text-[0.62rem]">{pk.pathHops} hop{pk.pathHops === 1 ? '' : 's'}</span>
 						<span class="font-mono text-xs tnum" style="color:{snrColor(pk.snr)}">{fmtSnr(pk.snr)}</span>
 						<span class="text-fg-faint w-9 text-right font-mono text-[0.62rem]">{ago(pk.receivedAt)}</span>
 					</div>

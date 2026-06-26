@@ -262,7 +262,7 @@
 				{#each detail.recentPackets.slice(0, 12) as pk (pk.messageHash)}
 					<div class="flex items-center gap-2.5 px-4 py-2">
 						<span class="text-fg-dim w-20 shrink-0 truncate text-xs">{pk.payloadType}</span>
-						<span class="text-fg-faint flex-1 truncate font-mono text-[0.62rem]">{pk.pathHops} hop{pk.pathHops === 1 ? '' : 's'}</span>
+						<span class="text-fg-dim flex-1 truncate font-mono text-[0.62rem]">{pk.pathHops} hop{pk.pathHops === 1 ? '' : 's'}</span>
 						<span class="font-mono text-xs tnum" style="color:{snrColor(pk.snr)}">{fmtSnr(pk.snr)}</span>
 						<span class="text-fg-faint w-9 text-right font-mono text-[0.62rem]">{ago(pk.receivedAt)}</span>
 					</div>

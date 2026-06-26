@@ -14,7 +14,9 @@
 
 	--color-fg: #dde7ed;
 	--color-fg-dim: #8394a1;
-	--color-fg-faint: #55626d;
+	/* Lifted from #55626d for legibility — kept below fg-dim so it stays the
+	   lowest (faint) tier, just less washed out on the dark background. */
+	--color-fg-faint: #6c7884;
 
 	--color-signal: #34e3c4;
 	--color-signal-deep: #129e87;
@@ -55,7 +57,9 @@ html.theme-light {
 
 	--color-fg: #16242a;
 	--color-fg-dim: #4f5f66;
-	--color-fg-faint: #8a979c;
+	/* Darkened from #8a979c for legibility — kept above fg-dim so it stays the
+	   lowest (faint) tier, just less washed out on the light paper background. */
+	--color-fg-faint: #707e85;
 
 	--color-signal: #0f9e8a;
 	--color-signal-deep: #0c7a6c;

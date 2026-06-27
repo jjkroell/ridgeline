@@ -16,9 +16,12 @@
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
 	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
 	import NodeModal from '$lib/components/NodeModal.svelte';
+	import FallbackMap from '$lib/components/FallbackMap.svelte';
+	import { hasWebGL } from '$lib/webgl';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
+	let webglOk = $state(true);
 	let ready = false;
 	let didFit = false;
 	let allLocated = $state<Node[]>([]);
@@ -312,9 +315,11 @@
 	}
 
 	async function plot() {
-		if (!map) return;
 		const nodes = await api.nodes();
 		allLocated = locatedNodes(nodes);
+		// No map = WebGL-free fallback: it renders straight from `allLocated`, so we
+		// must still fetch even though the MapLibre source/fit below are skipped.
+		if (!map) return;
 		if (ready) updateSource();
 		if (!didFit && allLocated.length > 0) {
 			fitToNodes();
@@ -324,6 +329,14 @@
 
 	onMount(() => {
 		basemap.init();
+		webglOk = hasWebGL();
+		if (!webglOk) {
+			// No WebGL → skip MapLibre entirely; the Leaflet FallbackMap just needs
+			// the located-node list, refreshed on the same cadence.
+			plot();
+			const t = setInterval(plot, 30000);
+			return () => clearInterval(t);
+		}
 		currentBasemap = basemap.id;
 		basemapLight = isLight();
 		map = new maplibregl.Map({
@@ -361,6 +374,9 @@
 
 <div class="px-6 py-6 md:px-10">
 	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
+		{#if !webglOk}
+			<FallbackMap nodes={allLocated} center={[-123.65, 49.25]} zoom={9} cluster onselect={(k) => (nodeKey = k)} />
+		{:else}
 		<div bind:this={mapEl} class="h-full w-full"></div>
 		<MapRoleFilter bind:selected={selectedRoles} />
 		<BasemapSelector />
@@ -428,6 +444,7 @@
 				</div>
 			{/if}
 		</div>
+		{/if}
 	</div>
 </div>
 

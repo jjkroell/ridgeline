@@ -10,6 +10,7 @@
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { theme } from '$lib/theme.svelte';
+	import { hasWebGL } from '$lib/webgl';
 
 	const pubkey = $derived((page.params.pubkey ?? '').toUpperCase());
 
@@ -94,8 +95,9 @@
 	let mapEl = $state<HTMLDivElement>();
 	let map: maplibregl.Map | null = null;
 	let marker: maplibregl.Marker | null = null;
+	const webglOk = hasWebGL();
 	$effect(() => {
-		if (!hasLoc || !mapEl || map) return;
+		if (!hasLoc || !mapEl || map || !webglOk) return;
 		const lat = untrack(() => node!.latitude!);
 		const lng = untrack(() => node!.longitude!);
 		const light = theme.mode === 'light';
@@ -177,7 +179,15 @@
 		<!-- location -->
 		{#if hasLoc}
 			<div class="border-line/60 mb-3 h-48 w-full overflow-hidden rounded-2xl border">
-				<div bind:this={mapEl} class="h-full w-full"></div>
+				{#if webglOk}
+					<div bind:this={mapEl} class="h-full w-full"></div>
+				{:else}
+					<div class="bg-ink-2 text-fg-faint flex h-full w-full flex-col items-center justify-center gap-1 px-4 text-center">
+						<svg viewBox="0 0 24 24" class="text-fg-dim h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11a3 3 0 1 0 6 0c0-1.7-3-7-3-7s-3 5.3-3 7z" /><path d="M17.7 14A9 9 0 1 1 6.3 14" /></svg>
+						<span class="font-mono text-xs">{fmtCoord(node!.latitude!)}, {fmtCoord(node!.longitude!)}</span>
+						<span class="text-[0.66rem]">Enable WebGL to view the map</span>
+					</div>
+				{/if}
 			</div>
 		{/if}
 

@@ -14,9 +14,12 @@
 	import { ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
 	import { computeCoverage, covered, distKm, type CoverageResult } from '$lib/coverage';
 	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
+	import FallbackMap from '$lib/components/FallbackMap.svelte';
+	import { hasWebGL } from '$lib/webgl';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
+	let webglOk = $state(true);
 	let nodes = $state<Node[]>([]);
 	let didFit = false;
 	let basemapLight = false;
@@ -203,6 +206,12 @@
 
 	onMount(() => {
 		basemap.init();
+		webglOk = hasWebGL();
+		if (!webglOk) {
+			refresh();
+			const t = setInterval(refresh, 30000);
+			return () => clearInterval(t);
+		}
 		currentBasemap = basemap.id;
 		basemapLight = theme.mode === 'light';
 		map = new maplibregl.Map({
@@ -228,6 +237,9 @@
 </script>
 
 <div class="relative h-full w-full">
+	{#if !webglOk}
+		<FallbackMap nodes={nodes} center={[-123.65, 49.25]} zoom={7} cluster onselect={(k) => goto('/m/nodes/' + k)} />
+	{:else}
 	<div bind:this={mapEl} class="h-full w-full"></div>
 
 	<div class="border-line/60 bg-ink-2/80 pointer-events-none absolute top-3 left-3 z-10 rounded-full border px-3 py-1.5 backdrop-blur-md">
@@ -282,6 +294,7 @@
 				{/if}
 			{/if}
 		</div>
+	{/if}
 	{/if}
 </div>
 

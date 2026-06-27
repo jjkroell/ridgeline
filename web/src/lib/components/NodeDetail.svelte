@@ -8,6 +8,7 @@
 	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry, type NodeActivity, type BlockEntry } from '$lib/api';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { isLight } from '$lib/map-util';
+	import { hasWebGL } from '$lib/webgl';
 	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, fmtRadio } from '$lib/format';
 	import { nodeHashId } from '$lib/hash-ids';
 	import PayloadTag from './PayloadTag.svelte';
@@ -204,8 +205,9 @@
 	// would tear down and recreate the whole map on every poll, flickering the
 	// attribution back open and never letting the marker settle). Coords are
 	// read untracked so a node refresh can't retrigger this effect.
+	const webglOk = hasWebGL();
 	$effect(() => {
-		if (!mapEl || !hasLoc || map) return;
+		if (!mapEl || !hasLoc || map || !webglOk) return;
 		untrack(() => {
 			const lng = node!.longitude!;
 			const lat = node!.latitude!;
@@ -372,7 +374,15 @@
 			</div>
 
 			{#if hasLoc}
-				<div bind:this={mapEl} class="border-line h-44 w-full overflow-hidden rounded-[var(--radius)] border"></div>
+				{#if webglOk}
+					<div bind:this={mapEl} class="border-line h-44 w-full overflow-hidden rounded-[var(--radius)] border"></div>
+				{:else}
+					<div class="border-line bg-ink-2 text-fg-faint flex h-44 w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[var(--radius)] border px-4 text-center">
+						<svg viewBox="0 0 24 24" class="text-fg-dim h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11a3 3 0 1 0 6 0c0-1.7-3-7-3-7s-3 5.3-3 7z" /><path d="M17.7 14A9 9 0 1 1 6.3 14" /></svg>
+						<span class="font-mono text-xs">{fmtCoord(node!.latitude!)}, {fmtCoord(node!.longitude!)}</span>
+						<span class="text-[0.66rem]">Enable WebGL to view the map</span>
+					</div>
+				{/if}
 			{/if}
 
 			{#if qrSvg && !compact}

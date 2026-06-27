@@ -12,6 +12,7 @@
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
 	import { ago, shortKey, fmtSnr, snrColor } from '$lib/format';
+	import { PulseEngine } from '$lib/live-pulse';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import PayloadTag from '$lib/components/PayloadTag.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -19,9 +20,12 @@
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
 	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
 	import NodeModal from '$lib/components/NodeModal.svelte';
+	import FallbackMap from '$lib/components/FallbackMap.svelte';
+	import { hasWebGL } from '$lib/webgl';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
+	let webglOk = $state(true);
 	let ready = false;
 	let nodes: Node[] = [];
 	let located: Node[] = $state([]); // all located nodes (pulse resolution uses these)
@@ -146,130 +150,17 @@
 	};
 	const payloadColor = (t: string) => PAYLOAD_COLOR[t] ?? '#34e3c4';
 
-	// ── hop resolution ────────────────────────────────────────────────────
-	// A packet's hops are all at the originating node's hash size, so the hop
-	// length is the prefix length to match. Each hop may match several located
-	// nodes (a short/1-byte hop is ambiguous); resolve by:
-	//   1. preferring repeaters (relays are repeaters),
-	//   2. anchoring on hops with a single candidate,
-	//   3. for the rest, picking the candidate nearest a resolved neighbour.
-	// Returns the located points in path order plus whether any hop was
-	// ambiguous (so the path can be drawn with less confidence).
-	const dist2 = (a: [number, number], b: [number, number]) =>
-		(a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
+	// ── propagation pulses (shared, renderer-agnostic engine) ──────────────
+	// The pulse geometry (hop resolution, comet animation, node ripples) lives in
+	// $lib/live-pulse so the WebGL-free Leaflet fallback draws the exact same
+	// animation onto a 2-D canvas; here we just feed its output into MapLibre.
+	const engine = new PulseEngine(payloadColor);
 
-	function resolvePath(path: string[]): { pts: [number, number][]; uncertain: boolean } {
-		const cands: [number, number][][] = path.map((hop) => {
-			let c = located.filter((n) => n.publicKey.startsWith(hop));
-			const reps = c.filter((n) => n.role === 'Repeater');
-			if (reps.length) c = reps;
-			return c.map((n) => [n.longitude!, n.latitude!] as [number, number]);
-		});
-
-		const resolved: ([number, number] | null)[] = path.map(() => null);
-		let uncertain = false;
-
-		// anchor unambiguous hops
-		for (let i = 0; i < cands.length; i++) if (cands[i].length === 1) resolved[i] = cands[i][0];
-
-		// disambiguate the rest by nearest resolved neighbour
-		for (let i = 0; i < cands.length; i++) {
-			if (resolved[i] || cands[i].length === 0) continue;
-			uncertain = true;
-			let ref: [number, number] | null = null;
-			for (let d = 1; d < cands.length && !ref; d++) {
-				if (i - d >= 0 && resolved[i - d]) ref = resolved[i - d];
-				else if (i + d < cands.length && resolved[i + d]) ref = resolved[i + d];
-			}
-			resolved[i] = ref
-				? cands[i].reduce((best, p) => (dist2(p, ref!) < dist2(best, ref!) ? p : best))
-				: cands[i][0];
-		}
-
-		return { pts: resolved.filter((p): p is [number, number] => p !== null), uncertain };
-	}
-
-	// ── animation state ───────────────────────────────────────────────────
-	interface Anim {
-		pts: [number, number][];
-		seglen: number[]; // cumulative length at each vertex
-		total: number;
-		color: string;
-		born: number;
-		dur: number;
-		uncertain: boolean;
-	}
-	let anims: Anim[] = [];
-	const FADE = 700;
-
-	// Fire-on-arrival: pulse each observer's reported header path as it comes
-	// in, deduped by messageHash + path. Observers report the same transmission
-	// over several seconds (mean ~5s here), so firing on arrival animates the
-	// flood spreading in real time rather than dumping every branch at once.
-	const fired = new Map<string, number>(); // "hash:path" -> time
-
-	// A small expanding ring fired at each node as the pulse passes through it.
-	interface Ripple {
-		at: [number, number];
-		born: number; // when the dot reaches this node (may be in the future)
-		color: string;
-		played?: boolean; // chimed once on arrival
-	}
-	let ripples: Ripple[] = [];
-	const RIPPLE_DUR = 650;
-
-	function addAnim(pts: [number, number][], color: string, uncertain: boolean) {
-		const seglen = [0];
-		for (let i = 1; i < pts.length; i++) {
-			const dx = pts[i][0] - pts[i - 1][0],
-				dy = pts[i][1] - pts[i - 1][1];
-			seglen.push(seglen[i - 1] + Math.hypot(dx, dy));
-		}
-		const total = seglen[seglen.length - 1];
-		const born = performance.now();
-		const dur = 900 + pts.length * 280;
-		anims.push({ pts, seglen, total, color, born, dur, uncertain });
-		if (anims.length > 60) anims.shift();
-
-		// Schedule a ripple at each node, timed to when the dot arrives there.
-		for (let i = 0; i < pts.length; i++) {
-			ripples.push({ at: pts[i], born: born + (total > 0 ? seglen[i] / total : 0) * dur, color });
-		}
-		if (ripples.length > 500) ripples.splice(0, ripples.length - 500);
-	}
-
-	// position along the polyline at fraction t (0..1)
-	function along(a: Anim, t: number): [number, number] {
-		const d = t * a.total;
-		for (let i = 1; i < a.pts.length; i++) {
-			if (d <= a.seglen[i]) {
-				const segStart = a.seglen[i - 1];
-				const f = (d - segStart) / (a.seglen[i] - segStart || 1);
-				return [
-					a.pts[i - 1][0] + (a.pts[i][0] - a.pts[i - 1][0]) * f,
-					a.pts[i - 1][1] + (a.pts[i][1] - a.pts[i - 1][1]) * f
-				];
-			}
-		}
-		return a.pts[a.pts.length - 1];
-	}
-
-	// The visible "comet" line: from the head position back to ~two nodes
-	// behind it. The lead reveals the line as it travels; the tail trails off
-	// once the head is more than two nodes ahead.
-	const TRAIL_NODES = 2;
-	function trailCoords(a: Anim, travel: number): [number, number][] {
-		const d = travel * a.total;
-		let lastV = 0; // last vertex the head has passed
-		for (let i = 1; i < a.pts.length; i++) {
-			if (a.seglen[i] <= d) lastV = i;
-			else break;
-		}
-		const tailV = Math.max(0, lastV - (TRAIL_NODES - 1));
-		const coords = a.pts.slice(tailV, lastV + 1);
-		if (d > a.seglen[lastV]) coords.push(along(a, travel)); // head mid-segment
-		return coords;
-	}
+	// Pulse each newly-seen header path as it arrives.
+	$effect(() => {
+		void live.events.length;
+		engine.ingest(live.events, located);
+	});
 
 	// ── per-frame render into GeoJSON sources ─────────────────────────────
 	function frame() {
@@ -277,87 +168,39 @@
 			requestAnimationFrame(frame);
 			return;
 		}
-		const now = performance.now();
+		const out = engine.frame(performance.now());
 
-		const lines: Feature[] = [];
-		const dots: Feature[] = [];
-		anims = anims.filter((a) => now - a.born < a.dur + FADE);
-		for (const a of anims) {
-			const age = now - a.born;
-			const travel = Math.min(1, age / a.dur);
-			// Ambiguous (disambiguated) paths are drawn fainter.
-			const base = a.uncertain ? 0.45 : 0.85;
-			const opacity = age < a.dur ? base : base * (1 - (age - a.dur) / FADE);
-			const trail = trailCoords(a, travel);
-			if (trail.length >= 2) {
-				lines.push({
-					type: 'Feature',
-					geometry: { type: 'LineString', coordinates: trail },
-					properties: { color: a.color, opacity }
-				});
-			}
-			if (age < a.dur) {
-				dots.push({
-					type: 'Feature',
-					geometry: { type: 'Point', coordinates: along(a, travel) },
-					properties: { color: a.color }
-				});
-			}
-		}
 		(map.getSource('pulse-lines') as maplibregl.GeoJSONSource)?.setData({
 			type: 'FeatureCollection',
-			features: lines
+			features: out.lines.map((l) => ({
+				type: 'Feature',
+				geometry: { type: 'LineString', coordinates: l.coords },
+				properties: { color: l.color, opacity: l.opacity }
+			})) as Feature[]
 		});
 		(map.getSource('pulse-dots') as maplibregl.GeoJSONSource)?.setData({
 			type: 'FeatureCollection',
-			features: dots
-		});
-
-		// Node ripples: an expanding ring as the pulse reaches each node.
-		const rings: Feature[] = [];
-		ripples = ripples.filter((r) => now - r.born < RIPPLE_DUR);
-		for (const r of ripples) {
-			const age = now - r.born;
-			if (age < 0) continue; // scheduled but not yet reached
-			if (!r.played) {
-				r.played = true; // the dot just reached this node
-				if (soundOn) playTick(Math.round((r.at[0] + r.at[1]) * 100));
-			}
-			const t = age / RIPPLE_DUR;
-			rings.push({
+			features: out.dots.map((d) => ({
 				type: 'Feature',
-				geometry: { type: 'Point', coordinates: r.at },
-				properties: { color: r.color, r: 3 + t * 11, o: 0.85 * (1 - t) }
-			});
-		}
+				geometry: { type: 'Point', coordinates: d.at },
+				properties: { color: d.color }
+			})) as Feature[]
+		});
 		(map.getSource('pulse-rings') as maplibregl.GeoJSONSource)?.setData({
 			type: 'FeatureCollection',
-			features: rings
+			features: out.rings.map((r) => ({
+				type: 'Feature',
+				geometry: { type: 'Point', coordinates: r.at },
+				properties: { color: r.color, r: r.r, o: r.o }
+			})) as Feature[]
 		});
 
-		animCount = anims.length;
+		// Chime once as the dot reaches each node.
+		if (soundOn) for (const at of out.arrivals) playTick(Math.round((at[0] + at[1]) * 100));
+
+		animCount = out.count;
 		requestAnimationFrame(frame);
 	}
-
-	// react to new live events → pulse each newly-seen header path on arrival
-	$effect(() => {
-		void live.events.length;
-		const now = performance.now();
-		for (const ev of live.events.slice(0, 60)) {
-			if (!ev.path || ev.path.length < 1) continue;
-			// Only pulse genuinely fresh arrivals — skip the last-hour history the
-			// feed seeds into the shared buffer, so the map doesn't burst on load.
-			if (Date.now() - +new Date(ev.receivedAt) > 20000) continue;
-			const key = ev.messageHash + ':' + ev.path.join(',');
-			if (fired.has(key)) continue;
-			fired.set(key, now);
-			const { pts, uncertain } = resolvePath(ev.path);
-			if (pts.length >= 2) addAnim(pts, payloadColor(ev.payloadType), uncertain);
-		}
-		// prune dedupe map
-		const cutoff = now - 90000;
-		for (const [k, t] of fired) if (t < cutoff) fired.delete(k);
-	});
 
 	// react to theme changes → swap the basemap style
 	let basemapLight = false;
@@ -569,6 +412,14 @@
 		}
 
 		basemap.init();
+		webglOk = hasWebGL();
+		if (!webglOk) {
+			// No WebGL → no live propagation (it needs MapLibre); show a static
+			// node map via Leaflet, still refreshing the located-node set.
+			loadNodes();
+			const t = setInterval(loadNodes, 30000);
+			return () => clearInterval(t);
+		}
 		currentBasemap = basemap.id;
 		basemapLight = isLight();
 		map = new maplibregl.Map({
@@ -612,6 +463,16 @@
 
 <div class="px-6 py-6 md:px-10">
 	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
+		{#if !webglOk}
+			<FallbackMap
+				nodes={located}
+				center={[-123.9, 49.2]}
+				zoom={8}
+				live
+				onselect={(k) => (nodeKey = k)}
+				notice="WebGL is disabled — showing the basic live map. Enable WebGL for terrain, the audio chime and the full-fidelity animation."
+			/>
+		{:else}
 		<div bind:this={mapEl} class="h-full w-full"></div>
 		<BasemapSelector />
 
@@ -746,6 +607,7 @@
 				</div>
 			{/if}
 		</div>
+		{/if}
 	</div>
 </div>
 

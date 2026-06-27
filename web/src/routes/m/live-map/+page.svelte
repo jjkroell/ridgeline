@@ -12,9 +12,12 @@
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { ROLE_HEX, locatedNodes } from '$lib/map-util';
 	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
+	import FallbackMap from '$lib/components/FallbackMap.svelte';
+	import { hasWebGL } from '$lib/webgl';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
+	let webglOk = $state(true);
 	let nodes = $state<Node[]>([]);
 	let basemapLight = false;
 	let didFit = false;
@@ -191,6 +194,12 @@
 
 	onMount(() => {
 		basemap.init();
+		webglOk = hasWebGL();
+		if (!webglOk) {
+			refresh();
+			const t = setInterval(refresh, 30000);
+			return () => clearInterval(t);
+		}
 		currentBasemap = basemap.id;
 		basemapLight = theme.mode === 'light';
 		map = new maplibregl.Map({ container: mapEl, style: basemapStyle(currentBasemap, basemapLight), center: [-123.65, 49.25], zoom: 7, attributionControl: { compact: true } });
@@ -210,10 +219,21 @@
 </script>
 
 <div class="relative h-full w-full">
+	{#if !webglOk}
+		<FallbackMap
+			nodes={nodes}
+			center={[-123.65, 49.25]}
+			zoom={7}
+			live
+			onselect={(k) => goto('/m/nodes/' + k)}
+			notice="WebGL is disabled — showing the basic live map. Enable WebGL for terrain and the full-fidelity animation."
+		/>
+	{:else}
 	<div bind:this={mapEl} class="h-full w-full"></div>
 	<div class="border-line/60 bg-ink-2/80 absolute top-3 left-3 z-10 flex items-center gap-2 rounded-full border px-3 py-1.5 backdrop-blur-md">
 		{#if live.connected}<span class="live-dot"></span>{:else}<span class="bg-coral/70 h-2 w-2 rounded-full"></span>{/if}
 		<span class="text-fg-dim font-mono text-[0.62rem] tnum">{nodes.length} nodes · {pulseCount} live</span>
 	</div>
 	<BasemapSelector compact posClass="top-14 left-3" />
+	{/if}
 </div>

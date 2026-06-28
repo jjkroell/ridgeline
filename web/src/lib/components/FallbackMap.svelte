@@ -18,6 +18,7 @@
 	import { roleLabel } from '$lib/format';
 	import { live } from '$lib/live.svelte';
 	import { PulseEngine } from '$lib/live-pulse';
+	import { chime } from '$lib/live-audio.svelte';
 
 	interface Props {
 		nodes: Node[];
@@ -31,6 +32,8 @@
 		cluster?: boolean;
 		/** Animate propagation pulses from the live feed (live map). */
 		live?: boolean;
+		/** Offer the wind-chime toggle + play a chime as pulses reach nodes (live map). */
+		audio?: boolean;
 	}
 	let {
 		nodes,
@@ -39,7 +42,8 @@
 		onselect,
 		notice = 'Basic map — WebGL is disabled in your browser. Enable it for the full interactive map with terrain, clustering, coverage and live propagation.',
 		cluster = false,
-		live: liveMode = false
+		live: liveMode = false,
+		audio = false
 	}: Props = $props();
 
 	let el: HTMLDivElement;
@@ -196,6 +200,8 @@
 		const size = map.getSize();
 		ctx.clearRect(0, 0, size.x, size.y);
 		const out = engine.frame(performance.now());
+		// Soft wind-chime as each pulse reaches a node (same seed as the MapLibre map).
+		if (audio) for (const at of out.arrivals) chime.play(Math.round((at[0] + at[1]) * 100));
 		// Project an engine [lon,lat] to a container pixel.
 		const px = (c: [number, number]) => map.latLngToContainerPoint([c[1], c[0]]);
 
@@ -254,7 +260,13 @@
 		ctx.globalAlpha = 1;
 	}
 
+	function toggleSound() {
+		chime.ensure(); // created within this click gesture so the browser allows it
+		chime.toggle();
+	}
+
 	onMount(() => {
+		if (audio) chime.load();
 		let destroyed = false;
 		(async () => {
 			// CSS first so controls/tiles are styled the moment the map appears.
@@ -373,6 +385,45 @@
 				class="text-fg-faint hover:text-fg -mt-0.5 shrink-0 text-lg leading-none">×</button
 			>
 		</div>
+	{/if}
+
+	{#if audio}
+		<button
+			onclick={toggleSound}
+			aria-pressed={chime.on}
+			title={chime.on ? 'Mute node chimes' : 'Play a soft wind chime as pulses reach nodes'}
+			class="border-line absolute bottom-3 left-3 z-[1000] flex h-9 w-9 items-center justify-center rounded-[var(--radius)] border shadow-lg backdrop-blur-md transition-colors {chime.on
+				? 'bg-signal/20 text-signal border-signal/50'
+				: 'bg-ink-2/90 text-fg-dim hover:text-fg'}"
+		>
+			{#if chime.on}
+				<svg
+					viewBox="0 0 24 24"
+					class="h-4 w-4"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.7"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /><path
+						d="M19 5a9 9 0 0 1 0 14"
+					/>
+				</svg>
+			{:else}
+				<svg
+					viewBox="0 0 24 24"
+					class="h-4 w-4"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.7"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<path d="M11 5 6 9H2v6h4l5 4z" /><path d="m22 9-6 6M16 9l6 6" />
+				</svg>
+			{/if}
+		</button>
 	{/if}
 </div>
 

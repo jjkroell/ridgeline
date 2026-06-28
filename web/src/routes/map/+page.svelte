@@ -346,7 +346,7 @@
 			zoom: 9,
 			attributionControl: { compact: true }
 		});
-		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+		map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
 		map.on('load', () => {
 			map?.resize();
 			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map!, basemapLight);

@@ -429,7 +429,7 @@
 			zoom: 8.4,
 			attributionControl: { compact: true }
 		});
-		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+		map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
 		map.on('load', () => {
 			map?.resize();
 			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map!, basemapLight);
@@ -469,6 +469,7 @@
 				center={[-123.9, 49.2]}
 				zoom={8}
 				live
+				audio
 				onselect={(k) => (nodeKey = k)}
 				notice="WebGL is disabled — showing the basic live map. Enable WebGL for terrain, the audio chime and the full-fidelity animation."
 			/>

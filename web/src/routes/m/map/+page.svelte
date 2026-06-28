@@ -221,7 +221,7 @@
 			zoom: 7,
 			attributionControl: { compact: true }
 		});
-		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+		map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'top-right');
 		map.on('load', () => {
 			if (!map) return;
 			map.resize();

@@ -203,7 +203,7 @@
 		currentBasemap = basemap.id;
 		basemapLight = theme.mode === 'light';
 		map = new maplibregl.Map({ container: mapEl, style: basemapStyle(currentBasemap, basemapLight), center: [-123.65, 49.25], zoom: 7, attributionControl: { compact: true } });
-		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+		map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'top-right');
 		map.on('load', () => {
 			if (!map) return;
 			map.resize();

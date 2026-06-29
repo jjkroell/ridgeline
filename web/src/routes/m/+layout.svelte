@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { live } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
+	import PwaInstall from '$lib/components/PwaInstall.svelte';
 
 	let { children } = $props();
 
@@ -140,6 +141,9 @@
 			{/if}
 		{/each}
 	</nav>
+
+	<!-- Install nudge (once / 30 days while not installed); floats above the tab bar -->
+	<PwaInstall />
 
 	<!-- More sheet (absolute within the fixed viewport root → unambiguous anchor) -->
 	{#if moreOpen}

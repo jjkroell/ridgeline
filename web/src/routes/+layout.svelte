@@ -7,8 +7,37 @@
 	import { channels } from '$lib/channels.svelte';
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemap } from '$lib/basemap.svelte';
+	import { hasWebGL } from '$lib/webgl';
 
 	let { children } = $props();
+
+	// Report WebGL availability once per session as a custom Umami event, so the
+	// dashboard shows the share of visitors who fall back to the non-WebGL maps.
+	// The Umami script loads async, so retry briefly until `window.umami` exists.
+	function trackWebGL() {
+		try {
+			if (sessionStorage.getItem('rl-webgl-tracked')) return;
+		} catch {
+			return; // storage unavailable — skip rather than risk firing every load
+		}
+		const enabled = hasWebGL();
+		let tries = 0;
+		const fire = (): boolean => {
+			const u = (window as unknown as { umami?: { track: (n: string, d?: unknown) => void } }).umami;
+			if (!u?.track) return false;
+			u.track('webgl', { enabled });
+			try {
+				sessionStorage.setItem('rl-webgl-tracked', '1');
+			} catch {
+				/* ignore */
+			}
+			return true;
+		};
+		if (fire()) return;
+		const iv = setInterval(() => {
+			if (fire() || ++tries > 40) clearInterval(iv); // give up after ~10s
+		}, 250);
+	}
 
 	onMount(() => {
 		theme.init();
@@ -16,6 +45,7 @@
 		favorites.init();
 		basemap.init();
 		live.start();
+		trackWebGL();
 	});
 
 	const nav = [

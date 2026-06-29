@@ -324,15 +324,19 @@ func (s *Store) AdvertObservationsChrono() ([]RawObservation, error) {
 	return out, rows.Err()
 }
 
-// AdvertObservationsSince returns advert observations received at or after
+// AdvertObservationsSince returns FLOOD advert observations received at or after
 // sinceISO, oldest first, with raw hex and reception time — for the periodic
-// hash-size consensus vote. Scanning only advert rows in a bounded window keeps
-// a wide (multi-day) pass cheap versus decoding every stored packet.
+// hash-size consensus vote. Only flood adverts carry the originator's configured
+// hash size; zero-hop (direct) adverts always encode size 1, so they're filtered
+// out here. Scanning only those rows in a bounded window keeps a wide (multi-day)
+// pass cheap versus decoding every stored packet.
 func (s *Store) AdvertObservationsSince(sinceISO string) ([]RawObservation, error) {
 	rows, err := s.db.Query(`
 		SELECT raw_hex, received_at
 		FROM observations
-		WHERE payload_type = 'Advert' AND received_at >= ?
+		WHERE payload_type = 'Advert'
+		  AND route_type IN ('Flood', 'TransportFlood')
+		  AND received_at >= ?
 		ORDER BY received_at ASC`, sinceISO)
 	if err != nil {
 		return nil, err

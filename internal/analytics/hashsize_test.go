@@ -133,3 +133,66 @@ func TestConsensusHashSizesPerTransmission(t *testing.T) {
 		t.Fatalf("consensus hash size = %d, want 1 (one corrupt burst must not outvote two genuine transmissions)", got)
 	}
 }
+
+// TestConsensusHashSizesIgnoresZeroHop reproduces the VE7SCC-R1 bug: a node
+// configured 3-byte floods its size at ~47h intervals (few transmissions), but
+// emits frequent zero-hop adverts that always decode as size 1. Each zero-hop
+// advert lands minutes apart, so it would form its own vote and bury the genuine
+// flood transmissions — the consensus must ignore zero-hop adverts entirely.
+func TestConsensusHashSizesIgnoresZeroHop(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "hzh.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	// Flood advert with hash size 3 (path-length byte 0x80, route bits = Flood).
+	floodHex := "1180" + advertFixture[4:]
+	flood, err := meshcore.DecodeHex(floodHex)
+	if err != nil || flood.Advert == nil {
+		t.Fatalf("decode flood advert: %v", err)
+	}
+	pubkey := flood.Advert.PublicKey
+	if !flood.RouteType.IsFlood() || flood.PathHashSize != 3 {
+		t.Fatalf("flood fixture route=%v size=%d, want Flood/3", flood.RouteType, flood.PathHashSize)
+	}
+
+	// Zero-hop advert: same node, route bits flipped to Direct (header 0x12),
+	// path-length byte 0x00 → always decodes as size 1.
+	zeroHopHex := "1200" + advertFixture[4:]
+	zeroHop, err := meshcore.DecodeHex(zeroHopHex)
+	if err != nil || zeroHop.Advert == nil {
+		t.Fatalf("decode zero-hop advert: %v", err)
+	}
+	if zeroHop.RouteType != meshcore.RouteDirect || zeroHop.PathHashSize != 1 || zeroHop.Advert.PublicKey != pubkey {
+		t.Fatalf("zero-hop route=%v size=%d pubkey=%q, want Direct/1/%q",
+			zeroHop.RouteType, zeroHop.PathHashSize, zeroHop.Advert.PublicKey, pubkey)
+	}
+
+	now := time.Now().UTC()
+	rec := func(p *meshcore.Packet, hex, obs string, ago time.Duration) {
+		if err := st.Record(store.Observation{
+			Packet: p, RawHex: hex, ObserverID: obs, Region: "YVR",
+			ReceivedAt: now.Add(-ago),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Two genuine flood transmissions (size 3), days apart → 2 votes for 3.
+	rec(flood, floodHex, "obs-A", 5*24*time.Hour)
+	rec(flood, floodHex, "obs-B", 2*24*time.Hour)
+	// Ten zero-hop adverts (size 1), each a separate transmission minutes apart →
+	// would be 10 votes for 1 if counted, swamping the two flood votes.
+	for i := 0; i < 10; i++ {
+		rec(zeroHop, zeroHopHex, "obs-Z", time.Hour+time.Duration(i)*10*time.Minute)
+	}
+
+	cutoff := now.Add(-7 * 24 * time.Hour).Format(time.RFC3339Nano)
+	consensus, err := ConsensusHashSizes(st, cutoff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := consensus[pubkey]; got != 3 {
+		t.Fatalf("consensus hash size = %d, want 3 (zero-hop size-1 adverts must be ignored)", got)
+	}
+}

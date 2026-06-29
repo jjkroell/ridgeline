@@ -255,7 +255,15 @@ func (s *Store) Record(o Observation) error {
 		txInc := advertTxIncrement(tx, a.PublicKey, o.ReceivedAt)
 		// The advert's path-length byte carries the originating node's own
 		// hash size (1, 2, or 3 bytes) — the length of the key prefix by which
-		// this node is identified in packet paths.
+		// this node is identified in packet paths. A zero-hop (direct) advert
+		// is sent with path_len=0, which always decodes as size 1 regardless of
+		// the node's setting, so it carries no usable hash-size signal: feed 0
+		// (unknown) for those and let a flood advert (or the periodic consensus
+		// pass) establish the real size.
+		advertHashSize := 0
+		if p.RouteType.IsFlood() {
+			advertHashSize = p.PathHashSize
+		}
 		if _, err := tx.Exec(`
 			INSERT INTO nodes
 				(pubkey, name, role, latitude, longitude, has_location,
@@ -278,7 +286,7 @@ func (s *Store) Record(o Observation) error {
 				hash_size    = CASE WHEN nodes.hash_size = 0 THEN excluded.hash_size ELSE nodes.hash_size END,
 				radio        = COALESCE(NULLIF(excluded.radio,''), nodes.radio)`,
 			a.PublicKey, nullStr(a.Name), a.DeviceRole.String(),
-			lat, lon, boolInt(a.HasLocation), ts, ts, ts, txInc, p.PathHashSize, nullStr(observerRadio),
+			lat, lon, boolInt(a.HasLocation), ts, ts, ts, txInc, advertHashSize, nullStr(observerRadio),
 			txInc,
 		); err != nil {
 			return fmt.Errorf("store: upsert node: %w", err)

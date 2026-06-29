@@ -19,6 +19,15 @@ const (
 	RouteTransportDirect RouteType = 0x03
 )
 
+// IsFlood reports whether the route is a flood, where the originator broadcasts
+// to the whole mesh and relays accumulate their hashes into the path. Only flood
+// adverts carry the originator's configured path-hash size; a zero-hop (direct)
+// advert is sent with path_len=0, which always decodes as hash size 1 regardless
+// of the node's setting — so it carries no usable hash-size signal.
+func (r RouteType) IsFlood() bool {
+	return r == RouteFlood || r == RouteTransportFlood
+}
+
 func (r RouteType) String() string {
 	switch r {
 	case RouteTransportFlood:

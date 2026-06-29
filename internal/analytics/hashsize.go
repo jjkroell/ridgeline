@@ -9,8 +9,14 @@ import (
 )
 
 // ConsensusHashSizes scans the advert window and returns each node's hash size
-// by majority vote of its adverts' path-length bytes, keyed by pubkey. Only
-// nodes with a clear winner are included.
+// by majority vote of its FLOOD adverts' path-length bytes, keyed by pubkey.
+// Only nodes with a clear winner are included.
+//
+// Only flood adverts carry the configured size: a node sends its periodic flood
+// advert (default every ~47h) with path_hash_mode+1 in the path-length byte, but
+// its far more frequent zero-hop adverts go out with path_len=0 (always size 1).
+// Counting zero-hop adverts would bury the few genuine flood transmissions under
+// many bogus size-1 votes, so they're excluded (here and in the store query).
 //
 // A node's true hash size is fixed, but a corrupt advert (a flipped path-length
 // byte) reports a wrong size, and ingest takes only the latest advert — so one
@@ -35,6 +41,14 @@ func ConsensusHashSizes(st *store.Store, cutoffISO string) (map[string]int, erro
 	for _, ro := range advs {
 		pkt, err := meshcore.DecodeHex(ro.RawHex)
 		if err != nil || pkt == nil || pkt.Advert == nil || pkt.Advert.PublicKey == "" {
+			continue
+		}
+		// Only flood adverts carry the configured hash size. A zero-hop (direct)
+		// advert is sent with path_len=0, so it always decodes as size 1 — and
+		// because each lands minutes apart it would otherwise form its own vote,
+		// flooding the tally with bogus size-1 votes that drown out the (bursty,
+		// hence few) genuine flood transmissions. Skip them entirely.
+		if !pkt.RouteType.IsFlood() {
 			continue
 		}
 		hs := pkt.PathHashSize

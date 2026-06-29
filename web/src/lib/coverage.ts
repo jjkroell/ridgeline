@@ -171,8 +171,10 @@ export async function computeCoverage(
 	// bilinearly interpolated, so sub-post samples are valid) and build a denser
 	// output grid so the overlay stays crisp when zoomed in. Capped for memory.
 	const step = demStep / 2;
-	const cell = Math.max(step, (2 * maxRange) / 1100);
-	const G = Math.max(64, Math.min(1400, Math.round((2 * maxRange) / cell)));
+	// Denser output grid (≈1500 cells/side) + less feather below => a more defined,
+	// less blurry viewshed boundary, still bounded for memory/compute.
+	const cell = Math.max(step, (2 * maxRange) / 1500);
+	const G = Math.max(64, Math.min(1700, Math.round((2 * maxRange) / cell)));
 	const grid = new Uint8Array(G * G);
 
 	const toCell = (east: number, north: number): number => {
@@ -229,12 +231,12 @@ export async function computeCoverage(
 	}
 	rctx.putImageData(img, 0, 0);
 
-	// Feather the cell edges so the overlay reads as a soft signal field rather
-	// than blocky pixels when zoomed in (paired with linear raster resampling).
+	// A light feather just anti-aliases the cell edges without smearing the
+	// boundary — the denser grid above keeps it sharp and well-defined.
 	const canvas = document.createElement('canvas');
 	canvas.width = canvas.height = G;
 	const ctx = canvas.getContext('2d')!;
-	ctx.filter = 'blur(1.4px)';
+	ctx.filter = 'blur(0.6px)';
 	ctx.drawImage(raw, 0, 0);
 
 	const halfLat = maxRange / mPerDegLat;

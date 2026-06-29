@@ -20,6 +20,7 @@
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
 	let webglOk = $state(true);
+	let fbBanner = $state(true); // WebGL-free banner open? (offsets the basemap selector below it)
 	let nodes = $state<Node[]>([]);
 	let didFit = false;
 	let basemapLight = false;
@@ -238,7 +239,26 @@
 
 <div class="relative h-full w-full">
 	{#if !webglOk}
-		<FallbackMap nodes={nodes} center={[-123.65, 49.25]} zoom={7} cluster onselect={(k) => goto('/m/nodes/' + k)} />
+		<FallbackMap
+			nodes={nodes}
+			center={[-123.65, 49.25]}
+			zoom={7}
+			cluster
+			bind:bannerOpen={fbBanner}
+			{coverage}
+			{pin}
+			{coverageMode}
+			onmapclick={(lat, lon) => {
+				pin = { lat, lon };
+				runCoverage();
+			}}
+			onpinmove={(lat, lon) => {
+				pin = { lat, lon };
+				runCoverage();
+			}}
+			onselect={(k) => goto('/m/nodes/' + k)}
+		/>
+		<BasemapSelector compact posClass={fbBanner ? 'top-16 left-3' : 'top-3 left-3'} />
 	{:else}
 	<div bind:this={mapEl} class="h-full w-full"></div>
 
@@ -247,11 +267,12 @@
 	</div>
 
 	<BasemapSelector compact posClass="top-14 left-3" />
+	{/if}
 
-	<!-- Coverage toggle -->
+	<!-- Coverage toggle (shared by the MapLibre + WebGL-free maps) -->
 	<button
 		onclick={toggleCoverage}
-		class="border-line/60 bg-ink-2/85 absolute top-3 right-14 z-10 flex items-center gap-1.5 rounded-full border px-3 py-1.5 backdrop-blur-md {coverageMode ? 'text-signal border-signal/50' : 'text-fg-dim'}"
+		class="border-line/60 bg-ink-2/85 absolute {!webglOk && fbBanner ? 'top-16' : 'top-3'} right-14 z-10 flex items-center gap-1.5 rounded-full border px-3 py-1.5 backdrop-blur-md {coverageMode ? 'text-signal border-signal/50' : 'text-fg-dim'}"
 	>
 		<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2M8 8a5 5 0 0 0 0 8M16 8a5 5 0 0 1 0 8M12 11.2a1 1 0 1 0 0 1.6 1 1 0 0 0 0-1.6z" /></svg>
 		<span class="text-[0.62rem] font-600">Coverage</span>
@@ -294,7 +315,6 @@
 				{/if}
 			{/if}
 		</div>
-	{/if}
 	{/if}
 </div>
 

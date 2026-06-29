@@ -235,3 +235,38 @@ html.theme-light {
 .maplibregl-ctrl-group button + button {
 	border-top: 1px solid var(--color-line);
 }
+
+/* ── Site-wide hover tooltips ───────────────────────────────────────────────
+   The maps render node hover labels as Leaflet .leaflet-tooltip elements. Style
+   them here (not per-map) to match the Tooltip.svelte bubble used everywhere
+   else — ink-2 surface, bright hairline border, dimmed label, app radius — so a
+   node hover reads the same on the maps as in the rest of the UI. Tooltip.svelte
+   is the component equivalent; keep the two visually in sync. */
+/* Scoped under .leaflet-container so these win over Leaflet's own defaults, which
+   are injected at runtime (after app.css) and would otherwise take equal-specificity
+   priority. */
+.leaflet-container .leaflet-tooltip {
+	background: var(--color-ink-2);
+	border: 1px solid var(--color-line-bright);
+	color: var(--color-fg-dim);
+	border-radius: var(--radius);
+	padding: 6px 10px;
+	font-size: 0.75rem;
+	line-height: 1.375;
+	font-weight: 500;
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+	white-space: nowrap;
+}
+/* Pointer matches the bubble surface (we anchor node tooltips above the dot). */
+.leaflet-container .leaflet-tooltip-top::before {
+	border-top-color: var(--color-ink-2);
+}
+.leaflet-container .leaflet-tooltip-bottom::before {
+	border-bottom-color: var(--color-ink-2);
+}
+.leaflet-container .leaflet-tooltip-left::before {
+	border-left-color: var(--color-ink-2);
+}
+.leaflet-container .leaflet-tooltip-right::before {
+	border-right-color: var(--color-ink-2);
+}

@@ -12,6 +12,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { Node } from '$lib/api';
+	import type { CoverageResult } from '$lib/coverage';
 	import { theme } from '$lib/theme.svelte';
 	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
 	import { favorites } from '$lib/favorites.svelte';
@@ -19,6 +20,8 @@
 	import { live } from '$lib/live.svelte';
 	import { PulseEngine } from '$lib/live-pulse';
 	import { chime } from '$lib/live-audio.svelte';
+	import { basemap } from '$lib/basemap.svelte';
+	import { leafletBasemap } from '$lib/leaflet-basemap';
 
 	interface Props {
 		nodes: Node[];
@@ -32,8 +35,25 @@
 		cluster?: boolean;
 		/** Animate propagation pulses from the live feed (live map). */
 		live?: boolean;
-		/** Offer the wind-chime toggle + play a chime as pulses reach nodes (live map). */
+		/** Play a chime as pulses reach nodes (live map). The on/off + tuning UI lives
+		 * in the route's Map Control panel (ChimeControls), bound to the same singleton. */
 		audio?: boolean;
+		/** Restrict which node roles are drawn. Pulse resolution still uses every
+		 * located node, so hidden-role relays keep animating correctly. */
+		roleFilter?: Set<string>;
+		/** Two-way: whether the WebGL-disabled banner is showing. Callers bind this to
+		 * offset their own overlays (e.g. map controls) below the banner. */
+		bannerOpen?: boolean;
+		/** Coverage-prediction overlay (static map). Rendered as an image overlay. */
+		coverage?: CoverageResult | null;
+		/** Planned-transmitter pin [lat, lon] — draggable when coverage mode is on. */
+		pin?: { lat: number; lon: number } | null;
+		/** In coverage mode, map clicks place the pin (not select nodes). */
+		coverageMode?: boolean;
+		/** Map click while coverage mode is on (lat, lon). */
+		onmapclick?: (lat: number, lon: number) => void;
+		/** Pin dragged to a new spot (lat, lon). */
+		onpinmove?: (lat: number, lon: number) => void;
 	}
 	let {
 		nodes,
@@ -43,7 +63,14 @@
 		notice = 'Basic map — WebGL is disabled in your browser. Enable it for the full interactive map with terrain, clustering, coverage and live propagation.',
 		cluster = false,
 		live: liveMode = false,
-		audio = false
+		audio = false,
+		roleFilter = undefined,
+		bannerOpen = $bindable(true),
+		coverage = null,
+		pin = null,
+		coverageMode = false,
+		onmapclick = undefined,
+		onpinmove = undefined
 	}: Props = $props();
 
 	let el: HTMLDivElement;
@@ -52,19 +79,57 @@
 	/* eslint-disable @typescript-eslint/no-explicit-any */
 	let L: any = null;
 	let map: any = null;
-	let tiles: any = null;
+	let baseLayer: any = null;
+	let hillLayer: any = null;
+	let coverageLayer: any = null;
+	let pinMarker: any = null;
 	let markers: any = null;
 	let canvasRenderer: any = null;
 	/* eslint-enable @typescript-eslint/no-explicit-any */
 	let didFit = false;
 	let curLight = false;
-	let bannerOpen = $state(true);
 
 	const located = $derived(locatedNodes(nodes));
+	// Markers honour the role filter; pulse resolution (below) keeps using `located`.
+	const displayed = $derived(
+		roleFilter ? located.filter((n) => roleFilter!.has(n.role)) : located
+	);
 
-	function tileUrl(light: boolean): string {
-		// CARTO's key-less raster basemaps mirror the app's dark/light themes.
-		return `https://{s}.basemaps.cartocdn.com/${light ? 'light_all' : 'dark_all'}/{z}/{x}/{y}{r}.png`;
+	// Build (or rebuild) the tile layers for the selected basemap + current theme.
+	// `topo` adds a shaded-relief overlay in a dedicated, multiply-blended pane that
+	// sits above the base tiles but below the node markers/pulses.
+	function applyBasemap() {
+		if (!map || !L) return;
+		if (baseLayer) map.removeLayer(baseLayer);
+		if (hillLayer) map.removeLayer(hillLayer);
+		baseLayer = hillLayer = null;
+		const spec = leafletBasemap(basemap.id, curLight);
+		baseLayer = L.tileLayer(spec.base.url, {
+			subdomains: spec.base.subdomains ?? 'abc',
+			maxZoom: spec.base.maxZoom,
+			attribution: spec.base.attribution
+		}).addTo(map);
+		if (spec.hillshade) {
+			if (!map.getPane('hillshade')) {
+				const p = map.createPane('hillshade');
+				p.style.zIndex = '250'; // above base tiles (200), below overlay/markers (400+)
+				p.style.pointerEvents = 'none';
+			}
+			// Theme-aware blend so the grayscale relief is actually visible: on the dark
+			// base 'screen' lifts lit slopes (relief reads light-on-dark); on the light
+			// base 'multiply' drops shadows in. (Plain 'multiply' over the dark base was
+			// near-invisible.) Set each render so a theme toggle updates it.
+			map.getPane('hillshade').style.mixBlendMode = curLight ? 'multiply' : 'screen';
+			hillLayer = L.tileLayer(spec.hillshade.url, {
+				pane: 'hillshade',
+				// 'screen' lifts aggressively on the dark base (light hand); 'multiply'
+				// only darkens, and on the near-white light base it needs more weight or
+				// the relief washes out.
+				opacity: curLight ? 0.7 : 0.22,
+				maxZoom: spec.hillshade.maxZoom,
+				attribution: spec.hillshade.attribution
+			}).addTo(map);
+		}
 	}
 
 	// Teal cluster bubble matching the MapLibre cluster style.
@@ -84,9 +149,9 @@
 	// shows/hides leaf layers through their `_icon` DOM element, which circleMarkers
 	// (canvas OR svg) don't have — so in cluster mode each node must be a divIcon
 	// marker or it never appears once clustered.
-	function nodeIcon(n: Node, stroke: string) {
+	function nodeIcon(n: Node, stroke: string, zoom: number) {
 		const repeater = n.role === 'Repeater';
-		const d = repeater ? 13 : 10;
+		const d = Math.round(nodeRadius(repeater, zoom) * 2); // match the live circleMarker diameter
 		const color = ROLE_HEX[n.role] ?? '#8394a1';
 		const ring = favorites.has(n.publicKey) ? `box-shadow:0 0 0 2px ${FAV_COLOR};` : '';
 		return L.divIcon({
@@ -99,14 +164,13 @@
 		});
 	}
 
-	// Canvas circleMarkers are sized in screen pixels, so a fixed radius looks the
-	// same at every zoom — tiny dots eat the whole region when zoomed out. Scale the
-	// radius with zoom (~22% per level, anchored at z9) so dots stay proportionate,
-	// clamped so they never vanish or balloon.
+	// One node-dot radius (px) shared by the static (divIcon) and live (circleMarker)
+	// maps, so a node is the same size on both at any zoom. Dots ease DOWN as you zoom
+	// in — large enough to spot the network when zoomed out, small and precise when
+	// zoomed in (they ballooned at high zoom before). Clamped so they never vanish.
 	function nodeRadius(repeater: boolean, zoom: number): number {
-		const base = repeater ? 4.2 : 3;
-		const r = base * Math.pow(1.22, zoom - 9);
-		return Math.max(1.5, Math.min(repeater ? 14 : 11, r));
+		const r = (repeater ? 4.5 : 3.5) - (zoom - 9) * 0.2;
+		return Math.max(repeater ? 3 : 2.6, Math.min(repeater ? 5 : 4, r));
 	}
 
 	function renderMarkers() {
@@ -114,16 +178,18 @@
 		markers.clearLayers();
 		const stroke = inkColor();
 		const zoom = map.getZoom();
-		for (const n of located) {
+		for (const n of displayed) {
 			const lat = n.latitude!;
 			const lon = n.longitude!;
 			// Cluster mode: divIcon markers so markercluster can cluster/decluster them.
 			if (cluster) {
-				const m = L.marker([lat, lon], { icon: nodeIcon(n, stroke) });
+				const m = L.marker([lat, lon], { icon: nodeIcon(n, stroke, zoom) });
 				m.bindTooltip(`${n.name || n.publicKey.slice(0, 10)} · ${roleLabel(n.role)}`, {
 					direction: 'top'
 				});
-				m.on('click', () => onselect?.(n.publicKey));
+				m.on('click', () => {
+					if (!coverageMode) onselect?.(n.publicKey);
+				});
 				m.addTo(markers);
 				continue;
 			}
@@ -159,10 +225,73 @@
 	}
 
 	function fit() {
-		if (!map || !L || didFit || located.length === 0) return;
-		const b = L.latLngBounds(located.map((n) => [n.latitude!, n.longitude!]));
+		if (!map || !L || didFit || displayed.length === 0) return;
+		const b = L.latLngBounds(displayed.map((n) => [n.latitude!, n.longitude!]));
 		map.fitBounds(b, { padding: [40, 40], maxZoom: 12 });
 		didFit = true;
+	}
+
+	// ── coverage prediction overlay + draggable transmitter pin ───────────────
+	// Renders the viewshed PNG (computeCoverage) as an image overlay in its own pane
+	// beneath the node markers, plus a draggable pin the route recomputes around.
+	function applyCoverage() {
+		if (!map || !L) return;
+		if (coverageLayer) {
+			map.removeLayer(coverageLayer);
+			coverageLayer = null;
+		}
+		if (!coverage) return;
+		if (!map.getPane('coverage')) {
+			const p = map.createPane('coverage');
+			p.style.zIndex = '350'; // above tiles/hillshade, below node markers (400+)
+			p.style.pointerEvents = 'none';
+		}
+		// imageCoords = [TL, TR, BR, BL] as [lon, lat]; Leaflet wants [[S,W],[N,E]].
+		const ic = coverage.imageCoords;
+		const bounds = [
+			[ic[2][1], ic[0][0]],
+			[ic[0][1], ic[2][0]]
+		];
+		coverageLayer = L.imageOverlay(coverage.dataUrl, bounds, {
+			pane: 'coverage',
+			opacity: 0.85
+		}).addTo(map);
+	}
+
+	function pinIcon() {
+		return L.divIcon({
+			html:
+				'<div style="width:16px;height:16px;border-radius:50%;background:#e8b454;' +
+				'border:2px solid #1a1407;box-shadow:0 0 0 2px rgba(232,180,84,.35),0 1px 4px rgba(0,0,0,.5);' +
+				'box-sizing:border-box"></div>',
+			className: 'rl-pin',
+			iconSize: [16, 16],
+			iconAnchor: [8, 8]
+		});
+	}
+
+	function applyPin() {
+		if (!map || !L) return;
+		if (!pin) {
+			if (pinMarker) {
+				map.removeLayer(pinMarker);
+				pinMarker = null;
+			}
+			return;
+		}
+		if (!pinMarker) {
+			pinMarker = L.marker([pin.lat, pin.lon], {
+				draggable: true,
+				icon: pinIcon(),
+				zIndexOffset: 1000
+			}).addTo(map);
+			pinMarker.on('dragend', () => {
+				const ll = pinMarker.getLatLng();
+				onpinmove?.(ll.lat, ll.lng);
+			});
+		} else {
+			pinMarker.setLatLng([pin.lat, pin.lon]);
+		}
 	}
 
 	// ── live propagation overlay (2-D canvas, no WebGL) ────────────────────
@@ -260,11 +389,6 @@
 		ctx.globalAlpha = 1;
 	}
 
-	function toggleSound() {
-		chime.ensure(); // created within this click gesture so the browser allows it
-		chime.toggle();
-	}
-
 	onMount(() => {
 		if (audio) chime.load();
 		let destroyed = false;
@@ -287,12 +411,7 @@
 				attributionControl: true
 			});
 			L.control.zoom({ position: 'bottomright' }).addTo(map);
-			tiles = L.tileLayer(tileUrl(curLight), {
-				subdomains: 'abcd',
-				maxZoom: 19,
-				attribution:
-					'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'
-			}).addTo(map);
+			applyBasemap();
 			markers =
 				cluster && L.markerClusterGroup
 					? L.markerClusterGroup({
@@ -305,11 +424,18 @@
 			markers.addTo(map);
 			renderMarkers();
 			fit();
+			applyCoverage();
+			applyPin();
 
-			// Re-plot dots at the new zoom-scaled radius. Cluster mode keeps fixed-size
-			// divIcons (markercluster redraws those itself), so only the live/non-cluster
-			// circleMarkers need this.
-			if (!cluster) map.on('zoomend', renderMarkers);
+			// Coverage mode: a map click drops/moves the planned-transmitter pin.
+			map.on('click', (e: { latlng: { lat: number; lng: number } }) => {
+				if (coverageMode) onmapclick?.(e.latlng.lat, e.latlng.lng);
+			});
+
+			// Re-plot dots at the new zoom-scaled radius — both the live circleMarkers
+			// and the static divIcons (their size is baked at creation, so they need a
+			// rebuild to resize).
+			map.on('zoomend', renderMarkers);
 
 			if (liveMode) {
 				engine = new PulseEngine(payloadColor);
@@ -332,9 +458,9 @@
 		};
 	});
 
-	// Re-plot markers as nodes load / favourites change.
+	// Re-plot markers as nodes load / the role filter or favourites change.
 	$effect(() => {
-		void located;
+		void displayed;
 		void favorites.keys;
 		if (map) {
 			renderMarkers();
@@ -349,18 +475,37 @@
 		engine?.ingest(live.events, located);
 	});
 
-	// Swap tile theme when the UI theme toggles.
+	// Rebuild tiles + marker strokes when the UI theme toggles (themed bases change).
 	$effect(() => {
 		void theme.mode;
 		const light = isLight();
-		if (!map || !tiles || light === curLight) return;
+		if (!map || light === curLight) return;
 		curLight = light;
-		tiles.setUrl(tileUrl(light));
+		applyBasemap();
 		renderMarkers(); // marker stroke follows the theme ink colour
+	});
+
+	// Swap tiles when the user picks a different basemap.
+	$effect(() => {
+		void basemap.id;
+		if (map) applyBasemap();
+	});
+
+	// Re-render the coverage overlay / pin when the route updates them.
+	$effect(() => {
+		void coverage;
+		if (map) applyCoverage();
+	});
+	$effect(() => {
+		void pin;
+		if (map) applyPin();
 	});
 </script>
 
-<div class="relative h-full w-full">
+<!-- `isolate` contains Leaflet's high z-indices (panes/controls up to ~1000) plus
+     our banner/audio overlays in one stacking context, so a page-level modal
+     (Modal.svelte is z-50) isn't painted underneath the map. -->
+<div class="relative isolate h-full w-full">
 	<div bind:this={el} class="h-full w-full"></div>
 
 	{#if bannerOpen}
@@ -385,45 +530,6 @@
 				class="text-fg-faint hover:text-fg -mt-0.5 shrink-0 text-lg leading-none">×</button
 			>
 		</div>
-	{/if}
-
-	{#if audio}
-		<button
-			onclick={toggleSound}
-			aria-pressed={chime.on}
-			title={chime.on ? 'Mute node chimes' : 'Play a soft wind chime as pulses reach nodes'}
-			class="border-line absolute bottom-3 left-3 z-[1000] flex h-9 w-9 items-center justify-center rounded-[var(--radius)] border shadow-lg backdrop-blur-md transition-colors {chime.on
-				? 'bg-signal/20 text-signal border-signal/50'
-				: 'bg-ink-2/90 text-fg-dim hover:text-fg'}"
-		>
-			{#if chime.on}
-				<svg
-					viewBox="0 0 24 24"
-					class="h-4 w-4"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.7"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-				>
-					<path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /><path
-						d="M19 5a9 9 0 0 1 0 14"
-					/>
-				</svg>
-			{:else}
-				<svg
-					viewBox="0 0 24 24"
-					class="h-4 w-4"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.7"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-				>
-					<path d="M11 5 6 9H2v6h4l5 4z" /><path d="m22 9-6 6M16 9l6 6" />
-				</svg>
-			{/if}
-		</button>
 	{/if}
 </div>
 
@@ -451,15 +557,8 @@
 		background: var(--color-panel-2);
 		color: var(--color-fg);
 	}
-	:global(.leaflet-tooltip) {
-		background: var(--color-panel);
-		border: 1px solid var(--color-line-bright);
-		color: var(--color-fg);
-		box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-	}
-	:global(.leaflet-tooltip-top::before) {
-		border-top-color: var(--color-line-bright);
-	}
+	/* Node hover tooltips are styled site-wide in app.css (.leaflet-tooltip), to
+	   match the Tooltip.svelte bubble used across the app. */
 	:global(.rl-cluster) {
 		background: transparent;
 		border: 0;

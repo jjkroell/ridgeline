@@ -10,8 +10,11 @@
 		selected = $bindable(),
 		title = '',
 		open = $bindable(true),
+		// Vertical offset class for the absolute panel. Overridable so the WebGL-free
+		// maps can drop it below the "WebGL disabled" banner; defaults flush to the top.
+		pos = 'top-3',
 		children
-	}: { selected: Set<string>; title?: string; open?: boolean; children?: Snippet } = $props();
+	}: { selected: Set<string>; title?: string; open?: boolean; pos?: string; children?: Snippet } = $props();
 
 	const ROLES: [string, string][] = [
 		['Repeater', 'Repeaters'],
@@ -44,7 +47,7 @@
 {/snippet}
 
 {#if title}
-	<div class="border-line bg-ink-2/85 absolute top-3 left-3 z-10 w-[132px] overflow-hidden rounded-[var(--radius)] border backdrop-blur-md">
+	<div class="border-line bg-ink-2/85 absolute {pos} left-3 z-10 w-[132px] overflow-hidden rounded-[var(--radius)] border backdrop-blur-md transition-[top] duration-200">
 		<button
 			onclick={() => (open = !open)}
 			class="hover:bg-panel-2/60 flex w-full items-center gap-2 px-3 py-2 text-left transition-colors {open ? 'border-line/70 border-b' : ''}"
@@ -69,7 +72,7 @@
 		{/if}
 	</div>
 {:else}
-	<div class="border-line bg-ink-2/85 absolute top-3 left-3 z-10 flex flex-wrap gap-1 rounded-[var(--radius)] border p-1 backdrop-blur-md">
+	<div class="border-line bg-ink-2/85 absolute {pos} left-3 z-10 flex flex-wrap gap-1 rounded-[var(--radius)] border p-1 backdrop-blur-md transition-[top] duration-200">
 		{#each ROLES as [key, label] (key)}
 			{@render roleBtn(key, label)}
 		{/each}

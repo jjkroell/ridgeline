@@ -22,6 +22,7 @@
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
 	let webglOk = $state(true);
+	let fbBanner = $state(true); // WebGL-free banner open? (offsets the role filter below it)
 	let ready = false;
 	let didFit = false;
 	let allLocated = $state<Node[]>([]);
@@ -375,13 +376,36 @@
 <div class="px-6 py-6 md:px-10">
 	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
 		{#if !webglOk}
-			<FallbackMap nodes={allLocated} center={[-123.65, 49.25]} zoom={9} cluster onselect={(k) => (nodeKey = k)} />
+			<FallbackMap
+				nodes={allLocated}
+				roleFilter={selectedRoles}
+				center={[-123.65, 49.25]}
+				zoom={9}
+				cluster
+				bind:bannerOpen={fbBanner}
+				{coverage}
+				{pin}
+				{coverageMode}
+				onmapclick={(lat, lon) => {
+					pin = { lat, lon };
+					runCoverage();
+				}}
+				onpinmove={(lat, lon) => {
+					pin = { lat, lon };
+					runCoverage();
+				}}
+				onselect={(k) => (nodeKey = k)}
+			/>
+			<MapRoleFilter bind:selected={selectedRoles} pos={fbBanner ? 'top-16' : 'top-3'} />
+			<BasemapSelector posClass={fbBanner ? 'top-16 right-3' : 'top-3 right-3'} />
 		{:else}
 		<div bind:this={mapEl} class="h-full w-full"></div>
 		<MapRoleFilter bind:selected={selectedRoles} />
 		<BasemapSelector />
+		{/if}
 
-		<!-- Coverage prediction control (bottom-left; panel expands upward) -->
+		<!-- Coverage prediction control (bottom-left; panel expands upward) — shared by
+		     the MapLibre map and the WebGL-free FallbackMap. -->
 		<div class="absolute bottom-3 left-3 z-10 flex w-64 max-w-[80vw] flex-col-reverse gap-2">
 			<button
 				onclick={toggleCoverage}
@@ -444,7 +468,6 @@
 				</div>
 			{/if}
 		</div>
-		{/if}
 	</div>
 </div>
 

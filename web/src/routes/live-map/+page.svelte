@@ -21,11 +21,13 @@
 	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
 	import NodeModal from '$lib/components/NodeModal.svelte';
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
+	import ChimeControls from '$lib/components/ChimeControls.svelte';
 	import { hasWebGL } from '$lib/webgl';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
 	let webglOk = $state(true);
+	let fbBanner = $state(true); // WebGL-free banner open? (offsets the Map Control panel below it)
 	let ready = false;
 	let nodes: Node[] = [];
 	let located: Node[] = $state([]); // all located nodes (pulse resolution uses these)
@@ -466,13 +468,24 @@
 		{#if !webglOk}
 			<FallbackMap
 				nodes={located}
+				roleFilter={selectedRoles}
 				center={[-123.9, 49.2]}
 				zoom={8}
 				live
 				audio
+				bind:bannerOpen={fbBanner}
 				onselect={(k) => (nodeKey = k)}
-				notice="WebGL is disabled — showing the basic live map. Enable WebGL for terrain, the audio chime and the full-fidelity animation."
+				notice="WebGL is disabled — showing the basic live map. Enable WebGL for terrain and the full-fidelity animation."
 			/>
+			<MapRoleFilter
+				bind:selected={selectedRoles}
+				title="Map Control"
+				bind:open={mapCtrlOpen}
+				pos={fbBanner ? 'top-16' : 'top-3'}
+			>
+				<ChimeControls />
+			</MapRoleFilter>
+			<BasemapSelector posClass={fbBanner ? 'top-16 right-3' : 'top-3 right-3'} />
 		{:else}
 		<div bind:this={mapEl} class="h-full w-full"></div>
 		<BasemapSelector />
@@ -550,8 +563,10 @@
 				</div>
 			{/if}
 		</MapRoleFilter>
+		{/if}
 
-		<!-- Recent packets overlay (bottom-left) -->
+		<!-- Recent packets overlay (bottom-left) — shared by the MapLibre and
+		     WebGL-free live maps. -->
 		<div
 			class="border-line bg-ink-2/85 absolute bottom-3 left-3 z-10 w-[280px] overflow-hidden rounded-[var(--radius)] border shadow-lg backdrop-blur-md"
 		>
@@ -608,7 +623,6 @@
 				</div>
 			{/if}
 		</div>
-		{/if}
 	</div>
 </div>
 

@@ -18,6 +18,7 @@
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
 	let webglOk = $state(true);
+	let fbBanner = $state(true); // WebGL-free banner open? (offsets the basemap selector below it)
 	let nodes = $state<Node[]>([]);
 	let basemapLight = false;
 	let didFit = false;
@@ -225,9 +226,11 @@
 			center={[-123.65, 49.25]}
 			zoom={7}
 			live
+			bind:bannerOpen={fbBanner}
 			onselect={(k) => goto('/m/nodes/' + k)}
 			notice="WebGL is disabled — showing the basic live map. Enable WebGL for terrain and the full-fidelity animation."
 		/>
+		<BasemapSelector compact posClass={fbBanner ? 'top-16 left-3' : 'top-3 left-3'} />
 	{:else}
 	<div bind:this={mapEl} class="h-full w-full"></div>
 	<div class="border-line/60 bg-ink-2/80 absolute top-3 left-3 z-10 flex items-center gap-2 rounded-full border px-3 py-1.5 backdrop-blur-md">

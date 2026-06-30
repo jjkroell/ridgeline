@@ -67,6 +67,17 @@ export function leafletBasemap(id: string, light: boolean): LeafletBasemap {
 					attribution: OTM_ATTR
 				}
 			};
+		case 'localterrain':
+			// Self-hosted Joerd-style terrain (Copernicus GLO-30) via the
+			// maps.ve7kod.ca tunnel; tiles cover the mesh region, z5-z13.
+			return {
+				base: {
+					url: 'https://maps.ve7kod.ca/terrain/{z}/{x}/{y}.png',
+					maxZoom: 13,
+					attribution:
+						'Terrain: <a href="https://github.com/tilezen/joerd" target="_blank" rel="noopener">Tilezen Joerd</a> recipe · Copernicus GLO-30 · self-hosted'
+				}
+			};
 		case 'topo':
 		default:
 			// Shaded relief over the themed base — the closest raster match to the

@@ -25,8 +25,23 @@ export const BASEMAPS: BasemapOption[] = [
 	{ id: 'minimal', label: 'Minimal', desc: 'Flat, label-light base', themed: true },
 	{ id: 'street', label: 'Street', desc: 'Detailed streets & places', themed: false },
 	{ id: 'satellite', label: 'Satellite', desc: 'Aerial imagery', themed: false },
-	{ id: 'terrain', label: 'Topographic', desc: 'Contour lines & relief', themed: false }
+	{ id: 'terrain', label: 'Topographic', desc: 'Contour lines & relief', themed: false },
+	{
+		id: 'localterrain',
+		label: 'Terrain (local)',
+		desc: 'Self-hosted Joerd-style shaded relief',
+		themed: false
+	}
 ];
+
+// Self-hosted Joerd-style terrain tiles: Copernicus GLO-30 rendered (color-relief
+// + multidirectional hillshade) on the VM and served via the maps.ve7kod.ca
+// tunnel. Covers the mesh region (Vancouver Island/Bella Bella → Grand Forks,
+// US border → Olympia); outside that, tiles 404 and the map shows blank.
+const LOCAL_TERRAIN_TILES = 'https://maps.ve7kod.ca/terrain/{z}/{x}/{y}.png';
+const LOCAL_TERRAIN_ATTR =
+	'Terrain: <a href="https://github.com/tilezen/joerd" target="_blank" rel="noopener">Tilezen Joerd</a> recipe · Copernicus GLO-30 · self-hosted';
+const LOCAL_TERRAIN_MAXZOOM = 13;
 
 export const BASEMAP_IDS = new Set(BASEMAPS.map((b) => b.id));
 export const DEFAULT_BASEMAP = 'topo';
@@ -46,6 +61,8 @@ function raster(tiles: string[], attribution: string, maxzoom: number): StyleSpe
 // URL for the vector styles, or an inline raster style spec for imagery/terrain.
 export function basemapStyle(id: string, light: boolean): string | StyleSpecification {
 	switch (id) {
+		case 'localterrain':
+			return raster([LOCAL_TERRAIN_TILES], LOCAL_TERRAIN_ATTR, LOCAL_TERRAIN_MAXZOOM);
 		case 'street':
 			return 'https://tiles.openfreemap.org/styles/liberty';
 		case 'satellite':

@@ -25,6 +25,19 @@ export interface LiveGroup {
 }
 
 /**
+ * Stable, vivid colour for a packet hash. Used to tie a live-map comet to its
+ * Recent Packets row: both the animated pulse and the row's flag derive their
+ * colour from the same message hash, so it's obvious which comet is which. The
+ * hex hash is folded to a hue; saturation/lightness are fixed to read on the
+ * dark map and keep distinct packets visually separable.
+ */
+export function hashColor(hash: string): string {
+	let h = 0;
+	for (let i = 0; i < hash.length; i++) h = (Math.imul(h, 31) + hash.charCodeAt(i)) >>> 0;
+	return `hsl(${h % 360}, 78%, 62%)`;
+}
+
+/**
  * Collapse a newest-first list of live events into feed groups. Adverts (and
  * any node-resolved packet) group by node + payload type, so all of node X's
  * adverts share one row; packets with no resolved node group by message hash,

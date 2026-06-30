@@ -4,7 +4,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import type { Feature, FeatureCollection } from 'geojson';
 	import { api, type Node } from '$lib/api';
-	import { live, groupLive, type LiveGroup } from '$lib/live.svelte';
+	import { live, groupLive, hashColor, type LiveGroup } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemapStyle, basemapHasHillshade, collapseAttribution } from '$lib/map-basemap';
@@ -141,22 +141,13 @@
 	let nodeKey = $state<string | null>(null);
 	const recent = $derived(groupLive(live.events).slice(0, 15));
 
-	const PAYLOAD_COLOR: Record<string, string> = {
-		Advert: '#34e3c4',
-		TextMessage: '#5b9dff',
-		GroupText: '#a78bfa',
-		Trace: '#e8b454',
-		Ack: '#9aa7b0',
-		Request: '#6ee7a8',
-		Response: '#6ee7a8'
-	};
-	const payloadColor = (t: string) => PAYLOAD_COLOR[t] ?? '#34e3c4';
-
 	// ── propagation pulses (shared, renderer-agnostic engine) ──────────────
 	// The pulse geometry (hop resolution, comet animation, node ripples) lives in
 	// $lib/live-pulse so the WebGL-free Leaflet fallback draws the exact same
 	// animation onto a 2-D canvas; here we just feed its output into MapLibre.
-	const engine = new PulseEngine(payloadColor);
+	// Comets are coloured per message hash so each pulse matches the colour flag
+	// on its Recent Packets row below.
+	const engine = new PulseEngine((ev) => hashColor(ev.messageHash));
 
 	// Pulse each newly-seen header path as it arrives.
 	$effect(() => {
@@ -601,6 +592,11 @@
 									onclick={() => (selected = g)}
 									class="panel-hover flex w-full items-center gap-2 px-3 py-1.5 text-left"
 								>
+									<span
+										class="h-4 w-1 shrink-0 rounded-full"
+										style="background:{hashColor(g.messageHash)}"
+										title="Matches this packet's comet on the map"
+									></span>
 									<PayloadTag type={g.payloadType} />
 									<span class="min-w-0 flex-1 truncate text-xs">
 										{#if g.node}

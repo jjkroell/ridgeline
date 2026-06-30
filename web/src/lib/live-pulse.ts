@@ -94,10 +94,12 @@ export class PulseEngine {
 	// transmission over several seconds, so firing on arrival animates the flood
 	// spreading in real time rather than dumping every branch at once.
 	private fired = new Map<string, number>();
-	private payloadColor: (t: string) => string;
+	private colorFor: (ev: LiveEvent) => string;
 
-	constructor(payloadColor: (t: string) => string) {
-		this.payloadColor = payloadColor;
+	// colorFor picks a comet's colour from its event — keyed on the message hash
+	// so the pulse matches its Recent Packets row (see hashColor in live.svelte).
+	constructor(colorFor: (ev: LiveEvent) => string) {
+		this.colorFor = colorFor;
 	}
 
 	private addAnim(pts: LngLat[], color: string, uncertain: boolean) {
@@ -135,7 +137,7 @@ export class PulseEngine {
 			if (this.fired.has(key)) continue;
 			this.fired.set(key, now);
 			const { pts, uncertain } = resolvePath(located, ev.path);
-			if (pts.length >= 2) this.addAnim(pts, this.payloadColor(ev.payloadType), uncertain);
+			if (pts.length >= 2) this.addAnim(pts, this.colorFor(ev), uncertain);
 		}
 		const cutoff = now - 90000;
 		for (const [k, t] of this.fired) if (t < cutoff) this.fired.delete(k);

@@ -17,7 +17,7 @@
 	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
 	import { favorites } from '$lib/favorites.svelte';
 	import { roleLabel } from '$lib/format';
-	import { live } from '$lib/live.svelte';
+	import { live, hashColor } from '$lib/live.svelte';
 	import { PulseEngine } from '$lib/live-pulse';
 	import { chime } from '$lib/live-audio.svelte';
 	import { basemap } from '$lib/basemap.svelte';
@@ -298,16 +298,6 @@
 	let engine: PulseEngine | null = null;
 	let pulseCanvas: HTMLCanvasElement | null = null;
 	let raf = 0;
-	const PAYLOAD_COLOR: Record<string, string> = {
-		Advert: '#34e3c4',
-		TextMessage: '#5b9dff',
-		GroupText: '#a78bfa',
-		Trace: '#e8b454',
-		Ack: '#9aa7b0',
-		Request: '#6ee7a8',
-		Response: '#6ee7a8'
-	};
-	const payloadColor = (t: string) => PAYLOAD_COLOR[t] ?? '#34e3c4';
 
 	function sizeCanvas() {
 		if (!pulseCanvas || !map) return;
@@ -438,7 +428,7 @@
 			map.on('zoomend', renderMarkers);
 
 			if (liveMode) {
-				engine = new PulseEngine(payloadColor);
+				engine = new PulseEngine((ev) => hashColor(ev.messageHash));
 				pulseCanvas = document.createElement('canvas');
 				pulseCanvas.style.cssText =
 					'position:absolute;inset:0;pointer-events:none;z-index:400';

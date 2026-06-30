@@ -5,7 +5,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import type { FeatureCollection } from 'geojson';
 	import { api, type Node } from '$lib/api';
-	import { live } from '$lib/live.svelte';
+	import { live, hashColor } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import { basemapStyle, basemapHasHillshade, collapseAttribution } from '$lib/map-basemap';
 	import { basemap } from '$lib/basemap.svelte';
@@ -80,9 +80,11 @@
 		};
 	}
 
-	function spawn(ev: { path?: string[]; payloadType: string }) {
+	function spawn(ev: { path?: string[]; payloadType: string; messageHash: string }) {
 		if (!ev.path?.length) return;
-		const color = ev.payloadType === 'GroupText' ? '#5b9dff' : ev.payloadType === 'Advert' ? '#34e3c4' : '#e8b454';
+		// Colour per message hash, matching the desktop comets (and the Recent
+		// Packets flag there); keeps the propagation colours consistent app-wide.
+		const color = hashColor(ev.messageHash);
 		const now = performance.now();
 		const coords: [number, number][] = [];
 		ev.path.forEach((hop, i) => {

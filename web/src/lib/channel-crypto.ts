@@ -91,7 +91,7 @@ export function decryptGroupText(payloadHex: string, keyHex: string): Decoded | 
 		if (sep <= 0) return null;
 		try {
 			const message = strict.decode(body.subarray(sep + 2));
-			return { ts, sender: '(unknown)', text: message };
+			return { ts, sender: '(corrupt name)', text: message };
 		} catch {
 			return null;
 		}

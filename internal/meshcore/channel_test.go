@@ -82,7 +82,7 @@ func TestDecodeGroupTextCorruptSenderName(t *testing.T) {
 	if gt.Message != "hello world" {
 		t.Errorf("message = %q, want %q", gt.Message, "hello world")
 	}
-	if gt.Sender != "(unknown)" {
-		t.Errorf("sender = %q, want %q", gt.Sender, "(unknown)")
+	if gt.Sender != "(corrupt name)" {
+		t.Errorf("sender = %q, want %q", gt.Sender, "(corrupt name)")
 	}
 }

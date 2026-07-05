@@ -113,7 +113,7 @@ func decryptGroupText(ciphertext, mac, key []byte) (ts uint32, sender, message s
 	// key. Recover the message body when it's readable rather than dropping the
 	// whole message; the broken name is unshowable, so use a placeholder.
 	if sep := bytes.Index(text, []byte(": ")); sep > 0 && utf8.Valid(text[sep+2:]) {
-		return ts, "(unknown)", string(text[sep+2:]), true
+		return ts, "(corrupt name)", string(text[sep+2:]), true
 	}
 	return 0, "", "", false
 }

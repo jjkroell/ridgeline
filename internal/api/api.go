@@ -64,6 +64,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/observers/{id}/telemetry", s.observerTelemetry)
 	mux.HandleFunc("GET /api/observations", s.observations)
 	mux.HandleFunc("GET /api/recent", s.recent)
+	mux.HandleFunc("GET /api/channels/recent", s.channelsRecent)
 	mux.HandleFunc("GET /api/live", s.live)
 
 	// Admin (auth-gated): injection detection + quarantine/purge.
@@ -437,6 +438,35 @@ func (s *Server) recent(w http.ResponseWriter, r *http.Request) {
 		}
 		// Hide quarantined traffic from feed history too (live WS is already
 		// clean — blocked packets are dropped at ingest before broadcast).
+		if s.store.ShouldDrop(pkt, ro.ObserverID) {
+			continue
+		}
+		out = append(out, newLiveEvent(pkt, ro.RawHex, ro.ObserverID, ro.Region, ro.ReceivedAt, ro.SNR, ro.RSSI))
+	}
+	writeJSON(w, out)
+}
+
+// channelsRecent returns channel (GroupText) message history in the live-event
+// shape, newest first, over the last `since` seconds (default & max 24h). Unlike
+// /api/recent it filters to GroupText and returns one row per distinct message
+// (collapsing observer copies), so the chat reader can show a full day of
+// messages without the all-traffic row cap truncating history to ~30 minutes.
+func (s *Server) channelsRecent(w http.ResponseWriter, r *http.Request) {
+	sinceSec := queryInt(r, "since", 24*3600, 1, 24*3600)
+	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
+
+	raws, err := s.store.RecentGroupText(cutoff, 10000)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+
+	out := make([]LiveEvent, 0, len(raws))
+	for _, ro := range raws {
+		pkt, err := meshcore.DecodeHex(ro.RawHex)
+		if err != nil || pkt == nil {
+			continue
+		}
 		if s.store.ShouldDrop(pkt, ro.ObserverID) {
 			continue
 		}

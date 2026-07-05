@@ -272,6 +272,39 @@ func (s *Store) RecentRaw(sinceISO string, limit int) ([]RawObservation, error) 
 	return s.rawSince(sinceISO, limit)
 }
 
+// RecentGroupText returns one raw observation per distinct channel message
+// (grouped by message_hash), newest first, for GroupText payloads received at
+// or after sinceISO. Collapsing the ~N observer copies of each transmission
+// keeps a long (24h) channel-history window compact — the channel reader dedups
+// by message hash anyway, so it only needs one copy of each.
+func (s *Store) RecentGroupText(sinceISO string, limit int) ([]RawObservation, error) {
+	if limit <= 0 || limit > 20000 {
+		limit = 10000
+	}
+	rows, err := s.db.Query(`
+		SELECT raw_hex, COALESCE(observer_id,''), COALESCE(region,''), snr, rssi, received_at, MAX(id)
+		FROM observations
+		WHERE payload_type = 'GroupText' AND received_at >= ?
+		GROUP BY message_hash
+		ORDER BY MAX(id) DESC
+		LIMIT ?`, sinceISO, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []RawObservation{}
+	for rows.Next() {
+		var o RawObservation
+		var id int64 // MAX(id): drives newest-per-hash ordering, not returned
+		if err := rows.Scan(&o.RawHex, &o.ObserverID, &o.Region, &o.SNR, &o.RSSI, &o.ReceivedAt, &id); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
 // rawSince runs the shared "raw observations since a timestamp, newest first"
 // query used by both RawWindow and RecentRaw.
 func (s *Store) rawSince(sinceISO string, limit int) ([]RawObservation, error) {

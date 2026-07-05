@@ -75,14 +75,33 @@ export function decryptGroupText(payloadHex: string, keyHex: string): Decoded | 
 	const nul = body.indexOf(0); // trim at null terminator
 	if (nul >= 0) body = body.subarray(0, nul);
 
-	let text: string;
+	const strict = new TextDecoder('utf-8', { fatal: true });
 	try {
-		text = new TextDecoder('utf-8', { fatal: true }).decode(body);
+		const text = strict.decode(body);
+		const { sender, message } = splitSender(text);
+		return { ts, sender, text: message };
 	} catch {
-		return null; // invalid UTF-8 → almost certainly the wrong key
+		// The 2-byte HMAC already authenticated this payload against the channel
+		// key, so invalid UTF-8 here is a corrupt *sender name* (seen in the wild
+		// from misbehaving clients), not the wrong key. Recover the message body
+		// when it's readable rather than discarding the whole (valid) message; the
+		// broken name is unshowable, so surface a placeholder. Requiring the body
+		// itself to be valid UTF-8 preserves the wrong-key guard.
+		const sep = indexOfSeq(body, 0x3a, 0x20); // ": "
+		if (sep <= 0) return null;
+		try {
+			const message = strict.decode(body.subarray(sep + 2));
+			return { ts, sender: '(unknown)', text: message };
+		} catch {
+			return null;
+		}
 	}
-	const { sender, message } = splitSender(text);
-	return { ts, sender, text: message };
+}
+
+/** Index of the first `a,c` byte pair in b, or -1. */
+function indexOfSeq(b: Uint8Array, a: number, c: number): number {
+	for (let i = 0; i + 1 < b.length; i++) if (b[i] === a && b[i + 1] === c) return i;
+	return -1;
 }
 
 /** Separate a "sender: message" prefix when present and plausible. */

@@ -8,8 +8,8 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
 
-	// How far back the reader pulls history (server caps /api/recent at 6h).
-	const HISTORY_SEC = 21600;
+	// How far back the reader pulls history (server caps channel history at 24h).
+	const HISTORY_SEC = 86400;
 
 	let history = $state<LiveEvent[]>([]);
 	let loadingHistory = $state(true);
@@ -21,7 +21,7 @@
 		channels.init();
 		if (!selectedId && channels.list.length) selectedId = channels.list[0].id;
 		try {
-			history = await api.recent(HISTORY_SEC);
+			history = await api.channelHistory(HISTORY_SEC);
 		} finally {
 			loadingHistory = false;
 		}

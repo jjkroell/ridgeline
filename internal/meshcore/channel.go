@@ -104,11 +104,18 @@ func decryptGroupText(ciphertext, mac, key []byte) (ts uint32, sender, message s
 	if i := bytes.IndexByte(text, 0); i >= 0 { // trim at null terminator
 		text = text[:i]
 	}
-	if !utf8.Valid(text) {
-		return 0, "", "", false
+	if utf8.Valid(text) {
+		sender, message = splitSender(string(text))
+		return ts, sender, message, true
 	}
-	sender, message = splitSender(string(text))
-	return ts, sender, message, true
+	// The 2-byte HMAC already authenticated this payload against the channel key,
+	// so invalid UTF-8 is a corrupt sender name (seen in the wild), not the wrong
+	// key. Recover the message body when it's readable rather than dropping the
+	// whole message; the broken name is unshowable, so use a placeholder.
+	if sep := bytes.Index(text, []byte(": ")); sep > 0 && utf8.Valid(text[sep+2:]) {
+		return ts, "(unknown)", string(text[sep+2:]), true
+	}
+	return 0, "", "", false
 }
 
 // splitSender separates a "sender: message" prefix when present and plausible.

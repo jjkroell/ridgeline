@@ -6,7 +6,7 @@
 	import { api, type LiveEvent } from '$lib/api';
 	import { ago } from '$lib/format';
 
-	const HISTORY_SEC = 21600;
+	const HISTORY_SEC = 86400;
 	let history = $state<LiveEvent[]>([]);
 	let loadingHistory = $state(true);
 	let selectedId = $state<string | null>(null);
@@ -15,7 +15,7 @@
 	onMount(async () => {
 		channels.init();
 		try {
-			history = await api.recent(HISTORY_SEC);
+			history = await api.channelHistory(HISTORY_SEC);
 		} finally {
 			loadingHistory = false;
 		}

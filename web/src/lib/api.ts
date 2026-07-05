@@ -438,6 +438,12 @@ export const api = {
 	observations: (limit = 100) => get<Observation[]>(`/api/observations?limit=${limit}`),
 	/** Recent history (default last hour) in the live-event shape, newest first. */
 	recent: (sinceSec = 3600) => get<LiveEvent[]>(`/api/recent?since=${sinceSec}`),
+	/**
+	 * Channel (GroupText) message history, newest first, one row per distinct
+	 * message. Default & max 24h — for the channel chat reader.
+	 */
+	channelHistory: (sinceSec = 86400) =>
+		get<LiveEvent[]>(`/api/channels/recent?since=${sinceSec}`),
 	/** Mesh-wide analytics over the last sinceSec seconds (default 6h, max 24h). */
 	meshAnalytics: (sinceSec = 21600, bucketMin = 10) =>
 		get<MeshAnalytics>(`/api/mesh-analytics?since=${sinceSec}&bucket=${bucketMin}`)

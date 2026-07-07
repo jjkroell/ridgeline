@@ -13,6 +13,7 @@
 	import { hasWebGL } from '$lib/webgl';
 	import LeafletInset from '$lib/components/LeafletInset.svelte';
 	import ClaimPanel from '$lib/components/ClaimPanel.svelte';
+	import PrivateLocationPanel from '$lib/components/PrivateLocationPanel.svelte';
 	import NotesPanel from '$lib/components/NotesPanel.svelte';
 
 	const pubkey = $derived((page.params.pubkey ?? '').toUpperCase());
@@ -152,6 +153,11 @@
 		<!-- ownership claim -->
 		<div class="mb-3">
 			<ClaimPanel {pubkey} compact />
+		</div>
+
+		<!-- private exact location (owner-only) -->
+		<div class="mb-3">
+			<PrivateLocationPanel {pubkey} seedLat={node?.latitude} seedLon={node?.longitude} compact />
 		</div>
 
 		<!-- notes -->

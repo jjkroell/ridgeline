@@ -17,6 +17,7 @@
 	import FavoriteStar from './FavoriteStar.svelte';
 	import Tooltip from './Tooltip.svelte';
 	import ClaimPanel from './ClaimPanel.svelte';
+	import PrivateLocationPanel from './PrivateLocationPanel.svelte';
 	import NotesPanel from './NotesPanel.svelte';
 
 	interface Props {
@@ -339,6 +340,11 @@
 	<!-- Ownership claim -->
 	<div class="mb-5">
 		<ClaimPanel {pubkey} {compact} />
+	</div>
+
+	<!-- Private exact location (owner-only; renders nothing otherwise) -->
+	<div class="mb-5">
+		<PrivateLocationPanel {pubkey} seedLat={node?.latitude} seedLon={node?.longitude} {compact} />
 	</div>
 
 	<!-- Notes -->

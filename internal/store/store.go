@@ -153,6 +153,20 @@ CREATE TABLE IF NOT EXISTS node_notes (
 );
 CREATE INDEX IF NOT EXISTS idx_notes_node ON node_notes(node_pubkey);
 CREATE INDEX IF NOT EXISTS idx_notes_user ON node_notes(user_id);
+
+-- node_private_locations holds a node's owner-set exact coordinates. This is
+-- SENSITIVE (a ham operator's real antenna/home location) and is DELIBERATELY
+-- separate from the nodes table: it is never joined into /api/nodes, node detail,
+-- the live WebSocket, or analytics. Only the node's verified owner (and, in a
+-- later phase, users they explicitly share with) may read it. One row per node.
+CREATE TABLE IF NOT EXISTS node_private_locations (
+	node_pubkey TEXT PRIMARY KEY,            -- uppercase hex
+	user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, -- who set it
+	latitude    REAL NOT NULL,
+	longitude   REAL NOT NULL,
+	label       TEXT NOT NULL DEFAULT '',    -- optional owner note ("rooftop", "repeater site")
+	updated_at  TEXT NOT NULL
+);
 `
 
 // Store wraps a SQLite database.

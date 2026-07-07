@@ -138,8 +138,8 @@
 				</div>
 			{/if}
 			<p class="text-fg-faint mt-3 text-xs leading-relaxed">
-				You can add public and private notes and set this node's private exact location (coming in
-				the next update).
+				You can add public and private notes and set this node's private exact location — see the
+				panels below.
 			</p>
 		{:else if status.owner}
 			<!-- Owned by someone else -->

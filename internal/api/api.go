@@ -82,6 +82,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/claims/mine", s.requireUser(s.claimsMine))
 	mux.HandleFunc("DELETE /api/claims/{pubkey}", s.requireUser(s.claimDelete))
 
+	// Node private exact location (owner-only, all methods). Kept entirely
+	// separate from the public node data — never joined into /api/nodes or WS.
+	mux.HandleFunc("GET /api/nodes/{pubkey}/private-location", s.requireUser(s.privateLocationGet))
+	mux.HandleFunc("PUT /api/nodes/{pubkey}/private-location", s.requireUser(s.privateLocationSet))
+	mux.HandleFunc("DELETE /api/nodes/{pubkey}/private-location", s.requireUser(s.privateLocationDelete))
+
 	// Node notes (public + private). Reading is public; writing needs a login.
 	mux.HandleFunc("POST /api/nodes/{pubkey}/notes", s.requireUser(s.noteCreate))
 	mux.HandleFunc("PATCH /api/notes/{id}", s.requireUser(s.noteUpdate))

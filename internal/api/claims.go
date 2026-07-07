@@ -128,6 +128,17 @@ func (s *Server) claimDelete(w http.ResponseWriter, r *http.Request, user store.
 		writeErr(w, http.StatusBadRequest, "invalid node public key")
 		return
 	}
+	// If the caller is releasing verified ownership, drop the node's private
+	// exact location too so a future owner can't inherit their coordinates.
+	if owns, err := s.ownsNode(pubkey, user.ID); err != nil {
+		s.fail(w, err)
+		return
+	} else if owns {
+		if _, err := s.store.DeletePrivateLocation(pubkey); err != nil {
+			s.fail(w, err)
+			return
+		}
+	}
 	removed, err := s.store.DeleteClaim(pubkey, user.ID)
 	if err != nil {
 		s.fail(w, err)

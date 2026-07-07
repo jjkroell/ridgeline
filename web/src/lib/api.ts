@@ -595,6 +595,44 @@ export const notes = {
 	remove: (csrf: string, id: number) => mutate<{ ok: boolean }>(`/api/notes/${id}`, 'DELETE', csrf)
 };
 
+// ---- Node private exact location (owner-only) ----
+
+export interface PrivateLocation {
+	nodePubkey: string;
+	userId: number;
+	latitude: number;
+	longitude: number;
+	label: string;
+	updatedAt: string;
+}
+
+/** GET response: `set` says whether a location exists; `location` is present when it does. */
+export interface PrivateLocationResult {
+	set: boolean;
+	location?: PrivateLocation;
+}
+
+export const privateLocation = {
+	/** Owner-only: fetch a node's private exact location (403 for non-owners). */
+	get: (pubkey: string) =>
+		get<PrivateLocationResult>(`/api/nodes/${encodeURIComponent(pubkey)}/private-location`),
+	/** Owner-only: store/replace the private exact location. */
+	set: (csrf: string, pubkey: string, latitude: number, longitude: number, label: string) =>
+		mutate<PrivateLocationResult>(
+			`/api/nodes/${encodeURIComponent(pubkey)}/private-location`,
+			'PUT',
+			csrf,
+			{ latitude, longitude, label }
+		),
+	/** Owner-only: clear the private exact location. */
+	remove: (csrf: string, pubkey: string) =>
+		mutate<{ ok: boolean }>(
+			`/api/nodes/${encodeURIComponent(pubkey)}/private-location`,
+			'DELETE',
+			csrf
+		)
+};
+
 /** Admin member management (session-admin gated). */
 export const adminUsers = {
 	list: () => get<AuthUser[]>('/api/admin/users'),

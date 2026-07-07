@@ -12,6 +12,7 @@
 	let list = $state<Note[]>([]);
 	let loading = $state(true);
 	let error = $state('');
+	let expanded = $state(false);
 
 	// New-note composer.
 	let body = $state('');
@@ -86,11 +87,16 @@
 	}
 </script>
 
-<div class="panel {compact ? 'px-4 py-4' : 'px-5 py-5'}">
-	<div class="label normal-case text-fg-dim mb-3 flex items-center gap-2">
+<div class="panel {compact ? 'px-4 py-3.5' : 'px-5 py-4'}">
+	<!-- Collapsed header: click to expand -->
+	<button
+		type="button"
+		onclick={() => (expanded = !expanded)}
+		class="flex w-full items-center gap-2 text-left"
+	>
 		<svg
 			viewBox="0 0 24 24"
-			class="text-fg-faint h-4 w-4"
+			class="text-fg-faint h-4 w-4 shrink-0"
 			fill="none"
 			stroke="currentColor"
 			stroke-width="1.6"
@@ -98,10 +104,34 @@
 			stroke-linejoin="round"
 			><path d="M4 4h16v12H7l-3 3zM8 9h8M8 12h5" /></svg
 		>
-		Notes
-		{#if list.length}<span class="text-fg-faint">{list.length}</span>{/if}
-	</div>
+		<span class="label normal-case text-fg-dim shrink-0">Notes</span>
+		{#if list.length}
+			<span class="bg-line/60 text-fg-dim shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-600"
+				>{list.length}</span
+			>
+		{/if}
+		{#if !expanded}
+			<span class="text-fg-faint min-w-0 flex-1 truncate text-xs">
+				{#if list.length}{list[0].authorName}: {list[0].body}{:else}{auth.loggedIn
+						? 'Add a note'
+						: 'No notes yet'}{/if}
+			</span>
+		{:else}
+			<span class="flex-1"></span>
+		{/if}
+		<svg
+			viewBox="0 0 24 24"
+			class="text-fg-faint h-4 w-4 shrink-0 transition-transform {expanded ? 'rotate-180' : ''}"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.8"
+			stroke-linecap="round"
+			stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg
+		>
+	</button>
 
+	{#if expanded}
+		<div class="mt-4">
 	<!-- Composer -->
 	{#if auth.loggedIn}
 		<div class="border-line/70 mb-4 rounded-[var(--radius)] border p-3">
@@ -208,6 +238,8 @@
 					{/if}
 				</div>
 			{/each}
+		</div>
+	{/if}
 		</div>
 	{/if}
 </div>

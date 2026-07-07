@@ -172,6 +172,13 @@
 								>{auth.isAdmin ? 'Admin' : auth.canClaim ? 'Member' : 'Account'}</span
 							>
 						</span>
+						{#if auth.unseenShares > 0}
+							<span
+								title="{auth.unseenShares} node{auth.unseenShares === 1 ? '' : 's'} newly shared with you"
+								class="bg-signal text-ink grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1.5 text-[0.65rem] font-700"
+								>{auth.unseenShares}</span
+							>
+						{/if}
 					</a>
 				{:else}
 					<a

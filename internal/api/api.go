@@ -96,6 +96,10 @@ func (s *Server) Handler() http.Handler {
 	// User autocomplete for the share picker (signed-in; returns id + name only).
 	mux.HandleFunc("GET /api/users/search", s.requireUser(s.usersSearch))
 
+	// Grantee-facing: nodes shared with me + mark-them-seen (clears the badge).
+	mux.HandleFunc("GET /api/shares/mine", s.requireUser(s.sharesMine))
+	mux.HandleFunc("POST /api/shares/mark-seen", s.requireUser(s.sharesMarkSeen))
+
 	// Node notes (public/private/team). Reading is public; writing needs a login.
 	mux.HandleFunc("POST /api/nodes/{pubkey}/notes", s.requireUser(s.noteCreate))
 	mux.HandleFunc("PATCH /api/notes/{id}", s.requireUser(s.noteUpdate))

@@ -2,7 +2,7 @@
 // The cookie is authoritative; this store mirrors it for the UI and holds the
 // CSRF token that authenticated mutations must echo. Initialised once from
 // /api/auth/me on app start (auth.init()).
-import { authApi, type AuthUser } from './api';
+import { authApi, shares, type AuthUser } from './api';
 
 class Auth {
 	user = $state<AuthUser | null>(null);
@@ -10,16 +10,30 @@ class Auth {
 	csrf = $state('');
 	/** True once the initial /me probe has resolved (so UI can avoid flicker). */
 	ready = $state(false);
+	/** Nodes newly shared with the user, not yet seen — drives the account badge. */
+	unseenShares = $state(0);
 
 	async init() {
 		try {
 			const r = await authApi.me();
 			this.user = r.user;
 			this.csrf = r.csrfToken ?? '';
+			this.unseenShares = r.unseenShares ?? 0;
 		} catch {
 			// Offline or server error — treat as signed out; UI stays usable.
 		}
 		this.ready = true;
+	}
+
+	/** Clear the "new shares" badge once the user has seen their list. */
+	async markSharesSeen() {
+		if (this.unseenShares === 0 || !this.csrf) return;
+		try {
+			await shares.markSeen(this.csrf);
+			this.unseenShares = 0;
+		} catch {
+			/* leave the badge; it clears on next successful attempt */
+		}
 	}
 
 	async register(email: string, password: string, displayName: string) {
@@ -38,12 +52,14 @@ class Auth {
 		} finally {
 			this.user = null;
 			this.csrf = '';
+			this.unseenShares = 0;
 		}
 	}
 
-	#adopt(r: { user: AuthUser | null; csrfToken?: string }) {
+	#adopt(r: { user: AuthUser | null; csrfToken?: string; unseenShares?: number }) {
 		this.user = r.user;
 		this.csrf = r.csrfToken ?? '';
+		this.unseenShares = r.unseenShares ?? 0;
 	}
 
 	get loggedIn() {

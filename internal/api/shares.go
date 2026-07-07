@@ -33,6 +33,30 @@ func (s *Server) usersSearch(w http.ResponseWriter, r *http.Request, user store.
 	writeJSON(w, res)
 }
 
+// sharesMine returns the nodes whose private location has been shared WITH the
+// caller (the grantee-facing "Shared with me" list).
+func (s *Server) sharesMine(w http.ResponseWriter, _ *http.Request, user store.User) {
+	shares, err := s.store.SharesForUser(user.ID)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	if shares == nil {
+		shares = []store.SharedWithMe{}
+	}
+	writeJSON(w, shares)
+}
+
+// sharesMarkSeen clears the caller's unseen-share flags (called when they view
+// their Shared-with-me list), so the account badge resets.
+func (s *Server) sharesMarkSeen(w http.ResponseWriter, _ *http.Request, user store.User) {
+	if err := s.store.MarkSharesSeen(user.ID); err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
 // locationSharesList returns the users a node's private location is shared with.
 // Owner-only.
 func (s *Server) locationSharesList(w http.ResponseWriter, r *http.Request, user store.User) {

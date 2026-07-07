@@ -103,8 +103,28 @@ func TestLocationSharingFlow(t *testing.T) {
 		t.Errorf("revoked friend GET should be 403, got %d", resp.StatusCode)
 	}
 
-	// Re-share, then release ownership → shares (and location) are dropped.
+	// Re-share so the friend has a share for the discovery checks below.
 	member.do("POST", "/api/nodes/"+node+"/location-shares", map[string]string{"email": "friend@example.com"}, true)
+
+	// Discovery: the friend's /me now reports an unseen share (badge), and
+	// /api/shares/mine returns 200. Marking seen clears the badge.
+	_, fme := friend.do("GET", "/api/auth/me", nil, false)
+	if int(fme["unseenShares"].(float64)) != 1 {
+		t.Errorf("friend should have 1 unseen share, got %v", fme["unseenShares"])
+	}
+	if resp, _ := friend.do("GET", "/api/shares/mine", nil, false); resp.StatusCode != 200 {
+		t.Errorf("shares/mine should be 200, got %d", resp.StatusCode)
+	}
+	if mine, _ := st.SharesForUser(memberID); len(mine) != 0 {
+		t.Errorf("owner is not a grantee; expected 0, got %d", len(mine))
+	}
+	friend.do("POST", "/api/shares/mark-seen", nil, true)
+	_, fme2 := friend.do("GET", "/api/auth/me", nil, false)
+	if int(fme2["unseenShares"].(float64)) != 0 {
+		t.Errorf("badge should clear after mark-seen, got %v", fme2["unseenShares"])
+	}
+
+	// Releasing ownership → shares (and location) are dropped.
 	member.do("DELETE", "/api/claims/"+node, nil, true)
 	if shares, _ := st.ListLocationShares(node); len(shares) != 0 {
 		t.Errorf("shares should be dropped on ownership release, got %d", len(shares))

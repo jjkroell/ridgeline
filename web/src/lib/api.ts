@@ -472,6 +472,8 @@ export interface AuthUser {
 export interface AuthResponse {
 	user: AuthUser | null;
 	csrfToken?: string;
+	/** Count of nodes newly shared with the user (not yet seen) — account badge. */
+	unseenShares?: number;
 }
 
 // Session cookies are HttpOnly and set by the server; same-origin fetches send
@@ -666,6 +668,23 @@ export const privateLocation = {
 			'DELETE',
 			csrf
 		)
+};
+
+/** A node whose private location has been shared WITH the current user. */
+export interface SharedWithMe {
+	nodePubkey: string;
+	nodeName: string;
+	nodeRole: string;
+	sharedById: number;
+	sharedByName: string;
+	createdAt: string;
+	seen: boolean;
+}
+
+/** Grantee-facing: the nodes shared with me + clearing the "new" badge. */
+export const shares = {
+	mine: () => get<SharedWithMe[]>('/api/shares/mine'),
+	markSeen: (csrf: string) => mutate<{ ok: boolean }>('/api/shares/mark-seen', 'POST', csrf)
 };
 
 /** Owner-only management of who a node's private location is shared with. */

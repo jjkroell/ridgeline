@@ -86,10 +86,19 @@ func csrfOK(r *http.Request, sess store.Session) bool {
 }
 
 // authResp is the shape returned by register/login/me. User is null when not
-// authenticated; csrfToken is included so the SPA can send it on mutations.
+// authenticated; csrfToken is included so the SPA can send it on mutations;
+// unseenShares drives the account badge for newly shared-with nodes.
 type authResp struct {
-	User      *store.User `json:"user"`
-	CSRFToken string      `json:"csrfToken,omitempty"`
+	User         *store.User `json:"user"`
+	CSRFToken    string      `json:"csrfToken,omitempty"`
+	UnseenShares int         `json:"unseenShares"`
+}
+
+// authRespFor builds the authenticated response, filling in the unseen-share
+// count (best-effort; a lookup error just leaves it at zero).
+func (s *Server) authRespFor(u store.User, csrf string) authResp {
+	n, _ := s.store.UnseenShareCount(u.ID)
+	return authResp{User: &u, CSRFToken: csrf, UnseenShares: n}
 }
 
 func (s *Server) authRegister(w http.ResponseWriter, r *http.Request) {
@@ -190,8 +199,7 @@ func (s *Server) authMe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, authResp{User: nil})
 		return
 	}
-	u := user
-	writeJSON(w, authResp{User: &u, CSRFToken: sess.CSRF})
+	writeJSON(w, s.authRespFor(user, sess.CSRF))
 }
 
 // adminListUsers returns all accounts for the admin console (session-admin gated).
@@ -349,8 +357,7 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user store
 		HttpOnly: false, Secure: secure, SameSite: http.SameSiteLaxMode,
 		MaxAge: int(sessionTTL.Seconds()),
 	})
-	u := user
-	writeJSON(w, authResp{User: &u, CSRFToken: csrf})
+	writeJSON(w, s.authRespFor(user, csrf))
 }
 
 func (s *Server) clearSessionCookies(w http.ResponseWriter, r *http.Request) {

@@ -22,12 +22,73 @@ func (s *Store) ShareLocation(nodePubkey string, ownerUserID, granteeUserID int6
 	nodePubkey = strings.ToUpper(nodePubkey)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err := s.db.Exec(`
-		INSERT INTO location_shares (node_pubkey, owner_user_id, grantee_user_id, created_at)
-		VALUES (?,?,?,?)
+		INSERT INTO location_shares (node_pubkey, owner_user_id, grantee_user_id, created_at, seen)
+		VALUES (?,?,?,?,0)
 		ON CONFLICT(node_pubkey, grantee_user_id) DO UPDATE SET
 			owner_user_id = excluded.owner_user_id,
-			created_at    = excluded.created_at`,
+			created_at    = excluded.created_at,
+			seen          = 0`,
 		nodePubkey, ownerUserID, granteeUserID, now)
+	return err
+}
+
+// SharedWithMe is a node whose private location has been shared with a user,
+// with the node's display fields and who shared it — for the grantee's
+// "Shared with me" list.
+type SharedWithMe struct {
+	NodePubkey   string `json:"nodePubkey"`
+	NodeName     string `json:"nodeName"`
+	NodeRole     string `json:"nodeRole"`
+	SharedByID   int64  `json:"sharedById"`
+	SharedByName string `json:"sharedByName"`
+	CreatedAt    string `json:"createdAt"`
+	Seen         bool   `json:"seen"`
+}
+
+// SharesForUser returns the nodes shared with granteeUserID (newest first),
+// each annotated with the node's name/role and who shared it.
+func (s *Store) SharesForUser(granteeUserID int64) ([]SharedWithMe, error) {
+	rows, err := s.db.Query(`
+		SELECT ls.node_pubkey, COALESCE(n.name,''), COALESCE(n.role,''),
+		       ls.owner_user_id, COALESCE(NULLIF(o.display_name,''), o.email),
+		       ls.created_at, ls.seen
+		FROM location_shares ls
+		JOIN users o ON o.id = ls.owner_user_id
+		LEFT JOIN nodes n ON n.pubkey = ls.node_pubkey
+		WHERE ls.grantee_user_id = ?
+		ORDER BY ls.created_at DESC`, granteeUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []SharedWithMe
+	for rows.Next() {
+		var sh SharedWithMe
+		var seen int
+		if err := rows.Scan(&sh.NodePubkey, &sh.NodeName, &sh.NodeRole, &sh.SharedByID,
+			&sh.SharedByName, &sh.CreatedAt, &seen); err != nil {
+			return nil, err
+		}
+		sh.Seen = seen != 0
+		out = append(out, sh)
+	}
+	return out, rows.Err()
+}
+
+// UnseenShareCount returns how many nodes have been shared with the user that
+// they haven't seen yet (drives the account badge).
+func (s *Store) UnseenShareCount(granteeUserID int64) (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM location_shares WHERE grantee_user_id = ? AND seen = 0`,
+		granteeUserID).Scan(&n)
+	return n, err
+}
+
+// MarkSharesSeen clears the unseen flag on all of a user's shares (called when
+// they view their Shared-with-me list).
+func (s *Store) MarkSharesSeen(granteeUserID int64) error {
+	_, err := s.db.Exec(`UPDATE location_shares SET seen = 1 WHERE grantee_user_id = ? AND seen = 0`,
+		granteeUserID)
 	return err
 }
 

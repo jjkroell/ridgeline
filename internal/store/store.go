@@ -178,6 +178,7 @@ CREATE TABLE IF NOT EXISTS location_shares (
 	owner_user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 	grantee_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 	created_at      TEXT NOT NULL,
+	seen            INTEGER NOT NULL DEFAULT 0, -- grantee has seen this share (badge/alert)
 	PRIMARY KEY (node_pubkey, grantee_user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_location_shares_grantee ON location_shares(grantee_user_id);
@@ -254,6 +255,12 @@ func Open(path string) (*Store, error) {
 	// User account status columns (added after the initial users table shipped).
 	db.Exec(`ALTER TABLE users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE users ADD COLUMN protected INTEGER NOT NULL DEFAULT 0`)
+	// Per-grantee "seen" flag on shares, for the Shared-with-me badge. Existing
+	// shares are treated as already seen so they don't retroactively alert.
+	if !columnExists(db, "location_shares", "seen") {
+		db.Exec(`ALTER TABLE location_shares ADD COLUMN seen INTEGER NOT NULL DEFAULT 0`)
+		db.Exec(`UPDATE location_shares SET seen = 1`)
+	}
 	// Backfill: if the protected/owner flag exists on nobody yet but accounts do,
 	// mark the first-registered account (lowest id = the bootstrap admin) as the
 	// protected owner. Idempotent — once one row is protected this is a no-op.

@@ -2,7 +2,14 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
-	import { adminUsers, claims, type AuthUser, type ClaimWithNode } from '$lib/api';
+	import {
+		adminUsers,
+		claims,
+		shares,
+		type AuthUser,
+		type ClaimWithNode,
+		type SharedWithMe
+	} from '$lib/api';
 	import { ago, shortKey } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 
@@ -11,6 +18,18 @@
 	async function loadMyNodes() {
 		try {
 			myNodes = await claims.mine();
+		} catch {
+			/* leave empty */
+		}
+	}
+
+	// Nodes shared WITH me (private locations others have granted me access to).
+	let sharedWithMe = $state<SharedWithMe[]>([]);
+	async function loadSharedWithMe() {
+		try {
+			sharedWithMe = await shares.mine();
+			// Viewing the list clears the "new shares" badge.
+			await auth.markSharesSeen();
 		} catch {
 			/* leave empty */
 		}
@@ -85,6 +104,7 @@
 	onMount(() => {
 		loadMembers();
 		loadMyNodes();
+		loadSharedWithMe();
 	});
 	// Re-load if admin status settles after the initial probe.
 	$effect(() => {
@@ -197,6 +217,51 @@
 								<span class="bg-amber/15 text-amber rounded-full px-2.5 py-1 text-xs font-600"
 									>Pending</span
 								>
+							{/if}
+						</a>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
+		<!-- Shared with me -->
+		{#if sharedWithMe.length}
+			<div class="panel overflow-hidden">
+				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
+					<span class="font-display text-fg text-sm font-700">Shared with me</span>
+					<span class="text-fg-faint text-xs">{sharedWithMe.length}</span>
+				</div>
+				<div class="divide-line/60 divide-y">
+					{#each sharedWithMe as sh (sh.nodePubkey)}
+						<a href="/nodes/{sh.nodePubkey}" class="panel-hover flex items-center gap-3 px-5 py-3">
+							<span
+								class="bg-signal/15 text-signal grid h-8 w-8 shrink-0 place-items-center rounded-full"
+							>
+								<svg
+									viewBox="0 0 24 24"
+									class="h-4 w-4"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.6"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									><path d="M12 21s-7-4.35-7-11a7 7 0 0 1 14 0c0 6.65-7 11-7 11z" /><circle
+										cx="12"
+										cy="10"
+										r="2.5"
+									/></svg
+								>
+							</span>
+							<span class="min-w-0 flex-1">
+								<span class="text-fg block truncate text-sm font-600"
+									>{sh.nodeName || shortKey(sh.nodePubkey)}</span
+								>
+								<span class="text-fg-faint block truncate text-xs"
+									>Shared by {sh.sharedByName} · {ago(sh.createdAt)}</span
+								>
+							</span>
+							{#if !sh.seen}
+								<span class="bg-signal text-ink rounded-full px-2.5 py-1 text-xs font-700">New</span>
 							{/if}
 						</a>
 					{/each}

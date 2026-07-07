@@ -88,6 +88,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/nodes/{pubkey}/private-location", s.requireUser(s.privateLocationSet))
 	mux.HandleFunc("DELETE /api/nodes/{pubkey}/private-location", s.requireUser(s.privateLocationDelete))
 
+	// Sharing a node's private location with specific registered users (owner-only).
+	mux.HandleFunc("GET /api/nodes/{pubkey}/location-shares", s.requireUser(s.locationSharesList))
+	mux.HandleFunc("POST /api/nodes/{pubkey}/location-shares", s.requireUser(s.locationShareCreate))
+	mux.HandleFunc("DELETE /api/nodes/{pubkey}/location-shares/{userId}", s.requireUser(s.locationShareDelete))
+
 	// Node notes (public + private). Reading is public; writing needs a login.
 	mux.HandleFunc("POST /api/nodes/{pubkey}/notes", s.requireUser(s.noteCreate))
 	mux.HandleFunc("PATCH /api/notes/{id}", s.requireUser(s.noteUpdate))

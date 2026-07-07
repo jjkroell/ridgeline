@@ -11,9 +11,8 @@ import (
 // maxLocationLabelLen bounds the optional owner label on a private location.
 const maxLocationLabelLen = 120
 
-// ownsNode reports whether the user is the node's verified owner. The private
-// exact location is strictly owner-only (Phase E will extend read access to
-// users the owner explicitly shares with).
+// ownsNode reports whether the user is the node's verified owner (may edit the
+// private location and manage who it's shared with).
 func (s *Server) ownsNode(pubkey string, userID int64) (bool, error) {
 	owner, ok, err := s.store.NodeOwner(pubkey)
 	if err != nil {
@@ -22,23 +21,48 @@ func (s *Server) ownsNode(pubkey string, userID int64) (bool, error) {
 	return ok && owner.UserID == userID, nil
 }
 
-// privateLocationGet returns the caller's node's private exact location. Only
-// the verified owner may read it; everyone else (including logged-in non-owners)
-// gets 403 so the endpoint never confirms whether a location exists.
+// canViewLocation reports whether the user may READ a node's private location:
+// the verified owner, or a user the owner has explicitly shared it with.
+func (s *Server) canViewLocation(pubkey string, userID int64) (owns, canView bool, err error) {
+	owns, err = s.ownsNode(pubkey, userID)
+	if err != nil {
+		return false, false, err
+	}
+	if owns {
+		return true, true, nil
+	}
+	shared, err := s.store.HasLocationShare(pubkey, userID)
+	if err != nil {
+		return false, false, err
+	}
+	return false, shared, nil
+}
+
+// privateLocationGet returns the caller's node's private exact location. The
+// verified owner or a shared-with user may read it; everyone else (including
+// logged-in non-owners) gets 403 so the endpoint never confirms whether a
+// location exists. `canEdit` is true only for the owner.
 func (s *Server) privateLocationGet(w http.ResponseWriter, r *http.Request, user store.User) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
 	if !validPubkey(pubkey) {
 		writeErr(w, http.StatusBadRequest, "invalid node public key")
 		return
 	}
-	owns, err := s.ownsNode(pubkey, user.ID)
+	owns, canView, err := s.canViewLocation(pubkey, user.ID)
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	if !owns {
-		writeErr(w, http.StatusForbidden, "only the node's owner can view its private location")
+	if !canView {
+		writeErr(w, http.StatusForbidden, "you don't have access to this node's private location")
 		return
+	}
+	// A shared-with viewer sees who shared it with them.
+	var sharedBy *store.OwnerInfo
+	if !owns {
+		if o, ok, _ := s.store.NodeOwner(pubkey); ok {
+			sharedBy = &o
+		}
 	}
 	loc, ok, err := s.store.GetPrivateLocation(pubkey)
 	if err != nil {
@@ -48,10 +72,10 @@ func (s *Server) privateLocationGet(w http.ResponseWriter, r *http.Request, user
 	if !ok {
 		// No location set yet — return an explicit empty result (not 404) so the
 		// owner's editor can distinguish "not set" from "not allowed".
-		writeJSON(w, map[string]any{"set": false})
+		writeJSON(w, map[string]any{"set": false, "canEdit": owns, "sharedBy": sharedBy})
 		return
 	}
-	writeJSON(w, map[string]any{"set": true, "location": loc})
+	writeJSON(w, map[string]any{"set": true, "location": loc, "canEdit": owns, "sharedBy": sharedBy})
 }
 
 // privateLocationSet stores (or replaces) the caller's node's private exact

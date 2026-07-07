@@ -167,6 +167,20 @@ CREATE TABLE IF NOT EXISTS node_private_locations (
 	label       TEXT NOT NULL DEFAULT '',    -- optional owner note ("rooftop", "repeater site")
 	updated_at  TEXT NOT NULL
 );
+
+-- location_shares grants specific registered users READ access to a node's
+-- private exact location. Only the node's verified owner may grant/revoke; a
+-- grantee can read the location but never edit it or re-share it. Rows are
+-- dropped when the owner releases the node (see claimDelete) or either user is
+-- deleted (cascade).
+CREATE TABLE IF NOT EXISTS location_shares (
+	node_pubkey     TEXT NOT NULL,           -- uppercase hex
+	owner_user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	grantee_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	created_at      TEXT NOT NULL,
+	PRIMARY KEY (node_pubkey, grantee_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_location_shares_grantee ON location_shares(grantee_user_id);
 `
 
 // Store wraps a SQLite database.

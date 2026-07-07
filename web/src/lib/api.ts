@@ -610,10 +610,24 @@ export interface PrivateLocation {
 export interface PrivateLocationResult {
 	set: boolean;
 	location?: PrivateLocation;
+	/** True only for the node's owner (shared-with viewers get read-only). */
+	canEdit?: boolean;
+	/** Present for a shared-with viewer: who shared the location with them. */
+	sharedBy?: { userId: number; displayName: string };
+}
+
+/** One user a node's private location is shared with. */
+export interface LocationShare {
+	nodePubkey: string;
+	granteeUserId: number;
+	displayName: string;
+	email: string;
+	createdAt: string;
 }
 
 export const privateLocation = {
-	/** Owner-only: fetch a node's private exact location (403 for non-owners). */
+	/** Fetch a node's private exact location. 200 for the owner or a shared-with
+	 *  user (403 otherwise, so it never confirms a location exists to others). */
 	get: (pubkey: string) =>
 		get<PrivateLocationResult>(`/api/nodes/${encodeURIComponent(pubkey)}/private-location`),
 	/** Owner-only: store/replace the private exact location. */
@@ -628,6 +642,27 @@ export const privateLocation = {
 	remove: (csrf: string, pubkey: string) =>
 		mutate<{ ok: boolean }>(
 			`/api/nodes/${encodeURIComponent(pubkey)}/private-location`,
+			'DELETE',
+			csrf
+		)
+};
+
+/** Owner-only management of who a node's private location is shared with. */
+export const locationShares = {
+	list: (pubkey: string) =>
+		get<LocationShare[]>(`/api/nodes/${encodeURIComponent(pubkey)}/location-shares`),
+	/** Grant read access to a registered user by email; returns the updated list. */
+	grant: (csrf: string, pubkey: string, email: string) =>
+		mutate<LocationShare[]>(
+			`/api/nodes/${encodeURIComponent(pubkey)}/location-shares`,
+			'POST',
+			csrf,
+			{ email }
+		),
+	/** Revoke a grantee's access. */
+	revoke: (csrf: string, pubkey: string, granteeUserId: number) =>
+		mutate<{ ok: boolean }>(
+			`/api/nodes/${encodeURIComponent(pubkey)}/location-shares/${granteeUserId}`,
 			'DELETE',
 			csrf
 		)

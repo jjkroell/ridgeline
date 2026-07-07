@@ -138,6 +138,10 @@ func (s *Server) claimDelete(w http.ResponseWriter, r *http.Request, user store.
 			s.fail(w, err)
 			return
 		}
+		if err := s.store.DeleteLocationShares(pubkey); err != nil {
+			s.fail(w, err)
+			return
+		}
 	}
 	removed, err := s.store.DeleteClaim(pubkey, user.ID)
 	if err != nil {

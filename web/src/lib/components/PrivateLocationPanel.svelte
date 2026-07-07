@@ -1,13 +1,23 @@
 <!--
-  Owner-only editor for a node's PRIVATE exact location. Renders nothing unless
-  the signed-in user is the node's verified owner. The pin the owner drops here is
-  never shown on the public map or in any public API — it's stored separately and
-  read back only by the owner (and, in a later phase, users they share with).
+  A node's PRIVATE exact location. Renders nothing unless the signed-in user is
+  the node's verified owner OR someone the owner has shared the location with.
+  The pin the owner drops here is never shown on the public map or in any public
+  API — it's stored separately and read back only by those two roles.
+
+  - Owner: full editor (drag/click a pin, coords, label, save/clear) + a "Shared
+    with" panel to grant/revoke read access to other registered users by email.
+  - Shared-with viewer: read-only map + coordinates, labelled with who shared it.
+
   Collapsible + minimized by default, matching the notes panel.
 -->
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { claims, privateLocation, type PrivateLocation } from '$lib/api';
+	import {
+		privateLocation,
+		locationShares,
+		type PrivateLocation,
+		type LocationShare
+	} from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import { isLight } from '$lib/map-util';
@@ -25,8 +35,10 @@
 	// Salish Sea / BC coast, where this mesh lives.
 	const FALLBACK: [number, number] = [49.16, -123.94];
 
-	let owner = $state(false); // caller owns this node
-	let ready = $state(false); // finished the ownership probe
+	let canView = $state(false); // owner OR shared-with — controls whether the panel shows
+	let canEdit = $state(false); // owner only
+	let sharedBy = $state<{ userId: number; displayName: string } | null>(null);
+	let ready = $state(false); // finished the access probe
 	let expanded = $state(false);
 
 	let saved = $state<PrivateLocation | null>(null);
@@ -37,6 +49,12 @@
 	let error = $state('');
 	let justSaved = $state(false);
 
+	// Sharing (owner only).
+	let shares = $state<LocationShare[]>([]);
+	let shareEmail = $state('');
+	let shareBusy = $state(false);
+	let shareError = $state('');
+
 	let loadedFor = $state('');
 	$effect(() => {
 		if (pubkey && pubkey !== loadedFor) {
@@ -46,35 +64,42 @@
 	});
 
 	async function probe() {
-		owner = false;
+		canView = false;
 		ready = false;
 		try {
-			const st = await claims.status(pubkey);
-			owner = st.ownedByMe;
-			if (owner) await loadLocation();
+			const res = await privateLocation.get(pubkey);
+			canView = true;
+			canEdit = res.canEdit ?? false;
+			sharedBy = res.sharedBy ?? null;
+			applyLocation(res.set ? (res.location ?? null) : null);
+			if (canEdit) await loadShares();
 		} catch {
-			owner = false;
+			// 403 (or any error) → the caller isn't permitted; hide the panel.
+			canView = false;
 		} finally {
 			ready = true;
 		}
 	}
 
-	async function loadLocation() {
+	function applyLocation(loc: PrivateLocation | null) {
+		if (loc) {
+			saved = loc;
+			lat = loc.latitude;
+			lon = loc.longitude;
+			label = loc.label;
+		} else {
+			saved = null;
+			lat = canEdit ? (seedLat ?? null) : null;
+			lon = canEdit ? (seedLon ?? null) : null;
+			label = '';
+		}
+	}
+
+	async function loadShares() {
 		try {
-			const res = await privateLocation.get(pubkey);
-			if (res.set && res.location) {
-				saved = res.location;
-				lat = res.location.latitude;
-				lon = res.location.longitude;
-				label = res.location.label;
-			} else {
-				saved = null;
-				lat = seedLat ?? null;
-				lon = seedLon ?? null;
-				label = '';
-			}
-		} catch (e) {
-			error = String((e as Error).message ?? e);
+			shares = await locationShares.list(pubkey);
+		} catch {
+			shares = [];
 		}
 	}
 
@@ -114,6 +139,31 @@
 			error = String((e as Error).message ?? e);
 		} finally {
 			busy = false;
+		}
+	}
+
+	async function grant() {
+		const email = shareEmail.trim();
+		if (!email) return;
+		shareBusy = true;
+		shareError = '';
+		try {
+			shares = await locationShares.grant(auth.csrf, pubkey, email);
+			shareEmail = '';
+		} catch (e) {
+			shareError = String((e as Error).message ?? e);
+		} finally {
+			shareBusy = false;
+		}
+	}
+
+	async function revoke(sh: LocationShare) {
+		shareError = '';
+		try {
+			await locationShares.revoke(auth.csrf, pubkey, sh.granteeUserId);
+			shares = shares.filter((s) => s.granteeUserId !== sh.granteeUserId);
+		} catch (e) {
+			shareError = String((e as Error).message ?? e);
 		}
 	}
 
@@ -199,7 +249,7 @@
 
 	// Initialise (or tear down) the map as the panel expands/collapses.
 	$effect(() => {
-		if (expanded && owner && mapEl && !map) {
+		if (expanded && canView && mapEl && !map) {
 			initMap(mapEl);
 		}
 		if (!expanded && map) {
@@ -225,10 +275,12 @@
 		map = L.map(el, { center, zoom: lat != null ? 14 : 9, attributionControl: true });
 		tiles = makeTiles(layerId, curLight).addTo(map);
 		if (lat != null && lon != null) placeMarker(lat, lon);
-		// Click anywhere to drop / move the pin.
-		map.on('click', (e: { latlng: { lat: number; lng: number } }) => {
-			setCoords(e.latlng.lat, e.latlng.lng);
-		});
+		// Owner may click anywhere to drop / move the pin; viewers can only pan/zoom.
+		if (canEdit) {
+			map.on('click', (e: { latlng: { lat: number; lng: number } }) => {
+				setCoords(e.latlng.lat, e.latlng.lng);
+			});
+		}
 		setTimeout(() => map?.invalidateSize(), 80);
 	}
 
@@ -238,11 +290,13 @@
 			marker.setLatLng([la, lo]);
 			return;
 		}
-		marker = L.marker([la, lo], { draggable: true, icon: pinIcon }).addTo(map);
-		marker.on('dragend', () => {
-			const p = marker.getLatLng();
-			setCoords(p.lat, p.lng);
-		});
+		marker = L.marker([la, lo], { draggable: canEdit, icon: pinIcon }).addTo(map);
+		if (canEdit) {
+			marker.on('dragend', () => {
+				const p = marker.getLatLng();
+				setCoords(p.lat, p.lng);
+			});
+		}
 	}
 
 	// Round to ~1m precision so the inputs stay tidy.
@@ -275,7 +329,7 @@
 	});
 </script>
 
-{#if ready && owner}
+{#if ready && canView}
 	<div class="panel {compact ? 'px-4 py-3.5' : 'px-5 py-4'}">
 		<!-- Collapsed header -->
 		<button
@@ -294,15 +348,22 @@
 				><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg
 			>
 			<span class="label normal-case text-fg-dim shrink-0">Private location</span>
-			<span
-				class="shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-600 {saved
-					? 'bg-signal/15 text-signal'
-					: 'bg-line/60 text-fg-dim'}">{saved ? 'Set' : 'Not set'}</span
-			>
+			{#if canEdit}
+				<span
+					class="shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-600 {saved
+						? 'bg-signal/15 text-signal'
+						: 'bg-line/60 text-fg-dim'}">{saved ? 'Set' : 'Not set'}</span
+				>
+			{:else}
+				<span class="bg-amber/15 text-amber shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-600"
+					>Shared</span
+				>
+			{/if}
 			{#if !expanded}
 				<span class="text-fg-faint min-w-0 flex-1 truncate text-xs">
 					{#if saved}{saved.latitude.toFixed(5)}, {saved.longitude.toFixed(5)}{#if saved.label}
-							· {saved.label}{/if}{:else}Owner-only — drop an exact pin{/if}
+							· {saved.label}{/if}{:else if canEdit}Owner-only — drop an exact pin{:else}Owner
+						hasn't set a location yet{/if}
 				</span>
 			{:else}
 				<span class="flex-1"></span>
@@ -320,74 +381,88 @@
 
 		{#if expanded}
 			<div class="mt-4">
-				<p class="text-fg-faint mb-3 text-xs leading-relaxed">
-					This exact location is <span class="text-fg-dim font-600">private</span> — only you can see
-					it. It never appears on the public map or in any public data. Drag the pin (or click the map)
-					to set your node's true position.
-				</p>
+				{#if canEdit}
+					<p class="text-fg-faint mb-3 text-xs leading-relaxed">
+						This exact location is <span class="text-fg-dim font-600">private</span> — only you and
+						people you share it with can see it. It never appears on the public map or in any public
+						data. Drag the pin (or click the map) to set your node's true position.
+					</p>
+				{:else}
+					<p class="text-fg-faint mb-3 text-xs leading-relaxed">
+						<span class="text-fg-dim font-600">{sharedBy?.displayName ?? 'The owner'}</span> shared this
+						node's private exact location with you. It's read-only and never appears on the public map.
+					</p>
+				{/if}
 
-				<div class="border-line/70 relative mb-3 h-64 overflow-hidden rounded-[var(--radius)] border">
-					<div bind:this={mapEl} class="h-full w-full"></div>
+				{#if canEdit || saved}
+					<div
+						class="border-line/70 relative mb-3 h-64 overflow-hidden rounded-[var(--radius)] border"
+					>
+						<div bind:this={mapEl} class="h-full w-full"></div>
 
-					<!-- Base-layer selector (top-right, above the Leaflet panes) -->
-					<div class="absolute top-2 right-2 z-[1000]">
-						<button
-							type="button"
-							onclick={() => (layerOpen = !layerOpen)}
-							class="border-line bg-ink-2/85 hover:bg-panel-2/70 flex items-center gap-1.5 rounded-[var(--radius)] border px-2.5 py-1.5 backdrop-blur-md transition-colors"
-							aria-label="Base map: {currentLayer.label}"
-						>
-							<svg
-								viewBox="0 0 24 24"
-								class="text-fg-dim h-3.5 w-3.5 shrink-0"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.7"
-								stroke-linecap="round"
-								stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg
+						<!-- Base-layer selector (top-right, above the Leaflet panes) -->
+						<div class="absolute top-2 right-2 z-[1000]">
+							<button
+								type="button"
+								onclick={() => (layerOpen = !layerOpen)}
+								class="border-line bg-ink-2/85 hover:bg-panel-2/70 flex items-center gap-1.5 rounded-[var(--radius)] border px-2.5 py-1.5 backdrop-blur-md transition-colors"
+								aria-label="Base map: {currentLayer.label}"
 							>
-							<span class="text-fg text-xs font-600">{currentLayer.label}</span>
-							<svg
-								viewBox="0 0 24 24"
-								class="text-fg-faint h-3 w-3 shrink-0 transition-transform {layerOpen ? 'rotate-180' : ''}"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg
-							>
-						</button>
-						{#if layerOpen}
-							<div
-								class="border-line bg-ink-2/95 mt-1 w-44 overflow-hidden rounded-[var(--radius)] border backdrop-blur-md"
-							>
-								{#each LAYERS as l (l.id)}
-									{@const on = l.id === layerId}
-									<button
-										type="button"
-										onclick={() => selectLayer(l.id)}
-										class="hover:bg-panel-2/60 flex w-full items-center gap-2 px-3 py-2 text-left transition-colors {on
-											? 'bg-signal/10'
-											: ''}"
-									>
-										<span
-											class="h-1.5 w-1.5 shrink-0 rounded-full"
-											style="background:{on ? 'var(--color-signal)' : 'var(--color-fg-faint)'}"
-										></span>
-										<span class="min-w-0 flex-1">
-											<span class="block truncate text-xs font-600 {on ? 'text-signal' : 'text-fg'}"
-												>{l.label}</span
-											>
-											<span class="text-fg-faint mt-0.5 block truncate text-[0.62rem] leading-tight"
-												>{l.desc}</span
-											>
-										</span>
-									</button>
-								{/each}
-							</div>
-						{/if}
+								<svg
+									viewBox="0 0 24 24"
+									class="text-fg-dim h-3.5 w-3.5 shrink-0"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.7"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg
+								>
+								<span class="text-fg text-xs font-600">{currentLayer.label}</span>
+								<svg
+									viewBox="0 0 24 24"
+									class="text-fg-faint h-3 w-3 shrink-0 transition-transform {layerOpen
+										? 'rotate-180'
+										: ''}"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg
+								>
+							</button>
+							{#if layerOpen}
+								<div
+									class="border-line bg-ink-2/95 mt-1 w-44 overflow-hidden rounded-[var(--radius)] border backdrop-blur-md"
+								>
+									{#each LAYERS as l (l.id)}
+										{@const on = l.id === layerId}
+										<button
+											type="button"
+											onclick={() => selectLayer(l.id)}
+											class="hover:bg-panel-2/60 flex w-full items-center gap-2 px-3 py-2 text-left transition-colors {on
+												? 'bg-signal/10'
+												: ''}"
+										>
+											<span
+												class="h-1.5 w-1.5 shrink-0 rounded-full"
+												style="background:{on ? 'var(--color-signal)' : 'var(--color-fg-faint)'}"
+											></span>
+											<span class="min-w-0 flex-1">
+												<span class="block truncate text-xs font-600 {on ? 'text-signal' : 'text-fg'}"
+													>{l.label}</span
+												>
+												<span class="text-fg-faint mt-0.5 block truncate text-[0.62rem] leading-tight"
+													>{l.desc}</span
+												>
+											</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
 					</div>
-				</div>
+				{/if}
 
 				<div class="mb-3 flex flex-wrap items-end gap-3">
 					<label class="flex flex-col gap-1">
@@ -397,7 +472,8 @@
 							step="0.00001"
 							bind:value={lat}
 							oninput={onInput}
-							class="bg-ink-2 text-fg focus:border-signal w-32 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none"
+							readonly={!canEdit}
+							class="bg-ink-2 text-fg focus:border-signal w-32 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none read-only:opacity-70"
 						/>
 					</label>
 					<label class="flex flex-col gap-1">
@@ -407,40 +483,96 @@
 							step="0.00001"
 							bind:value={lon}
 							oninput={onInput}
-							class="bg-ink-2 text-fg focus:border-signal w-32 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none"
+							readonly={!canEdit}
+							class="bg-ink-2 text-fg focus:border-signal w-32 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none read-only:opacity-70"
 						/>
 					</label>
 					<label class="flex flex-1 flex-col gap-1">
-						<span class="text-fg-faint text-[0.68rem]">Label (optional)</span>
+						<span class="text-fg-faint text-[0.68rem]">Label {canEdit ? '(optional)' : ''}</span>
 						<input
 							type="text"
 							bind:value={label}
 							maxlength="120"
-							placeholder="rooftop, repeater site…"
-							class="bg-ink-2 text-fg focus:border-signal min-w-32 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none"
+							readonly={!canEdit}
+							placeholder={canEdit ? 'rooftop, repeater site…' : ''}
+							class="bg-ink-2 text-fg focus:border-signal min-w-32 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none read-only:opacity-70"
 						/>
 					</label>
 				</div>
 
 				{#if error}<p class="text-coral mb-2 text-xs">{error}</p>{/if}
 
-				<div class="flex items-center gap-2">
-					<button
-						onclick={save}
-						disabled={busy || lat == null || lon == null}
-						class="bg-signal/15 text-signal border-signal/40 hover:bg-signal/25 rounded-[var(--radius)] border px-3.5 py-1.5 text-sm font-600 transition-colors disabled:opacity-40"
-						>{busy ? 'Saving…' : saved ? 'Update location' : 'Save location'}</button
-					>
-					{#if saved}
+				{#if canEdit}
+					<div class="flex items-center gap-2">
 						<button
-							onclick={clear}
-							disabled={busy}
-							class="text-fg-faint hover:text-coral rounded-[var(--radius)] px-3 py-1.5 text-sm transition-colors"
-							>Clear</button
+							onclick={save}
+							disabled={busy || lat == null || lon == null}
+							class="bg-signal/15 text-signal border-signal/40 hover:bg-signal/25 rounded-[var(--radius)] border px-3.5 py-1.5 text-sm font-600 transition-colors disabled:opacity-40"
+							>{busy ? 'Saving…' : saved ? 'Update location' : 'Save location'}</button
 						>
-					{/if}
-					{#if justSaved}<span class="text-signal text-xs font-600">Saved ✓</span>{/if}
-				</div>
+						{#if saved}
+							<button
+								onclick={clear}
+								disabled={busy}
+								class="text-fg-faint hover:text-coral rounded-[var(--radius)] px-3 py-1.5 text-sm transition-colors"
+								>Clear</button
+							>
+						{/if}
+						{#if justSaved}<span class="text-signal text-xs font-600">Saved ✓</span>{/if}
+					</div>
+
+					<!-- Shared with — grant/revoke read access to other registered users -->
+					<div class="border-line/60 mt-4 border-t pt-3">
+						<div class="mb-2 flex items-center gap-2">
+							<span class="label normal-case text-fg-dim">Shared with</span>
+							{#if shares.length}
+								<span
+									class="bg-line/60 text-fg-dim rounded-full px-2 py-0.5 text-[0.62rem] font-600"
+									>{shares.length}</span
+								>
+							{/if}
+						</div>
+						{#if shares.length}
+							<ul class="mb-2.5 space-y-1.5">
+								{#each shares as sh (sh.granteeUserId)}
+									<li class="flex items-center gap-2">
+										<span class="bg-signal/15 text-signal grid h-6 w-6 place-items-center rounded-full text-[0.6rem] font-700"
+											>{(sh.displayName || sh.email).slice(0, 2).toUpperCase()}</span
+										>
+										<span class="text-fg min-w-0 truncate text-sm font-600">{sh.displayName}</span>
+										<span class="text-fg-faint min-w-0 flex-1 truncate text-xs">{sh.email}</span>
+										<button
+											onclick={() => revoke(sh)}
+											class="text-fg-faint hover:text-coral shrink-0 text-xs">Revoke</button
+										>
+									</li>
+								{/each}
+							</ul>
+						{:else}
+							<p class="text-fg-faint mb-2.5 text-xs">Not shared with anyone yet.</p>
+						{/if}
+						<div class="flex items-center gap-2">
+							<input
+								type="email"
+								bind:value={shareEmail}
+								placeholder="teammate@example.com"
+								onkeydown={(e) => e.key === 'Enter' && grant()}
+								class="bg-ink-2 text-fg focus:border-signal min-w-0 flex-1 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none"
+							/>
+							<button
+								onclick={grant}
+								disabled={shareBusy || !shareEmail.trim()}
+								class="bg-signal/15 text-signal border-signal/40 hover:bg-signal/25 shrink-0 rounded-[var(--radius)] border px-3.5 py-1.5 text-sm font-600 transition-colors disabled:opacity-40"
+								>{shareBusy ? 'Sharing…' : 'Share'}</button
+							>
+						</div>
+						{#if shareError}<p class="text-coral mt-1.5 text-xs">{shareError}</p>{/if}
+						<p class="text-fg-faint mt-1.5 text-[0.68rem] leading-relaxed">
+							Enter the email of a registered Ridgeline user to give them read-only access to this
+							exact location. They can't edit it or share it further.
+						</p>
+					</div>
+				{/if}
 			</div>
 		{/if}
 	</div>

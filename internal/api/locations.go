@@ -38,6 +38,17 @@ func (s *Server) canViewLocation(pubkey string, userID int64) (owns, canView boo
 	return false, shared, nil
 }
 
+// inNodeCircle reports whether the user is in a node's trusted circle — its
+// verified owner or a user the owner has shared the location with. This is the
+// audience for "team" notes.
+func (s *Server) inNodeCircle(pubkey string, userID int64) (bool, error) {
+	if userID == 0 {
+		return false, nil
+	}
+	_, canView, err := s.canViewLocation(pubkey, userID)
+	return canView, err
+}
+
 // privateLocationGet returns the caller's node's private exact location. The
 // verified owner or a shared-with user may read it; everyone else (including
 // logged-in non-owners) gets 403 so the endpoint never confirms whether a

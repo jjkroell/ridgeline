@@ -16,9 +16,7 @@
 	import RoleBadge from './RoleBadge.svelte';
 	import FavoriteStar from './FavoriteStar.svelte';
 	import Tooltip from './Tooltip.svelte';
-	import ClaimPanel from './ClaimPanel.svelte';
-	import PrivateLocationPanel from './PrivateLocationPanel.svelte';
-	import NotesPanel from './NotesPanel.svelte';
+	import NodeAdmin from './NodeAdmin.svelte';
 
 	interface Props {
 		pubkey: string;
@@ -337,19 +335,9 @@
 		</button>
 	</div>
 
-	<!-- Ownership claim -->
+	<!-- Node Admin: claim, private location, notes — each in its own modal -->
 	<div class="mb-5">
-		<ClaimPanel {pubkey} {compact} />
-	</div>
-
-	<!-- Private exact location (owner-only; renders nothing otherwise) -->
-	<div class="mb-5">
-		<PrivateLocationPanel {pubkey} seedLat={node?.latitude} seedLon={node?.longitude} {compact} />
-	</div>
-
-	<!-- Notes -->
-	<div class="mb-5">
-		<NotesPanel {pubkey} {compact} />
+		<NodeAdmin {pubkey} seedLat={node?.latitude} seedLon={node?.longitude} />
 	</div>
 
 	<div class="grid gap-5 {compact ? '' : 'lg:grid-cols-3'}">

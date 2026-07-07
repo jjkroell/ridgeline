@@ -572,12 +572,14 @@ export const claims = {
 
 // ---- Node notes ----
 
+export type NoteVisibility = 'public' | 'private' | 'team';
+
 export interface Note {
 	id: number;
 	nodePubkey: string;
 	userId: number;
 	authorName: string;
-	visibility: 'public' | 'private';
+	visibility: NoteVisibility;
 	body: string;
 	createdAt: string;
 	updatedAt: string;
@@ -585,15 +587,34 @@ export interface Note {
 	mine: boolean;
 }
 
+/** Notes list plus the caller's posting rights (drives the note-type options). */
+export interface NotesResult {
+	notes: Note[];
+	/** Caller may post "team" notes (node owner or a shared-with user). */
+	canTeam: boolean;
+	/** Caller is signed in (may post at all). */
+	loggedIn: boolean;
+}
+
 export const notes = {
-	/** Public notes + the caller's own private notes for a node, newest first. */
-	list: (pubkey: string) => get<Note[]>(`/api/nodes/${encodeURIComponent(pubkey)}/notes`),
-	create: (csrf: string, pubkey: string, body: string, visibility: 'public' | 'private') =>
+	/** Notes visible to the caller (public + own + team-if-in-circle) + their rights. */
+	list: (pubkey: string) => get<NotesResult>(`/api/nodes/${encodeURIComponent(pubkey)}/notes`),
+	create: (csrf: string, pubkey: string, body: string, visibility: NoteVisibility) =>
 		mutate<Note>(`/api/nodes/${encodeURIComponent(pubkey)}/notes`, 'POST', csrf, { body, visibility }),
-	update: (csrf: string, id: number, body: string, visibility: 'public' | 'private') =>
+	update: (csrf: string, id: number, body: string, visibility: NoteVisibility) =>
 		mutate<Note>(`/api/notes/${id}`, 'PATCH', csrf, { body, visibility }),
 	remove: (csrf: string, id: number) => mutate<{ ok: boolean }>(`/api/notes/${id}`, 'DELETE', csrf)
 };
+
+/** Minimal public identity for the share autocomplete. */
+export interface UserBrief {
+	id: number;
+	displayName: string;
+}
+
+/** Autocomplete registered users by display name (signed-in only). */
+export const userSearch = (q: string) =>
+	get<UserBrief[]>(`/api/users/search?q=${encodeURIComponent(q)}`);
 
 // ---- Node private exact location (owner-only) ----
 
@@ -651,13 +672,14 @@ export const privateLocation = {
 export const locationShares = {
 	list: (pubkey: string) =>
 		get<LocationShare[]>(`/api/nodes/${encodeURIComponent(pubkey)}/location-shares`),
-	/** Grant read access to a registered user by email; returns the updated list. */
-	grant: (csrf: string, pubkey: string, email: string) =>
+	/** Grant read access to a registered user (by id from the picker, or email);
+	 *  returns the updated list. */
+	grant: (csrf: string, pubkey: string, grantee: { userId: number } | { email: string }) =>
 		mutate<LocationShare[]>(
 			`/api/nodes/${encodeURIComponent(pubkey)}/location-shares`,
 			'POST',
 			csrf,
-			{ email }
+			grantee
 		),
 	/** Revoke a grantee's access. */
 	revoke: (csrf: string, pubkey: string, granteeUserId: number) =>

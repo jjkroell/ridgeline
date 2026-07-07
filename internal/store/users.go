@@ -142,6 +142,48 @@ func (s *Store) ListUsers() ([]User, error) {
 	return out, rows.Err()
 }
 
+// UserBrief is a minimal public identity for pickers/autocomplete: just enough
+// to show and select a registered user, never their email or flags.
+type UserBrief struct {
+	ID          int64  `json:"id"`
+	DisplayName string `json:"displayName"`
+}
+
+// SearchUsersByName finds up to limit non-blocked users whose display name
+// contains q (case-insensitive), for the share autocomplete. Users without a
+// display name are excluded (they have no public handle to match). excludeID
+// drops one user (typically the requester) from the results. Prefix matches rank
+// ahead of mid-string matches.
+func (s *Store) SearchUsersByName(q string, excludeID int64, limit int) ([]UserBrief, error) {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return nil, nil
+	}
+	like := "%" + strings.ToLower(q) + "%"
+	prefix := strings.ToLower(q) + "%"
+	rows, err := s.db.Query(`
+		SELECT id, display_name FROM users
+		WHERE blocked = 0
+		  AND display_name IS NOT NULL AND display_name != ''
+		  AND id != ?
+		  AND LOWER(display_name) LIKE ?
+		ORDER BY (LOWER(display_name) LIKE ?) DESC, display_name COLLATE NOCASE
+		LIMIT ?`, excludeID, like, prefix, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []UserBrief
+	for rows.Next() {
+		var u UserBrief
+		if err := rows.Scan(&u.ID, &u.DisplayName); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
 // SetUserFlags updates an account's admin / can-claim grants (admin action).
 func (s *Store) SetUserFlags(id int64, isAdmin, canClaim bool) error {
 	_, err := s.db.Exec(`UPDATE users SET is_admin = ?, can_claim = ? WHERE id = ?`,

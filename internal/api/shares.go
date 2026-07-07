@@ -9,6 +9,30 @@ import (
 	"github.com/jjkroell/ridgeline/internal/store"
 )
 
+// usersSearch powers the share autocomplete: up to 8 registered users whose
+// display name matches ?q. Auth-gated (any signed-in user) and returns only
+// id + display name — never emails or flags — so it can't be used to enumerate
+// accounts or harvest addresses.
+func (s *Server) usersSearch(w http.ResponseWriter, r *http.Request, user store.User) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(q) < 2 {
+		writeJSON(w, []store.UserBrief{})
+		return
+	}
+	if len(q) > 64 {
+		q = q[:64]
+	}
+	res, err := s.store.SearchUsersByName(q, user.ID, 8)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	if res == nil {
+		res = []store.UserBrief{}
+	}
+	writeJSON(w, res)
+}
+
 // locationSharesList returns the users a node's private location is shared with.
 // Owner-only.
 func (s *Server) locationSharesList(w http.ResponseWriter, r *http.Request, user store.User) {
@@ -54,25 +78,33 @@ func (s *Server) locationShareCreate(w http.ResponseWriter, r *http.Request, use
 		writeErr(w, http.StatusForbidden, "only the node's owner can share this location")
 		return
 	}
+	// Grant by user id (from the autocomplete picker) or, as a fallback, by email.
 	var req struct {
-		Email string `json:"email"`
+		UserID int64  `json:"userId"`
+		Email  string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad request body")
 		return
 	}
-	email := strings.ToLower(strings.TrimSpace(req.Email))
-	if email == "" {
-		writeErr(w, http.StatusBadRequest, "an email address is required")
-		return
+	var grantee store.User
+	var ok bool
+	if req.UserID > 0 {
+		grantee, ok, err = s.store.GetUserByID(req.UserID)
+	} else {
+		email := strings.ToLower(strings.TrimSpace(req.Email))
+		if email == "" {
+			writeErr(w, http.StatusBadRequest, "pick a user to share with")
+			return
+		}
+		grantee, ok, err = s.store.GetUserByEmail(email)
 	}
-	grantee, ok, err := s.store.GetUserByEmail(email)
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
 	if !ok {
-		writeErr(w, http.StatusNotFound, "no registered user with that email")
+		writeErr(w, http.StatusNotFound, "that user isn't registered")
 		return
 	}
 	if grantee.ID == user.ID {

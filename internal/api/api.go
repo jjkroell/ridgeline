@@ -93,7 +93,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/nodes/{pubkey}/location-shares", s.requireUser(s.locationShareCreate))
 	mux.HandleFunc("DELETE /api/nodes/{pubkey}/location-shares/{userId}", s.requireUser(s.locationShareDelete))
 
-	// Node notes (public + private). Reading is public; writing needs a login.
+	// User autocomplete for the share picker (signed-in; returns id + name only).
+	mux.HandleFunc("GET /api/users/search", s.requireUser(s.usersSearch))
+
+	// Node notes (public/private/team). Reading is public; writing needs a login.
 	mux.HandleFunc("POST /api/nodes/{pubkey}/notes", s.requireUser(s.noteCreate))
 	mux.HandleFunc("PATCH /api/notes/{id}", s.requireUser(s.noteUpdate))
 	mux.HandleFunc("DELETE /api/notes/{id}", s.requireUser(s.noteDelete))

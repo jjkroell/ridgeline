@@ -18,8 +18,17 @@ type noteView struct {
 	Mine bool `json:"mine"`
 }
 
-// nodeNotes returns the notes visible to the caller for a node: all public notes
-// plus the caller's own private notes. Public (optional auth).
+// notesResponse wraps the visible notes with the caller's posting rights so the
+// UI can show/hide the "team" note option.
+type notesResponse struct {
+	Notes    []noteView `json:"notes"`
+	CanTeam  bool       `json:"canTeam"`  // caller may post team notes (owner or shared-with)
+	LoggedIn bool       `json:"loggedIn"` // caller may post at all
+}
+
+// nodeNotes returns the notes visible to the caller for a node: all public
+// notes, the caller's own notes, and (for the node's owner or a shared-with
+// user) the node's "team" notes. Public (optional auth).
 func (s *Server) nodeNotes(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
 	var viewerID int64
@@ -28,7 +37,12 @@ func (s *Server) nodeNotes(w http.ResponseWriter, r *http.Request) {
 		viewerID = user.ID
 		isAdmin = user.IsAdmin
 	}
-	notes, err := s.store.NotesForNode(pubkey, viewerID)
+	inCircle, err := s.inNodeCircle(pubkey, viewerID)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	notes, err := s.store.NotesForNode(pubkey, viewerID, inCircle)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -44,7 +58,7 @@ func (s *Server) nodeNotes(w http.ResponseWriter, r *http.Request) {
 	for _, n := range notes {
 		out = append(out, noteView{Note: n, Mine: n.UserID == viewerID || canModerate})
 	}
-	writeJSON(w, out)
+	writeJSON(w, notesResponse{Notes: out, CanTeam: inCircle, LoggedIn: viewerID != 0})
 }
 
 // noteCreate adds a note to a node (any authenticated user).
@@ -73,6 +87,16 @@ func (s *Server) noteCreate(w http.ResponseWriter, r *http.Request, user store.U
 		writeErr(w, http.StatusNotFound, "unknown node")
 		return
 	}
+	// A "team" note is visible to the node's whole trusted circle, so only the
+	// owner or a shared-with user may post one.
+	if vis == "team" {
+		if ok, err := s.requireCircle(w, pubkey, user.ID); err != nil {
+			s.fail(w, err)
+			return
+		} else if !ok {
+			return
+		}
+	}
 	note, err := s.store.CreateNote(pubkey, user.ID, vis, body)
 	if err != nil {
 		s.fail(w, err)
@@ -98,6 +122,20 @@ func (s *Server) noteUpdate(w http.ResponseWriter, r *http.Request, user store.U
 	body, vis, valid := validateNote(w, req.Body, req.Visibility)
 	if !valid {
 		return
+	}
+	// Promoting a note to "team" requires circle membership on its node.
+	if vis == "team" {
+		if n, found, err := s.store.GetNote(id); err != nil {
+			s.fail(w, err)
+			return
+		} else if found {
+			if ok, err := s.requireCircle(w, n.NodePubkey, user.ID); err != nil {
+				s.fail(w, err)
+				return
+			} else if !ok {
+				return
+			}
+		}
 	}
 	note, found, err := s.store.UpdateNote(id, user.ID, vis, body)
 	if err == store.ErrNotAuthor {
@@ -157,11 +195,25 @@ func validateNote(w http.ResponseWriter, body, visibility string) (string, strin
 		writeErr(w, http.StatusBadRequest, "note is too long")
 		return "", "", false
 	}
-	if visibility != "public" && visibility != "private" {
-		writeErr(w, http.StatusBadRequest, "visibility must be public or private")
+	if visibility != "public" && visibility != "private" && visibility != "team" {
+		writeErr(w, http.StatusBadRequest, "visibility must be public, private, or team")
 		return "", "", false
 	}
 	return body, visibility, true
+}
+
+// requireCircle writes a 403 and returns ok=false unless the user is in the
+// node's trusted circle (owner or shared-with).
+func (s *Server) requireCircle(w http.ResponseWriter, pubkey string, userID int64) (bool, error) {
+	in, err := s.inNodeCircle(pubkey, userID)
+	if err != nil {
+		return false, err
+	}
+	if !in {
+		writeErr(w, http.StatusForbidden, "only the node's owner or shared-with users can post team notes")
+		return false, nil
+	}
+	return true, nil
 }
 
 func noteID(w http.ResponseWriter, r *http.Request) (int64, bool) {

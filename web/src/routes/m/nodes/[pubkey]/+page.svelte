@@ -12,9 +12,7 @@
 	import { theme } from '$lib/theme.svelte';
 	import { hasWebGL } from '$lib/webgl';
 	import LeafletInset from '$lib/components/LeafletInset.svelte';
-	import ClaimPanel from '$lib/components/ClaimPanel.svelte';
-	import PrivateLocationPanel from '$lib/components/PrivateLocationPanel.svelte';
-	import NotesPanel from '$lib/components/NotesPanel.svelte';
+	import NodeAdmin from '$lib/components/NodeAdmin.svelte';
 
 	const pubkey = $derived((page.params.pubkey ?? '').toUpperCase());
 
@@ -150,19 +148,9 @@
 			<div class="text-fg-dim mt-1.5 font-mono text-[0.7rem] break-all">{pubkey}</div>
 		</div>
 
-		<!-- ownership claim -->
+		<!-- Node Admin: claim, private location, notes — each in its own modal -->
 		<div class="mb-3">
-			<ClaimPanel {pubkey} compact />
-		</div>
-
-		<!-- private exact location (owner-only) -->
-		<div class="mb-3">
-			<PrivateLocationPanel {pubkey} seedLat={node?.latitude} seedLon={node?.longitude} compact />
-		</div>
-
-		<!-- notes -->
-		<div class="mb-3">
-			<NotesPanel {pubkey} compact />
+			<NodeAdmin {pubkey} seedLat={node?.latitude} seedLon={node?.longitude} />
 		</div>
 
 		<!-- hash id -->

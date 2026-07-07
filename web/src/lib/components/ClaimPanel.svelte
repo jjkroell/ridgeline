@@ -5,10 +5,10 @@
 
 	interface Props {
 		pubkey: string;
-		/** Tighter spacing for the mobile node page. */
-		compact?: boolean;
+		/** Called after ownership changes (claim/release) so a parent can refresh. */
+		onchanged?: () => void;
 	}
-	let { pubkey, compact = false }: Props = $props();
+	let { pubkey, onchanged }: Props = $props();
 
 	let status = $state<ClaimStatus | null>(null);
 	let loading = $state(true);
@@ -56,6 +56,7 @@
 		try {
 			await claims.create(auth.csrf, pubkey);
 			await load();
+			onchanged?.();
 		} catch (e) {
 			error = String((e as Error).message ?? e);
 		} finally {
@@ -69,6 +70,7 @@
 		try {
 			await claims.release(auth.csrf, pubkey);
 			await load();
+			onchanged?.();
 		} catch (e) {
 			error = String((e as Error).message ?? e);
 		} finally {
@@ -97,21 +99,7 @@
 	}
 </script>
 
-<div class="panel {compact ? 'px-4 py-4' : 'px-5 py-5'}">
-	<div class="label normal-case text-fg-dim mb-3 flex items-center gap-2">
-		<svg
-			viewBox="0 0 24 24"
-			class="text-fg-faint h-4 w-4"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="1.6"
-			stroke-linecap="round"
-			stroke-linejoin="round"
-			><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z" /><path d="m9 12 2 2 4-4" /></svg
-		>
-		Ownership
-	</div>
-
+<div>
 	{#if loading}
 		<p class="text-fg-faint text-sm">Checking…</p>
 	{:else if status}
@@ -138,8 +126,9 @@
 				</div>
 			{/if}
 			<p class="text-fg-faint mt-3 text-xs leading-relaxed">
-				You can add public and private notes and set this node's private exact location — see the
-				panels below.
+				Use the <span class="text-fg-dim font-600">Private location</span> and
+				<span class="text-fg-dim font-600">Notes</span> options in Node Admin to set this node's exact
+				location and manage notes.
 			</p>
 		{:else if status.owner}
 			<!-- Owned by someone else -->

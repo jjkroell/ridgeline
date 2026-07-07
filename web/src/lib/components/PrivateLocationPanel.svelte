@@ -16,20 +16,21 @@
 		privateLocation,
 		locationShares,
 		type PrivateLocation,
-		type LocationShare
+		type LocationShare,
+		type UserBrief
 	} from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import { isLight } from '$lib/map-util';
+	import UserAutocomplete from './UserAutocomplete.svelte';
 
 	interface Props {
 		pubkey: string;
 		/** The node's publicly advertised coords, used only to seed the map centre. */
 		seedLat?: number | null;
 		seedLon?: number | null;
-		compact?: boolean;
 	}
-	let { pubkey, seedLat = null, seedLon = null, compact = false }: Props = $props();
+	let { pubkey, seedLat = null, seedLon = null }: Props = $props();
 
 	// Fallback centre if we have neither a saved nor an advertised location — the
 	// Salish Sea / BC coast, where this mesh lives.
@@ -39,7 +40,6 @@
 	let canEdit = $state(false); // owner only
 	let sharedBy = $state<{ userId: number; displayName: string } | null>(null);
 	let ready = $state(false); // finished the access probe
-	let expanded = $state(false);
 
 	let saved = $state<PrivateLocation | null>(null);
 	let lat = $state<number | null>(null);
@@ -51,9 +51,9 @@
 
 	// Sharing (owner only).
 	let shares = $state<LocationShare[]>([]);
-	let shareEmail = $state('');
 	let shareBusy = $state(false);
 	let shareError = $state('');
+	const sharedIds = $derived(shares.map((s) => s.granteeUserId));
 
 	let loadedFor = $state('');
 	$effect(() => {
@@ -142,14 +142,11 @@
 		}
 	}
 
-	async function grant() {
-		const email = shareEmail.trim();
-		if (!email) return;
+	async function grantUser(u: UserBrief) {
 		shareBusy = true;
 		shareError = '';
 		try {
-			shares = await locationShares.grant(auth.csrf, pubkey, email);
-			shareEmail = '';
+			shares = await locationShares.grant(auth.csrf, pubkey, { userId: u.id });
 		} catch (e) {
 			shareError = String((e as Error).message ?? e);
 		} finally {
@@ -247,16 +244,12 @@
 		tiles = makeTiles(id, curLight).addTo(map);
 	}
 
-	// Initialise (or tear down) the map as the panel expands/collapses.
+	// Initialise the map once the panel has access and the container is in the DOM.
+	// The panel is mounted inside the Node Admin modal, so this runs when it opens;
+	// onDestroy tears the map down when the modal closes.
 	$effect(() => {
-		if (expanded && canView && mapEl && !map) {
+		if (ready && canView && mapEl && !map) {
 			initMap(mapEl);
-		}
-		if (!expanded && map) {
-			map.remove();
-			map = null;
-			marker = null;
-			tiles = null;
 		}
 	});
 
@@ -330,250 +323,181 @@
 </script>
 
 {#if ready && canView}
-	<div class="panel {compact ? 'px-4 py-3.5' : 'px-5 py-4'}">
-		<!-- Collapsed header -->
-		<button
-			type="button"
-			onclick={() => (expanded = !expanded)}
-			class="flex w-full items-center gap-2 text-left"
-		>
-			<svg
-				viewBox="0 0 24 24"
-				class="text-fg-faint h-4 w-4 shrink-0"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="1.6"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg
-			>
-			<span class="label normal-case text-fg-dim shrink-0">Private location</span>
-			{#if canEdit}
-				<span
-					class="shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-600 {saved
-						? 'bg-signal/15 text-signal'
-						: 'bg-line/60 text-fg-dim'}">{saved ? 'Set' : 'Not set'}</span
-				>
-			{:else}
-				<span class="bg-amber/15 text-amber shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-600"
-					>Shared</span
-				>
-			{/if}
-			{#if !expanded}
-				<span class="text-fg-faint min-w-0 flex-1 truncate text-xs">
-					{#if saved}{saved.latitude.toFixed(5)}, {saved.longitude.toFixed(5)}{#if saved.label}
-							· {saved.label}{/if}{:else if canEdit}Owner-only — drop an exact pin{:else}Owner
-						hasn't set a location yet{/if}
-				</span>
-			{:else}
-				<span class="flex-1"></span>
-			{/if}
-			<svg
-				viewBox="0 0 24 24"
-				class="text-fg-faint h-4 w-4 shrink-0 transition-transform {expanded ? 'rotate-180' : ''}"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="1.8"
-				stroke-linecap="round"
-				stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg
-			>
-		</button>
+	{#if canEdit}
+		<p class="text-fg-faint mb-3 text-xs leading-relaxed">
+			This exact location is <span class="text-fg-dim font-600">private</span> — only you and people
+			you share it with can see it. It never appears on the public map or in any public data. Drag the
+			pin (or click the map) to set your node's true position.
+		</p>
+	{:else}
+		<p class="text-fg-faint mb-3 text-xs leading-relaxed">
+			<span class="text-fg-dim font-600">{sharedBy?.displayName ?? 'The owner'}</span> shared this node's
+			private exact location with you. It's read-only and never appears on the public map.
+		</p>
+	{/if}
 
-		{#if expanded}
-			<div class="mt-4">
-				{#if canEdit}
-					<p class="text-fg-faint mb-3 text-xs leading-relaxed">
-						This exact location is <span class="text-fg-dim font-600">private</span> — only you and
-						people you share it with can see it. It never appears on the public map or in any public
-						data. Drag the pin (or click the map) to set your node's true position.
-					</p>
-				{:else}
-					<p class="text-fg-faint mb-3 text-xs leading-relaxed">
-						<span class="text-fg-dim font-600">{sharedBy?.displayName ?? 'The owner'}</span> shared this
-						node's private exact location with you. It's read-only and never appears on the public map.
-					</p>
-				{/if}
+	{#if canEdit || saved}
+		<div class="border-line/70 relative mb-3 h-64 overflow-hidden rounded-[var(--radius)] border">
+			<div bind:this={mapEl} class="h-full w-full"></div>
 
-				{#if canEdit || saved}
-					<div
-						class="border-line/70 relative mb-3 h-64 overflow-hidden rounded-[var(--radius)] border"
+			<!-- Base-layer selector (top-right, above the Leaflet panes) -->
+			<div class="absolute top-2 right-2 z-[1000]">
+				<button
+					type="button"
+					onclick={() => (layerOpen = !layerOpen)}
+					class="border-line bg-ink-2/85 hover:bg-panel-2/70 flex items-center gap-1.5 rounded-[var(--radius)] border px-2.5 py-1.5 backdrop-blur-md transition-colors"
+					aria-label="Base map: {currentLayer.label}"
+				>
+					<svg
+						viewBox="0 0 24 24"
+						class="text-fg-dim h-3.5 w-3.5 shrink-0"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.7"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg
 					>
-						<div bind:this={mapEl} class="h-full w-full"></div>
-
-						<!-- Base-layer selector (top-right, above the Leaflet panes) -->
-						<div class="absolute top-2 right-2 z-[1000]">
+					<span class="text-fg text-xs font-600">{currentLayer.label}</span>
+					<svg
+						viewBox="0 0 24 24"
+						class="text-fg-faint h-3 w-3 shrink-0 transition-transform {layerOpen ? 'rotate-180' : ''}"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg
+					>
+				</button>
+				{#if layerOpen}
+					<div
+						class="border-line bg-ink-2/95 mt-1 w-44 overflow-hidden rounded-[var(--radius)] border backdrop-blur-md"
+					>
+						{#each LAYERS as l (l.id)}
+							{@const on = l.id === layerId}
 							<button
 								type="button"
-								onclick={() => (layerOpen = !layerOpen)}
-								class="border-line bg-ink-2/85 hover:bg-panel-2/70 flex items-center gap-1.5 rounded-[var(--radius)] border px-2.5 py-1.5 backdrop-blur-md transition-colors"
-								aria-label="Base map: {currentLayer.label}"
+								onclick={() => selectLayer(l.id)}
+								class="hover:bg-panel-2/60 flex w-full items-center gap-2 px-3 py-2 text-left transition-colors {on
+									? 'bg-signal/10'
+									: ''}"
 							>
-								<svg
-									viewBox="0 0 24 24"
-									class="text-fg-dim h-3.5 w-3.5 shrink-0"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="1.7"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg
-								>
-								<span class="text-fg text-xs font-600">{currentLayer.label}</span>
-								<svg
-									viewBox="0 0 24 24"
-									class="text-fg-faint h-3 w-3 shrink-0 transition-transform {layerOpen
-										? 'rotate-180'
-										: ''}"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg
-								>
-							</button>
-							{#if layerOpen}
-								<div
-									class="border-line bg-ink-2/95 mt-1 w-44 overflow-hidden rounded-[var(--radius)] border backdrop-blur-md"
-								>
-									{#each LAYERS as l (l.id)}
-										{@const on = l.id === layerId}
-										<button
-											type="button"
-											onclick={() => selectLayer(l.id)}
-											class="hover:bg-panel-2/60 flex w-full items-center gap-2 px-3 py-2 text-left transition-colors {on
-												? 'bg-signal/10'
-												: ''}"
-										>
-											<span
-												class="h-1.5 w-1.5 shrink-0 rounded-full"
-												style="background:{on ? 'var(--color-signal)' : 'var(--color-fg-faint)'}"
-											></span>
-											<span class="min-w-0 flex-1">
-												<span class="block truncate text-xs font-600 {on ? 'text-signal' : 'text-fg'}"
-													>{l.label}</span
-												>
-												<span class="text-fg-faint mt-0.5 block truncate text-[0.62rem] leading-tight"
-													>{l.desc}</span
-												>
-											</span>
-										</button>
-									{/each}
-								</div>
-							{/if}
-						</div>
-					</div>
-				{/if}
-
-				<div class="mb-3 flex flex-wrap items-end gap-3">
-					<label class="flex flex-col gap-1">
-						<span class="text-fg-faint text-[0.68rem]">Latitude</span>
-						<input
-							type="number"
-							step="0.00001"
-							bind:value={lat}
-							oninput={onInput}
-							readonly={!canEdit}
-							class="bg-ink-2 text-fg focus:border-signal w-32 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none read-only:opacity-70"
-						/>
-					</label>
-					<label class="flex flex-col gap-1">
-						<span class="text-fg-faint text-[0.68rem]">Longitude</span>
-						<input
-							type="number"
-							step="0.00001"
-							bind:value={lon}
-							oninput={onInput}
-							readonly={!canEdit}
-							class="bg-ink-2 text-fg focus:border-signal w-32 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none read-only:opacity-70"
-						/>
-					</label>
-					<label class="flex flex-1 flex-col gap-1">
-						<span class="text-fg-faint text-[0.68rem]">Label {canEdit ? '(optional)' : ''}</span>
-						<input
-							type="text"
-							bind:value={label}
-							maxlength="120"
-							readonly={!canEdit}
-							placeholder={canEdit ? 'rooftop, repeater site…' : ''}
-							class="bg-ink-2 text-fg focus:border-signal min-w-32 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none read-only:opacity-70"
-						/>
-					</label>
-				</div>
-
-				{#if error}<p class="text-coral mb-2 text-xs">{error}</p>{/if}
-
-				{#if canEdit}
-					<div class="flex items-center gap-2">
-						<button
-							onclick={save}
-							disabled={busy || lat == null || lon == null}
-							class="bg-signal/15 text-signal border-signal/40 hover:bg-signal/25 rounded-[var(--radius)] border px-3.5 py-1.5 text-sm font-600 transition-colors disabled:opacity-40"
-							>{busy ? 'Saving…' : saved ? 'Update location' : 'Save location'}</button
-						>
-						{#if saved}
-							<button
-								onclick={clear}
-								disabled={busy}
-								class="text-fg-faint hover:text-coral rounded-[var(--radius)] px-3 py-1.5 text-sm transition-colors"
-								>Clear</button
-							>
-						{/if}
-						{#if justSaved}<span class="text-signal text-xs font-600">Saved ✓</span>{/if}
-					</div>
-
-					<!-- Shared with — grant/revoke read access to other registered users -->
-					<div class="border-line/60 mt-4 border-t pt-3">
-						<div class="mb-2 flex items-center gap-2">
-							<span class="label normal-case text-fg-dim">Shared with</span>
-							{#if shares.length}
 								<span
-									class="bg-line/60 text-fg-dim rounded-full px-2 py-0.5 text-[0.62rem] font-600"
-									>{shares.length}</span
-								>
-							{/if}
-						</div>
-						{#if shares.length}
-							<ul class="mb-2.5 space-y-1.5">
-								{#each shares as sh (sh.granteeUserId)}
-									<li class="flex items-center gap-2">
-										<span class="bg-signal/15 text-signal grid h-6 w-6 place-items-center rounded-full text-[0.6rem] font-700"
-											>{(sh.displayName || sh.email).slice(0, 2).toUpperCase()}</span
-										>
-										<span class="text-fg min-w-0 truncate text-sm font-600">{sh.displayName}</span>
-										<span class="text-fg-faint min-w-0 flex-1 truncate text-xs">{sh.email}</span>
-										<button
-											onclick={() => revoke(sh)}
-											class="text-fg-faint hover:text-coral shrink-0 text-xs">Revoke</button
-										>
-									</li>
-								{/each}
-							</ul>
-						{:else}
-							<p class="text-fg-faint mb-2.5 text-xs">Not shared with anyone yet.</p>
-						{/if}
-						<div class="flex items-center gap-2">
-							<input
-								type="email"
-								bind:value={shareEmail}
-								placeholder="teammate@example.com"
-								onkeydown={(e) => e.key === 'Enter' && grant()}
-								class="bg-ink-2 text-fg focus:border-signal min-w-0 flex-1 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none"
-							/>
-							<button
-								onclick={grant}
-								disabled={shareBusy || !shareEmail.trim()}
-								class="bg-signal/15 text-signal border-signal/40 hover:bg-signal/25 shrink-0 rounded-[var(--radius)] border px-3.5 py-1.5 text-sm font-600 transition-colors disabled:opacity-40"
-								>{shareBusy ? 'Sharing…' : 'Share'}</button
-							>
-						</div>
-						{#if shareError}<p class="text-coral mt-1.5 text-xs">{shareError}</p>{/if}
-						<p class="text-fg-faint mt-1.5 text-[0.68rem] leading-relaxed">
-							Enter the email of a registered Ridgeline user to give them read-only access to this
-							exact location. They can't edit it or share it further.
-						</p>
+									class="h-1.5 w-1.5 shrink-0 rounded-full"
+									style="background:{on ? 'var(--color-signal)' : 'var(--color-fg-faint)'}"
+								></span>
+								<span class="min-w-0 flex-1">
+									<span class="block truncate text-xs font-600 {on ? 'text-signal' : 'text-fg'}"
+										>{l.label}</span
+									>
+									<span class="text-fg-faint mt-0.5 block truncate text-[0.62rem] leading-tight"
+										>{l.desc}</span
+									>
+								</span>
+							</button>
+						{/each}
 					</div>
 				{/if}
 			</div>
-		{/if}
+		</div>
+	{/if}
+
+	<div class="mb-3 flex flex-wrap items-end gap-3">
+		<label class="flex flex-col gap-1">
+			<span class="text-fg-faint text-[0.68rem]">Latitude</span>
+			<input
+				type="number"
+				step="0.00001"
+				bind:value={lat}
+				oninput={onInput}
+				readonly={!canEdit}
+				class="bg-ink-2 text-fg focus:border-signal w-32 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none read-only:opacity-70"
+			/>
+		</label>
+		<label class="flex flex-col gap-1">
+			<span class="text-fg-faint text-[0.68rem]">Longitude</span>
+			<input
+				type="number"
+				step="0.00001"
+				bind:value={lon}
+				oninput={onInput}
+				readonly={!canEdit}
+				class="bg-ink-2 text-fg focus:border-signal w-32 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none read-only:opacity-70"
+			/>
+		</label>
+		<label class="flex flex-1 flex-col gap-1">
+			<span class="text-fg-faint text-[0.68rem]">Label {canEdit ? '(optional)' : ''}</span>
+			<input
+				type="text"
+				bind:value={label}
+				maxlength="120"
+				readonly={!canEdit}
+				placeholder={canEdit ? 'rooftop, repeater site…' : ''}
+				class="bg-ink-2 text-fg focus:border-signal min-w-32 rounded-[var(--radius)] border border-transparent px-2.5 py-1.5 text-sm outline-none read-only:opacity-70"
+			/>
+		</label>
 	</div>
+
+	{#if error}<p class="text-coral mb-2 text-xs">{error}</p>{/if}
+
+	{#if canEdit}
+		<div class="flex items-center gap-2">
+			<button
+				onclick={save}
+				disabled={busy || lat == null || lon == null}
+				class="bg-signal/15 text-signal border-signal/40 hover:bg-signal/25 rounded-[var(--radius)] border px-3.5 py-1.5 text-sm font-600 transition-colors disabled:opacity-40"
+				>{busy ? 'Saving…' : saved ? 'Update location' : 'Save location'}</button
+			>
+			{#if saved}
+				<button
+					onclick={clear}
+					disabled={busy}
+					class="text-fg-faint hover:text-coral rounded-[var(--radius)] px-3 py-1.5 text-sm transition-colors"
+					>Clear</button
+				>
+			{/if}
+			{#if justSaved}<span class="text-signal text-xs font-600">Saved ✓</span>{/if}
+		</div>
+
+		<!-- Shared with — grant/revoke read access to other registered users -->
+		<div class="border-line/60 mt-4 border-t pt-3">
+			<div class="mb-2 flex items-center gap-2">
+				<span class="label normal-case text-fg-dim">Shared with</span>
+				{#if shares.length}
+					<span class="bg-line/60 text-fg-dim rounded-full px-2 py-0.5 text-[0.62rem] font-600"
+						>{shares.length}</span
+					>
+				{/if}
+			</div>
+			{#if shares.length}
+				<ul class="mb-2.5 space-y-1.5">
+					{#each shares as sh (sh.granteeUserId)}
+						<li class="flex items-center gap-2">
+							<span
+								class="bg-signal/15 text-signal grid h-6 w-6 place-items-center rounded-full text-[0.6rem] font-700"
+								>{(sh.displayName || sh.email).slice(0, 2).toUpperCase()}</span
+							>
+							<span class="text-fg min-w-0 truncate text-sm font-600">{sh.displayName}</span>
+							<span class="text-fg-faint min-w-0 flex-1 truncate text-xs">{sh.email}</span>
+							<button onclick={() => revoke(sh)} class="text-fg-faint hover:text-coral shrink-0 text-xs"
+								>Revoke</button
+							>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="text-fg-faint mb-2.5 text-xs">Not shared with anyone yet.</p>
+			{/if}
+			<UserAutocomplete
+				onselect={grantUser}
+				exclude={sharedIds}
+				placeholder={shareBusy ? 'Sharing…' : 'Share with a user by username…'}
+			/>
+			{#if shareError}<p class="text-coral mt-1.5 text-xs">{shareError}</p>{/if}
+			<p class="text-fg-faint mt-1.5 text-[0.68rem] leading-relaxed">
+				Start typing a registered Ridgeline user's username to give them read-only access to this exact
+				location. They can't edit it or share it further.
+			</p>
+		</div>
+	{/if}
 {/if}

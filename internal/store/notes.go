@@ -14,14 +14,15 @@ type Note struct {
 	NodePubkey string `json:"nodePubkey"`
 	UserID     int64  `json:"userId"`
 	AuthorName string `json:"authorName"`
-	Visibility string `json:"visibility"` // public | private
+	Visibility string `json:"visibility"` // public | private | team
 	Body       string `json:"body"`
 	CreatedAt  string `json:"createdAt"`
 	UpdatedAt  string `json:"updatedAt"`
 }
 
 // CreateNote adds a note authored by userID on a node. visibility must be
-// "public" or "private".
+// "public", "private", or "team" (the caller enforces that a team note's author
+// is in the node's shared circle).
 func (s *Store) CreateNote(nodePubkey string, userID int64, visibility, body string) (Note, error) {
 	nodePubkey = strings.ToUpper(nodePubkey)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -57,9 +58,10 @@ func (s *Store) GetNote(id int64) (Note, bool, error) {
 }
 
 // NotesForNode returns the notes visible to viewerUserID on a node: every public
-// note plus the viewer's own private notes. Pass viewerUserID=0 for an
-// anonymous viewer (public only). Newest first.
-func (s *Store) NotesForNode(nodePubkey string, viewerUserID int64) ([]Note, error) {
+// note, the viewer's own notes, and — when inCircle is true (the viewer is the
+// node's owner or a shared-with user) — the node's "team" notes. Pass
+// viewerUserID=0 for an anonymous viewer (public only). Newest first.
+func (s *Store) NotesForNode(nodePubkey string, viewerUserID int64, inCircle bool) ([]Note, error) {
 	nodePubkey = strings.ToUpper(nodePubkey)
 	rows, err := s.db.Query(`
 		SELECT nt.id, nt.node_pubkey, nt.user_id,
@@ -67,8 +69,10 @@ func (s *Store) NotesForNode(nodePubkey string, viewerUserID int64) ([]Note, err
 		       nt.created_at, nt.updated_at
 		FROM node_notes nt JOIN users u ON u.id = nt.user_id
 		WHERE nt.node_pubkey = ?
-		  AND (nt.visibility = 'public' OR nt.user_id = ?)
-		ORDER BY nt.created_at DESC`, nodePubkey, viewerUserID)
+		  AND (nt.visibility = 'public'
+		       OR nt.user_id = ?
+		       OR (nt.visibility = 'team' AND ?))
+		ORDER BY nt.created_at DESC`, nodePubkey, viewerUserID, inCircle)
 	if err != nil {
 		return nil, err
 	}

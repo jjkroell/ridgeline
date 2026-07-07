@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
 	import { admin, type InjectionReport, type BlockEntry, type BridgeCandidate, type InjectorCandidate } from '$lib/api';
@@ -29,11 +28,15 @@
 	let scrubKey = $state('');
 	let scrubbing = $state(false);
 
-	onMount(() => {
-		if (auth.isAdmin) refreshBlocks();
-	});
+	// Load once when admin status is confirmed. The `loaded` guard is essential:
+	// gating on blocks.length loops forever when the blocklist is empty (each
+	// refreshBlocks reassigns []→ re-triggers the effect → 429).
+	let loaded = $state(false);
 	$effect(() => {
-		if (auth.isAdmin && blocks.length === 0 && !detecting) refreshBlocks();
+		if (auth.isAdmin && !loaded) {
+			loaded = true;
+			refreshBlocks();
+		}
 	});
 	async function refreshBlocks() { try { blocks = await admin.blocklist(); } catch (e) { msg = `blocklist: ${(e as Error).message}`; } }
 	async function runDetect() {

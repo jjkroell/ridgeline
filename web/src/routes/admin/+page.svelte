@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
 	import {
@@ -105,18 +104,17 @@
 		}
 	}
 
-	onMount(() => {
-		if (auth.isAdmin) {
+	// Kick off the initial load exactly once, when admin status is confirmed
+	// (auth.isAdmin flips false→true after the /me probe). The `loaded` guard is
+	// essential: gating on blocks.length would loop forever when the blocklist is
+	// empty (refreshBlocks reassigns []→ re-triggers the effect → 429).
+	let loaded = $state(false);
+	$effect(() => {
+		if (auth.isAdmin && !loaded) {
+			loaded = true;
 			refreshBlocks();
 			loadMembers();
 		}
-	});
-	// Load data once admin status settles after the initial /me probe.
-	$effect(() => {
-		if (auth.isAdmin && blocks.length === 0 && !detecting) refreshBlocks();
-	});
-	$effect(() => {
-		if (auth.isAdmin && members.length === 0 && !loadingMembers) loadMembers();
 	});
 
 	async function refreshBlocks() {

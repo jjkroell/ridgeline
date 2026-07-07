@@ -5,6 +5,7 @@
 package meshcore
 
 import (
+	"crypto/ed25519"
 	"encoding/binary"
 	"encoding/hex"
 	"strings"
@@ -15,6 +16,15 @@ import (
 // signature(64) + flags(1).
 const advertMinLen = 32 + 4 + 64 + 1
 
+// advertSigPrefix is public_key(32) + timestamp(4) — the start of the signed
+// message; the rest is app_data (flags + optional location/features + name).
+const advertSigPrefix = 32 + 4
+
+// maxAdvertDataSize mirrors the firmware's MAX_ADVERT_DATA_SIZE: the app_data
+// signed (and transmitted) is capped at 32 bytes. Signature verification must
+// use the same cap or valid adverts with trailing bytes would fail.
+const maxAdvertDataSize = 32
+
 // decodeAdvert parses an Advert payload. It returns nil only when the payload
 // is too short to contain the fixed prefix.
 func decodeAdvert(payload []byte) *Advert {
@@ -23,10 +33,11 @@ func decodeAdvert(payload []byte) *Advert {
 	}
 
 	a := &Advert{
-		PublicKey: strings.ToUpper(hex.EncodeToString(payload[0:32])),
-		Timestamp: binary.LittleEndian.Uint32(payload[32:36]),
-		Signature: strings.ToUpper(hex.EncodeToString(payload[36:100])),
-		Flags:     payload[100],
+		PublicKey:      strings.ToUpper(hex.EncodeToString(payload[0:32])),
+		Timestamp:      binary.LittleEndian.Uint32(payload[32:36]),
+		Signature:      strings.ToUpper(hex.EncodeToString(payload[36:100])),
+		Flags:          payload[100],
+		SignatureValid: verifyAdvertSignature(payload),
 	}
 	a.DeviceRole = parseDeviceRole(a.Flags)
 	a.HasLocation = a.Flags&advertFlagHasLocation != 0
@@ -54,6 +65,26 @@ func decodeAdvert(payload []byte) *Advert {
 	}
 
 	return a
+}
+
+// verifyAdvertSignature checks the advert's Ed25519 signature the same way the
+// firmware does: the signed message is pub_key(32) || timestamp(4) || app_data,
+// where app_data is the bytes after the signature, capped at maxAdvertDataSize.
+// Returns false for any malformed/short payload.
+func verifyAdvertSignature(payload []byte) bool {
+	if len(payload) < advertMinLen { // need at least through flags/app_data start
+		return false
+	}
+	pub := payload[0:32]
+	sig := payload[36:100]
+	appData := payload[advertSigPrefix+64:] // from byte 100
+	if len(appData) > maxAdvertDataSize {
+		appData = appData[:maxAdvertDataSize]
+	}
+	msg := make([]byte, 0, advertSigPrefix+len(appData))
+	msg = append(msg, payload[0:advertSigPrefix]...) // pub_key || timestamp
+	msg = append(msg, appData...)
+	return ed25519.Verify(ed25519.PublicKey(pub), msg, sig)
 }
 
 func parseDeviceRole(flags uint8) DeviceRole {

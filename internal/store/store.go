@@ -85,6 +85,60 @@ CREATE TABLE IF NOT EXISTS blocklist (
 	created_at TEXT NOT NULL,
 	PRIMARY KEY (kind, key)
 );
+
+-- users holds registered accounts. Registration is open, but the sensitive
+-- features (claiming nodes, storing a node's private exact location) are gated
+-- behind can_claim, which an admin grants. The very first account created is
+-- bootstrapped as admin + can_claim so the deployment has an owner.
+CREATE TABLE IF NOT EXISTS users (
+	id            INTEGER PRIMARY KEY AUTOINCREMENT,
+	email         TEXT NOT NULL UNIQUE,     -- stored lowercased
+	password_hash TEXT NOT NULL,            -- Argon2id PHC string
+	display_name  TEXT,                     -- callsign / handle shown on public notes
+	is_admin      INTEGER NOT NULL DEFAULT 0,
+	can_claim     INTEGER NOT NULL DEFAULT 0,
+	blocked       INTEGER NOT NULL DEFAULT 0, -- suspended: cannot log in, existing sessions void
+	protected     INTEGER NOT NULL DEFAULT 0, -- the initial/owner admin: cannot be demoted/blocked/removed
+	created_at    TEXT NOT NULL,
+	last_login    TEXT
+);
+
+-- sessions are server-side so they can be revoked. token_hash is the SHA-256 of
+-- the opaque token in the user's cookie; the plaintext is never stored. csrf is
+-- the double-submit token echoed back on mutating requests.
+CREATE TABLE IF NOT EXISTS sessions (
+	token_hash TEXT PRIMARY KEY,
+	user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	csrf       TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	expires_at TEXT NOT NULL,
+	last_seen  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+-- node_claims records a user's claim on a node. A pending claim carries a
+-- verification code the owner temporarily embeds in the node's advertised name;
+-- the ingest verifier promotes it to 'verified' when a signature-valid advert
+-- from that node carries the code. One verified owner per node (partial unique
+-- index below); one claim row per (node,user).
+CREATE TABLE IF NOT EXISTS node_claims (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	node_pubkey TEXT NOT NULL,           -- uppercase hex
+	user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	code        TEXT NOT NULL,
+	status      TEXT NOT NULL,           -- pending | verified
+	created_at  TEXT NOT NULL,
+	expires_at  TEXT NOT NULL,           -- pending-challenge expiry
+	verified_at TEXT,
+	UNIQUE(node_pubkey, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_claims_node ON node_claims(node_pubkey);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_claims_one_owner ON node_claims(node_pubkey) WHERE status = 'verified';
+-- No two open (pending) claims may share a verification code, so a code is
+-- globally unambiguous while it's live. Verified claims keep their (now spent)
+-- code but are excluded here, so they never block a new pending code.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_claims_pending_code ON node_claims(code) WHERE status = 'pending';
 `
 
 // Store wraps a SQLite database.
@@ -104,6 +158,12 @@ type Store struct {
 	blockedNodes     map[string]bool // node/bridge pubkey (UPPER) — origin-advert block
 	blockedBridges   []string        // bridge pubkeys (UPPER) — path-prefix block
 	allowedNodes     map[string]bool // node pubkey (UPPER) — dismissed detection candidates
+
+	// Set of node pubkeys (UPPER) with an open pending ownership claim. Consulted
+	// on the hot ingest path so the advert verifier only touches the DB for nodes
+	// that actually have a claim awaiting a code. Refreshed on claim mutations.
+	claimMu           sync.RWMutex
+	pendingClaimNodes map[string]bool
 }
 
 // Open opens (creating if needed) the SQLite database at path, enables WAL
@@ -149,10 +209,24 @@ func Open(path string) (*Store, error) {
 	// backfill from the stored observation history.
 	needAdvertTxBackfill := !columnExists(db, "nodes", "advert_tx_count")
 	db.Exec(`ALTER TABLE nodes ADD COLUMN advert_tx_count INTEGER NOT NULL DEFAULT 0`)
+	// User account status columns (added after the initial users table shipped).
+	db.Exec(`ALTER TABLE users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0`)
+	db.Exec(`ALTER TABLE users ADD COLUMN protected INTEGER NOT NULL DEFAULT 0`)
+	// Backfill: if the protected/owner flag exists on nobody yet but accounts do,
+	// mark the first-registered account (lowest id = the bootstrap admin) as the
+	// protected owner. Idempotent — once one row is protected this is a no-op.
+	db.Exec(`UPDATE users SET protected = 1
+		WHERE id = (SELECT MIN(id) FROM users)
+		  AND (SELECT COUNT(*) FROM users) > 0
+		  AND NOT EXISTS (SELECT 1 FROM users WHERE protected = 1)`)
 	s := &Store{db: db, needAdvertTxBackfill: needAdvertTxBackfill}
 	if err := s.loadBlocklist(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("store: load blocklist: %w", err)
+	}
+	if err := s.loadPendingClaims(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: load pending claims: %w", err)
 	}
 	return s, nil
 }

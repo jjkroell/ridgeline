@@ -7,6 +7,7 @@
 	import { channels } from '$lib/channels.svelte';
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemap } from '$lib/basemap.svelte';
+	import { auth } from '$lib/auth.svelte';
 	import { hasWebGL } from '$lib/webgl';
 
 	let { children } = $props();
@@ -44,6 +45,7 @@
 		channels.init();
 		favorites.init();
 		basemap.init();
+		auth.init();
 		live.start();
 		trackWebGL();
 	});
@@ -150,6 +152,46 @@
 		</nav>
 
 		<div class="mt-auto px-5 pb-5">
+			<!-- Account -->
+			<div class="mb-3">
+				{#if auth.loggedIn}
+					<a
+						href="/account"
+						class="group border-line hover:border-line-bright flex items-center gap-2.5 rounded-[var(--radius)] border px-3 py-2 transition-colors"
+					>
+						<span
+							class="bg-signal/15 text-signal flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-700"
+						>
+							{(auth.user?.displayName || auth.user?.email || '?').charAt(0).toUpperCase()}
+						</span>
+						<span class="min-w-0 flex-1">
+							<span class="text-fg block truncate text-xs font-600"
+								>{auth.user?.displayName || auth.user?.email}</span
+							>
+							<span class="label !text-fg-faint block"
+								>{auth.isAdmin ? 'Admin' : auth.canClaim ? 'Member' : 'Account'}</span
+							>
+						</span>
+					</a>
+				{:else}
+					<a
+						href="/login"
+						class="text-fg-dim hover:border-line-bright hover:text-fg border-line flex w-full items-center gap-2.5 rounded-[var(--radius)] border px-3 py-2 text-xs transition-colors"
+					>
+						<svg
+							viewBox="0 0 24 24"
+							class="text-fg-faint h-4 w-4"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.6"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3" /></svg
+						>
+						<span class="font-medium">Sign in</span>
+					</a>
+				{/if}
+			</div>
 			<button
 				onclick={() => theme.toggle()}
 				class="text-fg-dim hover:border-line-bright hover:text-fg border-line flex w-full items-center gap-2.5 rounded-[var(--radius)] border px-3 py-2 text-xs transition-colors"

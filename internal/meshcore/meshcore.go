@@ -288,4 +288,12 @@ type Advert struct {
 
 	HasName bool
 	Name    string
+
+	// SignatureValid reports whether the advert's Ed25519 signature verifies
+	// against its own public key over pubkey||timestamp||app_data (capped at
+	// MAX_ADVERT_DATA_SIZE, matching the MeshCore firmware). A valid signature
+	// proves the advert was produced by the holder of the node's private key —
+	// it cannot be forged or replayed with altered fields by a rogue observer.
+	// Used to authenticate node-ownership claims (a temporary code in the name).
+	SignatureValid bool
 }

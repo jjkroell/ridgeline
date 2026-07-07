@@ -96,6 +96,8 @@ func run(log *slog.Logger, configPath string) error {
 	go runAnalytics(ctx, engine, st, log)
 	go runHashSizeConsensus(ctx, st, log)
 	go runRetention(ctx, st, log)
+	go runSessionPrune(ctx, st, log)
+	go runClaimPrune(ctx, st, log)
 	if cfg.NodeRetentionDays > 0 {
 		go runNodeRetention(ctx, st, engine, cfg.NodeRetentionDays, log)
 	}
@@ -206,6 +208,55 @@ func runHashSizeConsensus(ctx context.Context, st *store.Store, log *slog.Logger
 			return
 		case <-t.C:
 			reconcile()
+		}
+	}
+}
+
+// runSessionPrune deletes expired login sessions immediately, then daily, until
+// ctx is cancelled. Sessions are also validated (and expired ones dropped) on
+// use; this just keeps the table from accumulating stale rows.
+func runSessionPrune(ctx context.Context, st *store.Store, log *slog.Logger) {
+	prune := func() {
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		if n, err := st.PruneSessions(now); err != nil {
+			log.Warn("session prune", "err", err)
+		} else if n > 0 {
+			log.Info("session prune: removed expired sessions", "rows", n)
+		}
+	}
+	prune()
+	t := time.NewTicker(24 * time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			prune()
+		}
+	}
+}
+
+// runClaimPrune deletes expired pending node-ownership claims immediately, then
+// hourly, until ctx is cancelled. Verified claims are kept; only unfulfilled
+// codes past their expiry are cleared.
+func runClaimPrune(ctx context.Context, st *store.Store, log *slog.Logger) {
+	prune := func() {
+		if n, err := st.PruneExpiredClaims(); err != nil {
+			log.Warn("claim prune", "err", err)
+		} else if n > 0 {
+			log.Info("claim prune: removed expired pending claims", "rows", n)
+		}
+	}
+	prune()
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			prune()
 		}
 	}
 }

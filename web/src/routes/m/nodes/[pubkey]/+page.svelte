@@ -12,6 +12,7 @@
 	import { theme } from '$lib/theme.svelte';
 	import { hasWebGL } from '$lib/webgl';
 	import LeafletInset from '$lib/components/LeafletInset.svelte';
+	import ClaimPanel from '$lib/components/ClaimPanel.svelte';
 
 	const pubkey = $derived((page.params.pubkey ?? '').toUpperCase());
 
@@ -145,6 +146,11 @@
 				<button onclick={copyKey} class="text-xs {copied ? 'text-signal' : 'text-fg-faint active:text-fg'}">{copied ? 'copied' : 'copy'}</button>
 			</div>
 			<div class="text-fg-dim mt-1.5 font-mono text-[0.7rem] break-all">{pubkey}</div>
+		</div>
+
+		<!-- ownership claim -->
+		<div class="mb-3">
+			<ClaimPanel {pubkey} compact />
 		</div>
 
 		<!-- hash id -->

@@ -448,3 +448,137 @@ export const api = {
 	meshAnalytics: (sinceSec = 21600, bucketMin = 10) =>
 		get<MeshAnalytics>(`/api/mesh-analytics?since=${sinceSec}&bucket=${bucketMin}`)
 };
+
+// ---- Accounts / auth ----
+
+export interface AuthUser {
+	id: number;
+	email: string;
+	displayName: string;
+	/** Site administrator: manages members and (later) moderation. */
+	isAdmin: boolean;
+	/** Admin-granted gate for claiming nodes and storing private locations. */
+	canClaim: boolean;
+	/** Suspended: cannot log in; existing sessions are void. */
+	blocked: boolean;
+	/** The protected initial admin — cannot be demoted, blocked, or removed. */
+	isOwner: boolean;
+	createdAt: string;
+	lastLogin?: string;
+}
+
+/** Response from register/login/me: the user (null when signed out) plus the
+ *  session's CSRF token, echoed on authenticated mutations via X-CSRF-Token. */
+export interface AuthResponse {
+	user: AuthUser | null;
+	csrfToken?: string;
+}
+
+// Session cookies are HttpOnly and set by the server; same-origin fetches send
+// them automatically, so the client never handles the session token directly.
+async function authReq(path: string, body?: unknown): Promise<AuthResponse> {
+	const res = await fetch(path, {
+		method: 'POST',
+		headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json' } : {}) },
+		body: body ? JSON.stringify(body) : undefined
+	});
+	const data = (await res.json().catch(() => ({}))) as AuthResponse & { error?: string };
+	if (!res.ok) throw new Error(data.error ?? `${res.status}`);
+	return data;
+}
+
+export const authApi = {
+	me: () => get<AuthResponse>('/api/auth/me'),
+	register: (email: string, password: string, displayName: string) =>
+		authReq('/api/auth/register', { email, password, displayName }),
+	login: (email: string, password: string) => authReq('/api/auth/login', { email, password }),
+	logout: () => authReq('/api/auth/logout')
+};
+
+// mutate is the shared helper for authenticated, CSRF-protected state changes
+// (used by the account features). It relies on the same-origin session cookie
+// and sends the session's CSRF token in the header (double-submit).
+export async function mutate<T>(
+	path: string,
+	method: string,
+	csrf: string,
+	body?: unknown
+): Promise<T> {
+	const res = await fetch(path, {
+		method,
+		headers: {
+			accept: 'application/json',
+			'x-csrf-token': csrf,
+			...(body ? { 'content-type': 'application/json' } : {})
+		},
+		body: body ? JSON.stringify(body) : undefined
+	});
+	if (!res.ok) {
+		let msg = `${res.status}`;
+		try {
+			msg = (await res.json()).error ?? msg;
+		} catch {
+			/* ignore */
+		}
+		throw new Error(msg);
+	}
+	return res.json() as Promise<T>;
+}
+
+// ---- Node ownership claims ----
+
+export interface Claim {
+	id: number;
+	nodePubkey: string;
+	userId: number;
+	/** Verification code (present only on your own pending claim). */
+	code?: string;
+	status: 'pending' | 'verified';
+	createdAt: string;
+	expiresAt?: string;
+	verifiedAt?: string;
+}
+
+export interface ClaimStatus {
+	/** The verified owner (public), if any. */
+	owner?: { userId: number; displayName: string };
+	ownedByMe: boolean;
+	/** The requesting user's own claim on this node, if any. */
+	mine?: Claim;
+	loggedIn: boolean;
+	/** Whether the requester is allowed to start a claim on this node. */
+	canClaim: boolean;
+	/** True when you own the node but its advertised name still contains the
+	 *  verification code — restore the real name and re-advert to clear it. */
+	nameNeedsReset?: boolean;
+}
+
+export interface ClaimWithNode extends Claim {
+	nodeName: string;
+	nodeRole: string;
+}
+
+export const claims = {
+	/** Public: ownership + the caller's own claim status for a node. */
+	status: (pubkey: string) => get<ClaimStatus>(`/api/nodes/${encodeURIComponent(pubkey)}/claim`),
+	/** Open or refresh a pending claim; returns the code to embed in the advert name. */
+	create: (csrf: string, pubkey: string) => mutate<Claim>('/api/claims', 'POST', csrf, { pubkey }),
+	/** Cancel a pending claim or release ownership. */
+	release: (csrf: string, pubkey: string) =>
+		mutate<{ ok: boolean }>(`/api/claims/${encodeURIComponent(pubkey)}`, 'DELETE', csrf),
+	/** The caller's own claims (pending + owned) with node display info. */
+	mine: () => get<ClaimWithNode[]>('/api/claims/mine')
+};
+
+/** Admin member management (session-admin gated). */
+export const adminUsers = {
+	list: () => get<AuthUser[]>('/api/admin/users'),
+	setFlags: (csrf: string, id: number, isAdmin: boolean, canClaim: boolean) =>
+		mutate<{ ok: boolean }>('/api/admin/users/flags', 'POST', csrf, { id, isAdmin, canClaim }),
+	/** Suspend (blocked=true) or restore (blocked=false) an account. */
+	setBlocked: (csrf: string, id: number, blocked: boolean) =>
+		mutate<{ ok: boolean }>('/api/admin/users/block', 'POST', csrf, { id, blocked }),
+	/** Permanently delete an account. */
+	remove: (csrf: string, id: number) =>
+		mutate<{ ok: boolean }>('/api/admin/users/delete', 'POST', csrf, { id })
+};

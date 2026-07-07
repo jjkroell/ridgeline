@@ -58,6 +58,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/nodes/{pubkey}", s.nodeDetail)
 	mux.HandleFunc("GET /api/nodes/{pubkey}/history", s.nodeHistory)
 	mux.HandleFunc("GET /api/nodes/{pubkey}/heatmap", s.nodeHeatmap)
+	mux.HandleFunc("GET /api/nodes/{pubkey}/claim", s.nodeClaimStatus)
 	mux.HandleFunc("GET /api/mesh-analytics", s.meshAnalytics)
 	mux.HandleFunc("GET /api/observers", s.observers)
 	mux.HandleFunc("GET /api/observers/{id}/analytics", s.observerAnalytics)
@@ -66,6 +67,26 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/recent", s.recent)
 	mux.HandleFunc("GET /api/channels/recent", s.channelsRecent)
 	mux.HandleFunc("GET /api/live", s.live)
+
+	// Accounts: registration, login/logout, current-user probe. Mutating auth
+	// endpoints are same-origin POSTs; CSRF is enforced on authenticated
+	// mutations elsewhere (requireUser) once a session exists.
+	mux.HandleFunc("POST /api/auth/register", s.authRegister)
+	mux.HandleFunc("POST /api/auth/login", s.authLogin)
+	mux.HandleFunc("POST /api/auth/logout", s.authLogout)
+	mux.HandleFunc("GET /api/auth/me", s.authMe)
+
+	// Node ownership claims (authenticated; creating requires the can_claim gate).
+	mux.HandleFunc("POST /api/claims", s.requireUser(s.claimCreate))
+	mux.HandleFunc("GET /api/claims/mine", s.requireUser(s.claimsMine))
+	mux.HandleFunc("DELETE /api/claims/{pubkey}", s.requireUser(s.claimDelete))
+
+	// Session-admin (is_admin account) user administration — grant/revoke the
+	// can_claim gate. Distinct from the static-token injection console below.
+	mux.HandleFunc("GET /api/admin/users", s.requireAdminUser(s.adminListUsers))
+	mux.HandleFunc("POST /api/admin/users/flags", s.requireAdminUser(s.adminSetUserFlags))
+	mux.HandleFunc("POST /api/admin/users/block", s.requireAdminUser(s.adminBlockUser))
+	mux.HandleFunc("POST /api/admin/users/delete", s.requireAdminUser(s.adminDeleteUser))
 
 	// Admin (auth-gated): injection detection + quarantine/purge.
 	mux.HandleFunc("GET /api/admin/check", s.requireAdmin(s.adminCheck))

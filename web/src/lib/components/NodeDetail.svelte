@@ -16,6 +16,7 @@
 	import RoleBadge from './RoleBadge.svelte';
 	import FavoriteStar from './FavoriteStar.svelte';
 	import Tooltip from './Tooltip.svelte';
+	import ClaimPanel from './ClaimPanel.svelte';
 
 	interface Props {
 		pubkey: string;
@@ -332,6 +333,11 @@
 			<span class="font-mono text-fg whitespace-nowrap text-[0.72rem] tracking-tight">{pubkey}</span>
 			<span class="label ml-auto shrink-0 {copied ? '!text-signal' : ''}">{copied ? 'COPIED' : 'COPY'}</span>
 		</button>
+	</div>
+
+	<!-- Ownership claim -->
+	<div class="mb-5">
+		<ClaimPanel {pubkey} {compact} />
 	</div>
 
 	<div class="grid gap-5 {compact ? '' : 'lg:grid-cols-3'}">

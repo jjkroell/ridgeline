@@ -174,6 +174,20 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 		in.log.Error("store record failed", "err", err)
 		return
 	}
+	// Node-ownership claim verification: a signature-valid advert whose node has
+	// a pending claim may carry the verification code in its name. The signature
+	// check is essential — it proves the advert came from the node's own key, so
+	// a rogue observer can't forge a claim by injecting the code. Gated by the
+	// in-memory pending-claim set, so the overwhelming common case costs nothing.
+	if a := packet.Advert; a != nil && a.SignatureValid && in.store.HasPendingClaim(a.PublicKey) {
+		if verified, err := in.store.VerifyPendingClaims(a.PublicKey, a.Name); err != nil {
+			in.log.Warn("claim verification failed", "node", a.PublicKey, "err", err)
+		} else {
+			for _, v := range verified {
+				in.log.Info("node ownership claim verified", "node", a.PublicKey, "user", v.UserID)
+			}
+		}
+	}
 	if in.OnObservation != nil {
 		in.OnObservation(obs)
 	}

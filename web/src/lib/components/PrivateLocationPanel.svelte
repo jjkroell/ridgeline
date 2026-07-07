@@ -134,8 +134,68 @@
 	const pinSvg =
 		'<svg width="28" height="28" viewBox="0 0 24 24" fill="#34e3c4" stroke="#0b1f1a" stroke-width="1.3"><path d="M12 2c-3.87 0-7 3.13-7 7 0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.4" fill="#0b1f1a" stroke="none"/></svg>';
 
-	const tileUrl = (light: boolean) =>
+	// Selectable raster base layers. Only "map" follows the UI light/dark theme;
+	// the rest are fixed imagery. All are free, key-less, Leaflet-friendly tiles.
+	interface LayerOpt {
+		id: string;
+		label: string;
+		desc: string;
+		themed?: boolean;
+	}
+	const LAYERS: LayerOpt[] = [
+		{ id: 'map', label: 'Map', desc: 'Clean, theme-aware base', themed: true },
+		{ id: 'satellite', label: 'Satellite', desc: 'Aerial imagery' },
+		{ id: 'street', label: 'Street', desc: 'Detailed streets & places' },
+		{ id: 'topo', label: 'Topographic', desc: 'Contours & relief' }
+	];
+	let layerId = $state('map');
+	let layerOpen = $state(false);
+	const currentLayer = $derived(LAYERS.find((l) => l.id === layerId) ?? LAYERS[0]);
+
+	const cartoUrl = (light: boolean) =>
 		`https://{s}.basemaps.cartocdn.com/${light ? 'light_all' : 'dark_all'}/{z}/{x}/{y}{r}.png`;
+	const cartoAttr =
+		'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
+
+	// Build the Leaflet tile layer for a base-layer id at the current theme.
+	function makeTiles(id: string, light: boolean) {
+		switch (id) {
+			case 'satellite':
+				return L.tileLayer(
+					'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+					{
+						maxZoom: 19,
+						attribution:
+							'Imagery © <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, Maxar, Earthstar Geographics'
+					}
+				);
+			case 'street':
+				return L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+					subdomains: 'abcd',
+					maxZoom: 19,
+					attribution: cartoAttr
+				});
+			case 'topo':
+				return L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+					subdomains: 'abc',
+					maxZoom: 17,
+					attribution:
+						'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, SRTM | © <a href="https://opentopomap.org" target="_blank" rel="noopener">OpenTopoMap</a> (CC-BY-SA)'
+				});
+			case 'map':
+			default:
+				return L.tileLayer(cartoUrl(light), { subdomains: 'abcd', maxZoom: 19, attribution: cartoAttr });
+		}
+	}
+
+	// Swap the active base layer, preserving the marker + view.
+	function selectLayer(id: string) {
+		layerId = id;
+		layerOpen = false;
+		if (!map || !L) return;
+		if (tiles) map.removeLayer(tiles);
+		tiles = makeTiles(id, curLight).addTo(map);
+	}
 
 	// Initialise (or tear down) the map as the panel expands/collapses.
 	$effect(() => {
@@ -163,12 +223,7 @@
 		});
 		const center: [number, number] = [lat ?? FALLBACK[0], lon ?? FALLBACK[1]];
 		map = L.map(el, { center, zoom: lat != null ? 14 : 9, attributionControl: true });
-		tiles = L.tileLayer(tileUrl(curLight), {
-			subdomains: 'abcd',
-			maxZoom: 19,
-			attribution:
-				'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'
-		}).addTo(map);
+		tiles = makeTiles(layerId, curLight).addTo(map);
 		if (lat != null && lon != null) placeMarker(lat, lon);
 		// Click anywhere to drop / move the pin.
 		map.on('click', (e: { latlng: { lat: number; lng: number } }) => {
@@ -205,13 +260,13 @@
 		}
 	}
 
-	// Swap tile theme with the UI.
+	// Swap tile theme with the UI — only the themed "map" layer changes URL.
 	$effect(() => {
 		void theme.mode;
 		const light = isLight();
 		if (!map || !tiles || light === curLight) return;
 		curLight = light;
-		tiles.setUrl(tileUrl(light));
+		if (currentLayer.themed) tiles.setUrl(cartoUrl(light));
 	});
 
 	onDestroy(() => {
@@ -271,8 +326,67 @@
 					to set your node's true position.
 				</p>
 
-				<div class="border-line/70 mb-3 h-64 overflow-hidden rounded-[var(--radius)] border">
+				<div class="border-line/70 relative mb-3 h-64 overflow-hidden rounded-[var(--radius)] border">
 					<div bind:this={mapEl} class="h-full w-full"></div>
+
+					<!-- Base-layer selector (top-right, above the Leaflet panes) -->
+					<div class="absolute top-2 right-2 z-[1000]">
+						<button
+							type="button"
+							onclick={() => (layerOpen = !layerOpen)}
+							class="border-line bg-ink-2/85 hover:bg-panel-2/70 flex items-center gap-1.5 rounded-[var(--radius)] border px-2.5 py-1.5 backdrop-blur-md transition-colors"
+							aria-label="Base map: {currentLayer.label}"
+						>
+							<svg
+								viewBox="0 0 24 24"
+								class="text-fg-dim h-3.5 w-3.5 shrink-0"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.7"
+								stroke-linecap="round"
+								stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg
+							>
+							<span class="text-fg text-xs font-600">{currentLayer.label}</span>
+							<svg
+								viewBox="0 0 24 24"
+								class="text-fg-faint h-3 w-3 shrink-0 transition-transform {layerOpen ? 'rotate-180' : ''}"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg
+							>
+						</button>
+						{#if layerOpen}
+							<div
+								class="border-line bg-ink-2/95 mt-1 w-44 overflow-hidden rounded-[var(--radius)] border backdrop-blur-md"
+							>
+								{#each LAYERS as l (l.id)}
+									{@const on = l.id === layerId}
+									<button
+										type="button"
+										onclick={() => selectLayer(l.id)}
+										class="hover:bg-panel-2/60 flex w-full items-center gap-2 px-3 py-2 text-left transition-colors {on
+											? 'bg-signal/10'
+											: ''}"
+									>
+										<span
+											class="h-1.5 w-1.5 shrink-0 rounded-full"
+											style="background:{on ? 'var(--color-signal)' : 'var(--color-fg-faint)'}"
+										></span>
+										<span class="min-w-0 flex-1">
+											<span class="block truncate text-xs font-600 {on ? 'text-signal' : 'text-fg'}"
+												>{l.label}</span
+											>
+											<span class="text-fg-faint mt-0.5 block truncate text-[0.62rem] leading-tight"
+												>{l.desc}</span
+											>
+										</span>
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
 				</div>
 
 				<div class="mb-3 flex flex-wrap items-end gap-3">

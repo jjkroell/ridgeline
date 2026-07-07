@@ -81,6 +81,7 @@
 	let map: any = null;
 	let baseLayer: any = null;
 	let hillLayer: any = null;
+	let labelLayer: any = null;
 	let coverageLayer: any = null;
 	let pinMarker: any = null;
 	let markers: any = null;
@@ -102,11 +103,13 @@
 		if (!map || !L) return;
 		if (baseLayer) map.removeLayer(baseLayer);
 		if (hillLayer) map.removeLayer(hillLayer);
-		baseLayer = hillLayer = null;
+		if (labelLayer) map.removeLayer(labelLayer);
+		baseLayer = hillLayer = labelLayer = null;
 		const spec = leafletBasemap(basemap.id, curLight);
 		baseLayer = L.tileLayer(spec.base.url, {
 			subdomains: spec.base.subdomains ?? 'abc',
 			maxZoom: spec.base.maxZoom,
+			maxNativeZoom: spec.base.maxNativeZoom,
 			attribution: spec.base.attribution
 		}).addTo(map);
 		if (spec.hillshade) {
@@ -128,6 +131,19 @@
 				opacity: curLight ? 0.7 : 0.22,
 				maxZoom: spec.hillshade.maxZoom,
 				attribution: spec.hillshade.attribution
+			}).addTo(map);
+		}
+		if (spec.labels) {
+			if (!map.getPane('labels')) {
+				const lp = map.createPane('labels');
+				lp.style.zIndex = '350'; // above base/hillshade (≤250), below markers (400+)
+				lp.style.pointerEvents = 'none';
+			}
+			labelLayer = L.tileLayer(spec.labels.url, {
+				pane: 'labels',
+				subdomains: spec.labels.subdomains ?? 'abc',
+				maxZoom: spec.labels.maxZoom,
+				attribution: spec.labels.attribution
 			}).addTo(map);
 		}
 	}

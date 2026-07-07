@@ -10,6 +10,9 @@ export interface TileSpec {
 	attribution: string;
 	subdomains?: string;
 	maxZoom: number;
+	/** Highest zoom with real tiles; beyond it Leaflet overzooms (stretches) the
+	 * last level instead of going blank. Used by the self-hosted terrain (z14). */
+	maxNativeZoom?: number;
 	/** Overlay opacity (hillshade only). */
 	opacity?: number;
 }
@@ -17,6 +20,8 @@ export interface LeafletBasemap {
 	base: TileSpec;
 	/** Shaded-relief overlay drawn (multiply-blended) above the base. */
 	hillshade?: TileSpec;
+	/** Transparent road/place labels drawn above the base (crisp at any zoom). */
+	labels?: TileSpec;
 }
 
 const CARTO_ATTR =
@@ -68,14 +73,24 @@ export function leafletBasemap(id: string, light: boolean): LeafletBasemap {
 				}
 			};
 		case 'localterrain':
-			// Self-hosted Joerd-style terrain (Copernicus GLO-30) via the
-			// maps.ve7kod.ca tunnel; tiles cover the mesh region, z5-z13.
+			// Self-hosted terrain (Copernicus GLO-30) via the maps.ve7kod.ca tunnel;
+			// two themed renders follow the UI theme. Real tiles to z14 (overzoomed
+			// past that). Themed CARTO label tiles ride on top so place/road names
+			// stay crisp at any zoom (full vector roads need WebGL → MapLibre path).
 			return {
 				base: {
-					url: 'https://maps.ve7kod.ca/terrain/{z}/{x}/{y}.png',
-					maxZoom: 13,
+					// ?v= cache-buster — bump on re-render (v3 = OSM-coastline sea mask). See map-basemap.ts.
+					url: `https://maps.ve7kod.ca/terrain-${light ? 'light' : 'dark'}/{z}/{x}/{y}.png?v=3`,
+					maxZoom: 19,
+					maxNativeZoom: 14,
 					attribution:
 						'Terrain: <a href="https://github.com/tilezen/joerd" target="_blank" rel="noopener">Tilezen Joerd</a> recipe · Copernicus GLO-30 · self-hosted'
+				},
+				labels: {
+					url: `https://{s}.basemaps.cartocdn.com/${light ? 'light' : 'dark'}_only_labels/{z}/{x}/{y}{r}.png`,
+					subdomains: 'abcd',
+					maxZoom: 20,
+					attribution: CARTO_ATTR
 				}
 			};
 		case 'topo':

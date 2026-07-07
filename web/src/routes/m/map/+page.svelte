@@ -8,7 +8,7 @@
 	import { roleLabel } from '$lib/format';
 	import { theme } from '$lib/theme.svelte';
 	import { favorites } from '$lib/favorites.svelte';
-	import { basemapStyle, basemapHasHillshade, collapseAttribution } from '$lib/map-basemap';
+	import { basemapStyle, basemapHasHillshade, basemapHasLocalTerrain, collapseAttribution, ensureLocalTerrain } from '$lib/map-basemap';
 	import { basemap } from '$lib/basemap.svelte';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
@@ -172,6 +172,7 @@
 	function ensureOverlays() {
 		if (!map || !map.isStyleLoaded()) return;
 		if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
+		if (basemapHasLocalTerrain(currentBasemap)) ensureLocalTerrain(map, basemapLight);
 		if (!map.getSource('nodes')) { addLayers(); updateSource(); drawCoverage(); }
 	}
 
@@ -227,6 +228,7 @@
 			if (!map) return;
 			map.resize();
 			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
+			if (basemapHasLocalTerrain(currentBasemap)) ensureLocalTerrain(map, basemapLight);
 			addLayers();
 			updateSource();
 			collapseAttribution(map);

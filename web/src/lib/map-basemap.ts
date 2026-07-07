@@ -2,7 +2,7 @@
 // vector style (theme-aware dark/positron) with a Joerd hillshade on top — the
 // look the maps have always had. The selector lets a user switch to other free,
 // key-less basemaps; the choice is persisted in basemap.svelte.ts.
-import type { StyleSpecification } from 'maplibre-gl';
+import type { StyleSpecification, Map as MlMap } from 'maplibre-gl';
 
 // Theme-aware flat vector style — also the topo/minimal base and the inset maps.
 export function basemapStyleUrl(light: boolean): string {
@@ -29,19 +29,26 @@ export const BASEMAPS: BasemapOption[] = [
 	{
 		id: 'localterrain',
 		label: 'Terrain (local)',
-		desc: 'Self-hosted Joerd-style shaded relief',
-		themed: false
+		desc: 'Self-hosted shaded relief, themed to the UI',
+		themed: true
 	}
 ];
 
-// Self-hosted Joerd-style terrain tiles: Copernicus GLO-30 rendered (color-relief
+// Self-hosted terrain tiles: Copernicus GLO-30 rendered (hypsometric color-relief
 // + multidirectional hillshade) on the VM and served via the maps.ve7kod.ca
-// tunnel. Covers the mesh region (Vancouver Island/Bella Bella → Grand Forks,
-// US border → Olympia); outside that, tiles 404 and the map shows blank.
-const LOCAL_TERRAIN_TILES = 'https://maps.ve7kod.ca/terrain/{z}/{x}/{y}.png';
+// tunnel. Two themed renders (dark = deep teal/slate, light = warm paper) follow
+// the UI theme. Covers the mesh region (Vancouver Island/Bella Bella → Grand
+// Forks, US border → Olympia) at z5–z14; outside that tiles 404 (map goes blank).
+// ?v= is a cache-buster: the tiles are served with a 30-day Cache-Control and
+// Cloudflare caches per full URL (incl. query), so bump this whenever the tiles
+// are re-rendered so clients/edge fetch the new ones instead of the stale cache.
+// v3 = OSM-coastline sea mask (all inland lowlands — delta, Sumas, Serpentine,
+// Boundary Bay farmland — render as land; only real ocean/channels stay water).
+const LOCAL_TERRAIN_TILES = (light: boolean): string =>
+	`https://maps.ve7kod.ca/terrain-${light ? 'light' : 'dark'}/{z}/{x}/{y}.png?v=3`;
 const LOCAL_TERRAIN_ATTR =
 	'Terrain: <a href="https://github.com/tilezen/joerd" target="_blank" rel="noopener">Tilezen Joerd</a> recipe · Copernicus GLO-30 · self-hosted';
-const LOCAL_TERRAIN_MAXZOOM = 13;
+const LOCAL_TERRAIN_MAXZOOM = 14;
 
 export const BASEMAP_IDS = new Set(BASEMAPS.map((b) => b.id));
 export const DEFAULT_BASEMAP = 'topo';
@@ -62,7 +69,12 @@ function raster(tiles: string[], attribution: string, maxzoom: number): StyleSpe
 export function basemapStyle(id: string, light: boolean): string | StyleSpecification {
 	switch (id) {
 		case 'localterrain':
-			return raster([LOCAL_TERRAIN_TILES], LOCAL_TERRAIN_ATTR, LOCAL_TERRAIN_MAXZOOM);
+			// The relief is served as a raster overlay (ensureLocalTerrain) beneath
+			// this vector style's roads + labels, so the base here is a full-detail
+			// OpenFreeMap style: liberty (light) / dark (dark theme).
+			return light
+				? 'https://tiles.openfreemap.org/styles/liberty'
+				: 'https://tiles.openfreemap.org/styles/dark';
 		case 'street':
 			return 'https://tiles.openfreemap.org/styles/liberty';
 		case 'satellite':
@@ -93,6 +105,37 @@ export function basemapStyle(id: string, light: boolean): string | StyleSpecific
 // their own relief.
 export function basemapHasHillshade(id: string): boolean {
 	return id === 'topo';
+}
+
+// "localterrain" composites the self-hosted shaded-relief raster UNDER the vector
+// road/label layers of its OpenFreeMap base, so roads + place names stay crisp at
+// any zoom even though the relief itself is 30 m (Copernicus GLO-30).
+export function basemapHasLocalTerrain(id: string): boolean {
+	return id === 'localterrain';
+}
+
+// Add the themed terrain raster and slot it above the style's background/land/
+// water fills but below the first road/label layer. Idempotent + safe to call on
+// every styledata; after a theme/basemap setStyle wipes custom layers it re-adds.
+export function ensureLocalTerrain(map: MlMap, light: boolean): void {
+	if (!map.isStyleLoaded()) return;
+	if (!map.getSource('localterrain')) {
+		map.addSource('localterrain', {
+			type: 'raster',
+			tiles: [LOCAL_TERRAIN_TILES(light)],
+			tileSize: 256,
+			attribution: LOCAL_TERRAIN_ATTR,
+			maxzoom: LOCAL_TERRAIN_MAXZOOM
+		});
+	}
+	if (!map.getLayer('localterrain')) {
+		const layers = map.getStyle().layers ?? [];
+		const before = layers.find((l) => l.type === 'line' || l.type === 'symbol')?.id;
+		map.addLayer(
+			{ id: 'localterrain', type: 'raster', source: 'localterrain', paint: { 'raster-opacity': 1 } },
+			before
+		);
+	}
 }
 
 // MapLibre's compact AttributionControl renders expanded by default. Collapse it

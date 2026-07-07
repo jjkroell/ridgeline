@@ -7,7 +7,7 @@
 	import { api, type Node } from '$lib/api';
 	import { live, hashColor } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
-	import { basemapStyle, basemapHasHillshade, collapseAttribution } from '$lib/map-basemap';
+	import { basemapStyle, basemapHasHillshade, basemapHasLocalTerrain, collapseAttribution, ensureLocalTerrain } from '$lib/map-basemap';
 	import { basemap } from '$lib/basemap.svelte';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { ROLE_HEX, locatedNodes } from '$lib/map-util';
@@ -155,6 +155,7 @@
 	function ensureOverlays() {
 		if (!map || !map.isStyleLoaded()) return;
 		if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
+		if (basemapHasLocalTerrain(currentBasemap)) ensureLocalTerrain(map, basemapLight);
 		if (!map.getSource('nodes')) addLayers();
 	}
 	function fit() {
@@ -211,6 +212,7 @@
 			if (!map) return;
 			map.resize();
 			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
+			if (basemapHasLocalTerrain(currentBasemap)) ensureLocalTerrain(map, basemapLight);
 			addLayers();
 			collapseAttribution(map);
 			refresh();

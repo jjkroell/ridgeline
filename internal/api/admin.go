@@ -1,40 +1,21 @@
 package api
 
 import (
-	"crypto/subtle"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/jjkroell/ridgeline/internal/analytics"
+	"github.com/jjkroell/ridgeline/internal/store"
 )
 
-// requireAdmin wraps a handler with bearer-token auth against the configured
-// admin token. If no admin token is configured the admin API is disabled.
-func (s *Server) requireAdmin(h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if s.adminToken == "" {
-			writeErr(w, http.StatusServiceUnavailable, "admin API disabled (no admin token configured)")
-			return
-		}
-		tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		// Constant-time compare to avoid leaking the token via timing.
-		if subtle.ConstantTimeCompare([]byte(tok), []byte(s.adminToken)) != 1 {
-			writeErr(w, http.StatusUnauthorized, "unauthorized")
-			return
-		}
-		h(w, r)
-	}
-}
-
-// adminCheck validates the token (used by the panel to gate its UI).
-func (s *Server) adminCheck(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, map[string]bool{"ok": true})
-}
+// The injection-detection / quarantine handlers below are gated by
+// requireAdminUser (any is_admin account, session-authenticated), so they take
+// the acting user like the other admin-console handlers. The user isn't used by
+// the detection logic itself.
 
 // adminDetect runs injection detection over the window.
-func (s *Server) adminDetect(w http.ResponseWriter, r *http.Request) {
+func (s *Server) adminDetect(w http.ResponseWriter, r *http.Request, _ store.User) {
 	sinceSec := queryInt(r, "since", 24*3600, 1, 7*86400)
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 	nodes, err := s.store.ListNodes()
@@ -50,7 +31,7 @@ func (s *Server) adminDetect(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, report)
 }
 
-func (s *Server) adminBlocklist(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) adminBlocklist(w http.ResponseWriter, _ *http.Request, _ store.User) {
 	list, err := s.store.ListBlocks()
 	if err != nil {
 		s.fail(w, err)
@@ -70,7 +51,7 @@ type blockReq struct {
 	Nodes []string `json:"nodes,omitempty"`
 }
 
-func (s *Server) adminBlock(w http.ResponseWriter, r *http.Request) {
+func (s *Server) adminBlock(w http.ResponseWriter, r *http.Request, _ store.User) {
 	var req blockReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad request body")
@@ -93,7 +74,7 @@ func (s *Server) adminBlock(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]bool{"ok": true})
 }
 
-func (s *Server) adminUnblock(w http.ResponseWriter, r *http.Request) {
+func (s *Server) adminUnblock(w http.ResponseWriter, r *http.Request, _ store.User) {
 	kind := r.URL.Query().Get("kind")
 	key := r.URL.Query().Get("key")
 	if !validKind(kind) || key == "" {
@@ -117,7 +98,7 @@ type purgeReq struct {
 	Nodes     []string `json:"nodes"`
 }
 
-func (s *Server) adminPurge(w http.ResponseWriter, r *http.Request) {
+func (s *Server) adminPurge(w http.ResponseWriter, r *http.Request, _ store.User) {
 	var req purgeReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad request body")
@@ -151,7 +132,7 @@ func (s *Server) adminPurge(w http.ResponseWriter, r *http.Request) {
 // blocklist entry — a clean removal, distinct from purge which keeps the ingress
 // blocked. If the node still transmits (and isn't behind a blocked bridge), it
 // will re-appear on its next advert.
-func (s *Server) adminDelete(w http.ResponseWriter, r *http.Request) {
+func (s *Server) adminDelete(w http.ResponseWriter, r *http.Request, _ store.User) {
 	var req struct {
 		Nodes []string `json:"nodes"`
 	}

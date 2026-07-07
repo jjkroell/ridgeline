@@ -23,8 +23,12 @@ func TestCreateUserBootstrapsFirstAdmin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create second: %v", err)
 	}
-	if u2.IsAdmin || u2.CanClaim || u2.IsOwner {
-		t.Error("subsequent users must not be admin/can_claim/owner by default")
+	if u2.IsAdmin || u2.IsOwner {
+		t.Error("subsequent users must not be admin/owner by default")
+	}
+	// Claiming is universal — every account can claim from the start.
+	if !u2.CanClaim {
+		t.Error("every user should have can_claim")
 	}
 }
 
@@ -101,16 +105,22 @@ func TestGetUserByEmailAndID(t *testing.T) {
 	}
 }
 
-func TestSetUserFlags(t *testing.T) {
+func TestSetUserAdmin(t *testing.T) {
 	st := testStore(t)
 	st.CreateUser("owner@example.com", "h", "") // first = admin
 	u, _ := st.CreateUser("member@example.com", "h", "")
-	if err := st.SetUserFlags(u.ID, false, true); err != nil {
-		t.Fatalf("set flags: %v", err)
+	if err := st.SetUserAdmin(u.ID, true); err != nil {
+		t.Fatalf("grant admin: %v", err)
 	}
 	got, _, _ := st.GetUserByID(u.ID)
-	if got.IsAdmin || !got.CanClaim {
-		t.Errorf("flags not applied: admin=%v canClaim=%v", got.IsAdmin, got.CanClaim)
+	if !got.IsAdmin || !got.CanClaim {
+		t.Errorf("expected admin granted, claim retained: admin=%v canClaim=%v", got.IsAdmin, got.CanClaim)
+	}
+	if err := st.SetUserAdmin(u.ID, false); err != nil {
+		t.Fatalf("revoke admin: %v", err)
+	}
+	if got, _, _ := st.GetUserByID(u.ID); got.IsAdmin {
+		t.Error("admin should be revoked")
 	}
 }
 

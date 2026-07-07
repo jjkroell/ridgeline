@@ -50,7 +50,7 @@
 		trackWebGL();
 	});
 
-	const nav = [
+	const navItems = [
 		{ href: '/', label: 'Overview', exact: true, icon: 'grid' },
 		{ href: '/nodes', label: 'Nodes', icon: 'node' },
 		{ href: '/live', label: 'Feed', icon: 'pulse' },
@@ -60,8 +60,11 @@
 		{ href: '/channels', label: 'Channels', icon: 'hash' },
 		{ href: '/identity', label: 'Identity', icon: 'key' },
 		{ href: '/observers', label: 'Observers', icon: 'eye' },
-		{ href: '/admin', label: 'Admin', icon: 'shield' }
+		{ href: '/admin', label: 'Admin', icon: 'shield', adminOnly: true }
 	];
+	// The Admin console is only reachable by admin accounts, so hide its nav link
+	// from everyone else.
+	const nav = $derived(navItems.filter((item) => !item.adminOnly || auth.isAdmin));
 
 	function active(href: string, exact = false): boolean {
 		const p = page.url.pathname;
@@ -168,9 +171,7 @@
 							<span class="text-fg block truncate text-xs font-600"
 								>{auth.user?.displayName || auth.user?.email}</span
 							>
-							<span class="label !text-fg-faint block"
-								>{auth.isAdmin ? 'Admin' : auth.canClaim ? 'Member' : 'Account'}</span
-							>
+							<span class="label !text-fg-faint block">{auth.isAdmin ? 'Admin' : 'Member'}</span>
 						</span>
 						{#if auth.unseenShares > 0}
 							<span

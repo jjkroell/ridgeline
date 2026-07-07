@@ -66,7 +66,7 @@ func run(log *slog.Logger, configPath string) error {
 		}
 	}
 
-	apiServer := api.New(st, log, version, cfg.WebDir, cfg.AdminToken)
+	apiServer := api.New(st, log, version, cfg.WebDir)
 
 	// Per-node analytics snapshot, recomputed periodically over a rolling window.
 	engine := analytics.New(6)

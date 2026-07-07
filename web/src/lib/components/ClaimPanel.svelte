@@ -179,11 +179,6 @@
 			<p class="text-fg-dim text-sm">
 				<a href="/login" class="text-signal hover:underline">Sign in</a> to claim your nodes.
 			</p>
-		{:else if !status.canClaim}
-			<p class="text-fg-dim text-sm leading-relaxed">
-				Claiming nodes requires admin approval. Once approved you can prove control of this node and
-				manage it.
-			</p>
 		{:else}
 			<div class="flex flex-wrap items-center gap-3">
 				<p class="text-fg-dim text-sm">Is this your node?</p>

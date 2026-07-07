@@ -212,12 +212,12 @@ func (s *Server) adminListUsers(w http.ResponseWriter, _ *http.Request, _ store.
 	writeJSON(w, users)
 }
 
-// adminSetUserFlags grants/revokes a user's admin and can-claim rights.
+// adminSetUserFlags grants/revokes a user's admin rights. Claiming is universal
+// (every account can claim), so it is no longer an admin-managed flag.
 func (s *Server) adminSetUserFlags(w http.ResponseWriter, r *http.Request, actor store.User) {
 	var req struct {
-		ID       int64 `json:"id"`
-		IsAdmin  bool  `json:"isAdmin"`
-		CanClaim bool  `json:"canClaim"`
+		ID      int64 `json:"id"`
+		IsAdmin bool  `json:"isAdmin"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad request body")
@@ -246,12 +246,11 @@ func (s *Server) adminSetUserFlags(w http.ResponseWriter, r *http.Request, actor
 		writeErr(w, http.StatusForbidden, "the owner's admin rights cannot be removed")
 		return
 	}
-	if err := s.store.SetUserFlags(req.ID, req.IsAdmin, req.CanClaim); err != nil {
+	if err := s.store.SetUserAdmin(req.ID, req.IsAdmin); err != nil {
 		s.fail(w, err)
 		return
 	}
-	s.log.Info("admin updated user flags", "actor", actor.ID, "target", req.ID,
-		"isAdmin", req.IsAdmin, "canClaim", req.CanClaim)
+	s.log.Info("admin updated user admin flag", "actor", actor.ID, "target", req.ID, "isAdmin", req.IsAdmin)
 	writeJSON(w, map[string]bool{"ok": true})
 }
 

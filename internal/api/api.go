@@ -20,30 +20,28 @@ import (
 
 // Server holds API dependencies and serves HTTP.
 type Server struct {
-	store      *store.Store
-	log        *slog.Logger
-	version    string
-	webDir     string
-	hub        *hub
-	up         websocket.Upgrader
-	analytics  *analytics.Engine
-	adminToken string
+	store     *store.Store
+	log       *slog.Logger
+	version   string
+	webDir    string
+	hub       *hub
+	up        websocket.Upgrader
+	analytics *analytics.Engine
 }
 
 // SetAnalytics attaches the analytics engine used by the node-detail endpoint.
 func (s *Server) SetAnalytics(e *analytics.Engine) { s.analytics = e }
 
 // New creates an API Server. If webDir is non-empty and exists, the built SPA
-// is served from it with an index.html fallback for client routes. adminToken
-// gates the /api/admin/* endpoints; empty disables them.
-func New(st *store.Store, log *slog.Logger, version, webDir, adminToken string) *Server {
+// is served from it with an index.html fallback for client routes. The admin
+// console is gated by the is_admin account flag (session auth), not a token.
+func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
 	return &Server{
-		store:      st,
-		log:        log,
-		version:    version,
-		webDir:     webDir,
-		adminToken: adminToken,
-		hub:        newHub(),
+		store:   st,
+		log:     log,
+		version: version,
+		webDir:  webDir,
+		hub:     newHub(),
 		// Dev: allow any origin. Tighten before exposing publicly.
 		up: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
 	}
@@ -105,21 +103,19 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/notes/{id}", s.requireUser(s.noteUpdate))
 	mux.HandleFunc("DELETE /api/notes/{id}", s.requireUser(s.noteDelete))
 
-	// Session-admin (is_admin account) user administration — grant/revoke the
-	// can_claim gate. Distinct from the static-token injection console below.
+	// The admin console is one session-gated area for any is_admin account:
+	// member administration + injection detection / quarantine / purge. (The old
+	// static admin-token gate has been removed in favour of the account login.)
 	mux.HandleFunc("GET /api/admin/users", s.requireAdminUser(s.adminListUsers))
 	mux.HandleFunc("POST /api/admin/users/flags", s.requireAdminUser(s.adminSetUserFlags))
 	mux.HandleFunc("POST /api/admin/users/block", s.requireAdminUser(s.adminBlockUser))
 	mux.HandleFunc("POST /api/admin/users/delete", s.requireAdminUser(s.adminDeleteUser))
-
-	// Admin (auth-gated): injection detection + quarantine/purge.
-	mux.HandleFunc("GET /api/admin/check", s.requireAdmin(s.adminCheck))
-	mux.HandleFunc("GET /api/admin/detect", s.requireAdmin(s.adminDetect))
-	mux.HandleFunc("GET /api/admin/blocklist", s.requireAdmin(s.adminBlocklist))
-	mux.HandleFunc("POST /api/admin/block", s.requireAdmin(s.adminBlock))
-	mux.HandleFunc("DELETE /api/admin/block", s.requireAdmin(s.adminUnblock))
-	mux.HandleFunc("POST /api/admin/purge", s.requireAdmin(s.adminPurge))
-	mux.HandleFunc("POST /api/admin/delete", s.requireAdmin(s.adminDelete))
+	mux.HandleFunc("GET /api/admin/detect", s.requireAdminUser(s.adminDetect))
+	mux.HandleFunc("GET /api/admin/blocklist", s.requireAdminUser(s.adminBlocklist))
+	mux.HandleFunc("POST /api/admin/block", s.requireAdminUser(s.adminBlock))
+	mux.HandleFunc("DELETE /api/admin/block", s.requireAdminUser(s.adminUnblock))
+	mux.HandleFunc("POST /api/admin/purge", s.requireAdminUser(s.adminPurge))
+	mux.HandleFunc("POST /api/admin/delete", s.requireAdminUser(s.adminDelete))
 
 	if s.webDir != "" {
 		if info, err := os.Stat(s.webDir); err == nil && info.IsDir() {

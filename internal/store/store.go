@@ -255,6 +255,9 @@ func Open(path string) (*Store, error) {
 	// User account status columns (added after the initial users table shipped).
 	db.Exec(`ALTER TABLE users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE users ADD COLUMN protected INTEGER NOT NULL DEFAULT 0`)
+	// Claiming is now universal (no admin approval) — grant every existing account
+	// the can_claim right so members created before this change can claim too.
+	db.Exec(`UPDATE users SET can_claim = 1 WHERE can_claim = 0`)
 	// Per-grantee "seen" flag on shares, for the Shared-with-me badge. Existing
 	// shares are treated as already seen so they don't retroactively alert.
 	if !columnExists(db, "location_shares", "seen") {

@@ -1,13 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { auth } from '$lib/auth.svelte';
 	import { admin, type InjectionReport, type BlockEntry, type BridgeCandidate, type InjectorCandidate } from '$lib/api';
 	import { roleColor } from '$lib/format';
 
-	const TOKEN_KEY = 'ridgeline-admin-token';
-	let token = $state('');
-	let authed = $state(false);
-	let authError = $state('');
-	let checking = $state(true);
+	// Gated by the signed-in account's is_admin flag (no static token). Bounce
+	// non-admins once the /me probe resolves.
+	$effect(() => {
+		if (auth.ready && !auth.isAdmin) goto('/m/account');
+	});
+	const authed = $derived(auth.isAdmin);
 
 	let windowSec = $state(21600);
 	const windows = [
@@ -26,29 +29,16 @@
 	let scrubKey = $state('');
 	let scrubbing = $state(false);
 
-	onMount(async () => {
-		const saved = sessionStorage.getItem(TOKEN_KEY);
-		if (saved) { token = saved; await tryAuth(); }
-		checking = false;
+	onMount(() => {
+		if (auth.isAdmin) refreshBlocks();
 	});
-
-	async function tryAuth() {
-		authError = '';
-		try {
-			await admin.check(token);
-			authed = true;
-			sessionStorage.setItem(TOKEN_KEY, token);
-			await refreshBlocks();
-		} catch (e) {
-			authed = false;
-			authError = String((e as Error).message) === '503' ? 'Admin API disabled on the server.' : 'Invalid token.';
-		}
-	}
-	function lock() { sessionStorage.removeItem(TOKEN_KEY); token = ''; authed = false; report = null; blocks = []; }
-	async function refreshBlocks() { try { blocks = await admin.blocklist(token); } catch (e) { msg = `blocklist: ${(e as Error).message}`; } }
+	$effect(() => {
+		if (auth.isAdmin && blocks.length === 0 && !detecting) refreshBlocks();
+	});
+	async function refreshBlocks() { try { blocks = await admin.blocklist(); } catch (e) { msg = `blocklist: ${(e as Error).message}`; } }
 	async function runDetect() {
 		detecting = true; msg = '';
-		try { report = await admin.detect(token, windowSec); } catch (e) { msg = `detect: ${(e as Error).message}`; } finally { detecting = false; }
+		try { report = await admin.detect(windowSec); } catch (e) { msg = `detect: ${(e as Error).message}`; } finally { detecting = false; }
 	}
 
 	const isBlocked = (kind: string, key: string) => blocks.some((b) => b.kind === kind && b.key.toUpperCase() === key.toUpperCase());
@@ -61,42 +51,42 @@
 		busy = b.nodeKey; msg = '';
 		try {
 			const captive = b.foreign.filter((f) => f.captive).map((f) => f.key);
-			await admin.block(token, { kind: 'bridge', key: b.nodeKey, name: b.name, reason: 'RF bridge (detected)', nodes: captive });
+			await admin.block(auth.csrf, { kind: 'bridge', key: b.nodeKey, name: b.name, reason: 'RF bridge (detected)', nodes: captive });
 			await refreshBlocks();
 			msg = `Quarantined ${b.name} + ${captive.length} captive nodes.`;
 		} catch (e) { msg = `quarantine: ${(e as Error).message}`; } finally { busy = ''; }
 	}
 	async function dismissBridge(b: BridgeCandidate) {
 		busy = b.nodeKey; msg = '';
-		try { await admin.block(token, { kind: 'allow', key: b.nodeKey, name: b.name, reason: 'dismissed' }); await refreshBlocks(); msg = `Dismissed ${b.name}.`; }
+		try { await admin.block(auth.csrf, { kind: 'allow', key: b.nodeKey, name: b.name, reason: 'dismissed' }); await refreshBlocks(); msg = `Dismissed ${b.name}.`; }
 		catch (e) { msg = `dismiss: ${(e as Error).message}`; } finally { busy = ''; }
 	}
 	async function purgeBridge(b: BridgeCandidate) {
 		const captive = b.foreign.filter((f) => f.captive).map((f) => f.key);
 		if (!confirm(`Permanently delete ${captive.length} captive nodes and block bridge ${b.name}? Cannot be undone.`)) return;
 		busy = b.nodeKey; msg = '';
-		try { const r = await admin.purge(token, { bridges: [b.nodeKey], nodes: captive }); await refreshBlocks(); report = null; msg = `Purged ${b.name}: ${r.observations} obs, ${r.nodes} nodes.`; }
+		try { const r = await admin.purge(auth.csrf, { bridges: [b.nodeKey], nodes: captive }); await refreshBlocks(); report = null; msg = `Purged ${b.name}: ${r.observations} obs, ${r.nodes} nodes.`; }
 		catch (e) { msg = `purge: ${(e as Error).message}`; } finally { busy = ''; }
 	}
 	async function quarantineInjector(i: InjectorCandidate) {
 		busy = i.observer; msg = '';
-		try { await admin.block(token, { kind: 'observer', key: i.observer, name: i.observer, reason: 'MQTT injector (detected)' }); await refreshBlocks(); msg = `Quarantined ${i.observer}.`; }
+		try { await admin.block(auth.csrf, { kind: 'observer', key: i.observer, name: i.observer, reason: 'MQTT injector (detected)' }); await refreshBlocks(); msg = `Quarantined ${i.observer}.`; }
 		catch (e) { msg = `quarantine: ${(e as Error).message}`; } finally { busy = ''; }
 	}
 	async function purgeInjector(i: InjectorCandidate) {
 		if (!confirm(`Permanently delete packets from ${i.observer} + its ${i.exclusiveCount} nodes? Cannot be undone.`)) return;
 		busy = i.observer; msg = '';
-		try { const r = await admin.purge(token, { observers: [i.observer], nodes: i.exclusive.map((f) => f.key) }); await refreshBlocks(); report = null; msg = `Purged ${i.observer}: ${r.observations} obs.`; }
+		try { const r = await admin.purge(auth.csrf, { observers: [i.observer], nodes: i.exclusive.map((f) => f.key) }); await refreshBlocks(); report = null; msg = `Purged ${i.observer}: ${r.observations} obs.`; }
 		catch (e) { msg = `purge: ${(e as Error).message}`; } finally { busy = ''; }
 	}
 	async function removeBlock(b: BlockEntry) {
 		busy = b.kind + b.key; msg = '';
-		try { await admin.unblock(token, b.kind, b.key); await refreshBlocks(); } catch (e) { msg = `unblock: ${(e as Error).message}`; } finally { busy = ''; }
+		try { await admin.unblock(auth.csrf, b.kind, b.key); await refreshBlocks(); } catch (e) { msg = `unblock: ${(e as Error).message}`; } finally { busy = ''; }
 	}
 	async function deletePurged(b: BlockEntry) {
 		if (!confirm(`Permanently delete ${b.name || b.key} and remove from the list?`)) return;
 		busy = b.kind + b.key; msg = '';
-		try { await admin.deleteNodes(token, [b.key]); await admin.unblock(token, b.kind, b.key); await refreshBlocks(); } catch (e) { msg = `delete: ${(e as Error).message}`; } finally { busy = ''; }
+		try { await admin.deleteNodes(auth.csrf, [b.key]); await admin.unblock(auth.csrf, b.kind, b.key); await refreshBlocks(); } catch (e) { msg = `delete: ${(e as Error).message}`; } finally { busy = ''; }
 	}
 
 	// Scrub a node + all its data points by public key. Irreversible.
@@ -107,7 +97,7 @@
 		if (!confirm(`Permanently delete node ${key} and all of its data points? This cannot be undone.`)) return;
 		scrubbing = true; msg = '';
 		try {
-			const res = await admin.deleteNodes(token, [key]);
+			const res = await admin.deleteNodes(auth.csrf, [key]);
 			msg = res.nodes > 0 ? `Scrubbed ${key}: ${res.nodes} node row + ${res.observations} data points.` : `No node matched ${key} (removed ${res.observations} data points). Use the full key.`;
 			scrubKey = '';
 			await refreshBlocks();
@@ -119,22 +109,13 @@
 </script>
 
 <div class="px-4 py-4">
-	{#if checking}
+	{#if !auth.ready}
 		<div class="text-fg-faint py-16 text-center text-sm">Checking…</div>
 	{:else if !authed}
-		<div class="border-line/60 bg-panel mx-auto mt-8 max-w-sm rounded-2xl border p-5">
-			<h2 class="font-display text-fg text-base font-700">Admin access</h2>
-			<p class="text-fg-faint mt-1 mb-4 text-sm">Enter the admin token to manage injection detection.</p>
-			<form onsubmit={(e) => { e.preventDefault(); tryAuth(); }}>
-				<input type="password" bind:value={token} placeholder="admin token" class="border-line bg-ink-2 text-fg focus:border-signal w-full rounded-xl border px-3 py-3 text-sm outline-none" />
-				{#if authError}<p class="text-coral mt-2 text-xs">{authError}</p>{/if}
-				<button type="submit" class="border-signal/40 bg-signal/15 text-signal mt-4 w-full rounded-xl border py-3 text-sm font-600">Unlock</button>
-			</form>
-		</div>
+		<div class="text-fg-faint py-16 text-center text-sm">Admin access only. Redirecting…</div>
 	{:else}
 		<div class="mb-3 flex items-center gap-2">
 			<button onclick={runDetect} disabled={detecting} class="border-signal/40 bg-signal/15 text-signal rounded-xl border px-4 py-2 text-sm font-600 disabled:opacity-50">{detecting ? 'Scanning…' : 'Run detection'}</button>
-			<button onclick={lock} class="text-fg-faint active:text-coral ml-auto text-xs">Lock</button>
 		</div>
 		<div class="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4" style="scrollbar-width:none">
 			{#each windows as w (w.sec)}

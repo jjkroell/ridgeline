@@ -29,7 +29,7 @@ func newAuthEnv(t *testing.T) (*store.Store, string, func()) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	srv := New(st, slog.New(slog.NewTextHandler(io.Discard, nil)), "test", "", "")
+	srv := New(st, slog.New(slog.NewTextHandler(io.Discard, nil)), "test", "")
 	ts := httptest.NewServer(srv.Handler())
 	return st, ts.URL, func() { ts.Close(); st.Close() }
 }
@@ -120,13 +120,16 @@ func TestAuthFlow(t *testing.T) {
 		t.Errorf("duplicate email should be 409, got %d", resp.StatusCode)
 	}
 
-	// A second account is a plain member (not admin/can_claim).
+	// A second account is a plain member (not admin) but can claim from the start.
 	member := newClient(t, base)
 	_, mbody := member.do("POST", "/api/auth/register",
 		map[string]string{"email": "member@example.com", "password": "hunter2hunter2"}, false)
 	mu, _ := mbody["user"].(map[string]any)
-	if mu["isAdmin"] == true || mu["canClaim"] == true {
-		t.Errorf("second user should not be admin/can_claim, got %v", mu)
+	if mu["isAdmin"] == true {
+		t.Errorf("second user should not be admin, got %v", mu)
+	}
+	if mu["canClaim"] != true {
+		t.Errorf("every user should be able to claim, got %v", mu)
 	}
 	memberID := int64(mu["id"].(float64))
 
@@ -155,16 +158,16 @@ func TestAuthFlow(t *testing.T) {
 
 	// Mutating admin call WITHOUT the CSRF header is rejected.
 	if resp, _ := owner.do("POST", "/api/admin/users/flags",
-		map[string]any{"id": memberID, "isAdmin": false, "canClaim": true}, false); resp.StatusCode != 403 {
+		map[string]any{"id": memberID, "isAdmin": true}, false); resp.StatusCode != 403 {
 		t.Errorf("missing CSRF should be 403, got %d", resp.StatusCode)
 	}
-	// WITH the CSRF header it succeeds and grants can_claim.
+	// WITH the CSRF header it succeeds and grants admin.
 	if resp, _ := owner.do("POST", "/api/admin/users/flags",
-		map[string]any{"id": memberID, "isAdmin": false, "canClaim": true}, true); resp.StatusCode != 200 {
+		map[string]any{"id": memberID, "isAdmin": true}, true); resp.StatusCode != 200 {
 		t.Errorf("valid CSRF should be 200, got %d", resp.StatusCode)
 	}
-	if _, mb := member.do("GET", "/api/auth/me", nil, false); mb["user"].(map[string]any)["canClaim"] != true {
-		t.Error("member should now have can_claim after admin grant")
+	if _, mb := member.do("GET", "/api/auth/me", nil, false); mb["user"].(map[string]any)["isAdmin"] != true {
+		t.Error("member should be admin after the grant")
 	}
 
 	// Logout clears the session.

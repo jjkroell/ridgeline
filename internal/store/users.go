@@ -64,11 +64,12 @@ func (s *Store) CreateUser(email, passwordHash, displayName string) (User, error
 		admin = 1
 	}
 
-	// The bootstrap account is also the protected owner.
+	// Every registered user may claim nodes (no admin approval needed). The
+	// bootstrap account is additionally admin + the protected owner.
 	res, err := s.db.Exec(`
 		INSERT INTO users (email, password_hash, display_name, is_admin, can_claim, protected, created_at)
-		VALUES (?,?,?,?,?,?,?)`,
-		email, passwordHash, nullStr(displayName), admin, admin, admin, now)
+		VALUES (?,?,?,?,1,?,?)`,
+		email, passwordHash, nullStr(displayName), admin, admin, now)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return User{}, ErrEmailTaken
@@ -78,7 +79,7 @@ func (s *Store) CreateUser(email, passwordHash, displayName string) (User, error
 	id, _ := res.LastInsertId()
 	return User{
 		ID: id, Email: email, PasswordHash: passwordHash, DisplayName: displayName,
-		IsAdmin: admin == 1, CanClaim: admin == 1, IsOwner: admin == 1, CreatedAt: now,
+		IsAdmin: admin == 1, CanClaim: true, IsOwner: admin == 1, CreatedAt: now,
 	}, nil
 }
 
@@ -184,10 +185,10 @@ func (s *Store) SearchUsersByName(q string, excludeID int64, limit int) ([]UserB
 	return out, rows.Err()
 }
 
-// SetUserFlags updates an account's admin / can-claim grants (admin action).
-func (s *Store) SetUserFlags(id int64, isAdmin, canClaim bool) error {
-	_, err := s.db.Exec(`UPDATE users SET is_admin = ?, can_claim = ? WHERE id = ?`,
-		boolInt(isAdmin), boolInt(canClaim), id)
+// SetUserAdmin grants or revokes an account's admin rights (admin action).
+// Claiming is universal, so can_claim is no longer an admin-managed flag.
+func (s *Store) SetUserAdmin(id int64, isAdmin bool) error {
+	_, err := s.db.Exec(`UPDATE users SET is_admin = ? WHERE id = ?`, boolInt(isAdmin), id)
 	return err
 }
 

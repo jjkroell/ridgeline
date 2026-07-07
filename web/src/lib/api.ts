@@ -367,54 +367,32 @@ export interface PurgeResult {
 	nodes: number;
 }
 
-async function adminReq<T>(token: string, path: string, method = 'GET', body?: unknown): Promise<T> {
-	const res = await fetch(path, {
-		method,
-		headers: {
-			accept: 'application/json',
-			authorization: `Bearer ${token}`,
-			...(body ? { 'content-type': 'application/json' } : {})
-		},
-		body: body ? JSON.stringify(body) : undefined
-	});
-	if (!res.ok) {
-		let msg = `${res.status}`;
-		try {
-			msg = (await res.json()).error ?? msg;
-		} catch {
-			/* ignore */
-		}
-		throw new Error(msg);
-	}
-	return res.json() as Promise<T>;
-}
-
+// The admin console is gated by the is_admin account (session auth). Reads use
+// the shared session cookie; mutations additionally send the CSRF token.
 export const admin = {
-	/** Validate the admin token; throws on failure. */
-	check: (token: string) => adminReq<{ ok: boolean }>(token, '/api/admin/check'),
-	detect: (token: string, sinceSec = 86400) =>
-		adminReq<InjectionReport>(token, `/api/admin/detect?since=${sinceSec}`),
-	blocklist: (token: string) => adminReq<BlockEntry[]>(token, '/api/admin/blocklist'),
+	detect: (sinceSec = 86400) =>
+		get<InjectionReport>(`/api/admin/detect?since=${sinceSec}`),
+	blocklist: () => get<BlockEntry[]>('/api/admin/blocklist'),
 	/** Quarantine (reversible): drop at ingest + hide; does not delete stored rows.
 	 *  `nodes` optionally blocks extra node pubkeys (a bridge's foreign cluster).
 	 *  kind "allow" dismisses a detection candidate without blocking it. */
 	block: (
-		token: string,
+		csrf: string,
 		body: { kind: string; key: string; name?: string; reason?: string; nodes?: string[] }
-	) => adminReq<{ ok: boolean }>(token, '/api/admin/block', 'POST', body),
-	unblock: (token: string, kind: string, key: string) =>
-		adminReq<{ ok: boolean }>(
-			token,
+	) => mutate<{ ok: boolean }>('/api/admin/block', 'POST', csrf, body),
+	unblock: (csrf: string, kind: string, key: string) =>
+		mutate<{ ok: boolean }>(
 			`/api/admin/block?kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}`,
-			'DELETE'
+			'DELETE',
+			csrf
 		),
 	/** Purge: delete stored data; blocks the INGRESS points (bridges/observers)
 	 *  but deletes `nodes` permanently with no block. */
-	purge: (token: string, body: { observers?: string[]; bridges?: string[]; nodes?: string[] }) =>
-		adminReq<PurgeResult>(token, '/api/admin/purge', 'POST', body),
+	purge: (csrf: string, body: { observers?: string[]; bridges?: string[]; nodes?: string[] }) =>
+		mutate<PurgeResult>('/api/admin/purge', 'POST', csrf, body),
 	/** Permanently delete nodes (adverts + rows) with no blocklist entry. */
-	deleteNodes: (token: string, nodes: string[]) =>
-		adminReq<PurgeResult>(token, '/api/admin/delete', 'POST', { nodes })
+	deleteNodes: (csrf: string, nodes: string[]) =>
+		mutate<PurgeResult>('/api/admin/delete', 'POST', csrf, { nodes })
 };
 
 export const api = {
@@ -712,8 +690,9 @@ export const locationShares = {
 /** Admin member management (session-admin gated). */
 export const adminUsers = {
 	list: () => get<AuthUser[]>('/api/admin/users'),
-	setFlags: (csrf: string, id: number, isAdmin: boolean, canClaim: boolean) =>
-		mutate<{ ok: boolean }>('/api/admin/users/flags', 'POST', csrf, { id, isAdmin, canClaim }),
+	/** Grant/revoke admin. (Claiming is universal, so there's no can-claim flag.) */
+	setAdmin: (csrf: string, id: number, isAdmin: boolean) =>
+		mutate<{ ok: boolean }>('/api/admin/users/flags', 'POST', csrf, { id, isAdmin }),
 	/** Suspend (blocked=true) or restore (blocked=false) an account. */
 	setBlocked: (csrf: string, id: number, blocked: boolean) =>
 		mutate<{ ok: boolean }>('/api/admin/users/block', 'POST', csrf, { id, blocked }),

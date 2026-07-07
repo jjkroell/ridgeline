@@ -30,20 +30,10 @@ func TestClaimFlow(t *testing.T) {
 		map[string]string{"email": "owner@example.com", "password": "hunter2hunter2"}, false)
 
 	member := newClient(t, base)
-	_, mb := member.do("POST", "/api/auth/register",
+	member.do("POST", "/api/auth/register",
 		map[string]string{"email": "member@example.com", "password": "hunter2hunter2", "displayName": "Member"}, false)
-	memberID := int64(member.user(mb)["id"].(float64))
 
-	// Not-yet-approved member cannot claim.
-	if resp, _ := member.do("POST", "/api/claims", map[string]string{"pubkey": node}, true); resp.StatusCode != 403 {
-		t.Errorf("unapproved claim should be 403, got %d", resp.StatusCode)
-	}
-
-	// Owner grants can_claim; member refreshes.
-	owner.do("POST", "/api/admin/users/flags",
-		map[string]any{"id": memberID, "isAdmin": false, "canClaim": true}, true)
-	member.do("GET", "/api/auth/me", nil, false)
-
+	// Claiming is universal — any signed-in member can claim right away.
 	// Invalid + unknown pubkeys.
 	if resp, _ := member.do("POST", "/api/claims", map[string]string{"pubkey": "xyz"}, true); resp.StatusCode != 400 {
 		t.Errorf("bad pubkey should be 400, got %d", resp.StatusCode)
@@ -53,7 +43,7 @@ func TestClaimFlow(t *testing.T) {
 		t.Errorf("unknown node should be 404, got %d", resp.StatusCode)
 	}
 
-	// Approved member opens a claim → gets a code.
+	// Member opens a claim → gets a code.
 	resp, cb := member.do("POST", "/api/claims", map[string]string{"pubkey": node}, true)
 	if resp.StatusCode != 200 {
 		t.Fatalf("claim create: %d body %v", resp.StatusCode, cb)

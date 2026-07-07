@@ -2,14 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
-	import {
-		adminUsers,
-		claims,
-		shares,
-		type AuthUser,
-		type ClaimWithNode,
-		type SharedWithMe
-	} from '$lib/api';
+	import { claims, shares, type ClaimWithNode, type SharedWithMe } from '$lib/api';
 	import { ago, shortKey } from '$lib/format';
 
 	let myNodes = $state<ClaimWithNode[]>([]);
@@ -31,74 +24,9 @@
 		}
 	}
 
-	// --- Admin: member management (parity with desktop) ---
-	let members = $state<AuthUser[]>([]);
-	let loadingMembers = $state(false);
-	let membersError = $state('');
-	let busyId = $state<number | null>(null);
-
-	async function loadMembers() {
-		if (!auth.isAdmin) return;
-		loadingMembers = true;
-		membersError = '';
-		try {
-			members = await adminUsers.list();
-		} catch (e) {
-			membersError = String((e as Error).message ?? e);
-		} finally {
-			loadingMembers = false;
-		}
-	}
-
-	let confirmDeleteId = $state<number | null>(null);
-
-	async function setFlags(u: AuthUser, isAdmin: boolean, canClaim: boolean) {
-		busyId = u.id;
-		membersError = '';
-		try {
-			await adminUsers.setFlags(auth.csrf, u.id, isAdmin, canClaim);
-			await loadMembers();
-		} catch (e) {
-			membersError = String((e as Error).message ?? e);
-		} finally {
-			busyId = null;
-		}
-	}
-
-	async function setBlocked(u: AuthUser, blocked: boolean) {
-		busyId = u.id;
-		membersError = '';
-		try {
-			await adminUsers.setBlocked(auth.csrf, u.id, blocked);
-			await loadMembers();
-		} catch (e) {
-			membersError = String((e as Error).message ?? e);
-		} finally {
-			busyId = null;
-		}
-	}
-
-	async function removeUser(u: AuthUser) {
-		busyId = u.id;
-		membersError = '';
-		try {
-			await adminUsers.remove(auth.csrf, u.id);
-			confirmDeleteId = null;
-			await loadMembers();
-		} catch (e) {
-			membersError = String((e as Error).message ?? e);
-		} finally {
-			busyId = null;
-		}
-	}
-
 	onMount(() => {
-		loadMembers();
 		loadMyNodes();
 		loadSharedWithMe();
-	});
-	$effect(() => {
-		if (auth.isAdmin && members.length === 0 && !loadingMembers) loadMembers();
 	});
 
 	async function signOut() {
@@ -160,28 +88,8 @@
 				{:else if u?.isAdmin}
 					<span class="bg-signal/15 text-signal rounded-full px-2.5 py-1 text-xs font-600">Admin</span>
 				{/if}
-				{#if u?.canClaim}
-					<span class="bg-amber/15 text-amber rounded-full px-2.5 py-1 text-xs font-600"
-						>Can claim nodes</span
-					>
-				{/if}
 				<span class="text-fg-faint self-center text-xs">joined {ago(u?.createdAt)}</span>
 			</div>
-		</div>
-
-		<!-- Claim status -->
-		<div class="panel px-4 py-4">
-			<div class="label normal-case text-fg-dim mb-2">Node claiming & private locations</div>
-			<p class="text-fg-dim text-sm leading-relaxed">
-				{#if auth.canClaim}
-					You're approved to claim nodes — open any node and tap <strong class="text-fg"
-						>Claim this node</strong
-					>. Notes and private locations are coming next.
-				{:else}
-					Claiming nodes and storing private locations requires admin approval. Until then you can
-					browse everything.
-				{/if}
-			</p>
 		</div>
 
 		<!-- My nodes -->
@@ -261,77 +169,25 @@
 			</div>
 		{/if}
 
-		<!-- Admin: members -->
 		{#if auth.isAdmin}
-			<div class="panel overflow-hidden">
-				<div class="border-line/70 flex items-center gap-2 border-b px-4 py-3">
-					<span class="font-display text-fg text-sm font-700">Members</span>
-					<span class="text-fg-faint text-xs">{members.length}</span>
-					<button onclick={loadMembers} class="label active:text-signal ml-auto">Refresh</button>
-				</div>
-				{#if membersError}<div class="text-coral px-4 py-2 text-xs">{membersError}</div>{/if}
-				<div class="divide-line/60 divide-y">
-					{#each members as m (m.id)}
-						{@const self = m.id === auth.user?.id}
-						<div class="px-4 py-3 {m.blocked ? 'opacity-60' : ''}">
-							<div class="flex items-center gap-2">
-								<span class="text-fg truncate text-sm font-600">{m.displayName || m.email}</span>
-								{#if m.isOwner}
-									<span class="bg-signal/15 text-signal rounded-full px-2 py-0.5 text-[0.6rem] font-600"
-										>Owner</span
-									>
-								{/if}
-								{#if m.blocked}
-									<span class="bg-coral/15 text-coral rounded-full px-2 py-0.5 text-[0.6rem] font-600"
-										>Blocked</span
-									>
-								{/if}
-							</div>
-							<div class="text-fg-faint mb-2 truncate text-xs">{m.email}</div>
-							<div class="flex flex-wrap items-center gap-4">
-								<label class="text-fg-dim flex items-center gap-1.5 text-xs">
-									<input
-										type="checkbox"
-										checked={m.canClaim}
-										disabled={busyId === m.id}
-										onchange={(e) => setFlags(m, m.isAdmin, e.currentTarget.checked)}
-										class="accent-signal h-4 w-4"
-									/> Can claim
-								</label>
-								<label class="text-fg-dim flex items-center gap-1.5 text-xs">
-									<input
-										type="checkbox"
-										checked={m.isAdmin}
-										disabled={busyId === m.id || self || m.isOwner}
-										onchange={(e) => setFlags(m, e.currentTarget.checked, m.canClaim)}
-										class="accent-signal h-4 w-4"
-									/> Admin
-								</label>
-								{#if !m.isOwner && !self}
-									<button
-										onclick={() => setBlocked(m, !m.blocked)}
-										disabled={busyId === m.id}
-										class="text-xs font-600 disabled:opacity-50 {m.blocked ? 'text-signal' : 'text-amber'}"
-										>{m.blocked ? 'Unblock' : 'Block'}</button
-									>
-									{#if confirmDeleteId === m.id}
-										<button onclick={() => removeUser(m)} class="text-coral text-xs font-700"
-											>Confirm</button
-										>
-										<button onclick={() => (confirmDeleteId = null)} class="text-fg-faint text-xs"
-											>Cancel</button
-										>
-									{:else}
-										<button onclick={() => (confirmDeleteId = m.id)} class="text-coral/80 text-xs font-600"
-											>Remove</button
-										>
-									{/if}
-								{/if}
-							</div>
-						</div>
-					{/each}
-				</div>
-			</div>
+			<a
+				href="/m/admin"
+				class="panel active:bg-line/40 flex items-center gap-3 px-4 py-3.5 text-sm font-600"
+			>
+				<span class="bg-signal/15 text-signal grid h-8 w-8 shrink-0 place-items-center rounded-full">
+					<svg
+						viewBox="0 0 24 24"
+						class="h-4 w-4"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.6"
+						stroke-linecap="round"
+						stroke-linejoin="round"><path d="M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7z" /></svg
+					>
+				</span>
+				<span class="text-fg flex-1">Admin console</span>
+				<span class="text-fg-faint">›</span>
+			</a>
 		{/if}
 
 		<button

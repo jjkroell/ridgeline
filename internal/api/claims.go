@@ -61,8 +61,8 @@ func (s *Server) nodeClaimStatus(w http.ResponseWriter, r *http.Request) {
 			}
 			out.Mine = &mine
 		}
-		// May start a claim if approved and the node isn't owned by someone else.
-		out.CanClaim = user.CanClaim && (out.Owner == nil || out.Owner.UserID == user.ID)
+		// Any signed-in user may start a claim on a node no one else owns.
+		out.CanClaim = out.Owner == nil || out.Owner.UserID == user.ID
 	}
 	writeJSON(w, out)
 }
@@ -70,10 +70,6 @@ func (s *Server) nodeClaimStatus(w http.ResponseWriter, r *http.Request) {
 // claimCreate opens or refreshes the caller's pending claim on a node, returning
 // a fresh verification code to embed in the node's advertised name.
 func (s *Server) claimCreate(w http.ResponseWriter, r *http.Request, user store.User) {
-	if !user.CanClaim {
-		writeErr(w, http.StatusForbidden, "your account isn't approved to claim nodes yet")
-		return
-	}
 	var req struct {
 		Pubkey string `json:"pubkey"`
 	}

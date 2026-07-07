@@ -139,6 +139,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_claims_one_owner ON node_claims(node_pubke
 -- globally unambiguous while it's live. Verified claims keep their (now spent)
 -- code but are excluded here, so they never block a new pending code.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_claims_pending_code ON node_claims(code) WHERE status = 'pending';
+
+-- node_notes are user-authored annotations on a node. Public notes are visible
+-- to everyone on the node page; private notes are visible only to their author.
+CREATE TABLE IF NOT EXISTS node_notes (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	node_pubkey TEXT NOT NULL,             -- uppercase hex
+	user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	visibility  TEXT NOT NULL,             -- public | private
+	body        TEXT NOT NULL,
+	created_at  TEXT NOT NULL,
+	updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notes_node ON node_notes(node_pubkey);
+CREATE INDEX IF NOT EXISTS idx_notes_user ON node_notes(user_id);
 `
 
 // Store wraps a SQLite database.

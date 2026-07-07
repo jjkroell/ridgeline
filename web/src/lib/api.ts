@@ -570,6 +570,31 @@ export const claims = {
 	mine: () => get<ClaimWithNode[]>('/api/claims/mine')
 };
 
+// ---- Node notes ----
+
+export interface Note {
+	id: number;
+	nodePubkey: string;
+	userId: number;
+	authorName: string;
+	visibility: 'public' | 'private';
+	body: string;
+	createdAt: string;
+	updatedAt: string;
+	/** The requester may edit/delete this note (author, or owner/admin for delete). */
+	mine: boolean;
+}
+
+export const notes = {
+	/** Public notes + the caller's own private notes for a node, newest first. */
+	list: (pubkey: string) => get<Note[]>(`/api/nodes/${encodeURIComponent(pubkey)}/notes`),
+	create: (csrf: string, pubkey: string, body: string, visibility: 'public' | 'private') =>
+		mutate<Note>(`/api/nodes/${encodeURIComponent(pubkey)}/notes`, 'POST', csrf, { body, visibility }),
+	update: (csrf: string, id: number, body: string, visibility: 'public' | 'private') =>
+		mutate<Note>(`/api/notes/${id}`, 'PATCH', csrf, { body, visibility }),
+	remove: (csrf: string, id: number) => mutate<{ ok: boolean }>(`/api/notes/${id}`, 'DELETE', csrf)
+};
+
 /** Admin member management (session-admin gated). */
 export const adminUsers = {
 	list: () => get<AuthUser[]>('/api/admin/users'),

@@ -17,6 +17,7 @@
 	import FavoriteStar from './FavoriteStar.svelte';
 	import Tooltip from './Tooltip.svelte';
 	import ClaimPanel from './ClaimPanel.svelte';
+	import NotesPanel from './NotesPanel.svelte';
 
 	interface Props {
 		pubkey: string;
@@ -338,6 +339,11 @@
 	<!-- Ownership claim -->
 	<div class="mb-5">
 		<ClaimPanel {pubkey} {compact} />
+	</div>
+
+	<!-- Notes -->
+	<div class="mb-5">
+		<NotesPanel {pubkey} {compact} />
 	</div>
 
 	<div class="grid gap-5 {compact ? '' : 'lg:grid-cols-3'}">

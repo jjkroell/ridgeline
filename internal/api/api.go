@@ -59,6 +59,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/nodes/{pubkey}/history", s.nodeHistory)
 	mux.HandleFunc("GET /api/nodes/{pubkey}/heatmap", s.nodeHeatmap)
 	mux.HandleFunc("GET /api/nodes/{pubkey}/claim", s.nodeClaimStatus)
+	mux.HandleFunc("GET /api/nodes/{pubkey}/notes", s.nodeNotes)
 	mux.HandleFunc("GET /api/mesh-analytics", s.meshAnalytics)
 	mux.HandleFunc("GET /api/observers", s.observers)
 	mux.HandleFunc("GET /api/observers/{id}/analytics", s.observerAnalytics)
@@ -80,6 +81,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/claims", s.requireUser(s.claimCreate))
 	mux.HandleFunc("GET /api/claims/mine", s.requireUser(s.claimsMine))
 	mux.HandleFunc("DELETE /api/claims/{pubkey}", s.requireUser(s.claimDelete))
+
+	// Node notes (public + private). Reading is public; writing needs a login.
+	mux.HandleFunc("POST /api/nodes/{pubkey}/notes", s.requireUser(s.noteCreate))
+	mux.HandleFunc("PATCH /api/notes/{id}", s.requireUser(s.noteUpdate))
+	mux.HandleFunc("DELETE /api/notes/{id}", s.requireUser(s.noteDelete))
 
 	// Session-admin (is_admin account) user administration — grant/revoke the
 	// can_claim gate. Distinct from the static-token injection console below.

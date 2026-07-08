@@ -2,6 +2,47 @@ package api
 
 import "testing"
 
+// Admins can retire a stale observer via POST /api/admin/delete {observers:[...]};
+// it removes the observers row (drops off the list) with no blocklist entry.
+func TestAdminDeleteObserver(t *testing.T) {
+	st, base, cleanup := newAuthEnv(t)
+	defer cleanup()
+
+	// Seed an observer row (id has spaces, like the real "VE7NA - 808 Wing RS").
+	const obsID = "VE7NA - 808 Wing RS"
+	if err := st.UpsertObserverStatus(obsID, "YCD", "", "", "", "2026-07-06T20:39:32Z"); err != nil {
+		t.Fatalf("seed observer: %v", err)
+	}
+	if obs, _ := st.ListObservers(); len(obs) != 1 {
+		t.Fatalf("expected 1 seeded observer, got %d", len(obs))
+	}
+
+	admin := newClient(t, base) // first account = admin
+	admin.do("POST", "/api/auth/register",
+		map[string]string{"email": "admin@example.com", "password": "hunter2hunter2"}, false)
+	member := newClient(t, base)
+	member.do("POST", "/api/auth/register",
+		map[string]string{"email": "member@example.com", "password": "hunter2hunter2"}, false)
+
+	// A plain member cannot delete.
+	if resp, _ := member.do("POST", "/api/admin/delete",
+		map[string]any{"observers": []string{obsID}}, true); resp.StatusCode != 403 {
+		t.Errorf("member delete should be 403, got %d", resp.StatusCode)
+	}
+	// Empty request is a 400.
+	if resp, _ := admin.do("POST", "/api/admin/delete", map[string]any{}, true); resp.StatusCode != 400 {
+		t.Errorf("empty delete should be 400, got %d", resp.StatusCode)
+	}
+	// Admin deletes the observer.
+	if resp, _ := admin.do("POST", "/api/admin/delete",
+		map[string]any{"observers": []string{obsID}}, true); resp.StatusCode != 200 {
+		t.Fatalf("admin delete observer should be 200, got %d", resp.StatusCode)
+	}
+	if obs, _ := st.ListObservers(); len(obs) != 0 {
+		t.Errorf("observer should be gone after delete, still have %d", len(obs))
+	}
+}
+
 // The injection-detection / quarantine console is now gated by the is_admin
 // session (any admin account), not a static token.
 func TestAdminConsoleSessionGated(t *testing.T) {

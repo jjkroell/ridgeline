@@ -33,7 +33,30 @@ type Config struct {
 	// is kept regardless). A removed node reappears the moment it transmits again,
 	// so this only clears the genuinely-departed. Defaults to 30; set 0 to disable.
 	NodeRetentionDays int `json:"nodeRetentionDays"`
+	// Email configures outbound transactional mail (verification + notifications).
+	// When Host is empty, email is disabled and those features degrade gracefully.
+	Email Email `json:"email"`
 }
+
+// Email configures the outbound SMTP relay for transactional mail. For SendGrid:
+// Host smtp.sendgrid.net, Port 587, Username "apikey", Password the API key. From
+// must be an address on a domain authenticated at the relay (SPF/DKIM), and
+// BaseURL is the public site origin used to build verification links.
+type Email struct {
+	Host     string `json:"host"`     // SMTP submission host; empty disables email
+	Port     int    `json:"port"`     // 587 (STARTTLS) or 465 (implicit TLS)
+	Username string `json:"username"` // SMTP auth user ("apikey" for SendGrid)
+	Password string `json:"password"` // SMTP auth password / API key
+	From     string `json:"from"`     // envelope + header From, e.g. noreply@ve7kod.ca
+	FromName string `json:"fromName"` // display name, e.g. "Ridgeline"
+	BaseURL  string `json:"baseURL"`  // public origin, e.g. https://ridgeline.ve7kod.ca
+}
+
+// Enabled reports whether outbound email is fully configured. Requiring the
+// password too means the config block can be pre-filled with everything except
+// the API key, and email stays safely disabled (registration auto-verifies)
+// until the key is added — no accounts get stranded on a keyless instance.
+func (e Email) Enabled() bool { return e.Host != "" && e.From != "" && e.Password != "" }
 
 // MQTT configures the connection to a MeshCore observer broker.
 type MQTT struct {
@@ -53,6 +76,11 @@ func Default() Config {
 		WebDir:            "web/build",
 		ScrubArtifacts:    true,
 		NodeRetentionDays: 30,
+		Email: Email{
+			Port:     587,
+			FromName: "Ridgeline",
+			BaseURL:  "https://ridgeline.ve7kod.ca",
+		},
 		MQTT: MQTT{
 			Broker:   "tcp://localhost:1883",
 			ClientID: "ridgelined",

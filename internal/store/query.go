@@ -272,6 +272,31 @@ func (s *Store) RecentRaw(sinceISO string, limit int) ([]RawObservation, error) 
 	return s.rawSince(sinceISO, limit)
 }
 
+// RawByHash returns every raw observation of ONE transmission (all observer
+// copies sharing a message_hash), newest first. Backs the shareable per-packet
+// deep link — re-opening a specific packet from a copied URL.
+func (s *Store) RawByHash(hash string) ([]RawObservation, error) {
+	rows, err := s.db.Query(`
+		SELECT raw_hex, COALESCE(observer_id,''), COALESCE(region,''), snr, rssi, received_at
+		FROM observations
+		WHERE message_hash = ?
+		ORDER BY received_at DESC
+		LIMIT 500`, hash)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []RawObservation{}
+	for rows.Next() {
+		var o RawObservation
+		if err := rows.Scan(&o.RawHex, &o.ObserverID, &o.Region, &o.SNR, &o.RSSI, &o.ReceivedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
 // RecentGroupText returns one raw observation per distinct channel message
 // (grouped by message_hash), newest first, for GroupText payloads received at
 // or after sinceISO. Collapsing the ~N observer copies of each transmission

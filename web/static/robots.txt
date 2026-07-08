@@ -1,3 +1,12 @@
-# allow crawling everything by default
+# Ridgeline — MeshCore mesh observatory (Vancouver Island & Lower Mainland, BC)
+# Public content is open to all crawlers; account/admin/API areas are not useful
+# to index.
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /admin
+Disallow: /account
+Disallow: /identity
+Disallow: /login
+Disallow: /api/
+
+Sitemap: https://ridgeline.ve7kod.ca/sitemap.xml

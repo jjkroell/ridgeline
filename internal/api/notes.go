@@ -102,6 +102,9 @@ func (s *Server) noteCreate(w http.ResponseWriter, r *http.Request, user store.U
 		s.fail(w, err)
 		return
 	}
+	// Let the node's owner know someone commented (public/team notes only; async,
+	// best-effort — never blocks or fails the request).
+	s.notifyOwnerOfNote(pubkey, user, note)
 	writeJSON(w, noteView{Note: note, Mine: true})
 }
 

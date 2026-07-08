@@ -151,6 +151,44 @@ func (s *Store) CreateOrRefreshClaim(nodePubkey string, userID int64, code strin
 	return c, err
 }
 
+// CreateVerifiedClaim records verified ownership of a node by userID directly,
+// without the advert-name code dance — used by the private-key ownership proof
+// once the caller has produced a valid signature over a server challenge. It
+// fails with ErrNodeClaimed when another user already owns the node. If the user
+// already owns it, the existing verified claim is returned unchanged. Any prior
+// pending claim by the same user is promoted in place. The code is stored empty
+// (no name reset is ever needed for a key-verified claim).
+func (s *Store) CreateVerifiedClaim(nodePubkey string, userID int64) (Claim, error) {
+	nodePubkey = strings.ToUpper(nodePubkey)
+
+	if owner, ok, err := s.NodeOwner(nodePubkey); err != nil {
+		return Claim{}, err
+	} else if ok && owner.UserID != userID {
+		return Claim{}, ErrNodeClaimed
+	}
+	if existing, ok, err := s.UserClaim(nodePubkey, userID); err != nil {
+		return Claim{}, err
+	} else if ok && existing.Status == "verified" {
+		return existing, nil
+	}
+
+	now := time.Now().UTC()
+	nowS := now.Format(time.RFC3339Nano)
+	// expires_at is NOT NULL but meaningless for a verified claim; set it to now.
+	_, err := s.db.Exec(`
+		INSERT INTO node_claims (node_pubkey, user_id, code, status, created_at, expires_at, verified_at)
+		VALUES (?,?,'','verified',?,?,?)
+		ON CONFLICT(node_pubkey, user_id) DO UPDATE SET
+			code = '', status = 'verified', verified_at = excluded.verified_at`,
+		nodePubkey, userID, nowS, nowS, nowS)
+	if err != nil {
+		return Claim{}, err
+	}
+	s.loadPendingClaims() // a promoted pending claim leaves the pending set
+	c, _, err := s.UserClaim(nodePubkey, userID)
+	return c, err
+}
+
 // DeleteClaim removes a user's claim on a node (cancels a pending code or
 // releases ownership). Returns whether a row was removed.
 func (s *Store) DeleteClaim(nodePubkey string, userID int64) (bool, error) {
@@ -261,6 +299,14 @@ func (s *Store) NodeExists(pubkey string) (bool, error) {
 	var n int
 	err := s.db.QueryRow(`SELECT COUNT(*) FROM nodes WHERE pubkey = ?`, strings.ToUpper(pubkey)).Scan(&n)
 	return n > 0, err
+}
+
+// NodeName returns a node's advertised name (empty string if the node is unknown
+// or unnamed).
+func (s *Store) NodeName(pubkey string) string {
+	var name string
+	s.db.QueryRow(`SELECT COALESCE(name,'') FROM nodes WHERE pubkey = ?`, strings.ToUpper(pubkey)).Scan(&name)
+	return name
 }
 
 // NameHasVerificationCode reports whether the node's current advertised name

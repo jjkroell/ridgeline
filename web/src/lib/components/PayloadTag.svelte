@@ -1,7 +1,9 @@
 <script lang="ts">
 	import Tooltip from './Tooltip.svelte';
 
-	let { type }: { type: string } = $props();
+	// `tip` gates the hover tooltip — off where the full type is already obvious
+	// from surrounding context (e.g. inside the packet modal header).
+	let { type, tip = true }: { type: string; tip?: boolean } = $props();
 
 	const colors: Record<string, string> = {
 		Advert: 'var(--color-signal)',
@@ -29,11 +31,17 @@
 	const label = $derived(abbr[type] ?? type);
 </script>
 
-<Tooltip text={type}>
+{#snippet tag()}
 	<span
 		class="font-mono rounded-[var(--radius)] px-1.5 py-0.5 text-[0.66rem] tracking-wide whitespace-nowrap"
 		style="color:{color}; background:color-mix(in srgb, {color} 10%, transparent)"
 	>
 		{label}
 	</span>
-</Tooltip>
+{/snippet}
+
+{#if tip}
+	<Tooltip text={type}>{@render tag()}</Tooltip>
+{:else}
+	{@render tag()}
+{/if}

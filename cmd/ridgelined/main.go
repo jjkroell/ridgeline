@@ -19,6 +19,7 @@ import (
 	"github.com/jjkroell/ridgeline/internal/api"
 	"github.com/jjkroell/ridgeline/internal/config"
 	"github.com/jjkroell/ridgeline/internal/ingest"
+	"github.com/jjkroell/ridgeline/internal/mail"
 	"github.com/jjkroell/ridgeline/internal/store"
 )
 
@@ -67,6 +68,10 @@ func run(log *slog.Logger, configPath string) error {
 	}
 
 	apiServer := api.New(st, log, version, cfg.WebDir)
+
+	// Outbound transactional email (verification + note notifications). Disabled
+	// gracefully when no relay is configured.
+	apiServer.SetMailer(mail.New(cfg.Email, log))
 
 	// Per-node analytics snapshot, recomputed periodically over a rolling window.
 	engine := analytics.New(6)
@@ -246,6 +251,11 @@ func runClaimPrune(ctx context.Context, st *store.Store, log *slog.Logger) {
 			log.Warn("claim prune", "err", err)
 		} else if n > 0 {
 			log.Info("claim prune: removed expired pending claims", "rows", n)
+		}
+		if n, err := st.PruneExpiredEmailVerifications(); err != nil {
+			log.Warn("email-verification prune", "err", err)
+		} else if n > 0 {
+			log.Info("email-verification prune: removed expired tokens", "rows", n)
 		}
 	}
 	prune()

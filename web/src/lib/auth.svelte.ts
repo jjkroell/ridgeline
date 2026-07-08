@@ -36,14 +36,24 @@ class Auth {
 		}
 	}
 
+	/** Register. Returns the response so the caller can show a "check your email"
+	 *  screen when verification was sent (user is null in that case). */
 	async register(email: string, password: string, displayName: string) {
 		const r = await authApi.register(email, password, displayName);
-		this.#adopt(r);
+		if (r.user) this.#adopt(r);
+		return r;
 	}
 
 	async login(email: string, password: string) {
 		const r = await authApi.login(email, password);
 		this.#adopt(r);
+	}
+
+	/** Confirm an emailed verification token; logs the user in on success. */
+	async verifyEmail(token: string) {
+		const r = await authApi.verifyEmail(token);
+		this.#adopt(r);
+		return r;
 	}
 
 	async logout() {

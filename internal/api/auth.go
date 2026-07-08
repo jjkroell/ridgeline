@@ -144,8 +144,32 @@ func (s *Server) authRegister(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	s.startSession(w, r, user)
 	s.log.Info("user registered", "id", user.ID, "email", user.Email, "admin", user.IsAdmin)
+
+	// The bootstrap owner is auto-verified and logged straight in. Everyone else
+	// must confirm their email before they can sign in.
+	if user.EmailVerified {
+		s.startSession(w, r, user)
+		return
+	}
+	s.sendVerificationEmail(user)
+	// If email isn't configured there's no way to verify, so don't strand the
+	// account — log them in and note it. (Dev / misconfiguration safety valve.)
+	if !s.mailEnabled() {
+		s.log.Warn("email disabled: logging new user in without verification", "id", user.ID)
+		s.store.MarkEmailVerified(user.ID)
+		user.EmailVerified = true
+		s.startSession(w, r, user)
+		return
+	}
+	writeJSON(w, registerResp{VerificationSent: true, Email: user.Email})
+}
+
+// registerResp tells the client a verification email is on its way (no session
+// is started until the address is confirmed).
+type registerResp struct {
+	VerificationSent bool   `json:"verificationSent"`
+	Email            string `json:"email"`
 }
 
 func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
@@ -180,9 +204,60 @@ func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "this account has been blocked")
 		return
 	}
+	// Unverified accounts cannot sign in. Signal it distinctly so the UI can offer
+	// to resend the confirmation email.
+	if !user.EmailVerified {
+		writeJSONStatus(w, http.StatusForbidden, map[string]any{
+			"error":      "please confirm your email address before signing in — check your inbox for the verification link",
+			"unverified": true,
+		})
+		return
+	}
 	s.store.SetUserLastLogin(user.ID)
 	s.startSession(w, r, user)
 	s.log.Info("user login", "id", user.ID, "email", user.Email)
+}
+
+// authVerifyEmail consumes a verification token (from the emailed link) and, on
+// success, marks the account verified and logs it in.
+func (s *Server) authVerifyEmail(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad request body")
+		return
+	}
+	user, ok, err := s.store.VerifyEmailToken(strings.TrimSpace(req.Token))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "this verification link is invalid or has expired — request a new one")
+		return
+	}
+	s.store.SetUserLastLogin(user.ID)
+	s.startSession(w, r, user)
+	s.log.Info("email verified", "id", user.ID, "email", user.Email)
+}
+
+// authResendVerification re-sends a confirmation email. It always responds 200
+// (never revealing whether the address exists or its state) to avoid account
+// enumeration; the email only goes out for a real, still-unverified account.
+func (s *Server) authResendVerification(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad request body")
+		return
+	}
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	if user, ok, err := s.store.GetUserByEmail(email); err == nil && ok && !user.EmailVerified {
+		s.sendVerificationEmail(user)
+	}
+	writeJSON(w, map[string]bool{"ok": true})
 }
 
 func (s *Server) authLogout(w http.ResponseWriter, r *http.Request) {

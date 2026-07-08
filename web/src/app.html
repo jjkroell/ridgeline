@@ -12,11 +12,92 @@
 		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 		<meta name="apple-mobile-web-app-title" content="Ridgeline" />
+
+		<!-- Primary SEO. Per-page routes override title/description via <svelte:head>
+		     (see $lib/components/Seo.svelte); these are the crawl-time defaults for
+		     the SPA fallback and any page that doesn't set its own. -->
+		<title>Ridgeline — MeshCore Mesh Observatory · Vancouver Island &amp; Lower Mainland BC</title>
 		<meta
 			name="description"
-			content="Ridgeline — mesh network observability for MeshCore LoRa networks."
+			content="Ridgeline is a live observatory for the MeshCore LoRa mesh network across Vancouver Island and the Lower Mainland of British Columbia. Track nodes, repeaters, coverage and packet activity in real time on the mesh's alternate frequency (currently 910.425 MHz)."
 		/>
-		<title>Ridgeline</title>
+		<meta
+			name="keywords"
+			content="MeshCore, MeshCore mesh, LoRa mesh, mesh network, Vancouver Island, Lower Mainland, British Columbia, BC, coastal mesh, amateur radio, ham radio, 910.425 MHz, 910.425, alternate frequency, alt frequency, secondary frequency, off-grid communication, mesh observability, mesh map, node coverage, repeater map"
+		/>
+		<meta name="robots" content="index, follow, max-image-preview:large" />
+		<meta name="author" content="Ridgeline" />
+		<!-- No canonical / og:url here on purpose: those are per-page and are set by
+		     $lib/components/Seo.svelte. A hardcoded canonical in this shared shell would
+		     wrongly point every route at "/" and conflict with the per-page tag. -->
+		<link rel="alternate" type="application/xml" title="Sitemap" href="/sitemap.xml" />
+
+		<!-- Geographic targeting: coastal British Columbia -->
+		<meta name="geo.region" content="CA-BC" />
+		<meta name="geo.placename" content="Vancouver Island &amp; Lower Mainland, British Columbia" />
+		<meta name="geo.position" content="49.2;-124.0" />
+		<meta name="ICBM" content="49.2, -124.0" />
+
+		<!-- Open Graph (Facebook, Discord, Slack, iMessage, etc.) -->
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="Ridgeline" />
+		<meta
+			property="og:title"
+			content="Ridgeline — MeshCore Mesh Observatory for coastal BC"
+		/>
+		<meta
+			property="og:description"
+			content="Live map and analytics for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland. Nodes, repeaters, coverage and packets on the alternate frequency (currently 910.425 MHz)."
+		/>
+		<meta property="og:image" content="https://ridgeline.ve7kod.ca/icons/icon-512.png" />
+		<meta property="og:locale" content="en_CA" />
+
+		<!-- Twitter / X card -->
+		<meta name="twitter:card" content="summary" />
+		<meta name="twitter:title" content="Ridgeline — MeshCore Mesh Observatory for coastal BC" />
+		<meta
+			name="twitter:description"
+			content="Live map and analytics for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland — on the 910.425 MHz alternate frequency."
+		/>
+		<meta name="twitter:image" content="https://ridgeline.ve7kod.ca/icons/icon-512.png" />
+
+		<!-- Structured data: helps search engines understand what Ridgeline is and
+		     where it operates. -->
+		<script type="application/ld+json">
+			{
+				"@context": "https://schema.org",
+				"@graph": [
+					{
+						"@type": "WebSite",
+						"@id": "https://ridgeline.ve7kod.ca/#website",
+						"url": "https://ridgeline.ve7kod.ca/",
+						"name": "Ridgeline",
+						"description": "Live observability for the MeshCore LoRa mesh network across Vancouver Island and the Lower Mainland of British Columbia.",
+						"inLanguage": "en-CA"
+					},
+					{
+						"@type": "WebApplication",
+						"@id": "https://ridgeline.ve7kod.ca/#app",
+						"name": "Ridgeline",
+						"url": "https://ridgeline.ve7kod.ca/",
+						"applicationCategory": "Utilities",
+						"operatingSystem": "Web",
+						"browserRequirements": "Requires JavaScript.",
+						"offers": { "@type": "Offer", "price": "0", "priceCurrency": "CAD" },
+						"description": "A real-time observatory for the MeshCore LoRa mesh network: node directory, live packet feed, coverage maps, and analytics for the mesh (alternate frequency, currently 910.425 MHz) across coastal British Columbia.",
+						"about": {
+							"@type": "Thing",
+							"name": "MeshCore LoRa mesh network",
+							"description": "An off-grid, long-range LoRa radio mesh operating on the alternate frequency (currently 910.425 MHz) across Vancouver Island and the Lower Mainland, British Columbia."
+						},
+						"areaServed": [
+							{ "@type": "Place", "name": "Vancouver Island, British Columbia, Canada" },
+							{ "@type": "Place", "name": "Lower Mainland, British Columbia, Canada" }
+						]
+					}
+				]
+			}
+		</script>
 		<script>
 			// Apply the saved theme before first paint to avoid a flash.
 			try {
@@ -34,5 +115,39 @@
 	</head>
 	<body data-sveltekit-preload-data="hover">
 		<div style="display: contents">%sveltekit.body%</div>
+		<!-- Crawlable summary for search engines and no-JavaScript clients. The live
+		     app above replaces the view once JavaScript runs; this content mirrors it
+		     honestly so non-JS crawlers still index what Ridgeline is and where it
+		     operates. -->
+		<noscript>
+			<main style="max-width: 44rem; margin: 0 auto; padding: 2rem 1.25rem; font-family: system-ui, sans-serif; line-height: 1.6;">
+				<h1>Ridgeline — MeshCore Mesh Observatory for coastal British Columbia</h1>
+				<p>
+					Ridgeline is a live observatory for the
+					<strong>MeshCore</strong> LoRa mesh network across
+					<strong>Vancouver Island</strong> and the
+					<strong>Lower Mainland</strong> of British Columbia. It maps every
+					node and repeater, streams a live packet feed, and charts coverage and
+					link health for the mesh operating on its
+					<strong>alternate frequency</strong> (currently
+					<strong>910.425 MHz</strong>).
+				</p>
+				<h2>Explore the network</h2>
+				<ul>
+					<li><a href="/about">About Ridgeline &amp; the MeshCore mesh</a></li>
+					<li><a href="/nodes">Node &amp; repeater directory</a></li>
+					<li><a href="/live">Live packet feed</a></li>
+					<li><a href="/map">Coverage map</a></li>
+					<li><a href="/live-map">Live signal map</a></li>
+					<li><a href="/analytics">Network analytics</a></li>
+					<li><a href="/channels">Channels</a></li>
+					<li><a href="/observers">Observer receivers</a></li>
+				</ul>
+				<p>
+					Ridgeline requires JavaScript for its interactive maps and live feed.
+					Please enable JavaScript for the full experience.
+				</p>
+			</main>
+		</noscript>
 	</body>
 </html>

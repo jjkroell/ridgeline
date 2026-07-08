@@ -4,7 +4,12 @@
 //
 // Crypto algorithms ported from the MIT-licensed meshcore-decoder by Michael
 // Hart (https://github.com/michaelhart/meshcore-decoder), Copyright (c) 2025.
-import { SHA256, HmacSHA256, AES, enc, mode, pad, lib } from 'crypto-js';
+// Default-import the whole CryptoJS object rather than named exports: crypto-js
+// is CommonJS and its named ESM exports break under Node SSR/prerender (used when
+// the /about page is prerendered through the app-shell layout). The destructure
+// below is equivalent for the browser bundle.
+import CryptoJS from 'crypto-js';
+const { SHA256, HmacSHA256, AES, enc, mode, pad, lib } = CryptoJS;
 
 /** A group-channel AES key is 16 bytes (the first 16 of a SHA-256 digest). */
 export const CHANNEL_KEY_BYTES = 16;

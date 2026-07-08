@@ -117,6 +117,17 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 
+-- email_verifications holds pending account-verification tokens. token_hash is
+-- the SHA-256 of the opaque token emailed to the user; the plaintext is never
+-- stored. One row per outstanding request (a resend replaces prior rows).
+CREATE TABLE IF NOT EXISTS email_verifications (
+	token_hash TEXT PRIMARY KEY,
+	user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	created_at TEXT NOT NULL,
+	expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_email_verif_user ON email_verifications(user_id);
+
 -- node_claims records a user's claim on a node. A pending claim carries a
 -- verification code the owner temporarily embeds in the node's advertised name;
 -- the ingest verifier promotes it to 'verified' when a signature-valid advert
@@ -255,6 +266,13 @@ func Open(path string) (*Store, error) {
 	// User account status columns (added after the initial users table shipped).
 	db.Exec(`ALTER TABLE users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE users ADD COLUMN protected INTEGER NOT NULL DEFAULT 0`)
+	// Email verification: new accounts must confirm their address before logging
+	// in. Accounts that predate this feature are grandfathered as verified on the
+	// one-time column add, so nobody is locked out.
+	if !columnExists(db, "users", "email_verified") {
+		db.Exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0`)
+		db.Exec(`UPDATE users SET email_verified = 1`)
+	}
 	// Claiming is now universal (no admin approval) — grant every existing account
 	// the can_claim right so members created before this change can claim too.
 	db.Exec(`UPDATE users SET can_claim = 1 WHERE can_claim = 0`)
@@ -362,7 +380,13 @@ func (s *Store) Record(o Observation) error {
 		}
 	}
 
-	if a := p.Advert; a != nil && a.PublicKey != "" {
+	// Only a signature-valid advert may create or mutate the authoritative node
+	// row (name, role, location, hash size, counts). The observation itself is
+	// already stored above, so a corrupt or forged advert still shows in the live
+	// feed — it just can't deface a node's identity. Without this guard a single
+	// RF-garbled copy (e.g. "UBCV//Zenith" arriving as "P#e//jnitm") overwrites the
+	// real name, and corrupt copies also spawn phantom nodes.
+	if a := p.Advert; a != nil && a.PublicKey != "" && a.SignatureValid {
 		var lat, lon interface{}
 		if a.HasLocation {
 			lat, lon = a.Latitude, a.Longitude

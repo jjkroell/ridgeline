@@ -20,6 +20,9 @@ type User struct {
 	CanClaim     bool   `json:"canClaim"`
 	// Blocked accounts cannot log in and their sessions are invalidated.
 	Blocked bool `json:"blocked"`
+	// EmailVerified is set once the account confirms its address. New accounts
+	// (except the bootstrap owner) start unverified and cannot log in until they do.
+	EmailVerified bool `json:"emailVerified"`
 	// IsOwner marks the protected initial admin: it cannot be demoted, blocked,
 	// or removed by anyone (guarantees the deployment always keeps its owner).
 	IsOwner   bool   `json:"isOwner"`
@@ -66,10 +69,12 @@ func (s *Store) CreateUser(email, passwordHash, displayName string) (User, error
 
 	// Every registered user may claim nodes (no admin approval needed). The
 	// bootstrap account is additionally admin + the protected owner.
+	// The bootstrap owner is auto-verified (there's no one to email a link to yet,
+	// and the deployment must always have a usable owner account).
 	res, err := s.db.Exec(`
-		INSERT INTO users (email, password_hash, display_name, is_admin, can_claim, protected, created_at)
-		VALUES (?,?,?,?,1,?,?)`,
-		email, passwordHash, nullStr(displayName), admin, admin, now)
+		INSERT INTO users (email, password_hash, display_name, is_admin, can_claim, protected, email_verified, created_at)
+		VALUES (?,?,?,?,1,?,?,?)`,
+		email, passwordHash, nullStr(displayName), admin, admin, admin, now)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return User{}, ErrEmailTaken
@@ -79,7 +84,7 @@ func (s *Store) CreateUser(email, passwordHash, displayName string) (User, error
 	id, _ := res.LastInsertId()
 	return User{
 		ID: id, Email: email, PasswordHash: passwordHash, DisplayName: displayName,
-		IsAdmin: admin == 1, CanClaim: true, IsOwner: admin == 1, CreatedAt: now,
+		IsAdmin: admin == 1, CanClaim: true, IsOwner: admin == 1, EmailVerified: admin == 1, CreatedAt: now,
 	}, nil
 }
 
@@ -89,7 +94,7 @@ func (s *Store) GetUserByEmail(email string) (User, bool, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	return s.scanUser(s.db.QueryRow(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
-		       blocked, protected, created_at, COALESCE(last_login,'')
+		       blocked, protected, created_at, COALESCE(last_login,''), email_verified
 		FROM users WHERE email = ?`, email))
 }
 
@@ -97,14 +102,14 @@ func (s *Store) GetUserByEmail(email string) (User, bool, error) {
 func (s *Store) GetUserByID(id int64) (User, bool, error) {
 	return s.scanUser(s.db.QueryRow(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
-		       blocked, protected, created_at, COALESCE(last_login,'')
+		       blocked, protected, created_at, COALESCE(last_login,''), email_verified
 		FROM users WHERE id = ?`, id))
 }
 
 func (s *Store) scanUser(row *sql.Row) (User, bool, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin,
-		&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin)
+		&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin, &u.EmailVerified)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, false, nil
 	}
@@ -125,7 +130,7 @@ func (s *Store) SetUserLastLogin(id int64) error {
 func (s *Store) ListUsers() ([]User, error) {
 	rows, err := s.db.Query(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
-		       blocked, protected, created_at, COALESCE(last_login,'')
+		       blocked, protected, created_at, COALESCE(last_login,''), email_verified
 		FROM users ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -135,7 +140,7 @@ func (s *Store) ListUsers() ([]User, error) {
 	for rows.Next() {
 		var u User
 		if err := rows.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin,
-			&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin); err != nil {
+			&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin, &u.EmailVerified); err != nil {
 			return nil, err
 		}
 		out = append(out, u)

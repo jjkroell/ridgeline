@@ -128,28 +128,31 @@ func (s *Server) adminPurge(w http.ResponseWriter, r *http.Request, _ store.User
 	writeJSON(w, res)
 }
 
-// adminDelete permanently deletes nodes (their adverts + node rows) with NO
-// blocklist entry — a clean removal, distinct from purge which keeps the ingress
-// blocked. If the node still transmits (and isn't behind a blocked bridge), it
-// will re-appear on its next advert.
+// adminDelete permanently deletes nodes and/or observers (their rows + stored
+// observations) with NO blocklist entry — a clean removal, distinct from purge
+// which keeps the ingress blocked. A deleted observer/node that still transmits
+// (or keeps publishing) re-appears on its next report; delete is for retiring
+// stale/old entries, not for stopping active injectors (use purge for that).
 func (s *Server) adminDelete(w http.ResponseWriter, r *http.Request, _ store.User) {
 	var req struct {
-		Nodes []string `json:"nodes"`
+		Nodes     []string `json:"nodes"`
+		Observers []string `json:"observers"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad request body")
 		return
 	}
-	if len(req.Nodes) == 0 {
-		writeErr(w, http.StatusBadRequest, "no nodes to delete")
+	if len(req.Nodes)+len(req.Observers) == 0 {
+		writeErr(w, http.StatusBadRequest, "nothing to delete")
 		return
 	}
-	res, err := s.store.PurgeTargets(nil, nil, req.Nodes)
+	res, err := s.store.PurgeTargets(req.Observers, nil, req.Nodes)
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	s.log.Info("admin deleted nodes", "nodes", len(req.Nodes), "observationsDeleted", res.Observations, "nodesDeleted", res.Nodes)
+	s.log.Info("admin deleted", "nodes", len(req.Nodes), "observers", len(req.Observers),
+		"observationsDeleted", res.Observations, "nodesDeleted", res.Nodes)
 	writeJSON(w, res)
 }
 
@@ -161,4 +164,11 @@ func writeErr(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+// writeJSONStatus writes an arbitrary JSON body with an explicit status code.
+func writeJSONStatus(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(v)
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import { channels, type Channel } from '$lib/channels.svelte';
 	import { decryptGroupText } from '$lib/channel-crypto';
 	import { live } from '$lib/live.svelte';
@@ -209,6 +210,12 @@
 	const btnCls =
 		'rounded-[var(--radius)] border border-signal/50 bg-signal/10 px-3 py-2 text-sm font-medium text-signal transition-colors hover:bg-signal/20 disabled:opacity-40';
 </script>
+
+<Seo
+	title="MeshCore Channels"
+	description="Public channel activity on the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland of coastal British Columbia."
+	path="/channels"
+/>
 
 <div class="flex h-[calc(100dvh-3.25rem)] flex-col md:h-screen">
 	<PageHeader eyebrow="Decrypted Traffic" title="Channels">

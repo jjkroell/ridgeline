@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import type { FeatureCollection } from 'geojson';
@@ -368,6 +369,12 @@
 		};
 	});
 </script>
+
+<Seo
+	title="MeshCore Coverage Map — Vancouver Island &amp; Lower Mainland"
+	description="Interactive coverage map of the MeshCore LoRa mesh across coastal British Columbia — node and repeater locations on the alternate frequency (currently 910.425 MHz)."
+	path="/map"
+/>
 
 <PageHeader eyebrow="Terrain & Topology" title="Network Map">
 	<div class="font-mono text-fg-dim text-xs">

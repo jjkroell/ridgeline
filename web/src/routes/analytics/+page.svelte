@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import { api, type MeshAnalytics } from '$lib/api';
 	import { fmtNum, roleColor, shortKey, skewColor, fmtSkew } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -265,6 +266,12 @@
 		data ? `SF${data.radio.SpreadingFactor} · BW${(data.radio.BandwidthHz / 1000).toFixed(1)}k · CR4/${data.radio.CodingRate}` : ''
 	);
 </script>
+
+<Seo
+	title="MeshCore Mesh Analytics"
+	description="Network health, link quality and activity analytics for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland of British Columbia."
+	path="/analytics"
+/>
 
 <PageHeader eyebrow="Network Observatory" title="Mesh Analytics">
 	<div class="flex items-center gap-3">

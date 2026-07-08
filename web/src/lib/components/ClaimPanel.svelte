@@ -2,6 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import { claims, type ClaimStatus } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
+	import { signChallenge } from '$lib/sign';
 
 	interface Props {
 		pubkey: string;
@@ -16,6 +17,10 @@
 	let error = $state('');
 	let copied = $state(false);
 	let poll: ReturnType<typeof setInterval> | null = null;
+
+	// Private-key proof (alternative to the advert-name method).
+	let showKey = $state(false);
+	let privKey = $state('');
 
 	async function load() {
 		try {
@@ -64,6 +69,32 @@
 		}
 	}
 
+	// Prove ownership by signing a server challenge with the node's private key,
+	// entirely in-browser. Only the signature is sent — never the key itself.
+	async function proveWithKey() {
+		busy = true;
+		error = '';
+		try {
+			const { challenge } = await claims.keyChallenge(auth.csrf, pubkey);
+			const signature = signChallenge(privKey, challenge);
+			await claims.keyVerify(auth.csrf, pubkey, signature);
+			privKey = '';
+			showKey = false;
+			await load();
+			onchanged?.();
+		} catch (e) {
+			error = String((e as Error).message ?? e);
+		} finally {
+			busy = false;
+		}
+	}
+
+	function cancelKey() {
+		showKey = false;
+		privKey = '';
+		error = '';
+	}
+
 	async function release() {
 		busy = true;
 		error = '';
@@ -98,6 +129,48 @@
 		return m >= 1 ? `~${m} min` : '<1 min';
 	}
 </script>
+
+{#snippet keyProof()}
+	{#if showKey}
+		<div class="border-line mt-3 rounded-[var(--radius)] border p-3">
+			<label class="text-fg-dim text-xs font-600" for="pk-{pubkey}">Node private key</label>
+			<textarea
+				id="pk-{pubkey}"
+				bind:value={privKey}
+				rows="2"
+				placeholder="128-hex MeshCore private key"
+				autocomplete="off"
+				autocapitalize="off"
+				spellcheck="false"
+				class="border-line bg-ink-2 text-fg mt-1 w-full rounded-[var(--radius)] border px-2 py-1.5 font-mono text-xs break-all"
+			></textarea>
+			<p class="text-fg-faint mt-1.5 text-[0.7rem] leading-relaxed">
+				<strong class="text-signal">Stays on your device.</strong> Your private key is used only in
+				your browser to sign a one-time challenge — it is <strong>never sent</strong> to the server.
+			</p>
+			<div class="mt-2 flex items-center gap-2">
+				<button
+					onclick={proveWithKey}
+					disabled={busy || !privKey.trim()}
+					class="bg-signal/15 text-signal border-signal/40 hover:bg-signal/25 rounded-[var(--radius)] border px-3 py-1.5 text-xs font-600 transition-colors disabled:opacity-50"
+					>{busy ? 'Verifying…' : 'Verify ownership'}</button
+				>
+				<button onclick={cancelKey} class="text-fg-faint hover:text-fg text-xs transition-colors"
+					>Cancel</button
+				>
+			</div>
+		</div>
+	{:else}
+		<button
+			onclick={() => {
+				showKey = true;
+				error = '';
+			}}
+			class="text-signal/80 hover:text-signal mt-3 text-xs underline-offset-2 transition-colors hover:underline"
+			>Have the node's private key? Verify instantly →</button
+		>
+	{/if}
+{/snippet}
 
 <div>
 	{#if loading}
@@ -175,6 +248,10 @@
 					>Cancel</button
 				>
 			</div>
+			<div class="border-line/60 mt-3 border-t pt-1">
+				<p class="text-fg-faint text-[0.7rem]">Prefer not to rename the node?</p>
+				{@render keyProof()}
+			</div>
 		{:else if !status.loggedIn}
 			<p class="text-fg-dim text-sm">
 				<a href="/login" class="text-signal hover:underline">Sign in</a> to claim your nodes.
@@ -189,6 +266,7 @@
 					>{busy ? 'Starting…' : 'Claim this node'}</button
 				>
 			</div>
+			{@render keyProof()}
 		{/if}
 
 		{#if error}

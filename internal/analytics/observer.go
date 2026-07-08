@@ -53,7 +53,9 @@ func ObserverSummary(st *store.Store, nodes []store.Node, id, sinceISO string, s
 	buckets := int(windowSec/3600) + 1
 	now := time.Now()
 
-	out := &ObserverAnalytics{ID: id, WindowHours: windowSec / 3600.0, Activity: make([]int, buckets)}
+	// Neighbours starts as an empty (non-nil) slice so it serialises as [] not null
+	// when the observer heard nothing zero-hop — the UI indexes .length on it.
+	out := &ObserverAnalytics{ID: id, WindowHours: windowSec / 3600.0, Activity: make([]int, buckets), Neighbors: []DirectLink{}}
 	payload := map[string]int{}
 	advHeard := map[string]bool{}
 	directCount := map[string]int{} // node → zero-hop hear count

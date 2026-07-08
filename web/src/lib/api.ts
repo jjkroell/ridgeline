@@ -392,7 +392,11 @@ export const admin = {
 		mutate<PurgeResult>('/api/admin/purge', 'POST', csrf, body),
 	/** Permanently delete nodes (adverts + rows) with no blocklist entry. */
 	deleteNodes: (csrf: string, nodes: string[]) =>
-		mutate<PurgeResult>('/api/admin/delete', 'POST', csrf, { nodes })
+		mutate<PurgeResult>('/api/admin/delete', 'POST', csrf, { nodes }),
+	/** Permanently delete observers (row + their stored observations) with no block —
+	 *  for retiring stale/old observers. Re-appears if it publishes again. */
+	deleteObservers: (csrf: string, observers: string[]) =>
+		mutate<PurgeResult>('/api/admin/delete', 'POST', csrf, { observers })
 };
 
 export const api = {
@@ -416,6 +420,9 @@ export const api = {
 	observations: (limit = 100) => get<Observation[]>(`/api/observations?limit=${limit}`),
 	/** Recent history (default last hour) in the live-event shape, newest first. */
 	recent: (sinceSec = 3600) => get<LiveEvent[]>(`/api/recent?since=${sinceSec}`),
+	/** All observations of one transmission (by message hash) — backs the shareable
+	 *  per-packet deep link. Empty if the hash is unknown or has aged out. */
+	packet: (hash: string) => get<LiveEvent[]>(`/api/packets/${encodeURIComponent(hash)}`),
 	/**
 	 * Channel (GroupText) message history, newest first, one row per distinct
 	 * message. Default & max 24h — for the channel chat reader.
@@ -452,6 +459,23 @@ export interface AuthResponse {
 	csrfToken?: string;
 	/** Count of nodes newly shared with the user (not yet seen) — account badge. */
 	unseenShares?: number;
+	/** Set by register when a verification email was sent instead of logging in. */
+	verificationSent?: boolean;
+	/** Echoed address for the "check your email" screen / resend. */
+	email?: string;
+}
+
+/** Error thrown by auth requests; carries the HTTP status and the unverified flag
+ *  so the login screen can offer to resend the confirmation email. */
+export class AuthError extends Error {
+	status: number;
+	unverified: boolean;
+	constructor(message: string, status: number, unverified = false) {
+		super(message);
+		this.name = 'AuthError';
+		this.status = status;
+		this.unverified = unverified;
+	}
 }
 
 // Session cookies are HttpOnly and set by the server; same-origin fetches send
@@ -462,8 +486,11 @@ async function authReq(path: string, body?: unknown): Promise<AuthResponse> {
 		headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json' } : {}) },
 		body: body ? JSON.stringify(body) : undefined
 	});
-	const data = (await res.json().catch(() => ({}))) as AuthResponse & { error?: string };
-	if (!res.ok) throw new Error(data.error ?? `${res.status}`);
+	const data = (await res.json().catch(() => ({}))) as AuthResponse & {
+		error?: string;
+		unverified?: boolean;
+	};
+	if (!res.ok) throw new AuthError(data.error ?? `${res.status}`, res.status, !!data.unverified);
 	return data;
 }
 
@@ -472,7 +499,16 @@ export const authApi = {
 	register: (email: string, password: string, displayName: string) =>
 		authReq('/api/auth/register', { email, password, displayName }),
 	login: (email: string, password: string) => authReq('/api/auth/login', { email, password }),
-	logout: () => authReq('/api/auth/logout')
+	logout: () => authReq('/api/auth/logout'),
+	/** Confirm an emailed verification token; on success the server logs the user in. */
+	verifyEmail: (token: string) => authReq('/api/auth/verify', { token }),
+	/** Ask for a fresh verification email (always resolves; never reveals account state). */
+	resendVerification: (email: string) =>
+		fetch('/api/auth/resend-verification', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ email })
+		}).then(() => undefined)
 };
 
 // mutate is the shared helper for authenticated, CSRF-protected state changes
@@ -547,7 +583,19 @@ export const claims = {
 	release: (csrf: string, pubkey: string) =>
 		mutate<{ ok: boolean }>(`/api/claims/${encodeURIComponent(pubkey)}`, 'DELETE', csrf),
 	/** The caller's own claims (pending + owned) with node display info. */
-	mine: () => get<ClaimWithNode[]>('/api/claims/mine')
+	mine: () => get<ClaimWithNode[]>('/api/claims/mine'),
+	/** Private-key proof: request a challenge to sign with the node's private key. */
+	keyChallenge: (csrf: string, pubkey: string) =>
+		mutate<{ challenge: string }>(
+			`/api/nodes/${encodeURIComponent(pubkey)}/claim/key-challenge`,
+			'POST',
+			csrf
+		),
+	/** Private-key proof: submit the signature over the challenge to verify ownership. */
+	keyVerify: (csrf: string, pubkey: string, signature: string) =>
+		mutate<Claim>(`/api/nodes/${encodeURIComponent(pubkey)}/claim/key-verify`, 'POST', csrf, {
+			signature
+		})
 };
 
 // ---- Node notes ----

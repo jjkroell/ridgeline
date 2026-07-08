@@ -6,12 +6,17 @@
 	import { buildPacketFields, parseTrace, type ByteRange } from '$lib/packet-fields';
 	import PayloadTag from './PayloadTag.svelte';
 	import HopChips from './HopChips.svelte';
+	import Tooltip from './Tooltip.svelte';
 
 	interface Props {
 		group: LiveGroup | null;
 		onclose: () => void;
+		// Deep-link straight to one observation's packet detail: obs + receivedAt
+		// uniquely identify a repeat within the group (see the shareable copy-link).
+		initialObs?: string | null;
+		initialAt?: string | null;
 	}
-	let { group, onclose }: Props = $props();
+	let { group, onclose, initialObs = null, initialAt = null }: Props = $props();
 
 	let nodes = $state<Node[]>([]);
 	let copied = $state('');
@@ -22,10 +27,14 @@
 	$effect(() => {
 		if (group && nodes.length === 0) api.nodes().then((n) => (nodes = n)).catch(() => {});
 	});
-	// Whenever a new packet group is opened, start on the repeats list.
+	// When a packet group opens, start on the repeats list — unless a specific
+	// observation was deep-linked (obs+receivedAt), in which case open its detail.
 	$effect(() => {
 		void group;
-		repeat = null;
+		repeat =
+			initialObs && group
+				? (group.events.find((e) => e.observerId === initialObs && e.receivedAt === initialAt) ?? null)
+				: null;
 	});
 
 	// Observations sorted by arrival (first heard first).
@@ -57,6 +66,19 @@
 		await navigator.clipboard.writeText(text);
 		copied = label;
 		setTimeout(() => (copied = ''), 1200);
+	}
+
+	// Shareable deep link to whatever's on screen: the packet's repeats list, or —
+	// when drilled into one observation — that exact packet-detail sub-view.
+	function copyLink() {
+		if (!group) return;
+		let url = `${location.origin}/live?p=${encodeURIComponent(group.messageHash)}`;
+		if (repeat) {
+			url +=
+				`&obs=${encodeURIComponent(repeat.observerId ?? '')}` +
+				`&at=${encodeURIComponent(repeat.receivedAt)}`;
+		}
+		copy(url, 'link');
 	}
 
 	function advTime(ts?: number): string {
@@ -199,6 +221,28 @@
 	}
 </script>
 
+<!-- Top-right header actions, identical in the repeats-list and packet-detail views:
+     a shareable copy-link (to whichever view is open) + the close button. -->
+{#snippet headerActions()}
+	<div class="flex shrink-0 items-center gap-2.5">
+		<Tooltip text="Copy a shareable link to this packet">
+			<button
+				onclick={copyLink}
+				class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.68rem] font-600 transition-colors {copied ===
+				'link'
+					? 'border-signal/50 bg-signal/15 text-signal'
+					: 'border-line text-fg-dim hover:border-signal/50 hover:text-signal'}"
+			>
+				<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
+				</svg>
+				{copied === 'link' ? 'Link copied' : 'Copy link'}
+			</button>
+		</Tooltip>
+		<button onclick={onclose} class="text-fg-faint hover:text-fg text-xl leading-none" aria-label="Close">✕</button>
+	</div>
+{/snippet}
+
 <svelte:window onkeydown={(e) => e.key === 'Escape' && group && (repeat ? (repeat = null) : onclose())} />
 
 {#if group}
@@ -221,14 +265,14 @@
 				<div class="border-line/70 flex items-start gap-3 border-b px-5 py-4">
 					<div class="min-w-0 flex-1">
 						<div class="mb-2 flex flex-wrap items-center gap-2">
-							<PayloadTag type={group.payloadType} />
+							<PayloadTag type={group.payloadType} tip={false} />
 							<span class="label">{group.routeType}</span>
 							<span class="label">· {group.kind === 'node' ? 'all from node' : 'one transmission'}</span>
 						</div>
 						<h2 class="font-display text-fg truncate text-lg font-700">{title}</h2>
-						<div class="font-mono text-fg-faint text-[0.68rem]">{group.messageHash}</div>
+						<div class="font-mono text-fg-faint mt-1 text-[0.68rem]">{group.messageHash}</div>
 					</div>
-					<button onclick={onclose} class="text-fg-faint hover:text-fg shrink-0 text-xl leading-none" aria-label="Close">✕</button>
+					{@render headerActions()}
 				</div>
 
 				<!-- Summary -->
@@ -293,7 +337,7 @@
 							>← All {group.count} repeats</button
 						>
 						<div class="mb-2 flex flex-wrap items-center gap-2">
-							<PayloadTag type={ev.payloadType} />
+							<PayloadTag type={ev.payloadType} tip={false} />
 							<span class="label">{ev.routeType}</span>
 							<span class="label">v{ev.payloadVersion ?? 0}</span>
 							{#if events.length > 1}<span class="label text-fg-faint">obs {obsIndex + 1}/{events.length}</span>{/if}
@@ -303,7 +347,7 @@
 						<h2 class="font-display text-fg truncate text-lg font-700">{ev.observerId ?? '—'}</h2>
 						<div class="font-mono text-fg-dim text-xs">heard {ago(ev.receivedAt)} ago{#if events.length > 1} · {relWords(ev.receivedAt)}{/if}</div>
 					</div>
-					<button onclick={onclose} class="text-fg-faint hover:text-fg shrink-0 text-xl leading-none" aria-label="Close">✕</button>
+					{@render headerActions()}
 				</div>
 
 				<!-- Reception stats for this repeat -->

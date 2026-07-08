@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import Seo from '$lib/components/Seo.svelte';
+	import { page } from '$app/state';
+	import { replaceState } from '$app/navigation';
 	import { live, groupLive, type LiveGroup } from '$lib/live.svelte';
 	import { channels } from '$lib/channels.svelte';
 	import { api, type Node } from '$lib/api';
@@ -39,6 +43,53 @@
 	// IDs (the pubkey prefix at the node's configured hash length).
 	let showIds = $state(false);
 	const hashId = (n: Node) => n.publicKey.slice(0, Math.max(1, n.hashSize || 2) * 2);
+
+	// --- Shareable per-packet deep link (?p=<messageHash>, optionally &obs=&at=) ---
+	// Reflect the open packet in the URL so the address bar is directly shareable,
+	// and re-open a packet from a pasted link on load (fetching it by hash from the
+	// backend, so it works for anyone even after it scrolls out of the live buffer).
+	// obs+at deep-link straight to one observation's packet-detail sub-view.
+	let deepObs = $state<string | null>(null);
+	let deepAt = $state<string | null>(null);
+
+	function setParams(hash: string | null) {
+		const url = new URL(page.url);
+		if (hash) url.searchParams.set('p', hash);
+		else url.searchParams.delete('p');
+		// obs/at only ever ride along on an incoming deep link; drop them once the
+		// user navigates so a copied address-bar URL doesn't carry stale detail.
+		url.searchParams.delete('obs');
+		url.searchParams.delete('at');
+		replaceState(url, {});
+	}
+	function selectGroup(g: LiveGroup) {
+		selected = g;
+		deepObs = null;
+		deepAt = null;
+		setParams(g.messageHash);
+		hideTip();
+	}
+	function closeModal() {
+		selected = null;
+		deepObs = null;
+		deepAt = null;
+		setParams(null);
+	}
+	async function openPacketByHash(hash: string) {
+		try {
+			const events = await api.packet(hash);
+			const g = groupLive(events)[0];
+			if (g) selected = g;
+		} catch {
+			/* unknown/aged-out hash — leave the feed as-is */
+		}
+	}
+	onMount(() => {
+		const h = page.url.searchParams.get('p');
+		deepObs = page.url.searchParams.get('obs');
+		deepAt = page.url.searchParams.get('at');
+		if (h) openPacketByHash(h);
+	});
 
 	/** The observer that reported this transmission earliest. */
 	function firstObserver(g: LiveGroup): string {
@@ -104,6 +155,12 @@
 	}
 </script>
 
+<Seo
+	title="Live MeshCore Packet Feed"
+	description="Watch MeshCore mesh packets stream in real time across coastal BC — adverts, messages and traces on the alternate frequency (currently 910.425 MHz)."
+	path="/live"
+/>
+
 <PageHeader eyebrow="Real-time Telemetry" title="Feed">
 	<Tooltip text="Toggle the Path column between node names and hash IDs">
 		<button
@@ -152,10 +209,7 @@
 					{@const path = leadPath(g)}
 					{@const summary = packetSummary(g)}
 					<button
-						onclick={() => {
-							selected = g;
-							hideTip();
-						}}
+						onclick={() => selectGroup(g)}
 						onmousemove={(e) => showTip(e, 'Click for full packet details')}
 						onmouseleave={hideTip}
 						class="panel-hover group grid w-full grid-cols-[34px_64px_140px_64px_160px_minmax(0,1fr)] items-center gap-x-3 px-5 py-2.5 text-left text-sm md:grid-cols-[34px_64px_140px_370px_64px_160px_minmax(0,1fr)]"
@@ -221,7 +275,7 @@
 	</div>
 </div>
 
-<LiveGroupModal group={selected} onclose={() => (selected = null)} />
+<LiveGroupModal group={selected} onclose={closeModal} initialObs={deepObs} initialAt={deepAt} />
 <PathModal group={pathFor} {nodes} {showIds} onclose={() => (pathFor = null)} />
 
 {#if tip}

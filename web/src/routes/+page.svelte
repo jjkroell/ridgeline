@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import { api, type Stats, type Node } from '$lib/api';
 	import { live, groupLive, type LiveGroup } from '$lib/live.svelte';
 	import { ago, shortKey, fmtNum, snrColor, fmtSnr, nodeStatus } from '$lib/format';
@@ -54,6 +55,12 @@
 			.filter((n): n is Node => !!n)
 	);
 </script>
+
+<Seo
+	title="Ridgeline — Live MeshCore Mesh Observatory for coastal BC"
+	description="Live dashboard for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland — nodes, repeaters, coverage and packets on the alternate frequency (currently 910.425 MHz)."
+	path="/"
+/>
 
 <PageHeader eyebrow="Network Observatory" title="Overview">
 	<div class="font-mono text-fg-dim flex items-center gap-2 text-xs">

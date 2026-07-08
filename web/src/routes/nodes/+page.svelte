@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import { api, type Node } from '$lib/api';
 	import { shortKey, fmtCoord, fmtNum, nodeStatus, ago, lastHeard } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -55,6 +56,12 @@
 		...filtered.filter((n) => !favorites.has(n.publicKey))
 	]);
 </script>
+
+<Seo
+	title="MeshCore Node &amp; Repeater Directory"
+	description="Every node and repeater on the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland — status, location and last-heard on the alternate frequency (currently 910.425 MHz)."
+	path="/nodes"
+/>
 
 <PageHeader eyebrow="Mesh Inventory" title="Nodes">
 	<div class="font-mono text-fg-dim text-xs">

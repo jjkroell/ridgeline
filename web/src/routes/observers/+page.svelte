@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import { api, type Observer, type ObserverCoverage } from '$lib/api';
 	import { ago, fmtNum, skewColor, fmtSkew, isFresh } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -24,6 +25,12 @@
 		return () => clearInterval(t);
 	});
 </script>
+
+<Seo
+	title="MeshCore Observers — receive-only mesh listeners"
+	description="The receive-only observer stations that feed Ridgeline's view of the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland."
+	path="/observers"
+/>
 
 <PageHeader eyebrow="Listening Posts" title="Observers">
 	<div class="font-mono text-fg-dim text-xs">

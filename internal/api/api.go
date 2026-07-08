@@ -18,6 +18,15 @@ import (
 	"github.com/jjkroell/ridgeline/internal/store"
 )
 
+// mailSender is the subset of the mailer the API uses. An interface (rather than
+// the concrete *mail.Mailer) so tests can inject a capturing fake and never send
+// real email.
+type mailSender interface {
+	Enabled() bool
+	BaseURL() string
+	SendAsync(kind, to, subject, text, html string)
+}
+
 // Server holds API dependencies and serves HTTP.
 type Server struct {
 	store     *store.Store
@@ -27,10 +36,19 @@ type Server struct {
 	hub       *hub
 	up        websocket.Upgrader
 	analytics *analytics.Engine
+	keyChal   *keyChallengeStore // pending private-key ownership challenges
+	mail      mailSender         // outbound transactional email (nil/disabled ok)
 }
 
 // SetAnalytics attaches the analytics engine used by the node-detail endpoint.
 func (s *Server) SetAnalytics(e *analytics.Engine) { s.analytics = e }
+
+// SetMailer attaches the outbound mailer. When nil or disabled, email features
+// (verification, note notifications) degrade to no-ops.
+func (s *Server) SetMailer(m mailSender) { s.mail = m }
+
+// mailEnabled reports whether outbound email is configured.
+func (s *Server) mailEnabled() bool { return s.mail != nil && s.mail.Enabled() }
 
 // New creates an API Server. If webDir is non-empty and exists, the built SPA
 // is served from it with an index.html fallback for client routes. The admin
@@ -43,7 +61,8 @@ func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
 		webDir:  webDir,
 		hub:     newHub(),
 		// Dev: allow any origin. Tighten before exposing publicly.
-		up: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
+		up:      websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
+		keyChal: newKeyChallengeStore(),
 	}
 }
 
@@ -64,6 +83,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/observers/{id}/telemetry", s.observerTelemetry)
 	mux.HandleFunc("GET /api/observations", s.observations)
 	mux.HandleFunc("GET /api/recent", s.recent)
+	mux.HandleFunc("GET /api/packets/{hash}", s.packet)
 	mux.HandleFunc("GET /api/channels/recent", s.channelsRecent)
 	mux.HandleFunc("GET /api/live", s.live)
 
@@ -74,11 +94,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/login", s.authLogin)
 	mux.HandleFunc("POST /api/auth/logout", s.authLogout)
 	mux.HandleFunc("GET /api/auth/me", s.authMe)
+	mux.HandleFunc("POST /api/auth/verify", s.authVerifyEmail)
+	mux.HandleFunc("POST /api/auth/resend-verification", s.authResendVerification)
 
 	// Node ownership claims (authenticated; creating requires the can_claim gate).
 	mux.HandleFunc("POST /api/claims", s.requireUser(s.claimCreate))
 	mux.HandleFunc("GET /api/claims/mine", s.requireUser(s.claimsMine))
 	mux.HandleFunc("DELETE /api/claims/{pubkey}", s.requireUser(s.claimDelete))
+	// Alternative ownership proof: sign a server challenge with the node's private key.
+	mux.HandleFunc("POST /api/nodes/{pubkey}/claim/key-challenge", s.requireUser(s.claimKeyChallenge))
+	mux.HandleFunc("POST /api/nodes/{pubkey}/claim/key-verify", s.requireUser(s.claimKeyVerify))
 
 	// Node private exact location (owner-only, all methods). Kept entirely
 	// separate from the public node data — never joined into /api/nodes or WS.
@@ -456,6 +481,31 @@ func (s *Server) observations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, obs)
+}
+
+// packet returns every observation of ONE transmission (by message hash) in the
+// same live-event shape as /api/recent, so a shared link can re-open that exact
+// packet in the feed modal. Public — the feed is public. Empty array if the hash
+// is unknown or has aged out of storage.
+func (s *Server) packet(w http.ResponseWriter, r *http.Request) {
+	hash := r.PathValue("hash")
+	raws, err := s.store.RawByHash(hash)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	out := make([]LiveEvent, 0, len(raws))
+	for _, ro := range raws {
+		pkt, err := meshcore.DecodeHex(ro.RawHex)
+		if err != nil || pkt == nil {
+			continue
+		}
+		if s.store.ShouldDrop(pkt, ro.ObserverID) {
+			continue // keep quarantined traffic hidden here too
+		}
+		out = append(out, newLiveEvent(pkt, ro.RawHex, ro.ObserverID, ro.Region, ro.ReceivedAt, ro.SNR, ro.RSSI))
+	}
+	writeJSON(w, out)
 }
 
 // recent returns the last `since` seconds (default 1h, max 6h) of observations

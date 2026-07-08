@@ -60,6 +60,7 @@
 		{ href: '/channels', label: 'Channels', icon: 'hash' },
 		{ href: '/identity', label: 'Identity', icon: 'key' },
 		{ href: '/observers', label: 'Observers', icon: 'eye' },
+		{ href: '/about', label: 'About', icon: 'info' },
 		{ href: '/admin', label: 'Admin', icon: 'shield', adminOnly: true }
 	];
 	// The Admin console is only reachable by admin accounts, so hide its nav link
@@ -85,7 +86,8 @@
 		chart: 'M3 3v18h18M7 14v4M12 9v9M17 5v13',
 		eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 9a3 3 0 100 6 3 3 0 000-6z',
 		key: 'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3',
-		shield: 'M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z'
+		shield: 'M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z',
+		info: 'M12 2a10 10 0 100 20 10 10 0 000-20zM12 8h.01M11 12h1v5h1'
 	};
 </script>
 

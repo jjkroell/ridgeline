@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import type { Feature, FeatureCollection } from 'geojson';
@@ -445,6 +446,12 @@
 		};
 	});
 </script>
+
+<Seo
+	title="Live MeshCore Signal Map"
+	description="Real-time signal map of the MeshCore LoRa mesh — watch packets and links light up across Vancouver Island and the Lower Mainland of British Columbia."
+	path="/live-map"
+/>
 
 <PageHeader eyebrow="Real-time Propagation" title="Live Map">
 	<div class="font-mono text-fg-dim flex items-center gap-4 text-xs">

@@ -88,6 +88,30 @@ func (s *Store) NodeOwner(nodePubkey string) (OwnerInfo, bool, error) {
 	return o, true, nil
 }
 
+// ClaimedNodeKeys returns the set of node pubkeys (uppercase) that have a
+// verified owner. It's a single small scan of node_claims (verified claims are
+// few) used to flag "claimed" nodes in the public nodes list without an N+1
+// per-node owner lookup. Ownership is already public (the node-detail claim
+// endpoint shows the owner to everyone), so this exposes nothing new — and it
+// deliberately returns only the boolean set, never owner identities, so no
+// display-name/email fallback leaks into the bulk list.
+func (s *Store) ClaimedNodeKeys() (map[string]bool, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT node_pubkey FROM node_claims WHERE status = 'verified'`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	set := make(map[string]bool)
+	for rows.Next() {
+		var pk string
+		if err := rows.Scan(&pk); err != nil {
+			return nil, err
+		}
+		set[strings.ToUpper(pk)] = true
+	}
+	return set, rows.Err()
+}
+
 // UserClaim returns a user's claim on a node, if any.
 func (s *Store) UserClaim(nodePubkey string, userID int64) (Claim, bool, error) {
 	nodePubkey = strings.ToUpper(nodePubkey)

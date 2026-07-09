@@ -271,6 +271,8 @@ type nodeWithLiveness struct {
 	store.Node
 	LastRelayed  string `json:"lastRelayed,omitempty"`
 	RelayCount1h int    `json:"relayCount1h,omitempty"`
+	// Claimed reports that the node has a verified owner (public "claimed" badge).
+	Claimed bool `json:"claimed,omitempty"`
 }
 
 func (s *Server) nodes(w http.ResponseWriter, _ *http.Request) {
@@ -283,6 +285,11 @@ func (s *Server) nodes(w http.ResponseWriter, _ *http.Request) {
 	if s.analytics != nil {
 		live = s.analytics.Liveness()
 	}
+	claimed, err := s.store.ClaimedNodeKeys()
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
 	out := make([]nodeWithLiveness, 0, len(nodes))
 	for _, n := range nodes {
 		if s.store.IsNodeBlocked(n.PublicKey) {
@@ -293,6 +300,7 @@ func (s *Server) nodes(w http.ResponseWriter, _ *http.Request) {
 			nw.LastRelayed = sig.LastRelayed
 			nw.RelayCount1h = sig.RelayCount1h
 		}
+		nw.Claimed = claimed[strings.ToUpper(n.PublicKey)]
 		out = append(out, nw)
 	}
 	writeJSON(w, out)

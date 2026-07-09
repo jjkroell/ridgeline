@@ -59,6 +59,35 @@ func TestClaimLifecycle(t *testing.T) {
 	}
 }
 
+func TestClaimedNodeKeys(t *testing.T) {
+	st := testStore(t)
+	st.CreateUser("owner@example.com", "h", "Owner") // first = admin/owner
+	u, _ := st.CreateUser("claimer@example.com", "h", "Claimer")
+
+	// A pending (unverified) claim must NOT count as claimed.
+	if _, err := st.CreateOrRefreshClaim(claimNode, u.ID, "K7X4QP", 30*time.Minute); err != nil {
+		t.Fatalf("create claim: %v", err)
+	}
+	if keys, _ := st.ClaimedNodeKeys(); keys[claimNode] {
+		t.Error("pending claim must not appear in ClaimedNodeKeys")
+	}
+
+	// Verifying it flips the node to claimed.
+	if v, err := st.VerifyPendingClaims(claimNode, "MyRepeater k7x4qp"); err != nil || len(v) != 1 {
+		t.Fatalf("verify: n=%d err=%v", len(v), err)
+	}
+	keys, err := st.ClaimedNodeKeys()
+	if err != nil {
+		t.Fatalf("ClaimedNodeKeys: %v", err)
+	}
+	if !keys[claimNode] {
+		t.Errorf("verified node %s missing from ClaimedNodeKeys (keys=%v)", claimNode, keys)
+	}
+	if len(keys) != 1 {
+		t.Errorf("expected 1 claimed node, got %d", len(keys))
+	}
+}
+
 func TestNameHasVerificationCode(t *testing.T) {
 	st := testStore(t)
 	u, _ := st.CreateUser("u@example.com", "h", "U")

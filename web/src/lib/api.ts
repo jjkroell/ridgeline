@@ -32,6 +32,8 @@ export interface Node {
 	lastRelayed?: string;
 	/** Packets this node relayed in the last hour. */
 	relayCount1h?: number;
+	/** A registered user has verified ownership of this node ("claimed" badge). */
+	claimed?: boolean;
 }
 
 export interface ObserverStatus {

@@ -82,7 +82,15 @@
 				<a href="/m/nodes/{n.publicKey}" class="active:bg-line/40 flex items-center gap-3 px-4 py-3">
 					<span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background:{st.color}"></span>
 					<div class="min-w-0 flex-1">
-						<div class="text-fg truncate text-sm font-medium">{n.name || shortKey(n.publicKey)}</div>
+						<div class="flex items-center gap-1.5">
+							<span class="text-fg truncate text-sm font-medium">{n.name || shortKey(n.publicKey)}</span>
+							{#if n.claimed}
+								<svg viewBox="0 0 24 24" class="text-signal h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="Claimed">
+									<path d="M12 3 4 6v6c0 4.4 3.2 7.6 8 9 4.8-1.4 8-4.6 8-9V6l-8-3z" />
+									<path d="m9 12 2 2 4-4" />
+								</svg>
+							{/if}
+						</div>
 						<div class="mt-0.5 flex items-center gap-1.5 font-mono text-[0.62rem]">
 							<span style="color:{roleColor(n.role)}">{roleLabel(n.role)}</span>
 							<span class="text-fg-faint">· {st.label} · {ago(heard)}</span>

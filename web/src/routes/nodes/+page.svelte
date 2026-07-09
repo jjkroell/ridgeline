@@ -164,6 +164,14 @@
 									</Tooltip>
 								{/if}
 								<span class="text-fg truncate font-medium">{n.name || shortKey(n.publicKey)}</span>
+								{#if n.claimed}
+									<Tooltip text="Claimed — a registered owner has verified this node">
+										<svg viewBox="0 0 24 24" class="text-signal h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+											<path d="M12 3 4 6v6c0 4.4 3.2 7.6 8 9 4.8-1.4 8-4.6 8-9V6l-8-3z" />
+											<path d="m9 12 2 2 4-4" />
+										</svg>
+									</Tooltip>
+								{/if}
 							</div>
 							<div class="font-mono text-fg-faint mt-0.5 text-[0.68rem]">
 								{shortKey(n.publicKey, 10, 4)}

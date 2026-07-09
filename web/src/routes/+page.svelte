@@ -2,23 +2,17 @@
 	import { onMount } from 'svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { api, type Stats, type Node } from '$lib/api';
-	import { live, groupLive, type LiveGroup } from '$lib/live.svelte';
-	import { ago, shortKey, fmtNum, snrColor, fmtSnr, nodeStatus } from '$lib/format';
+	import { live } from '$lib/live.svelte';
+	import { ago, fmtNum } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
-	import RoleBadge from '$lib/components/RoleBadge.svelte';
-	import PayloadTag from '$lib/components/PayloadTag.svelte';
-	import Tooltip from '$lib/components/Tooltip.svelte';
-	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
-	import FavoriteStar from '$lib/components/FavoriteStar.svelte';
-	import { favorites } from '$lib/favorites.svelte';
 	import { announce } from '$lib/announce.svelte';
+	import { overview } from '$lib/overview.svelte';
+	import OverviewGrid from '$lib/components/widgets/OverviewGrid.svelte';
+	import OverviewCustomizer from '$lib/components/widgets/OverviewCustomizer.svelte';
 
 	let stats = $state<Stats | null>(null);
 	let nodes = $state<Node[]>([]);
 	let error = $state<string | null>(null);
-	let selected = $state<LiveGroup | null>(null);
-
-	const groups = $derived(groupLive(live.events));
 
 	async function refresh() {
 		try {
@@ -48,13 +42,6 @@
 		pulse: 'M2 12h4l3 8 4-16 3 8h6',
 		bolt: 'M13 2 4 14h7l-1 8 9-12h-7z'
 	};
-
-	// Favorites, front and center: the user's pinned nodes, in their saved order.
-	const favNodes = $derived(
-		favorites.keys
-			.map((k) => nodes.find((n) => n.publicKey.toUpperCase() === k))
-			.filter((n): n is Node => !!n)
-	);
 </script>
 
 <Seo
@@ -65,18 +52,21 @@
 
 <PageHeader eyebrow="Network Observatory" title="Overview">
 	<button
+		onclick={() => (overview.editing = !overview.editing)}
+		class="flex items-center gap-2 rounded-[var(--radius)] border px-3 py-2 text-sm font-600 transition-colors {overview.editing
+			? 'border-signal/50 text-signal bg-signal/10'
+			: 'border-line text-fg-dim hover:border-signal/50 hover:text-signal'}"
+	>
+		<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+			<path d="M4 6h10M4 12h7M4 18h13M16 4v4M20 10v4M12 16v4" />
+		</svg>
+		Customize
+	</button>
+	<button
 		onclick={() => announce.show()}
 		class="border-line text-fg-dim hover:border-signal/50 hover:text-signal flex items-center gap-2 rounded-[var(--radius)] border px-3 py-2 text-sm font-600 transition-colors"
 	>
-		<svg
-			viewBox="0 0 24 24"
-			class="h-4 w-4"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="1.7"
-			stroke-linecap="round"
-			stroke-linejoin="round"
-		>
+		<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
 			<path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2zM9 21h6M10 17v4m4-4v4" />
 		</svg>
 		What's new
@@ -94,36 +84,19 @@
 		</div>
 	{/if}
 
-	<!-- Stat row -->
+	<!-- Fixed stat row -->
 	<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
 		{#each cards as c, i (c.label)}
-			<div
-				class="panel rise relative overflow-hidden px-5 py-5"
-				style="animation-delay:{i * 50}ms"
-			>
+			<div class="panel rise relative overflow-hidden px-5 py-5" style="animation-delay:{i * 50}ms">
 				{#if c.accent}
-					<div
-						class="from-signal/[0.07] absolute inset-0 bg-gradient-to-br to-transparent"
-					></div>
+					<div class="from-signal/[0.07] absolute inset-0 bg-gradient-to-br to-transparent"></div>
 				{/if}
 				<div class="relative">
 					<div class="label flex items-center justify-between">
 						{c.label}
-						<svg
-							viewBox="0 0 24 24"
-							class="h-4 w-4 {c.accent ? 'text-signal' : 'text-fg-faint'}"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"><path d={icons[c.icon]} /></svg
-						>
+						<svg viewBox="0 0 24 24" class="h-4 w-4 {c.accent ? 'text-signal' : 'text-fg-faint'}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d={icons[c.icon]} /></svg>
 					</div>
-					<div
-						class="font-display tnum mt-3 text-4xl font-700 {c.accent
-							? 'text-signal glow-signal'
-							: 'text-fg'}"
-					>
+					<div class="font-display tnum mt-3 text-4xl font-700 {c.accent ? 'text-signal glow-signal' : 'text-fg'}">
 						{fmtNum(c.value)}
 					</div>
 				</div>
@@ -131,114 +104,9 @@
 		{/each}
 	</div>
 
-	<!-- Favorites — pinned nodes, front and center -->
-	{#if favNodes.length}
-		<section class="panel rise mt-6" style="animation-delay:120ms">
-			<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
-				<svg viewBox="0 0 24 24" class="text-amber h-4 w-4" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
-					<path d="M12 2.5l2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.9l-5.8 3.05 1.1-6.45-4.7-4.6 6.5-.95z" />
-				</svg>
-				<h2 class="font-display text-fg text-sm font-700 tracking-wide">FAVORITES</h2>
-				<a href="/nodes" class="label hover:text-signal ml-auto transition-colors">Manage →</a>
-			</div>
-			<div class="grid gap-px sm:grid-cols-2 lg:grid-cols-3">
-				{#each favNodes as n (n.publicKey)}
-					{@const st = nodeStatus(n)}
-					<a href="/nodes/{n.publicKey}" class="panel-hover flex items-center gap-3 px-5 py-3">
-						<Tooltip text={st.label} class="shrink-0"><span class="h-2 w-2 rounded-full" style="background:{st.color}"></span></Tooltip>
-						<div class="min-w-0 flex-1">
-							<div class="text-fg truncate text-sm font-medium">{n.name || shortKey(n.publicKey)}</div>
-							<div class="font-mono text-fg-faint mt-0.5 text-[0.68rem]">{st.label} · {ago(n.lastSeen)}</div>
-						</div>
-						<RoleBadge role={n.role} />
-						<FavoriteStar pubkey={n.publicKey} size="sm" />
-					</a>
-				{/each}
-			</div>
-		</section>
+	<!-- Customizable dashboard -->
+	{#if overview.editing}
+		<OverviewCustomizer />
 	{/if}
-
-	<!-- Two columns -->
-	<div class="mt-6 grid gap-6 lg:grid-cols-5">
-		<!-- Live feed -->
-		<section class="panel rise lg:col-span-3" style="animation-delay:240ms">
-			<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-				<div class="flex items-center gap-2.5">
-					{#if live.connected}<span class="live-dot"></span>{/if}
-					<h2 class="font-display text-fg text-sm font-700 tracking-wide">LIVE FEED</h2>
-				</div>
-				<a href="/live" class="label hover:text-signal transition-colors">View all →</a>
-			</div>
-			<div class="divide-line/50 divide-y">
-				{#if groups.length === 0}
-					<div class="text-fg-faint px-5 py-10 text-center text-sm">
-						Waiting for packets…
-					</div>
-				{:else}
-					{#each groups.slice(0, 9) as g (g.key)}
-						<button
-							onclick={() => (selected = g)}
-							class="panel-hover flex w-full items-center gap-3 px-5 py-2.5 text-left text-sm"
-						>
-							<PayloadTag type={g.payloadType} />
-							<span class="text-fg-dim flex min-w-0 flex-1 items-center gap-2 truncate">
-								<span class="truncate">
-									{#if g.node}
-										<span class="text-fg">{g.node.name || shortKey(g.node.publicKey)}</span>
-									{:else}
-										<span class="font-mono text-fg-faint">{g.messageHash}</span>
-									{/if}
-								</span>
-								{#if g.count > 1}
-									<span
-										class="font-mono text-signal bg-signal/10 shrink-0 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem] tnum"
-										>×{g.count}</span
-									>
-								{/if}
-							</span>
-							<span class="font-mono tnum text-xs" style="color:{snrColor(g.bestSnr)}"
-								>{fmtSnr(g.bestSnr)} dB</span
-							>
-							<span class="font-mono text-fg-faint w-10 text-right text-xs">{ago(g.latest)}</span>
-						</button>
-					{/each}
-				{/if}
-			</div>
-		</section>
-
-		<!-- Recent nodes -->
-		<section class="panel rise lg:col-span-2" style="animation-delay:300ms">
-			<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-				<h2 class="font-display text-fg text-sm font-700 tracking-wide">RECENT NODES</h2>
-				<a href="/nodes" class="label hover:text-signal transition-colors">All →</a>
-			</div>
-			<div class="divide-line/50 divide-y">
-				{#if nodes.length === 0}
-					<div class="text-fg-faint px-5 py-10 text-center text-sm">No nodes yet.</div>
-				{:else}
-					{#each nodes.slice(0, 7) as n (n.publicKey)}
-						<a
-							href="/nodes/{n.publicKey}"
-							class="panel-hover flex items-center gap-3 px-5 py-2.5"
-						>
-							<div class="min-w-0 flex-1">
-								<div class="text-fg truncate text-sm font-medium">
-									{n.name || shortKey(n.publicKey)}
-								</div>
-								<div class="font-mono text-fg-faint mt-0.5 text-[0.68rem]">
-									{shortKey(n.publicKey, 8, 4)}
-								</div>
-							</div>
-							<RoleBadge role={n.role} />
-							<span class="font-mono text-fg-faint w-8 text-right text-xs tnum"
-								>{ago(n.lastSeen)}</span
-							>
-						</a>
-					{/each}
-				{/if}
-			</div>
-		</section>
-	</div>
+	<OverviewGrid base="" {nodes} {stats} />
 </div>
-
-<LiveGroupModal group={selected} onclose={() => (selected = null)} />

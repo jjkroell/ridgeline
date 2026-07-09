@@ -7,6 +7,7 @@
 	import { channels } from '$lib/channels.svelte';
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemap } from '$lib/basemap.svelte';
+	import { overview } from '$lib/overview.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { announce } from '$lib/announce.svelte';
 	import AnnouncementModal from '$lib/components/AnnouncementModal.svelte';
@@ -49,6 +50,7 @@
 		channels.init();
 		favorites.init();
 		basemap.init();
+		overview.init();
 		auth.init();
 		live.start();
 		trackWebGL();

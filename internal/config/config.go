@@ -28,10 +28,11 @@ type Config struct {
 	// high-confidence artifacts are ever deleted. Defaults to true; set false to
 	// disable the sweep.
 	ScrubArtifacts bool `json:"scrubArtifacts"`
-	// NodeRetentionDays is how long a node may go without advertising before the
-	// daily retention sweep removes it (a node still relaying within the last day
-	// is kept regardless). A removed node reappears the moment it transmits again,
-	// so this only clears the genuinely-departed. Defaults to 14; set 0 to disable.
+	// NodeRetentionDays is how long a node may go without ANY activity before the
+	// daily retention sweep removes it. "Activity" means either an advert or a
+	// relay: a node that adverted OR relayed a packet anywhere in the window is
+	// kept. A removed node reappears the moment it transmits again, so this only
+	// clears the genuinely-departed. Defaults to 7; set 0 to disable.
 	NodeRetentionDays int `json:"nodeRetentionDays"`
 	// ObserverRetentionMinutes is how long an observer may go without reporting
 	// (no packet or status) before the retention sweep removes its row. Only the
@@ -81,7 +82,7 @@ func Default() Config {
 		DBPath:                   "ridgeline.db",
 		WebDir:                   "web/build",
 		ScrubArtifacts:           true,
-		NodeRetentionDays:        14,
+		NodeRetentionDays:        7,
 		ObserverRetentionMinutes: 60,
 		Email: Email{
 			Port:     587,

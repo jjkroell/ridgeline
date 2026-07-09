@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"math"
 	"sort"
+	"strings"
+
+	"github.com/jjkroell/ridgeline/internal/meshcore"
 )
 
 // Node is a row from the nodes table, shaped for API responses.
@@ -353,6 +356,39 @@ func (s *Store) rawSince(sinceISO string, limit int) ([]RawObservation, error) {
 		out = append(out, o)
 	}
 	return out, rows.Err()
+}
+
+// RelayHopPrefixesSince returns the set of distinct relay-hop identifiers
+// (uppercase hex, as they appear in packet paths) seen in any multi-hop
+// observation since sinceISO. It's used by the node-retention sweep to detect a
+// node that stopped advertising but is still relaying traffic within the window
+// — the hop identifier is the relay's hash-ID prefix (1/2/3 bytes), so a node
+// whose pubkey starts with one of these prefixes was relaying. Zero-hop packets
+// carry no relay hops and are skipped (path_hops = 0), which also keeps the scan
+// cheap since most adverts are zero-hop.
+func (s *Store) RelayHopPrefixesSince(sinceISO string) (map[string]bool, error) {
+	rows, err := s.db.Query(`SELECT raw_hex FROM observations WHERE received_at >= ? AND path_hops > 0`, sinceISO)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	set := make(map[string]bool)
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		pkt, err := meshcore.DecodeHex(raw)
+		if err != nil || pkt == nil {
+			continue
+		}
+		for _, hop := range pkt.Path {
+			if hop != "" {
+				set[strings.ToUpper(hop)] = true
+			}
+		}
+	}
+	return set, rows.Err()
 }
 
 // NeedsAdvertTxBackfill reports whether the advert_tx_count column was just added

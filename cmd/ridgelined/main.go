@@ -324,6 +324,18 @@ func runNodeRetention(ctx context.Context, st *store.Store, engine *analytics.En
 		if len(keys) == 0 {
 			return
 		}
+		// A node with no advert in the window may still have relayed traffic. The
+		// liveness guard above only reaches the short analytics window, so scan the
+		// full retention window for relay hops and drop any candidate that relayed.
+		relayHops, err := st.RelayHopPrefixesSince(cutoff)
+		if err != nil {
+			log.Warn("node retention: relay scan", "err", err)
+			return
+		}
+		keys = analytics.FilterRelayedWithin(keys, nodes, relayHops)
+		if len(keys) == 0 {
+			return
+		}
 		res, err := st.PurgeTargets(nil, nil, keys)
 		if err != nil {
 			log.Warn("node retention: purge", "err", err)

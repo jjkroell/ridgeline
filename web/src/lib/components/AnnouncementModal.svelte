@@ -5,6 +5,11 @@
 	// Each entry is one new capability, in user-facing terms.
 	const items: { icon: string; title: string; body: string }[] = [
 		{
+			icon: 'M4 6h10M4 12h7M4 18h13M16 4v4M20 10v4M12 16v4',
+			title: 'Build your own dashboard',
+			body: 'The Overview is now yours to arrange — hit Customize to drag cards into any order, show or hide them, and add new ones like a mini map, claimed nodes, top relays, network activity and channels. Your layout is saved on your device.'
+		},
+		{
 			icon: 'M4 6h16v12H4zM4 7l8 6 8-6',
 			title: 'Accounts with email verification',
 			body: 'Create an account, confirm your email, and sign in to unlock the features below.'

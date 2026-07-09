@@ -195,6 +195,13 @@
 						<strong class="text-amber">Set the name back:</strong> this node's advertised name still
 						contains the verification code. Restore its normal name and send another advert — this
 						note clears once Ridgeline sees the change.
+						<strong class="text-amber">Keep this window open until it does.</strong>
+					</p>
+				</div>
+			{:else}
+				<div class="border-signal/40 bg-signal/10 mt-3 rounded-[var(--radius)] border px-3 py-2.5">
+					<p class="text-fg-dim text-xs leading-relaxed">
+						<strong class="text-signal">Ownership confirmed.</strong> You may now close this window.
 					</p>
 				</div>
 			{/if}
@@ -212,9 +219,17 @@
 			</div>
 		{:else if status.mine?.status === 'pending'}
 			<!-- Your pending claim: show the code + instructions, poll for verification -->
+			<div class="border-amber/50 bg-amber/10 mb-3 rounded-[var(--radius)] border px-3 py-2.5">
+				<p class="text-amber text-xs font-700 leading-relaxed">
+					Do not close this window until you are told to.
+				</p>
+				<p class="text-fg-dim mt-1 text-[0.7rem] leading-relaxed">
+					Claiming takes a couple of steps — leave this open until it confirms you can close it.
+				</p>
+			</div>
 			<p class="text-fg-dim text-sm leading-relaxed">
 				To prove you control this node, set its advertised <strong class="text-fg">name</strong> to
-				include this code, then send an advert (or wait for the next one):
+				include this code, then send an advert:
 			</p>
 			<div class="border-line bg-ink-2 mt-3 flex items-center gap-3 rounded-[var(--radius)] border px-4 py-3">
 				<code class="text-signal font-mono text-lg font-700 tracking-[0.2em]">{status.mine.code}</code>
@@ -226,10 +241,9 @@
 			</div>
 			<ul class="text-fg-faint mt-3 space-y-1 text-xs leading-relaxed">
 				<li>
-					• <strong class="text-fg-dim">Repeater / room server:</strong> change the name via its BLE app
-					or serial console, then trigger an advert.
+					• Change the node name via the <strong class="text-fg-dim">MeshCore app</strong> (of your
+					choice) or via <strong class="text-fg-dim">CLI</strong>, then trigger a flood advert.
 				</li>
-				<li>• <strong class="text-fg-dim">Companion:</strong> change the name in the MeshCore app.</li>
 				<li>• We verify the advert's signature, so only your node can complete this.</li>
 				<li>
 					• Once it's verified, <strong class="text-fg-dim">change the name back</strong> and send another

@@ -2,7 +2,7 @@
 // The cookie is authoritative; this store mirrors it for the UI and holds the
 // CSRF token that authenticated mutations must echo. Initialised once from
 // /api/auth/me on app start (auth.init()).
-import { authApi, shares, type AuthUser } from './api';
+import { authApi, account, shares, type AuthUser } from './api';
 
 class Auth {
 	user = $state<AuthUser | null>(null);
@@ -54,6 +54,22 @@ class Auth {
 		const r = await authApi.verifyEmail(token);
 		this.#adopt(r);
 		return r;
+	}
+
+	/** Change display name; updates the cached user on success. */
+	async updateDisplayName(displayName: string) {
+		this.user = await account.updateProfile(this.csrf, displayName);
+	}
+
+	/** Change password (re-auth with the current one). Session stays valid. */
+	async changePassword(currentPassword: string, newPassword: string) {
+		await account.changePassword(this.csrf, currentPassword, newPassword);
+	}
+
+	/** Change email (re-auth required). Updates the cached user; emailVerified
+	 *  flips false until the new address is confirmed. */
+	async changeEmail(currentPassword: string, newEmail: string) {
+		this.user = await account.changeEmail(this.csrf, currentPassword, newEmail);
 	}
 
 	async logout() {

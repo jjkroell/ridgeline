@@ -96,6 +96,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/auth/me", s.authMe)
 	mux.HandleFunc("POST /api/auth/verify", s.authVerifyEmail)
 	mux.HandleFunc("POST /api/auth/resend-verification", s.authResendVerification)
+	// Self-service account editing (authenticated + CSRF via requireUser).
+	mux.HandleFunc("PUT /api/account/profile", s.requireUser(s.accountUpdateProfile))
+	mux.HandleFunc("POST /api/account/password", s.requireUser(s.accountChangePassword))
+	mux.HandleFunc("POST /api/account/email", s.requireUser(s.accountChangeEmail))
 
 	// Node ownership claims (authenticated; creating requires the can_claim gate).
 	mux.HandleFunc("POST /api/claims", s.requireUser(s.claimCreate))

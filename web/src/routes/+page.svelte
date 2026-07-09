@@ -11,6 +11,7 @@
 	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
 	import FavoriteStar from '$lib/components/FavoriteStar.svelte';
 	import { favorites } from '$lib/favorites.svelte';
+	import { announce } from '$lib/announce.svelte';
 
 	let stats = $state<Stats | null>(null);
 	let nodes = $state<Node[]>([]);
@@ -63,6 +64,23 @@
 />
 
 <PageHeader eyebrow="Network Observatory" title="Overview">
+	<button
+		onclick={() => announce.show()}
+		class="border-line text-fg-dim hover:border-signal/50 hover:text-signal flex items-center gap-2 rounded-[var(--radius)] border px-3 py-2 text-sm font-600 transition-colors"
+	>
+		<svg
+			viewBox="0 0 24 24"
+			class="h-4 w-4"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.7"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+		>
+			<path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2zM9 21h6M10 17v4m4-4v4" />
+		</svg>
+		What's new
+	</button>
 	<div class="font-mono text-fg-dim flex items-center gap-2 text-xs">
 		<span class="text-fg-faint">LAST PACKET</span>
 		<span class="text-signal tnum">{ago(stats?.lastPacketAt)} ago</span>

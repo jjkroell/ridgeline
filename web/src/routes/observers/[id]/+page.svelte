@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
+	import { confirmer } from '$lib/confirm.svelte';
 	import { api, admin, type Observer, type ObserverAnalytics, type ObserverStatus, type ObserverTelemetry } from '$lib/api';
 	import { ago, fmtNum, skewColor, fmtSkew, snrColor, roleColor, roleLabel, isFresh } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -54,14 +55,22 @@
 	// observations (no block; re-appears if it publishes again).
 	let deleting = $state(false);
 	async function deleteObserver() {
-		if (!confirm(`Permanently delete observer "${id}" and all of its stored packets? This cannot be undone.`)) return;
+		if (
+			!(await confirmer.ask({
+				title: `Delete observer "${id}"?`,
+				message: 'This permanently removes the observer and all of its stored packets. This cannot be undone.',
+				confirmLabel: 'Delete observer',
+				danger: true
+			}))
+		)
+			return;
 		deleting = true;
 		try {
 			await admin.deleteObservers(auth.csrf, [id]);
 			goto('/observers');
 		} catch (e) {
-			alert(`Delete failed: ${(e as Error).message}`);
 			deleting = false;
+			await confirmer.tell({ title: 'Delete failed', message: (e as Error).message });
 		}
 	}
 
@@ -167,12 +176,13 @@
 		{/if}
 		<WindowToggle options={windows} bind:value={windowSec} />
 		{#if auth.isAdmin}
-			<button
-				onclick={deleteObserver}
-				disabled={deleting}
-				class="border-coral/40 text-coral hover:bg-coral/15 rounded-[var(--radius)] border px-3 py-1 text-xs font-600 transition-colors disabled:opacity-50"
-				title="Permanently delete this observer and its stored packets"
-			>{deleting ? 'Deleting…' : 'Delete observer'}</button>
+			<Tooltip text="Permanently delete this observer and its stored packets">
+				<button
+					onclick={deleteObserver}
+					disabled={deleting}
+					class="border-coral/40 text-coral hover:bg-coral/15 rounded-[var(--radius)] border px-3 py-1 text-xs font-600 transition-colors disabled:opacity-50"
+				>{deleting ? 'Deleting…' : 'Delete observer'}</button>
+			</Tooltip>
 		{/if}
 		<a href="/observers" class="label hover:text-signal transition-colors">← All</a>
 	</div>

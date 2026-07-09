@@ -8,6 +8,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { chime, CHORDS, RINGS } from '$lib/live-audio.svelte';
+	import Tooltip from '$lib/components/Tooltip.svelte';
 
 	onMount(() => chime.load());
 
@@ -18,10 +19,13 @@
 </script>
 
 <div class="label mb-1">Audio</div>
+<Tooltip
+	text={chime.on ? 'Mute node chimes' : 'Play a soft wind chime as pulses reach nodes'}
+	class="block w-full"
+>
 <button
 	onclick={toggle}
 	aria-pressed={chime.on}
-	title={chime.on ? 'Mute node chimes' : 'Play a soft wind chime as pulses reach nodes'}
 	class="flex w-full items-center justify-center gap-1.5 rounded-[var(--radius)] border px-2 py-1 text-[0.68rem] font-medium transition-colors {chime.on
 		? 'border-signal/50 text-signal'
 		: 'border-line text-fg-dim hover:text-fg'}"
@@ -34,6 +38,7 @@
 		<span>Muted</span>
 	{/if}
 </button>
+</Tooltip>
 
 {#if chime.on}
 	<div class="border-line/60 mt-2 space-y-2 border-t pt-2">

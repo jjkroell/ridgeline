@@ -49,12 +49,12 @@
 	<form onsubmit={submit} class="flex flex-col gap-4">
 		{#if mode === 'register'}
 			<label class="block">
-				<span class="label normal-case text-fg-dim mb-1.5 block">Display name / callsign</span>
+				<span class="label normal-case text-fg-dim mb-1.5 block">Display name</span>
 				<input
 					type="text"
 					bind:value={displayName}
 					maxlength="64"
-					placeholder="VE7XYZ"
+					placeholder="Your name or handle"
 					autocomplete="nickname"
 					class="border-line bg-ink-2 text-fg focus:border-signal w-full rounded-xl border px-3.5 py-3 text-base outline-none"
 				/>

@@ -8,6 +8,10 @@
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemap } from '$lib/basemap.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { announce } from '$lib/announce.svelte';
+	import AnnouncementModal from '$lib/components/AnnouncementModal.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import Tooltip from '$lib/components/Tooltip.svelte';
 	import { hasWebGL } from '$lib/webgl';
 
 	let { children } = $props();
@@ -48,6 +52,7 @@
 		auth.init();
 		live.start();
 		trackWebGL();
+		announce.init();
 	});
 
 	const navItems = [
@@ -90,6 +95,10 @@
 		info: 'M12 2a10 10 0 100 20 10 10 0 000-20zM12 8h.01M11 12h1v5h1'
 	};
 </script>
+
+<!-- App-wide "what's new" modal (self-guards on announce.open). -->
+<AnnouncementModal />
+<ConfirmDialog />
 
 {#if isMobileApp}
 	{@render children()}
@@ -176,11 +185,14 @@
 							<span class="label !text-fg-faint block">{auth.isAdmin ? 'Admin' : 'Member'}</span>
 						</span>
 						{#if auth.unseenShares > 0}
-							<span
-								title="{auth.unseenShares} node{auth.unseenShares === 1 ? '' : 's'} newly shared with you"
-								class="bg-signal text-ink grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1.5 text-[0.65rem] font-700"
-								>{auth.unseenShares}</span
+							<Tooltip
+								text="{auth.unseenShares} node{auth.unseenShares === 1 ? '' : 's'} newly shared with you"
 							>
+								<span
+									class="bg-signal text-ink grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1.5 text-[0.65rem] font-700"
+									>{auth.unseenShares}</span
+								>
+							</Tooltip>
 						{/if}
 					</a>
 				{:else}

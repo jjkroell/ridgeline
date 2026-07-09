@@ -205,8 +205,9 @@ func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Unverified accounts cannot sign in. Signal it distinctly so the UI can offer
-	// to resend the confirmation email.
-	if !user.EmailVerified {
+	// to resend the confirmation email. The protected owner is exempt so a botched
+	// email change can never lock the deployment's owner out.
+	if !user.EmailVerified && !user.IsOwner {
 		writeJSONStatus(w, http.StatusForbidden, map[string]any{
 			"error":      "please confirm your email address before signing in — check your inbox for the verification link",
 			"unverified": true,

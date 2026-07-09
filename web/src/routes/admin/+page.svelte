@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
+	import { confirmer } from '$lib/confirm.svelte';
 	import {
 		admin,
 		adminUsers,
@@ -185,7 +186,14 @@
 
 	async function purgeBridge(b: BridgeCandidate) {
 		const captive = b.foreign.filter((f) => f.captive).map((f) => f.key);
-		if (!confirm(`Permanently delete ${captive.length} captive nodes (removed for good) and block the bridge ${b.name} so it can't re-inject (it stays on the Purged list)? This cannot be undone.`))
+		if (
+			!(await confirmer.ask({
+				title: `Purge bridge ${b.name}?`,
+				message: `Permanently deletes ${captive.length} captive node${captive.length === 1 ? '' : 's'} and blocks the bridge so it can't re-inject (it stays on the Purged list). This cannot be undone.`,
+				confirmLabel: 'Purge bridge',
+				danger: true
+			}))
+		)
 			return;
 		busy = b.nodeKey;
 		msg = '';
@@ -216,7 +224,14 @@
 	}
 
 	async function purgeInjector(i: InjectorCandidate) {
-		if (!confirm(`Permanently delete all packets published by ${i.observer} and its ${i.exclusiveCount} exclusively-sourced nodes? This cannot be undone.`))
+		if (
+			!(await confirmer.ask({
+				title: `Purge injector ${i.observer}?`,
+				message: `Permanently deletes all packets published by ${i.observer} and its ${i.exclusiveCount} exclusively-sourced node${i.exclusiveCount === 1 ? '' : 's'}. This cannot be undone.`,
+				confirmLabel: 'Purge injector',
+				danger: true
+			}))
+		)
 			return;
 		busy = i.observer;
 		msg = '';
@@ -248,7 +263,14 @@
 	// Permanently delete a purged entry: sweep any stored data and drop the
 	// blocklist row, so it disappears from the list entirely.
 	async function deletePurged(b: BlockEntry) {
-		if (!confirm(`Permanently delete ${b.name || b.key} and remove it from the list? Any remaining stored data is swept and the block is lifted. This cannot be undone.`))
+		if (
+			!(await confirmer.ask({
+				title: `Delete ${b.name || b.key}?`,
+				message: 'Removes it from the list. Any remaining stored data is swept and the block is lifted. This cannot be undone.',
+				confirmLabel: 'Delete',
+				danger: true
+			}))
+		)
 			return;
 		busy = b.kind + b.key;
 		msg = '';
@@ -272,7 +294,14 @@
 			msg = 'scrub: enter a hex public key (paste the full key for an exact match).';
 			return;
 		}
-		if (!confirm(`Permanently delete the node ${key} and all of its stored data points? This cannot be undone.`))
+		if (
+			!(await confirmer.ask({
+				title: `Scrub node ${key}?`,
+				message: 'Permanently deletes the node and all of its stored data points. This cannot be undone.',
+				confirmLabel: 'Scrub node',
+				danger: true
+			}))
+		)
 			return;
 		scrubbing = true;
 		msg = '';
@@ -398,12 +427,13 @@
 										{#if isBlocked('bridge', b.nodeKey)}
 											<span class="label text-amber">quarantined</span>
 										{:else}
-											<button
-												onclick={() => dismissBridge(b)}
-												disabled={busy === b.nodeKey}
-												class="border-line/60 text-fg-faint hover:text-fg hover:bg-line/30 rounded-[var(--radius)] border px-3 py-1 text-xs font-600 transition-colors disabled:opacity-50"
-												title="Not a bridge — stop flagging this node"
-											>Dismiss</button>
+											<Tooltip text="Not a bridge — stop flagging this node">
+												<button
+													onclick={() => dismissBridge(b)}
+													disabled={busy === b.nodeKey}
+													class="border-line/60 text-fg-faint hover:text-fg hover:bg-line/30 rounded-[var(--radius)] border px-3 py-1 text-xs font-600 transition-colors disabled:opacity-50"
+												>Dismiss</button>
+											</Tooltip>
 											<button
 												onclick={() => quarantineBridge(b)}
 												disabled={busy === b.nodeKey}
@@ -530,18 +560,20 @@
 						<div class="flex items-center gap-3 px-5 py-2.5 text-sm opacity-70">
 							<span class="label !text-[0.58rem]" style="color:{kindColor[b.kind] ?? 'var(--color-fg-dim)'}">{kindLabel(b.kind)}</span>
 							<span class="text-fg-dim min-w-0 flex-1 truncate">{b.name || b.key}</span>
-							<button
-								onclick={() => removeBlock(b)}
-								disabled={busy === b.kind + b.key}
-								class="label hover:text-signal disabled:opacity-50"
-								title="Lift the block (data is already deleted; the node could re-ingest on its next advert)"
-							>unblock</button>
-							<button
-								onclick={() => deletePurged(b)}
-								disabled={busy === b.kind + b.key}
-								class="label hover:text-coral disabled:opacity-50"
-								title="Permanently delete and remove from this list"
-							>delete</button>
+							<Tooltip text="Lift the block (data is already deleted; the node could re-ingest on its next advert)">
+								<button
+									onclick={() => removeBlock(b)}
+									disabled={busy === b.kind + b.key}
+									class="label hover:text-signal disabled:opacity-50"
+								>unblock</button>
+							</Tooltip>
+							<Tooltip text="Permanently delete and remove from this list">
+								<button
+									onclick={() => deletePurged(b)}
+									disabled={busy === b.kind + b.key}
+									class="label hover:text-coral disabled:opacity-50"
+								>delete</button>
+							</Tooltip>
 						</div>
 					{/each}
 				</div>

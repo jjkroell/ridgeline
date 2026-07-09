@@ -130,11 +130,11 @@
 		<form onsubmit={submit} class="flex flex-col gap-4">
 			{#if mode === 'register'}
 				<label class="block">
-					<span class="label normal-case text-fg-dim mb-1.5 block">Display name / callsign</span>
+					<span class="label normal-case text-fg-dim mb-1.5 block">Display name</span>
 					<input
 						type="text"
 						bind:value={displayName}
-						placeholder="VE7XYZ"
+						placeholder="Your name or handle"
 						maxlength="64"
 						autocomplete="nickname"
 						class="border-line bg-ink-2 text-fg focus:border-signal w-full rounded-[var(--radius)] border px-3 py-2 text-sm outline-none"

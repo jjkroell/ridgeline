@@ -190,6 +190,32 @@ func (s *Store) SearchUsersByName(q string, excludeID int64, limit int) ([]UserB
 	return out, rows.Err()
 }
 
+// SetDisplayName updates an account's public display name / callsign.
+func (s *Store) SetDisplayName(id int64, name string) error {
+	_, err := s.db.Exec(`UPDATE users SET display_name = ? WHERE id = ?`, nullStr(name), id)
+	return err
+}
+
+// UpdatePassword replaces an account's password hash. Existing sessions stay
+// valid (they aren't derived from the password); the caller decides whether to
+// revoke them.
+func (s *Store) UpdatePassword(id int64, passwordHash string) error {
+	_, err := s.db.Exec(`UPDATE users SET password_hash = ? WHERE id = ?`, passwordHash, id)
+	return err
+}
+
+// UpdateEmail changes an account's email and resets its verified flag, so the new
+// address must be confirmed. The email is lowercased and must be unique; returns
+// ErrEmailTaken on a collision.
+func (s *Store) UpdateEmail(id int64, newEmail string) error {
+	newEmail = strings.ToLower(strings.TrimSpace(newEmail))
+	_, err := s.db.Exec(`UPDATE users SET email = ?, email_verified = 0 WHERE id = ?`, newEmail, id)
+	if err != nil && isUniqueViolation(err) {
+		return ErrEmailTaken
+	}
+	return err
+}
+
 // SetUserAdmin grants or revokes an account's admin rights (admin action).
 // Claiming is universal, so can_claim is no longer an admin-managed flag.
 func (s *Store) SetUserAdmin(id int64, isAdmin bool) error {

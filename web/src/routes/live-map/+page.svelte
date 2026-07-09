@@ -601,11 +601,12 @@
 									onclick={() => (selected = g)}
 									class="panel-hover flex w-full items-center gap-2 px-3 py-1.5 text-left"
 								>
-									<span
-										class="h-4 w-1 shrink-0 rounded-full"
-										style="background:{hashColor(g.messageHash)}"
-										title="Matches this packet's comet on the map"
-									></span>
+									<Tooltip text="Matches this packet's comet on the map" class="shrink-0">
+										<span
+											class="h-4 w-1 rounded-full"
+											style="background:{hashColor(g.messageHash)}"
+										></span>
+									</Tooltip>
 									<PayloadTag type={g.payloadType} />
 									<span class="min-w-0 flex-1 truncate text-xs">
 										{#if g.node}

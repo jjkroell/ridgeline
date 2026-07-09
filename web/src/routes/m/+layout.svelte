@@ -5,6 +5,7 @@
 	import { theme } from '$lib/theme.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import PwaInstall from '$lib/components/PwaInstall.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	let { children } = $props();
 
@@ -149,6 +150,9 @@
 
 	<!-- Install nudge (once / 30 days while not installed); floats above the tab bar -->
 	<PwaInstall />
+
+	<!-- Styled confirm()/alert() replacement -->
+	<ConfirmDialog />
 
 	<!-- More sheet (absolute within the fixed viewport root → unambiguous anchor) -->
 	{#if moreOpen}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
+	import { confirmer } from '$lib/confirm.svelte';
 	import { admin, type InjectionReport, type BlockEntry, type BridgeCandidate, type InjectorCandidate } from '$lib/api';
 	import { roleColor } from '$lib/format';
 
@@ -66,7 +67,7 @@
 	}
 	async function purgeBridge(b: BridgeCandidate) {
 		const captive = b.foreign.filter((f) => f.captive).map((f) => f.key);
-		if (!confirm(`Permanently delete ${captive.length} captive nodes and block bridge ${b.name}? Cannot be undone.`)) return;
+		if (!(await confirmer.ask({ title: `Purge bridge ${b.name}?`, message: `Permanently deletes ${captive.length} captive node${captive.length === 1 ? '' : 's'} and blocks the bridge. Cannot be undone.`, confirmLabel: 'Purge', danger: true }))) return;
 		busy = b.nodeKey; msg = '';
 		try { const r = await admin.purge(auth.csrf, { bridges: [b.nodeKey], nodes: captive }); await refreshBlocks(); report = null; msg = `Purged ${b.name}: ${r.observations} obs, ${r.nodes} nodes.`; }
 		catch (e) { msg = `purge: ${(e as Error).message}`; } finally { busy = ''; }
@@ -77,7 +78,7 @@
 		catch (e) { msg = `quarantine: ${(e as Error).message}`; } finally { busy = ''; }
 	}
 	async function purgeInjector(i: InjectorCandidate) {
-		if (!confirm(`Permanently delete packets from ${i.observer} + its ${i.exclusiveCount} nodes? Cannot be undone.`)) return;
+		if (!(await confirmer.ask({ title: `Purge injector ${i.observer}?`, message: `Permanently deletes packets from ${i.observer} and its ${i.exclusiveCount} node${i.exclusiveCount === 1 ? '' : 's'}. Cannot be undone.`, confirmLabel: 'Purge', danger: true }))) return;
 		busy = i.observer; msg = '';
 		try { const r = await admin.purge(auth.csrf, { observers: [i.observer], nodes: i.exclusive.map((f) => f.key) }); await refreshBlocks(); report = null; msg = `Purged ${i.observer}: ${r.observations} obs.`; }
 		catch (e) { msg = `purge: ${(e as Error).message}`; } finally { busy = ''; }
@@ -87,7 +88,7 @@
 		try { await admin.unblock(auth.csrf, b.kind, b.key); await refreshBlocks(); } catch (e) { msg = `unblock: ${(e as Error).message}`; } finally { busy = ''; }
 	}
 	async function deletePurged(b: BlockEntry) {
-		if (!confirm(`Permanently delete ${b.name || b.key} and remove from the list?`)) return;
+		if (!(await confirmer.ask({ title: `Delete ${b.name || b.key}?`, message: 'Removes it from the list and sweeps any remaining data. Cannot be undone.', confirmLabel: 'Delete', danger: true }))) return;
 		busy = b.kind + b.key; msg = '';
 		try { await admin.deleteNodes(auth.csrf, [b.key]); await admin.unblock(auth.csrf, b.kind, b.key); await refreshBlocks(); } catch (e) { msg = `delete: ${(e as Error).message}`; } finally { busy = ''; }
 	}
@@ -97,7 +98,7 @@
 		const key = scrubKey.trim().toUpperCase();
 		if (!key) return;
 		if (!/^[0-9A-F]{6,64}$/.test(key)) { msg = 'scrub: enter a hex public key (full key for an exact match).'; return; }
-		if (!confirm(`Permanently delete node ${key} and all of its data points? This cannot be undone.`)) return;
+		if (!(await confirmer.ask({ title: `Scrub node ${key}?`, message: 'Permanently deletes the node and all of its data points. This cannot be undone.', confirmLabel: 'Scrub', danger: true }))) return;
 		scrubbing = true; msg = '';
 		try {
 			const res = await admin.deleteNodes(auth.csrf, [key]);

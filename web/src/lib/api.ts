@@ -448,6 +448,8 @@ export interface AuthUser {
 	blocked: boolean;
 	/** The protected initial admin — cannot be demoted, blocked, or removed. */
 	isOwner: boolean;
+	/** Whether the account's email address has been confirmed. */
+	emailVerified: boolean;
 	createdAt: string;
 	lastLogin?: string;
 }
@@ -509,6 +511,23 @@ export const authApi = {
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ email })
 		}).then(() => undefined)
+};
+
+/** Self-service account editing (authenticated + CSRF). */
+export const account = {
+	/** Change display name; returns the updated account. */
+	updateProfile: (csrf: string, displayName: string) =>
+		mutate<AuthUser>('/api/account/profile', 'PUT', csrf, { displayName }),
+	/** Change password after re-authenticating with the current one. */
+	changePassword: (csrf: string, currentPassword: string, newPassword: string) =>
+		mutate<{ ok: boolean }>('/api/account/password', 'POST', csrf, {
+			currentPassword,
+			newPassword
+		}),
+	/** Change email (re-auth required); the new address must be re-verified. Returns
+	 *  the updated account (emailVerified will be false until confirmed). */
+	changeEmail: (csrf: string, currentPassword: string, newEmail: string) =>
+		mutate<AuthUser>('/api/account/email', 'POST', csrf, { currentPassword, newEmail })
 };
 
 // mutate is the shared helper for authenticated, CSRF-protected state changes

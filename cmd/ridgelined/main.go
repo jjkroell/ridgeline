@@ -106,6 +106,9 @@ func run(log *slog.Logger, configPath string) error {
 	if cfg.NodeRetentionDays > 0 {
 		go runNodeRetention(ctx, st, engine, cfg.NodeRetentionDays, log)
 	}
+	if cfg.ObserverRetentionMinutes > 0 {
+		go runObserverRetention(ctx, st, cfg.ObserverRetentionMinutes, log)
+	}
 	if cfg.ScrubArtifacts {
 		go runArtifactScrub(ctx, st, log)
 	}
@@ -347,6 +350,49 @@ func runNodeRetention(ctx context.Context, st *store.Store, engine *analytics.En
 			return
 		case <-t.C:
 			prune()
+		}
+	}
+}
+
+// observerSweepInterval is how often the stale-observer sweep runs. It's checked
+// frequently relative to the (minutes-scale) retention threshold so a silent
+// observer is cleared shortly after crossing it.
+const observerSweepInterval = 5 * time.Minute
+
+// runObserverRetention periodically removes observer rows that have gone silent
+// for longer than retentionMinutes. Only the observers row is deleted; the
+// packets it reported are kept, and the observer reappears if it publishes again.
+func runObserverRetention(ctx context.Context, st *store.Store, retentionMinutes int, log *slog.Logger) {
+	sweep := func() {
+		cutoff := time.Now().Add(-time.Duration(retentionMinutes) * time.Minute).UTC().Format(time.RFC3339Nano)
+		ids, err := st.DeleteStaleObservers(cutoff)
+		if err != nil {
+			log.Warn("observer retention: sweep", "err", err)
+			return
+		}
+		if len(ids) > 0 {
+			log.Info("observer retention: removed silent observers",
+				"thresholdMinutes", retentionMinutes, "count", len(ids), "observers", ids)
+		}
+	}
+
+	// A short initial delay lets a fresh start ingest current traffic (and any
+	// retained status messages) before the first sweep, so live observers aren't
+	// briefly seen as stale.
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(2 * time.Minute):
+	}
+	sweep()
+	t := time.NewTicker(observerSweepInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			sweep()
 		}
 	}
 }

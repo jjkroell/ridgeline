@@ -319,6 +319,43 @@ func (s *Store) UpsertObserverStatus(id, region, pubkey, statusJSON, radio, rece
 	return err
 }
 
+// DeleteStaleObservers removes observer rows whose last_seen is older than the
+// given RFC3339 cutoff, returning the ids removed. Only the observers row is
+// deleted — the observations (packets) it reported, and its telemetry history,
+// are left intact so past traffic and "heard by" attribution survive. A removed
+// observer reappears the moment it publishes again (its next packet or status
+// re-creates the row), so this only clears observers that have genuinely gone
+// silent.
+func (s *Store) DeleteStaleObservers(cutoff string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rows, err := s.db.Query(`SELECT id FROM observers WHERE last_seen < ?`, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	if _, err := s.db.Exec(`DELETE FROM observers WHERE last_seen < ?`, cutoff); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
 // Close closes the underlying database.
 func (s *Store) Close() error { return s.db.Close() }
 

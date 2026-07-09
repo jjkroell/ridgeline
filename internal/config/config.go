@@ -31,8 +31,14 @@ type Config struct {
 	// NodeRetentionDays is how long a node may go without advertising before the
 	// daily retention sweep removes it (a node still relaying within the last day
 	// is kept regardless). A removed node reappears the moment it transmits again,
-	// so this only clears the genuinely-departed. Defaults to 30; set 0 to disable.
+	// so this only clears the genuinely-departed. Defaults to 14; set 0 to disable.
 	NodeRetentionDays int `json:"nodeRetentionDays"`
+	// ObserverRetentionMinutes is how long an observer may go without reporting
+	// (no packet or status) before the retention sweep removes its row. Only the
+	// observers row is deleted — the packets it reported are kept — and it
+	// reappears the moment it publishes again, so this just tidies observers that
+	// have gone silent. Defaults to 60; set 0 to disable.
+	ObserverRetentionMinutes int `json:"observerRetentionMinutes"`
 	// Email configures outbound transactional mail (verification + notifications).
 	// When Host is empty, email is disabled and those features degrade gracefully.
 	Email Email `json:"email"`
@@ -71,11 +77,12 @@ type MQTT struct {
 // development against the dev MeshCore broker.
 func Default() Config {
 	return Config{
-		ListenAddr:        ":8080",
-		DBPath:            "ridgeline.db",
-		WebDir:            "web/build",
-		ScrubArtifacts:    true,
-		NodeRetentionDays: 30,
+		ListenAddr:               ":8080",
+		DBPath:                   "ridgeline.db",
+		WebDir:                   "web/build",
+		ScrubArtifacts:           true,
+		NodeRetentionDays:        14,
+		ObserverRetentionMinutes: 60,
 		Email: Email{
 			Port:     587,
 			FromName: "Ridgeline",

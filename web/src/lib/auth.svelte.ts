@@ -2,7 +2,7 @@
 // The cookie is authoritative; this store mirrors it for the UI and holds the
 // CSRF token that authenticated mutations must echo. Initialised once from
 // /api/auth/me on app start (auth.init()).
-import { authApi, account, shares, type AuthUser } from './api';
+import { authApi, account, shares, claims, type AuthUser } from './api';
 
 class Auth {
 	user = $state<AuthUser | null>(null);
@@ -12,6 +12,9 @@ class Auth {
 	ready = $state(false);
 	/** Nodes newly shared with the user, not yet seen — drives the account badge. */
 	unseenShares = $state(0);
+	/** Uppercase pubkeys of nodes the current user has verified ownership of — lets
+	 *  the claimed badge show YOUR nodes in a distinct colour from others'. */
+	myClaims = $state<Set<string>>(new Set());
 
 	async init() {
 		try {
@@ -23,6 +26,28 @@ class Auth {
 			// Offline or server error — treat as signed out; UI stays usable.
 		}
 		this.ready = true;
+		this.refreshClaims();
+	}
+
+	/** Load the current user's owned-node pubkeys (empty when signed out). */
+	async refreshClaims() {
+		if (!this.user) {
+			this.myClaims = new Set();
+			return;
+		}
+		try {
+			const list = await claims.mine();
+			this.myClaims = new Set(
+				list.filter((c) => c.status === 'verified').map((c) => c.nodePubkey.toUpperCase())
+			);
+		} catch {
+			/* keep whatever we had */
+		}
+	}
+
+	/** Whether the signed-in user is the verified owner of this node. */
+	ownsNode(pubkey: string): boolean {
+		return this.myClaims.has((pubkey ?? '').toUpperCase());
 	}
 
 	/** Clear the "new shares" badge once the user has seen their list. */
@@ -79,6 +104,7 @@ class Auth {
 			this.user = null;
 			this.csrf = '';
 			this.unseenShares = 0;
+			this.myClaims = new Set();
 		}
 	}
 
@@ -86,6 +112,7 @@ class Auth {
 		this.user = r.user;
 		this.csrf = r.csrfToken ?? '';
 		this.unseenShares = r.unseenShares ?? 0;
+		this.refreshClaims();
 	}
 
 	get loggedIn() {

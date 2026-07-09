@@ -5,6 +5,7 @@
 	import { authApi, claims, shares, type ClaimWithNode, type SharedWithMe } from '$lib/api';
 	import { ago, shortKey } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import OwnershipIcon from '$lib/components/OwnershipIcon.svelte';
 
 	// --- Account settings (self-service edit) ---
 	let dn = $state('');
@@ -385,9 +386,10 @@
 							class="panel-hover flex items-center gap-3 px-5 py-3"
 						>
 							<span class="min-w-0 flex-1">
-								<span class="text-fg block truncate text-sm font-600"
-									>{c.nodeName || shortKey(c.nodePubkey)}</span
-								>
+								<span class="flex items-center gap-1.5">
+									<span class="text-fg truncate text-sm font-600">{c.nodeName || shortKey(c.nodePubkey)}</span>
+									<OwnershipIcon kind={c.status === 'verified' ? 'owned' : 'pending'} />
+								</span>
 								<span class="text-fg-faint block truncate font-mono text-xs">{shortKey(c.nodePubkey, 6, 4)}</span>
 							</span>
 							{#if c.status === 'verified'}
@@ -427,28 +429,11 @@
 				<div class="divide-line/60 divide-y">
 					{#each sharedWithMe as sh (sh.nodePubkey)}
 						<a href="/nodes/{sh.nodePubkey}" class="panel-hover flex items-center gap-3 px-5 py-3">
-							<span
-								class="bg-signal/15 text-signal grid h-8 w-8 shrink-0 place-items-center rounded-full"
-							>
-								<svg
-									viewBox="0 0 24 24"
-									class="h-4 w-4"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="1.6"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									><path d="M12 21s-7-4.35-7-11a7 7 0 0 1 14 0c0 6.65-7 11-7 11z" /><circle
-										cx="12"
-										cy="10"
-										r="2.5"
-									/></svg
-								>
-							</span>
 							<span class="min-w-0 flex-1">
-								<span class="text-fg block truncate text-sm font-600"
-									>{sh.nodeName || shortKey(sh.nodePubkey)}</span
-								>
+								<span class="flex items-center gap-1.5">
+									<span class="text-fg truncate text-sm font-600">{sh.nodeName || shortKey(sh.nodePubkey)}</span>
+									<OwnershipIcon kind="shared" sharedBy={sh.sharedByName} />
+								</span>
 								<span class="text-fg-faint block truncate text-xs"
 									>Shared by {sh.sharedByName} · {ago(sh.createdAt)}</span
 								>

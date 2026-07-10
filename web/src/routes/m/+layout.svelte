@@ -29,6 +29,7 @@
 		{ href: '/m/account', label: 'Account', icon: 'account', desc: 'Sign in or manage your account' },
 		{ href: '/m/map', label: 'Map', icon: 'map', desc: 'Node locations & coverage' },
 		{ href: '/m/analytics', label: 'Analytics', icon: 'analytics', desc: 'Mesh-wide health & traffic' },
+		{ href: '/m/topology', label: 'Topology', icon: 'topology', desc: 'Relay backbone graph' },
 		{ href: '/m/channels', label: 'Channels', icon: 'channels', desc: 'Decrypted group chat' },
 		{ href: '/m/identity', label: 'Identity', icon: 'keys', desc: 'Collisions & key generator' },
 		{ href: '/m/observers', label: 'Observers', icon: 'observers', desc: 'Listening posts & telemetry' },
@@ -43,6 +44,7 @@
 		more: 'M5 12h.01M12 12h.01M19 12h.01',
 		livemap: 'M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2M8 8a5 5 0 0 0 0 8M16 8a5 5 0 0 1 0 8M12 11.2a1 1 0 1 0 0 1.6 1 1 0 0 0 0-1.6z',
 		analytics: 'M5 21V11M12 21V4M19 21v-7M3 21h18',
+		topology: 'M6 8a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM18 8a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM12 21a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM7 7l4 9M17 7l-4 9',
 		channels: 'M21 11.5a7.5 7.5 0 0 1-10.8 6.7L3.5 20l1.3-5A7.5 7.5 0 1 1 21 11.5z',
 		observers: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
 		admin: 'M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z',
@@ -65,6 +67,7 @@
 		if (p.startsWith('/m/live')) return 'Feed';
 		if (p.startsWith('/m/map')) return 'Map';
 		if (p.startsWith('/m/analytics')) return 'Analytics';
+		if (p.startsWith('/m/topology')) return 'Topology';
 		if (p.startsWith('/m/channels')) return 'Channels';
 		if (p.startsWith('/m/identity')) return 'Node Identity';
 		if (p.startsWith('/m/observers')) return p === '/m/observers' ? 'Observers' : 'Observer';

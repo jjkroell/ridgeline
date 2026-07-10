@@ -8,7 +8,12 @@
 	import { roleColor, shortKey } from '$lib/format';
 	import type { TopologyNode, TopologyEdge } from '$lib/api';
 
-	let { nodes, edges }: { nodes: TopologyNode[]; edges: TopologyEdge[] } = $props();
+	// nodePath lets the mobile PWA (/m/nodes) reuse this with its own detail route.
+	let {
+		nodes,
+		edges,
+		nodePath = '/nodes'
+	}: { nodes: TopologyNode[]; edges: TopologyEdge[]; nodePath?: string } = $props();
 
 	let canvas: HTMLCanvasElement;
 	let raf = 0;
@@ -90,6 +95,15 @@
 			lastY = 0,
 			downX = 0,
 			downY = 0;
+		// Active touch/mouse pointers → two of them = pinch-zoom (mobile).
+		const pointers = new Map<number, { x: number; y: number }>();
+		let pinchDist = 0;
+		const pinch = () => {
+			const p = [...pointers.values()];
+			const dx = p[0].x - p[1].x,
+				dy = p[0].y - p[1].y;
+			return { dist: Math.hypot(dx, dy), cx: (p[0].x + p[1].x) / 2, cy: (p[0].y + p[1].y) / 2 };
+		};
 		const wx = (sx: number) => (sx - tx) / scale;
 		const wy = (sy: number) => (sy - ty) / scale;
 		const rad = (p: PN) => 3 + Math.sqrt(p.n.relayed / maxRelayed) * 9;
@@ -220,10 +234,23 @@
 		const onDown = (ev: PointerEvent) => {
 			canvas.setPointerCapture(ev.pointerId);
 			const rect = canvas.getBoundingClientRect();
-			lastX = downX = ev.clientX - rect.left;
-			lastY = downY = ev.clientY - rect.top;
+			const mx = ev.clientX - rect.left,
+				my = ev.clientY - rect.top;
+			pointers.set(ev.pointerId, { x: mx, y: my });
+			if (pointers.size === 2) {
+				// second finger down → start pinch, abandon any single-touch gesture
+				if (dragNode >= 0) {
+					P[dragNode].fixed = false;
+					dragNode = -1;
+				}
+				panning = false;
+				pinchDist = pinch().dist;
+				return;
+			}
+			lastX = downX = mx;
+			lastY = downY = my;
 			moved = false;
-			const hit = nodeAt(lastX, lastY);
+			const hit = nodeAt(mx, my);
 			if (hit >= 0) {
 				dragNode = hit;
 				P[hit].fixed = true;
@@ -236,6 +263,18 @@
 			const rect = canvas.getBoundingClientRect(),
 				mx = ev.clientX - rect.left,
 				my = ev.clientY - rect.top;
+			if (pointers.has(ev.pointerId)) pointers.set(ev.pointerId, { x: mx, y: my });
+			if (pointers.size === 2) {
+				const { dist, cx, cy } = pinch();
+				if (pinchDist > 0 && dist > 0) {
+					const ns = Math.max(0.15, Math.min(6, scale * (dist / pinchDist)));
+					tx = cx - (cx - tx) * (ns / scale);
+					ty = cy - (cy - ty) * (ns / scale);
+					scale = ns;
+				}
+				pinchDist = dist;
+				return;
+			}
 			if (Math.abs(mx - downX) + Math.abs(my - downY) > 3) moved = true;
 			if (dragNode >= 0) {
 				P[dragNode].x = wx(mx);
@@ -259,9 +298,11 @@
 			} catch {
 				/* ignore */
 			}
+			pointers.delete(ev.pointerId);
+			if (pointers.size < 2) pinchDist = 0;
 			if (dragNode >= 0) {
 				P[dragNode].fixed = false;
-				if (!moved) goto(`/nodes/${P[dragNode].n.publicKey}`);
+				if (!moved) goto(`${nodePath}/${P[dragNode].n.publicKey}`);
 				dragNode = -1;
 			}
 			panning = false;
@@ -275,6 +316,7 @@
 		canvas.addEventListener('pointerdown', onDown);
 		canvas.addEventListener('pointermove', onMove);
 		canvas.addEventListener('pointerup', onUp);
+		canvas.addEventListener('pointercancel', onUp);
 		canvas.addEventListener('pointerleave', onLeave);
 		const ro = new ResizeObserver(() => {
 			const d = fit();
@@ -298,6 +340,7 @@
 			canvas.removeEventListener('pointerdown', onDown);
 			canvas.removeEventListener('pointermove', onMove);
 			canvas.removeEventListener('pointerup', onUp);
+			canvas.removeEventListener('pointercancel', onUp);
 			canvas.removeEventListener('pointerleave', onLeave);
 		};
 	});
@@ -311,7 +354,7 @@
 </script>
 
 <div class="relative h-full w-full overflow-hidden">
-	<canvas bind:this={canvas} class="h-full w-full" style="cursor:grab"></canvas>
+	<canvas bind:this={canvas} class="h-full w-full" style="cursor:grab;touch-action:none"></canvas>
 	<button
 		onclick={() => resetView()}
 		class="border-line bg-panel/85 text-fg-dim hover:border-signal/50 hover:text-signal absolute top-3 right-3 rounded-[var(--radius)] border px-2.5 py-1 font-mono text-[0.68rem] font-600 backdrop-blur transition-colors"
@@ -325,6 +368,6 @@
 				><span class="inline-block h-2.5 w-2.5 rounded-full" style="background:{roleColor(l.role)}"></span>{l.label}</span
 			>
 		{/each}
-		<span class="text-fg-faint w-full">scroll = zoom · drag = pan · drag a node = move it · click a node = open it</span>
+		<span class="text-fg-faint w-full">scroll / pinch = zoom · drag = pan · drag a node = move it · tap a node = open it</span>
 	</div>
 </div>

@@ -25,6 +25,21 @@
 
 		const dpr = window.devicePixelRatio || 1;
 		const ctx = canvas.getContext('2d')!;
+
+		// Canvas can't parse `var(--…)`, so resolve the role palette to concrete
+		// hex once from the computed stylesheet (theme-aware). roleColor() returns
+		// CSS custom properties — fine for HTML, useless for a 2D context.
+		const cs = getComputedStyle(document.documentElement);
+		const cvar = (name: string) => cs.getPropertyValue(name).trim();
+		const roleHex: Record<string, string> = {
+			Repeater: cvar('--color-role-repeater'),
+			ChatNode: cvar('--color-role-companion'),
+			RoomServer: cvar('--color-role-room'),
+			Sensor: cvar('--color-role-sensor'),
+			Observer: cvar('--color-role-observer')
+		};
+		const fallbackHex = cvar('--color-fg-faint') || '#8b9bad';
+		const fillFor = (role: string) => roleHex[role] || fallbackHex;
 		const fit = () => {
 			const W = canvas.clientWidth,
 				H = canvas.clientHeight;
@@ -56,6 +71,12 @@
 			P[e.b].deg++;
 		}
 		const maxRelayed = Math.max(1, ...gNodes.map((n) => n.relayed));
+
+		// Only the busiest ~12 nodes ("major hubs") carry a persistent label so the
+		// view isn't a wall of names; everything else is revealed on hover. Cutoff
+		// is the 12th-highest degree, floored so tiny graphs still label a few.
+		const degsSorted = P.map((p) => p.deg).sort((a, b) => b - a);
+		const hubCutoff = Math.max(4, degsSorted[Math.min(degsSorted.length - 1, 11)] ?? 4);
 
 		let scale = 1,
 			tx = 0,
@@ -160,17 +181,21 @@
 				ctx.globalAlpha = dim ? 0.2 : 1;
 				ctx.beginPath();
 				ctx.arc(p.x, p.y, r, 0, 7);
-				ctx.fillStyle = roleColor(p.n.role);
+				ctx.fillStyle = fillFor(p.n.role);
 				ctx.fill();
 				if (i === hover) {
 					ctx.lineWidth = 2 / scale;
 					ctx.strokeStyle = '#e6edf3';
 					ctx.stroke();
 				}
-				if (i === hover || (hl && adj[hover].has(i)) || (!hl && p.deg >= 3)) {
+				const isHub = p.deg >= hubCutoff;
+				if (i === hover || (hl && adj[hover].has(i)) || (!hl && isHub)) {
 					ctx.globalAlpha = 1;
-					ctx.fillStyle = '#c7d2de';
-					ctx.font = `${11 / scale}px ui-sans-serif, system-ui`;
+					// major hubs read brighter + a touch larger than the spoke names
+					// that surface on hover
+					const hubLabel = isHub && !hl;
+					ctx.fillStyle = hubLabel ? '#e6edf3' : '#c7d2de';
+					ctx.font = `${(hubLabel ? 12 : 11) / scale}px ui-sans-serif, system-ui`;
 					ctx.fillText((p.n.name || shortKey(p.n.publicKey)).slice(0, 22), p.x + r + 2 / scale, p.y + 3 / scale);
 				}
 			}

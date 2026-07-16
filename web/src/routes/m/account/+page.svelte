@@ -2,9 +2,11 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
-	import { claims, shares, type ClaimWithNode, type SharedWithMe } from '$lib/api';
+	import { authApi, claims, shares, type ClaimWithNode, type SharedWithMe } from '$lib/api';
 	import { ago, shortKey } from '$lib/format';
 	import OwnershipIcon from '$lib/components/OwnershipIcon.svelte';
+	import AccountSettings from '$lib/components/AccountSettings.svelte';
+	import DeleteAccountPanel from '$lib/components/DeleteAccountPanel.svelte';
 
 	let myNodes = $state<ClaimWithNode[]>([]);
 	async function loadMyNodes() {
@@ -33,6 +35,16 @@
 	async function signOut() {
 		await auth.logout();
 		goto('/m');
+	}
+
+	let settingsOpen = $state(false);
+
+	let resendMsg = $state('');
+	async function resendVerification() {
+		if (!auth.user) return;
+		resendMsg = '';
+		await authApi.resendVerification(auth.user.email);
+		resendMsg = 'Sent — check your inbox.';
 	}
 </script>
 
@@ -69,6 +81,18 @@
 {:else}
 	{@const u = auth.user}
 	<div class="flex flex-col gap-4 px-4 py-5">
+		{#if u && !u.emailVerified}
+			<div class="border-amber/40 bg-amber/10 rounded-xl border px-4 py-3">
+				<p class="text-fg-dim text-sm leading-relaxed">
+					<strong class="text-amber">Confirm your email.</strong>
+					We sent a link to <strong class="text-fg break-all">{u.email}</strong>. Until it's
+					confirmed you won't be able to sign in again.
+					<button onclick={resendVerification} class="text-signal underline">Resend</button
+					>{#if resendMsg}<span class="text-signal"> {resendMsg}</span>{/if}
+				</p>
+			</div>
+		{/if}
+
 		<!-- Profile -->
 		<div class="panel px-4 py-4">
 			<div class="flex items-center gap-3">
@@ -91,6 +115,38 @@
 				{/if}
 				<span class="text-fg-faint self-center text-xs">joined {ago(u?.createdAt)}</span>
 			</div>
+		</div>
+
+		<!-- Account settings -->
+		<div class="panel overflow-hidden">
+			<button
+				onclick={() => (settingsOpen = !settingsOpen)}
+				aria-expanded={settingsOpen}
+				class="active:bg-line/40 flex w-full items-center gap-2 px-4 py-3 text-left {settingsOpen
+					? 'border-line/70 border-b'
+					: ''}"
+			>
+				<span class="font-display text-fg text-sm font-700">Account settings</span>
+				{#if u && !u.emailVerified}
+					<span class="bg-amber/15 text-amber rounded-full px-2 py-0.5 text-xs font-600"
+						>Email unconfirmed</span
+					>
+				{/if}
+				<svg
+					viewBox="0 0 24 24"
+					class="text-fg-faint ml-auto h-4 w-4 shrink-0 transition-transform {settingsOpen
+						? 'rotate-180'
+						: ''}"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.8"
+					stroke-linecap="round"
+					stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg
+				>
+			</button>
+			{#if settingsOpen}
+				<AccountSettings compact />
+			{/if}
 		</div>
 
 		<!-- My nodes -->
@@ -174,6 +230,9 @@
 				<span class="text-fg-faint">›</span>
 			</a>
 		{/if}
+
+		<!-- Danger zone -->
+		<DeleteAccountPanel home="/m" compact />
 
 		<button
 			onclick={signOut}

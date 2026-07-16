@@ -108,6 +108,17 @@ class Auth {
 		}
 	}
 
+	/** Permanently delete the current account (re-auth with password). The server
+	 *  releases the user's nodes and clears the session; we drop local state so the
+	 *  UI reflects a signed-out user immediately. */
+	async deleteAccount(password: string) {
+		await account.deleteAccount(this.csrf, password);
+		this.user = null;
+		this.csrf = '';
+		this.unseenShares = 0;
+		this.myClaims = new Set();
+	}
+
 	#adopt(r: { user: AuthUser | null; csrfToken?: string; unseenShares?: number }) {
 		this.user = r.user;
 		this.csrf = r.csrfToken ?? '';

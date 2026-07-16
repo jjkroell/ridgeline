@@ -529,7 +529,11 @@ export const account = {
 	/** Change email (re-auth required); the new address must be re-verified. Returns
 	 *  the updated account (emailVerified will be false until confirmed). */
 	changeEmail: (csrf: string, currentPassword: string, newEmail: string) =>
-		mutate<AuthUser>('/api/account/email', 'POST', csrf, { currentPassword, newEmail })
+		mutate<AuthUser>('/api/account/email', 'POST', csrf, { currentPassword, newEmail }),
+	/** Permanently delete the caller's own account (re-auth with password). Every
+	 *  node they owned is released and marked "previously owned by …". */
+	deleteAccount: (csrf: string, password: string) =>
+		mutate<{ ok: boolean }>('/api/account/delete', 'POST', csrf, { password })
 };
 
 // mutate is the shared helper for authenticated, CSRF-protected state changes
@@ -579,6 +583,9 @@ export interface Claim {
 export interface ClaimStatus {
 	/** The verified owner (public), if any. */
 	owner?: { userId: number; displayName: string };
+	/** Display name of the node's last owner, kept after they deleted their
+	 *  account. Only set when the node currently has no owner. */
+	previousOwner?: string;
 	ownedByMe: boolean;
 	/** The requesting user's own claim on this node, if any. */
 	mine?: Claim;

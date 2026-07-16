@@ -102,7 +102,11 @@
 
 <!-- App-wide "what's new" modal (self-guards on announce.open). -->
 <AnnouncementModal />
-<ConfirmDialog />
+<!-- The /m app layout mounts its own ConfirmDialog; only render one here on the
+     desktop app so the confirmer singleton doesn't drive two stacked dialogs. -->
+{#if !isMobileApp}
+	<ConfirmDialog />
+{/if}
 
 {#if isMobileApp}
 	{@render children()}

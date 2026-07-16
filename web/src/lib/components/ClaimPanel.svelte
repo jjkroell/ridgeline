@@ -267,10 +267,16 @@
 				{@render keyProof()}
 			</div>
 		{:else if !status.loggedIn}
+			{#if status.previousOwner}
+				<p class="text-fg-faint mb-2 text-xs">Previously owned by {status.previousOwner}.</p>
+			{/if}
 			<p class="text-fg-dim text-sm">
 				<a href="/login" class="text-signal hover:underline">Sign in</a> to claim your nodes.
 			</p>
 		{:else}
+			{#if status.previousOwner}
+				<p class="text-fg-faint mb-2 text-xs">Previously owned by {status.previousOwner}.</p>
+			{/if}
 			<div class="flex flex-wrap items-center gap-3">
 				<p class="text-fg-dim text-sm">Is this your node?</p>
 				<button

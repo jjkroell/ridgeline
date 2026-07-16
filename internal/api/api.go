@@ -100,6 +100,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/account/profile", s.requireUser(s.accountUpdateProfile))
 	mux.HandleFunc("POST /api/account/password", s.requireUser(s.accountChangePassword))
 	mux.HandleFunc("POST /api/account/email", s.requireUser(s.accountChangeEmail))
+	mux.HandleFunc("POST /api/account/delete", s.requireUser(s.accountDelete))
 
 	// Node ownership claims (authenticated; creating requires the can_claim gate).
 	mux.HandleFunc("POST /api/claims", s.requireUser(s.claimCreate))

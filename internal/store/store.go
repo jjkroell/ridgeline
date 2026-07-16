@@ -27,7 +27,11 @@ CREATE TABLE IF NOT EXISTS nodes (
 	last_advert  TEXT,
 	advert_count INTEGER NOT NULL DEFAULT 0,
 	advert_tx_count INTEGER NOT NULL DEFAULT 0,
-	hash_size    INTEGER NOT NULL DEFAULT 0
+	hash_size    INTEGER NOT NULL DEFAULT 0,
+	-- Display name of the node's last verified owner, retained after that owner
+	-- deleted their account (so the node can show "previously owned by …").
+	-- Cleared when the node gains a new verified owner.
+	prev_owner_name TEXT
 );
 
 CREATE TABLE IF NOT EXISTS observers (
@@ -263,6 +267,9 @@ func Open(path string) (*Store, error) {
 	// backfill from the stored observation history.
 	needAdvertTxBackfill := !columnExists(db, "nodes", "advert_tx_count")
 	db.Exec(`ALTER TABLE nodes ADD COLUMN advert_tx_count INTEGER NOT NULL DEFAULT 0`)
+	// prev_owner_name records a node's last verified owner after they delete their
+	// account, so the public page can show "previously owned by …".
+	db.Exec(`ALTER TABLE nodes ADD COLUMN prev_owner_name TEXT`)
 	// User account status columns (added after the initial users table shipped).
 	db.Exec(`ALTER TABLE users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE users ADD COLUMN protected INTEGER NOT NULL DEFAULT 0`)

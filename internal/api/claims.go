@@ -18,11 +18,15 @@ const claimTTL = 30 * time.Minute
 // claimStatus is the shape returned by GET /api/nodes/{pubkey}/claim. Owner is
 // public (a "claimed by" badge); Mine + CanClaim reflect the requesting user.
 type claimStatus struct {
-	Owner     *store.OwnerInfo `json:"owner,omitempty"`
-	OwnedByMe bool             `json:"ownedByMe"`
-	Mine      *store.Claim     `json:"mine,omitempty"`
-	LoggedIn  bool             `json:"loggedIn"`
-	CanClaim  bool             `json:"canClaim"` // requester is allowed to start a claim
+	Owner *store.OwnerInfo `json:"owner,omitempty"`
+	// PreviousOwner is the display name of the node's last owner, retained after
+	// that owner deleted their account. Only set when the node currently has no
+	// owner; lets the page show "previously owned by …".
+	PreviousOwner string       `json:"previousOwner,omitempty"`
+	OwnedByMe     bool         `json:"ownedByMe"`
+	Mine          *store.Claim `json:"mine,omitempty"`
+	LoggedIn      bool         `json:"loggedIn"`
+	CanClaim      bool         `json:"canClaim"` // requester is allowed to start a claim
 	// NameNeedsReset is true when the caller owns the node and its current
 	// advertised name still contains the code used to verify — i.e. the owner
 	// hasn't yet restored the real name and re-advertised.
@@ -41,6 +45,12 @@ func (s *Server) nodeClaimStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if ok {
 		out.Owner = &owner
+	} else {
+		// No current owner — surface a "previously owned by" marker if one was
+		// left behind by an owner who deleted their account.
+		if prev, err := s.store.NodePrevOwner(pubkey); err == nil {
+			out.PreviousOwner = prev
+		}
 	}
 
 	if user, _, ok := s.currentUser(r); ok {

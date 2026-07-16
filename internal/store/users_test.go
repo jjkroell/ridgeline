@@ -173,3 +173,60 @@ func TestSessionExpiryAndPrune(t *testing.T) {
 		t.Error("live session should survive prune")
 	}
 }
+
+func TestDeleteUserAndReleaseNodes(t *testing.T) {
+	st := testStore(t)
+	st.CreateUser("owner@example.com", "h", "Owner") // first = protected owner
+	u, _ := st.CreateUser("claimer@example.com", "h", "Claimer")
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+
+	const nodeA = "AA11223344556677889900AABBCCDDEEFF00112233445566778899AABBCCDDEE"
+	const nodeB = "BB11223344556677889900AABBCCDDEEFF00112233445566778899AABBCCDDEE"
+	for _, pk := range []string{nodeA, nodeB} {
+		st.db.Exec(`INSERT INTO nodes (pubkey,name,role,has_location,first_seen,last_seen,advert_count,advert_tx_count,hash_size)
+			VALUES (?,?, 'Repeater',0,?,?,1,1,3)`, pk, "Node", now, now)
+	}
+
+	// The user owns nodeA (verified) and has a pending claim on nodeB.
+	if _, err := st.CreateVerifiedClaim(nodeA, u.ID); err != nil {
+		t.Fatalf("verify nodeA: %v", err)
+	}
+	if _, err := st.CreateOrRefreshClaim(nodeB, u.ID, "PEND01", 30*time.Minute); err != nil {
+		t.Fatalf("pending nodeB: %v", err)
+	}
+	if !st.HasPendingClaim(nodeB) {
+		t.Fatal("nodeB should have a pending claim before deletion")
+	}
+
+	if err := st.DeleteUserAndReleaseNodes(u.ID, "Claimer"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	// Account gone.
+	if _, ok, _ := st.GetUserByID(u.ID); ok {
+		t.Error("user should be deleted")
+	}
+	// nodeA released (no owner) but stamped with the previous owner.
+	if _, ok, _ := st.NodeOwner(nodeA); ok {
+		t.Error("nodeA should have no current owner")
+	}
+	if prev, _ := st.NodePrevOwner(nodeA); prev != "Claimer" {
+		t.Errorf("nodeA prev owner = %q, want Claimer", prev)
+	}
+	// The pending claim on nodeB is gone (cascade) and not stamped (never owned).
+	if st.HasPendingClaim(nodeB) {
+		t.Error("nodeB pending claim should be cleared after deletion")
+	}
+	if prev, _ := st.NodePrevOwner(nodeB); prev != "" {
+		t.Errorf("nodeB prev owner = %q, want empty (never owned)", prev)
+	}
+
+	// A new owner claiming nodeA clears the previous-owner marker.
+	u2, _ := st.CreateUser("next@example.com", "h", "Next")
+	if _, err := st.CreateVerifiedClaim(nodeA, u2.ID); err != nil {
+		t.Fatalf("reclaim nodeA: %v", err)
+	}
+	if prev, _ := st.NodePrevOwner(nodeA); prev != "" {
+		t.Errorf("nodeA prev owner = %q after reclaim, want empty", prev)
+	}
+}

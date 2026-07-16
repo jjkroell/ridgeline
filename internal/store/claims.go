@@ -112,6 +112,21 @@ func (s *Store) ClaimedNodeKeys() (map[string]bool, error) {
 	return set, rows.Err()
 }
 
+// NodePrevOwner returns the display name recorded when the node's last verified
+// owner deleted their account (empty when there is none). Meaningful only for a
+// node that currently has no owner — it is cleared the moment a node is re-claimed.
+func (s *Store) NodePrevOwner(nodePubkey string) (string, error) {
+	var name sql.NullString
+	err := s.db.QueryRow(`SELECT prev_owner_name FROM nodes WHERE pubkey = ?`, strings.ToUpper(nodePubkey)).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return name.String, nil
+}
+
 // UserClaim returns a user's claim on a node, if any.
 func (s *Store) UserClaim(nodePubkey string, userID int64) (Claim, bool, error) {
 	nodePubkey = strings.ToUpper(nodePubkey)
@@ -208,6 +223,8 @@ func (s *Store) CreateVerifiedClaim(nodePubkey string, userID int64) (Claim, err
 	if err != nil {
 		return Claim{}, err
 	}
+	// A new verified owner supersedes any "previously owned by" marker.
+	s.db.Exec(`UPDATE nodes SET prev_owner_name = NULL WHERE pubkey = ?`, nodePubkey)
 	s.loadPendingClaims() // a promoted pending claim leaves the pending set
 	c, _, err := s.UserClaim(nodePubkey, userID)
 	return c, err
@@ -285,6 +302,8 @@ func (s *Store) VerifyPendingClaims(nodePubkey, advertName string) ([]Claim, err
 			WHERE id = ? AND status = 'pending'`, now, c.id); err != nil {
 			return verified, err
 		}
+		// A new verified owner supersedes any "previously owned by" marker.
+		s.db.Exec(`UPDATE nodes SET prev_owner_name = NULL WHERE pubkey = ?`, nodePubkey)
 		verified = append(verified, Claim{ID: c.id, NodePubkey: nodePubkey, UserID: c.userID, Status: "verified", VerifiedAt: now})
 		break
 	}

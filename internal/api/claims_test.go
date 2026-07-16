@@ -97,3 +97,71 @@ func TestClaimFlow(t *testing.T) {
 		t.Error("node should be unowned after release")
 	}
 }
+
+func TestAccountDeleteReleasesNodes(t *testing.T) {
+	st, base, cleanup := newAuthEnv(t)
+	defer cleanup()
+
+	// Seed the node.
+	pkt, err := meshcore.DecodeHex(claimAdvertHex)
+	if err != nil || pkt.Advert == nil {
+		t.Fatalf("decode advert: %v", err)
+	}
+	node := pkt.Advert.PublicKey
+	if err := st.Record(store.Observation{Packet: pkt, RawHex: claimAdvertHex, ReceivedAt: time.Now()}); err != nil {
+		t.Fatalf("record node: %v", err)
+	}
+
+	// First account = protected owner; second is a normal member.
+	owner := newClient(t, base)
+	owner.do("POST", "/api/auth/register",
+		map[string]string{"email": "owner@example.com", "password": "hunter2hunter2", "displayName": "Owner"}, false)
+	member := newClient(t, base)
+	member.do("POST", "/api/auth/register",
+		map[string]string{"email": "member@example.com", "password": "hunter2hunter2", "displayName": "Member"}, false)
+
+	// Give the member verified ownership of the node (bypass the advert dance).
+	mu, _, _ := st.GetUserByEmail("member@example.com")
+	if _, err := st.CreateVerifiedClaim(node, mu.ID); err != nil {
+		t.Fatalf("verified claim: %v", err)
+	}
+
+	// Wrong password → 403, account untouched.
+	if resp, _ := member.do("POST", "/api/account/delete", map[string]string{"password": "nope"}, true); resp.StatusCode != 403 {
+		t.Fatalf("wrong password should be 403, got %d", resp.StatusCode)
+	}
+	if _, ok, _ := st.GetUserByEmail("member@example.com"); !ok {
+		t.Fatal("member should still exist after a failed delete")
+	}
+
+	// The protected owner cannot delete their own account.
+	if resp, _ := owner.do("POST", "/api/account/delete", map[string]string{"password": "hunter2hunter2"}, true); resp.StatusCode != 403 {
+		t.Fatalf("owner self-delete should be 403, got %d", resp.StatusCode)
+	}
+
+	// Member deletes their account.
+	if resp, _ := member.do("POST", "/api/account/delete", map[string]string{"password": "hunter2hunter2"}, true); resp.StatusCode != 200 {
+		t.Fatalf("member delete should be 200, got %d", resp.StatusCode)
+	}
+	if _, ok, _ := st.GetUserByEmail("member@example.com"); ok {
+		t.Error("member account should be gone")
+	}
+	// Node released and stamped with the former owner's name.
+	if _, ok, _ := st.NodeOwner(node); ok {
+		t.Error("node should have no current owner")
+	}
+	if prev, _ := st.NodePrevOwner(node); prev != "Member" {
+		t.Errorf("prev owner = %q, want Member", prev)
+	}
+	// Session cleared — /me now returns a null user.
+	if _, body := member.do("GET", "/api/auth/me", nil, false); body["user"] != nil {
+		t.Errorf("deleted member's session should be void, got user %v", body["user"])
+	}
+
+	// The public claim status surfaces the previous owner to a fresh visitor.
+	visitor := newClient(t, base)
+	_, cs := visitor.do("GET", "/api/nodes/"+node+"/claim", nil, false)
+	if cs["previousOwner"] != "Member" {
+		t.Errorf("claim status previousOwner = %v, want Member", cs["previousOwner"])
+	}
+}

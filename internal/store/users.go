@@ -240,6 +240,63 @@ func (s *Store) DeleteUser(id int64) error {
 	return err
 }
 
+// DeleteUserAndReleaseNodes permanently removes an account and, for every node it
+// verifiably owned, records ownerLabel as the node's previous owner (so the public
+// page can show "previously owned by …") before the ownership claim is cascaded
+// away. Deleting the user row cascades their claims, notes, private locations,
+// location shares, and sessions (all FK ON DELETE CASCADE). Runs in one
+// transaction so a node is never left both un-owned and un-stamped.
+func (s *Store) DeleteUserAndReleaseNodes(id int64, ownerLabel string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // no-op after a successful Commit
+
+	// Stamp every node this user verifiably owned, before the cascade drops the
+	// claim rows. Pending claims are not ownership and are intentionally skipped.
+	rows, err := tx.Query(`SELECT node_pubkey FROM node_claims WHERE user_id = ? AND status = 'verified'`, id)
+	if err != nil {
+		return err
+	}
+	var owned []string
+	for rows.Next() {
+		var pk string
+		if err := rows.Scan(&pk); err != nil {
+			rows.Close()
+			return err
+		}
+		owned = append(owned, pk)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, pk := range owned {
+		if _, err := tx.Exec(`UPDATE nodes SET prev_owner_name = ? WHERE pubkey = ?`, ownerLabel, pk); err != nil {
+			return err
+		}
+	}
+
+	// Explicit session delete (as DeleteUser does) plus the user row; the user's
+	// claims/notes/locations/shares cascade off the users FK.
+	if _, err := tx.Exec(`DELETE FROM sessions WHERE user_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM users WHERE id = ?`, id); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	// The removed account may have held pending claims; refresh the ingest cache.
+	s.loadPendingClaims()
+	return nil
+}
+
 // DeleteUserSessions removes all of a user's login sessions (used when blocking
 // so existing logins stop working immediately).
 func (s *Store) DeleteUserSessions(userID int64) error {

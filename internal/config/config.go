@@ -45,14 +45,15 @@ type Config struct {
 	Email Email `json:"email"`
 }
 
-// Email configures the outbound SMTP relay for transactional mail. For SendGrid:
-// Host smtp.sendgrid.net, Port 587, Username "apikey", Password the API key. From
-// must be an address on a domain authenticated at the relay (SPF/DKIM), and
-// BaseURL is the public site origin used to build verification links.
+// Email configures the outbound SMTP relay for transactional mail. For Brevo:
+// Host smtp-relay.brevo.com, Port 587, Username the Brevo SMTP login (e.g.
+// xxxxxxx@smtp-brevo.com), Password a Brevo SMTP key. From must be an address on
+// a domain authenticated at the relay (SPF/DKIM), and BaseURL is the public site
+// origin used to build verification links.
 type Email struct {
 	Host     string `json:"host"`     // SMTP submission host; empty disables email
 	Port     int    `json:"port"`     // 587 (STARTTLS) or 465 (implicit TLS)
-	Username string `json:"username"` // SMTP auth user ("apikey" for SendGrid)
+	Username string `json:"username"` // SMTP auth user (Brevo SMTP login)
 	Password string `json:"password"` // SMTP auth password / API key
 	From     string `json:"from"`     // envelope + header From, e.g. noreply@ve7kod.ca
 	FromName string `json:"fromName"` // display name, e.g. "Ridgeline"

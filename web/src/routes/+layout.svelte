@@ -10,40 +10,15 @@
 	import { overview } from '$lib/overview.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { announce } from '$lib/announce.svelte';
+	import { consent } from '$lib/consent.svelte';
+	import { syncAnalytics, trackWebGLOnce, analyticsInjected } from '$lib/analytics';
 	import AnnouncementModal from '$lib/components/AnnouncementModal.svelte';
+	import CookieConsent from '$lib/components/CookieConsent.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
 	import { hasWebGL } from '$lib/webgl';
 
 	let { children } = $props();
-
-	// Report WebGL availability once per session as a custom Umami event, so the
-	// dashboard shows the share of visitors who fall back to the non-WebGL maps.
-	// The Umami script loads async, so retry briefly until `window.umami` exists.
-	function trackWebGL() {
-		try {
-			if (sessionStorage.getItem('rl-webgl-tracked')) return;
-		} catch {
-			return; // storage unavailable — skip rather than risk firing every load
-		}
-		const enabled = hasWebGL();
-		let tries = 0;
-		const fire = (): boolean => {
-			const u = (window as unknown as { umami?: { track: (n: string, d?: unknown) => void } }).umami;
-			if (!u?.track) return false;
-			u.track('webgl', { enabled });
-			try {
-				sessionStorage.setItem('rl-webgl-tracked', '1');
-			} catch {
-				/* ignore */
-			}
-			return true;
-		};
-		if (fire()) return;
-		const iv = setInterval(() => {
-			if (fire() || ++tries > 40) clearInterval(iv); // give up after ~10s
-		}, 250);
-	}
 
 	onMount(() => {
 		theme.init();
@@ -53,8 +28,20 @@
 		overview.init();
 		auth.init();
 		live.start();
-		trackWebGL();
+		consent.init();
 		announce.init();
+	});
+
+	// Analytics is strictly consent-gated: inject Umami (and fire the once-per-
+	// session WebGL event) only after the visitor opts in. If they later withdraw
+	// consent and the script was already loaded, reload so it stops collecting.
+	$effect(() => {
+		if (consent.analytics) {
+			syncAnalytics();
+			trackWebGLOnce(hasWebGL());
+		} else if (analyticsInjected()) {
+			location.reload();
+		}
 	});
 
 	const navItems = [
@@ -102,6 +89,8 @@
 
 <!-- App-wide "what's new" modal (self-guards on announce.open). -->
 <AnnouncementModal />
+<!-- Cookie-consent banner (self-guards on consent.open); shown on desktop + /m. -->
+<CookieConsent />
 <!-- The /m app layout mounts its own ConfirmDialog; only render one here on the
      desktop app so the confirmer singleton doesn't drive two stacked dialogs. -->
 {#if !isMobileApp}
@@ -264,6 +253,7 @@
 				{/if}
 				<span class="label ml-auto tnum">{live.total}</span>
 			</div>
+			<a href="/privacy" class="label !text-fg-faint hover:!text-fg-dim mt-2 block transition-colors">Privacy &amp; cookies</a>
 		</div>
 	</aside>
 

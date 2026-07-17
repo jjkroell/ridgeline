@@ -105,12 +105,10 @@
 					document.documentElement.classList.add('theme-light');
 			} catch (e) {}
 		</script>
-		<!-- Umami analytics (self-hosted at umami.ve7kod.ca) -->
-		<script
-			defer
-			src="https://umami.ve7kod.ca/script.js"
-			data-website-id="4c10287b-81fe-4ae9-9197-e285b2fd4919"
-		></script>
+		<!-- Analytics (self-hosted Umami) is NOT loaded here: it is injected at
+		     runtime only after the visitor opts in via the cookie-consent banner
+		     (see $lib/analytics.ts + $lib/consent.svelte.ts), as GDPR/ePrivacy
+		     require for non-essential analytics. -->
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

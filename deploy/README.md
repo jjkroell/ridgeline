@@ -59,7 +59,8 @@ rsync -az --delete \
 ssh ve7kod@lnuvm159.ubc.bcwarn.net
 cd ~/ridgeline/deploy
 cp config.example.json config.json
-# set "adminToken" to a real secret (reuse the local config.prod.json token if you want parity)
+# fill in the mqtt broker (+ username/password if authenticated). No admin token:
+# the first account registered on the site becomes the protected owner/admin.
 mkdir -p data
 # capture this box's uid/gid so the container can write the bind-mounted DB dir
 printf 'RIDGELINE_UID=%s\nRIDGELINE_GID=%s\n' "$(id -u)" "$(id -g)" > .env

@@ -4,6 +4,19 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.2.1] — 2026-07-17
+
+### Security
+- Cap request bodies at 64 KB via a `MaxBytesReader` middleware on all routes
+  (except the `/api/live` WebSocket). Endpoint length limits were previously
+  enforced only after fully decoding the JSON body, so an unbounded POST could
+  buffer arbitrary memory before any check ran; the cap keeps memory bounded and
+  the handler returns its usual 400.
+
+### Tests
+- `TestBodyLimit`: an oversized request body is refused while a normal-sized one
+  still succeeds.
+
 ## [v0.2.0] — 2026-07-17
 
 Security hardening (from an endpoint-authorization / email self-audit).
@@ -20,17 +33,10 @@ Security hardening (from an endpoint-authorization / email self-audit).
 - Remove the dead `adminToken` config field and its misleading framing. Admin
   access is the account `is_admin` flag; the first registered account is the
   protected owner/admin. A legacy `adminToken` in an old config is ignored.
-- Cap request bodies at 64 KB via a `MaxBytesReader` middleware on all routes
-  (except the `/api/live` WebSocket). Endpoint length limits were previously
-  enforced only after fully decoding the JSON body, so an unbounded POST could
-  buffer arbitrary memory before any check ran; the cap keeps memory bounded and
-  the handler returns its usual 400.
 
 ### Tests
 - Rate limiter, client-IP extraction, same-origin WebSocket, and email
   header-injection tests.
-- `TestBodyLimit`: an oversized request body is refused while a normal-sized one
-  still succeeds.
 
 ## [v0.1.0] — 2026-07-17
 

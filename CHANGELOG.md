@@ -4,6 +4,19 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [Unreleased]
+
+### Security
+- Cap request bodies at 64 KB via a `MaxBytesReader` middleware on all routes
+  (except the `/api/live` WebSocket). Endpoint length limits were previously
+  enforced only after fully decoding the JSON body, so an unbounded POST could
+  buffer arbitrary memory before any check ran; the cap keeps memory bounded and
+  the handler returns its usual 400.
+
+### Tests
+- `TestBodyLimit`: an oversized request body is refused while a normal-sized one
+  still succeeds.
+
 ## [v0.2.0] — 2026-07-17
 
 Security hardening (from an endpoint-authorization / email self-audit).

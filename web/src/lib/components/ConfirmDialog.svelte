@@ -10,9 +10,11 @@
 {#if s.open}
 	<Modal onclose={() => confirmer.cancel()}>
 		<div class="px-6 py-5">
-			<h2 class="font-display text-fg text-lg font-700">{s.title}</h2>
+			<h2 class="font-display text-fg text-lg font-700 break-words">{s.title}</h2>
 			{#if s.message}
-				<p class="text-fg-dim mt-2 text-sm leading-relaxed whitespace-pre-line">{s.message}</p>
+				<p class="text-fg-dim mt-2 text-sm leading-relaxed break-words whitespace-pre-line">
+					{s.message}
+				</p>
 			{/if}
 		</div>
 		<div class="border-line/70 flex items-center justify-end gap-3 border-t px-6 py-4">

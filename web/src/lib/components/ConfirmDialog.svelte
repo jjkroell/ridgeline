@@ -18,10 +18,12 @@
 			{/if}
 			{#if s.code}
 				<div
-					class="border-line/70 bg-ink-2/60 mt-3 overflow-x-auto rounded-[var(--radius)] border px-3 py-2"
+					class="border-line/70 bg-ink-2/60 mt-3 overflow-x-auto rounded-[var(--radius)] border px-3 py-2 text-center"
 				>
-					<code class="font-mono text-fg-dim text-[0.6875rem] leading-relaxed whitespace-nowrap"
-						>{s.code}</code
+					<code
+						class="font-mono {s.danger
+							? 'text-coral'
+							: 'text-signal'} text-[0.6875rem] leading-relaxed whitespace-nowrap">{s.code}</code
 					>
 				</div>
 			{/if}

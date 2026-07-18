@@ -87,7 +87,11 @@ func Default() Config {
 		Email: Email{
 			Port:     587,
 			FromName: "Ridgeline",
-			BaseURL:  "https://ridgeline.ve7kod.ca",
+			// No default BaseURL: each instance must set its own public origin.
+			// A hardcoded default here silently sends every instance's links to
+			// that origin when the field is omitted — how a dev box ended up
+			// emailing prod links. mail.New warns if this is empty while email
+			// is enabled.
 		},
 		MQTT: MQTT{
 			Broker:   "tcp://localhost:1883",

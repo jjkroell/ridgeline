@@ -190,6 +190,9 @@
 										<span class={b.nextHops === 1 && b.pathVolume >= 200 ? 'text-amber' : ''}
 											>{b.nextHops} next hop{b.nextHops === 1 ? '' : 's'}</span
 										>
+										{#if b.terminalShare === 0}
+											<span class="text-amber">never terminal</span>
+										{/if}
 									{/if}
 								<span>{(b.captiveFraction * 100).toFixed(0)}% of foreign</span>
 								{#if b.foreignKm > 5}<span>{b.foreignKm.toFixed(0)} km</span>{/if}

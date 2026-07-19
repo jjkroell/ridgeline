@@ -82,6 +82,23 @@ sits at 98%. They are an order of magnitude below Cokley 6 in sample count, whic
 is what confidence weighting is for. The output is a ranked shortlist for review,
 not a verdict.
 
+### Corroborator: never terminal
+
+How often a relay is the LAST hop in a path — where an observer received that
+relay's own transmission. A relay transmitting on a frequency nobody monitors can
+never be terminal, however much traffic it carries: its packets only become
+observable once something else re-sends them.
+
+This is independent of next-hop entropy. Entropy says the egress never varies;
+this says the transmission is never heard. Measured over 14 days, only 2 of 134
+relays with ≥200 path appearances sit at zero — the bridge (1,417 packets, 0
+terminal) and one node simply out of every observer's range. Only the bridge also
+has a single next hop.
+
+It does not separate "on another frequency" from "out of everyone's earshot", and
+at low volume it means little — a candidate with 102 packets reads 0% too.
+Displayed as corroborating evidence; nothing ranks on it.
+
 ### Corroborator: asymmetric pair
 
 A bridge joins a zero-entropy node to a high-entropy one — the wire feeds a radio

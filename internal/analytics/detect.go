@@ -122,6 +122,13 @@ type BridgeCandidate struct {
 	PathVolume      int     `json:"pathVolume"`
 	NextHops        int     `json:"nextHops"`
 	NextHopTopShare float64 `json:"nextHopTopShare"`
+	// TerminalShare is the share of carried packets where this relay was the last
+	// hop — where an observer received its own transmission. Zero over meaningful
+	// volume means it transmits where nothing is listening, which is what a
+	// bridge's far-side half does. Displayed as a corroborator; nothing ranks on
+	// it. On the dev mesh only 2 of 134 relays sit at zero, and only one of those
+	// also has a single next hop.
+	TerminalShare float64 `json:"terminalShare"`
 
 	// Signals names which rule produced this candidate — "captivity", "wired", or
 	// both. They catch different things and neither subsumes the other: captivity
@@ -221,6 +228,13 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 	// bridge with a full path attached.
 	adjacency := map[string]map[string]int{} // relay -> next relay -> times observed
 	relayVolume := map[string]int{}          // relay -> packets it carried
+	// terminalCount[relay] = packets where this relay was the LAST hop, meaning an
+	// observer received that relay's own transmission. A relay transmitting on a
+	// frequency nobody monitors can never be terminal, however much traffic it
+	// carries — its packets only become observable once something else re-sends
+	// them. Independent of next-hop entropy: that says the egress never varies,
+	// this says the transmission is never heard.
+	terminalCount := map[string]int{}
 
 	// RawWindow returns newest-first; walk it in reverse so the scan runs in
 	// chronological order. The direct/relayed recency tracking below accumulates
@@ -262,6 +276,9 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 					adjacency[prev][ku]++
 				}
 				prev = ku
+			}
+			if last := resolve(pkt.Path[len(pkt.Path)-1]); last != "" {
+				terminalCount[strings.ToUpper(last)]++
 			}
 		}
 
@@ -413,6 +430,9 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 			bc.NextHops = len(next)
 			bc.NextHopTopShare = float64(top) / float64(total)
 		}
+		if v := relayVolume[relay]; v > 0 {
+			bc.TerminalShare = float64(terminalCount[relay]) / float64(v)
+		}
 		if haveMesh {
 			if fLat, fLon, ok := captiveCentroid(foreign); ok {
 				bc.ForeignKm = haversineKm(meshLat, meshLon, fLat, fLon)
@@ -482,6 +502,9 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 			PathVolume:      relayVolume[relay],
 			NextHops:        1,
 			NextHopTopShare: 1,
+		}
+		if v := relayVolume[relay]; v > 0 {
+			bc.TerminalShare = float64(terminalCount[relay]) / float64(v)
 		}
 		if haveMesh {
 			if fLat, fLon, ok := captiveCentroid(foreign); ok {

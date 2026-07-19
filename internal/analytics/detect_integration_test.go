@@ -46,9 +46,9 @@ func TestDetectInjectionIntegration(t *testing.T) {
 		rep.PacketsScanned, rep.PathsScanned, rep.UnresolvedHops,
 		rep.AdvertsScanned, rep.AdvertsRejected, len(rep.Bridges), len(rep.Injectors))
 	for _, b := range rep.Bridges {
-		t.Logf("  [%s] %s (%s) captive=%d/%d | pathVol=%d nextHops=%d topShare=%.0f%%",
+		t.Logf("  [%s] %s (%s) captive=%d/%d | pathVol=%d nextHops=%d topShare=%.0f%% terminal=%.1f%%",
 			strings.Join(b.Signals, "+"), b.Name, b.NodeKey[:12], b.CaptiveCount, b.ForeignThrough,
-			b.PathVolume, b.NextHops, b.NextHopTopShare*100)
+			b.PathVolume, b.NextHops, b.NextHopTopShare*100, b.TerminalShare*100)
 		for _, f := range b.Foreign {
 			t.Logf("        behind: %s (%s) transit=%.0f%%", f.Name, f.Key[:10], f.TransitPct)
 		}

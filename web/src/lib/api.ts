@@ -345,6 +345,10 @@ export interface BridgeCandidate {
 	pathVolume: number;
 	nextHops: number;
 	nextHopTopShare: number;
+	/** Share of carried packets where this relay was the LAST hop — where an
+	 *  observer received its own transmission. Zero over real volume means it
+	 *  transmits where nothing is listening. Shown, not ranked on. */
+	terminalShare: number;
 	/** Which rule produced this candidate: "captivity" (a population with no
 	 *  alternative route in), "wired" (an egress that never varies), or both. */
 	signals: string[];

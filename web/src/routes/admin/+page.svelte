@@ -449,6 +449,19 @@
 									{/if}
 									<!-- Physical behaviour, from all payload types. One next hop over many
 									     packets means the egress is a wire; several means it radiates. -->
+									{#if b.pathVolume > 0 && b.terminalShare === 0}
+										<Tooltip
+											text="No observer has ever received this relay's own transmission — it is never the last hop, across {b.pathVolume.toLocaleString()} packets. A relay transmitting on a frequency nobody monitors can't be, however much it carries. Corroborating evidence only; a relay simply out of everyone's range looks the same."
+										>
+											<span class="label normal-case tnum text-amber">never terminal</span>
+										</Tooltip>
+									{:else if b.pathVolume > 0}
+										<Tooltip text="Share of carried packets where an observer received this relay's own transmission.">
+											<span class="label normal-case tnum text-fg-faint"
+												>terminal {(b.terminalShare * 100).toFixed(0)}%</span
+											>
+										</Tooltip>
+									{/if}
 									{#if b.pathVolume > 0}
 										<Tooltip
 											text="Distinct nodes this relay was seen handing off to, across {b.pathVolume.toLocaleString()} packets. RF is broadcast, so the next hop varies — a typical relay here has ~13 at ~44%. Exactly one, over many packets, is the signature of a wired link rather than a radio."

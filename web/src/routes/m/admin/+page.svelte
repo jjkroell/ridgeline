@@ -236,6 +236,21 @@
 		{/if}
 
 		<!-- quarantine list -->
+		{#if report && report.migrations.length > 0}
+			<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">NO LONGER HEARD DIRECTLY · {report.migrations.length}</h2>
+			<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
+				{#each report.migrations as m (m.key)}
+					<div class="px-4 py-2.5">
+						<a href="/m/nodes/{m.key}" class="text-fg text-sm font-600">{m.name}</a>
+						{#if m.viaBridge}
+							<span class="text-amber ml-1 text-[0.62rem]">now behind {m.viaBridge}</span>
+						{/if}
+						<div class="text-fg-faint font-mono text-[0.62rem]">{m.relayedAfter} relayed since it went quiet</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+
 		<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">QUARANTINE LIST · {quarantineEntries.length}</h2>
 		<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
 			{#if quarantineEntries.length === 0}

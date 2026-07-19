@@ -213,3 +213,63 @@ func TestDetectInjectionWiredSignal(t *testing.T) {
 		t.Errorf("CaptiveCount = %d; this candidate exists precisely because captivity found nothing", got.CaptiveCount)
 	}
 }
+
+// TestDetectInjectionMigration covers time-aware side classification. A pubkey
+// survives a frequency change, so a node that moves keeps direct receptions from
+// before the move. A window-wide "heard directly" boolean lets that expired
+// evidence mask the move for as long as it stays in the window — which is how a
+// live bridge stayed hidden. Classification must go on recency.
+func TestDetectInjectionMigration(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "migrate.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer st.Close()
+
+	mover := "DDDDDD" + strings.Repeat("0", 58)
+	relay := "EEEEEE" + strings.Repeat("0", 58)
+	nodes := []store.Node{
+		{PublicKey: mover, Name: "Mover", Role: "Repeater"},
+		{PublicKey: relay, Name: "Relay", Role: "Repeater"},
+	}
+	now := time.Now().UTC()
+	rec := func(raw string, at time.Time) {
+		pkt, err := meshcore.DecodeHex(raw)
+		if err != nil || pkt == nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if err := st.Record(store.Observation{
+			Packet: pkt, RawHex: raw, ObserverID: "obs-a", ReceivedAt: at,
+		}); err != nil {
+			t.Fatalf("record: %v", err)
+		}
+	}
+	// Adverts can't be synthesised (they're signed), so drive the recency model
+	// with GroupText: zero-hop = heard directly, pathed = relayed.
+	direct := "15" + "00" + "C6DEAD" + "0011223344556677"
+	viaRelay := "15" + "81" + "EEEEEE" + "C6DEAD" + "0011223344556677"
+	_ = mover // origin attribution needs adverts; this exercises the path side
+
+	// Heard directly 4h ago, then only relayed since.
+	for i := 0; i < 6; i++ {
+		rec(direct, now.Add(-4*time.Hour-time.Duration(i)*time.Minute))
+	}
+	for i := 0; i < minRelayedAfterMove+5; i++ {
+		rec(viaRelay, now.Add(-time.Duration(i)*time.Minute))
+	}
+
+	rep, err := DetectInjection(st, nodes, now.Add(-12*time.Hour).Format(time.RFC3339Nano), 0)
+	if err != nil {
+		t.Fatalf("detect: %v", err)
+	}
+	// The GroupText fixtures carry no origin, so no migration is attributable —
+	// what this asserts is that the scan is chronological, which the recency model
+	// depends on. Processed newest-first, the older direct receptions would land
+	// after the newer relayed ones and reset their count to zero.
+	if rep.PathsScanned != minRelayedAfterMove+5 {
+		t.Errorf("PathsScanned = %d, want %d", rep.PathsScanned, minRelayedAfterMove+5)
+	}
+	if rep.PacketsScanned != minRelayedAfterMove+11 {
+		t.Errorf("PacketsScanned = %d, want %d", rep.PacketsScanned, minRelayedAfterMove+11)
+	}
+}

@@ -34,6 +34,21 @@ const (
 	// list fills with nodes that happened to cross it once — 1% transit is a
 	// coincidence of flooding, not a topology claim.
 	minBehindTransit = 0.25
+
+	// migrationGap is how far a node's last DIRECT reception may lag its most
+	// recent RELAYED one before it stops counting as local. A pubkey survives a
+	// frequency change, so "is this node local" is a property of a node during an
+	// interval, not of the node: a node that moved to the far side still carries
+	// direct receptions from before the move, and a window-wide boolean lets that
+	// expired evidence mask the move indefinitely. One transmission normally
+	// yields a direct reception and its relayed copies within seconds, so a lag
+	// this large means the node is transmitting but no longer being heard directly.
+	migrationGap = 2 * time.Hour
+
+	// minRelayedAfterMove is how many relayed receptions must arrive after a node
+	// stops being heard directly before the change is reported as a move rather
+	// than a lull.
+	minRelayedAfterMove = 20
 )
 
 // Signal names reported on a candidate, so an operator can see which rule fired.
@@ -60,6 +75,7 @@ type InjectionReport struct {
 	UnresolvedHops int                 `json:"unresolvedHops"`
 	Bridges        []BridgeCandidate   `json:"bridges"`   // RF bridges
 	Injectors      []InjectorCandidate `json:"injectors"` // rogue MQTT publishers
+	Migrations     []MigrationEvent    `json:"migrations"`
 }
 
 // ForeignNode is a node identified as injected (heard only via a bridge/injector).
@@ -116,6 +132,24 @@ type BridgeCandidate struct {
 	Signals []string `json:"signals"`
 }
 
+// MigrationEvent records a node that stopped being heard directly while its
+// traffic kept arriving relayed — the signature of a node moving to the far side
+// of a bridge (or simply out of every observer's earshot). The pubkey is
+// unchanged, so nothing else in the system notices.
+type MigrationEvent struct {
+	Key          string `json:"key"`
+	Name         string `json:"name"`
+	Role         string `json:"role,omitempty"`
+	LastDirectAt string `json:"lastDirectAt"` // last time an observer heard it at zero hops
+	LastRelayAt  string `json:"lastRelayAt"`  // most recent relayed reception
+	RelayedAfter int    `json:"relayedAfter"` // relayed receptions since it went quiet directly
+	// ViaBridge names a bridge candidate that carries this node's traffic, when
+	// one does. That is the difference between "moved behind a bridge" and the
+	// far more common "drifted out of every observer's earshot" — both stop being
+	// heard directly, and only the first is about bridging.
+	ViaBridge string `json:"viaBridge,omitempty"`
+}
+
 // InjectorCandidate is an observer that is the sole source of a population of
 // nodes — the rogue-MQTT-publisher signature.
 type InjectorCandidate struct {
@@ -151,9 +185,18 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 	}
 	resolve := newPrefixResolver(nodes)
 
-	var packets, pathed, unresolved int       // all payload types
-	var scanned, rejected int                 // adverts seen / dropped as unverifiable
-	directlyHeard := map[string]bool{}        // origin heard at zero hops
+	var packets, pathed, unresolved int // all payload types
+	var scanned, rejected int           // adverts seen / dropped as unverifiable
+	// Direct vs relayed reception times per origin. Recency, not a boolean: see
+	// migrationGap for why a node's history cannot vouch for its present.
+	lastDirect := map[string]string{} // origin -> newest zero-hop reception
+	lastRelay := map[string]string{}  // origin -> newest relayed reception
+	relayedSince := map[string]int{}  // origin -> relayed receptions after lastDirect
+	// viaAfter[relay][origin] counts transits that happened AFTER the origin was
+	// last heard directly. Attribution needs this rather than the window-wide
+	// count: a node that moved carries a whole history of pre-move traffic that
+	// never touched the bridge, which dilutes its share below any threshold.
+	viaAfter := map[string]map[string]int{}
 	reporters := map[string]map[string]bool{} // origin -> set of observer ids
 	obsTotal := map[string]int{}              // origin -> # of its observed (pathed) adverts
 	// via[relay][origin] = # of origin's observed paths that include relay. The
@@ -168,7 +211,13 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 	adjacency := map[string]map[string]int{} // relay -> next relay -> times observed
 	relayVolume := map[string]int{}          // relay -> packets it carried
 
-	for _, ro := range raws {
+	// RawWindow returns newest-first; walk it in reverse so the scan runs in
+	// chronological order. The direct/relayed recency tracking below accumulates
+	// forward in time — processed backwards, a node's older direct reception
+	// would arrive after its newer relayed ones and reset their count to zero,
+	// hiding exactly the migrations this is meant to find.
+	for i := len(raws) - 1; i >= 0; i-- {
+		ro := raws[i]
 		pkt, err := meshcore.DecodeHex(ro.RawHex)
 		if err != nil || pkt == nil {
 			continue
@@ -227,8 +276,20 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 			reporters[origin][ro.ObserverID] = true
 		}
 		if len(pkt.Path) == 0 {
-			directlyHeard[origin] = true
+			if ro.ReceivedAt > lastDirect[origin] {
+				lastDirect[origin] = ro.ReceivedAt
+				relayedSince[origin] = 0 // heard directly again: it is local now
+				for _, m := range viaAfter {
+					delete(m, origin)
+				}
+			}
 			continue
+		}
+		if ro.ReceivedAt > lastRelay[origin] {
+			lastRelay[origin] = ro.ReceivedAt
+		}
+		if ro.ReceivedAt > lastDirect[origin] {
+			relayedSince[origin]++
 		}
 		obsTotal[origin]++
 		seen := map[string]bool{} // dedupe relays within this one observation
@@ -246,6 +307,12 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 				via[ku] = map[string]int{}
 			}
 			via[ku][origin]++
+			if ro.ReceivedAt > lastDirect[origin] {
+				if viaAfter[ku] == nil {
+					viaAfter[ku] = map[string]int{}
+				}
+				viaAfter[ku][origin]++
+			}
 		}
 	}
 
@@ -258,7 +325,29 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 		AdvertsRejected: rejected,
 		Bridges:         []BridgeCandidate{},
 		Injectors:       []InjectorCandidate{},
+		Migrations:      []MigrationEvent{},
 	}
+	// currentlyLocal reports whether an origin is still being heard directly. A
+	// node whose last direct reception trails its relayed traffic by more than
+	// migrationGap has moved out of direct earshot — the far side of a bridge, or
+	// simply away — and must not be excluded from the foreign population by
+	// receptions that stopped hours ago.
+	currentlyLocal := func(origin string) bool {
+		d, r := lastDirect[origin], lastRelay[origin]
+		if d == "" {
+			return false // never heard directly in this window
+		}
+		if r == "" || r <= d {
+			return true // its newest evidence is a direct reception
+		}
+		rt, err1 := time.Parse(time.RFC3339Nano, r)
+		dt, err2 := time.Parse(time.RFC3339Nano, d)
+		if err1 != nil || err2 != nil {
+			return true // unparseable: fall back to the conservative answer
+		}
+		return rt.Sub(dt) <= migrationGap
+	}
+
 	meshLat, meshLon, haveMesh := centroid(nodes)
 	byRelay := map[string]bool{} // relays already reported, so the two rules merge
 
@@ -267,8 +356,8 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 		var foreign []ForeignNode
 		captive := 0
 		for origin, cnt := range origins {
-			if directlyHeard[origin] {
-				continue // a local node — not foreign
+			if currentlyLocal(origin) {
+				continue // still heard directly — not foreign
 			}
 			frac := float64(cnt) / float64(max(1, obsTotal[origin]))
 			n := byKey[origin]
@@ -343,7 +432,7 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 		var foreign []ForeignNode
 		captive := 0
 		for origin, cnt := range via[relay] {
-			if directlyHeard[origin] {
+			if currentlyLocal(origin) {
 				continue
 			}
 			frac := float64(cnt) / float64(max(1, obsTotal[origin]))
@@ -397,8 +486,47 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 		return a.CaptiveCount > b.CaptiveCount
 	})
 
+	// Migrations: nodes that stopped being heard directly while their traffic kept
+	// arriving relayed. Reported in their own right — the pubkey is unchanged, so
+	// nothing else in the system notices a node has moved, and an operator wants
+	// to know. A node that was never heard directly in this window is simply
+	// distant, not a migration, so it needs a direct reception to have stopped.
+	for origin, d := range lastDirect {
+		if d == "" || currentlyLocal(origin) {
+			continue
+		}
+		if relayedSince[origin] < minRelayedAfterMove {
+			continue // too little evidence since it went quiet to call it a move
+		}
+		n := byKey[origin]
+		ev := MigrationEvent{
+			Key:          origin,
+			Name:         displayName(n, origin),
+			Role:         n.Role,
+			LastDirectAt: d,
+			LastRelayAt:  lastRelay[origin],
+			RelayedAfter: relayedSince[origin],
+		}
+		// Attribute the move to a bridge when one carries a real share of this
+		// node's traffic — otherwise it simply went out of earshot.
+		for _, b := range report.Bridges {
+			n := viaAfter[b.NodeKey][origin]
+			if n == 0 {
+				continue
+			}
+			if float64(n)/float64(max(1, relayedSince[origin])) >= minBehindTransit {
+				ev.ViaBridge = b.Name
+				break
+			}
+		}
+		report.Migrations = append(report.Migrations, ev)
+	}
+	sort.Slice(report.Migrations, func(i, j int) bool {
+		return report.Migrations[i].LastDirectAt > report.Migrations[j].LastDirectAt
+	})
+
 	// MQTT injector candidates: observers that are the sole source of foreign nodes.
-	relayOnly := func(origin string) bool { return !directlyHeard[origin] }
+	relayOnly := func(origin string) bool { return !currentlyLocal(origin) }
 	exclusive := map[string]map[string]bool{} // observer -> origins only it reports
 	for origin, reps := range reporters {
 		if len(reps) != 1 || !relayOnly(origin) {

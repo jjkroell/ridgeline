@@ -131,7 +131,8 @@ there was no way to tell whether a tweak helped.
    origin attribution still from verified adverts only.
 3. ✅ **Wired detector** — runs alongside captivity; each candidate is labelled
    with the signal(s) that produced it.
-4. **Recency + changepoint** classification.
+4. ✅ **Recency + changepoint** classification — side membership from recent
+   evidence, and nodes that stop being heard directly reported in their own right.
 5. **Known-bridge registry.**
 
 Findings surface in the admin console; no automatic notifications.
@@ -156,6 +157,32 @@ beside it and contradicts it at a glance: seven next hops is a radio.
 Candidates are ranked by number of signals, then by packets carried — ranking on
 captive count first would push a bridge carrying 1,400 packets below a relay that
 squeaked past the threshold with 102.
+
+### Phase 4
+
+Side membership now goes on recency: a node whose last direct reception trails
+its relayed traffic by more than `migrationGap` (2h) is no longer local. One
+transmission normally yields a direct reception and its relayed copies within
+seconds, so a lag that large means the node is transmitting and no longer being
+heard directly.
+
+Nodes crossing that line are reported as their own list. The known migration is
+caught with the right timestamps and attributed:
+
+    Yaletown Repeater  lastDirect 2026-07-18T18:13:21  relayedAfter=70
+                       -> now behind KOD - Cokley 6
+
+Attribution counts transits AFTER the node went quiet, not across the window: a
+node that moved carries a history of pre-move traffic that never touched the
+bridge, which dilutes its share below any threshold. Without a bridge named, the
+node simply drifted out of every observer's earshot — a real event worth showing,
+but not a bridging one. On the dev mesh a 48h window yields 8 such nodes, exactly
+one of which is attributed to a bridge.
+
+**This pass depends on chronological iteration.** `RawWindow` returns newest
+first; the scan walks it in reverse. Processed backwards, a node's older direct
+reception arrives after its newer relayed ones and resets their count to zero,
+hiding precisely the migrations being looked for.
 
 `minWiredPackets = 100` is the bar for a single observed next hop to count as
 evidence. It cannot separate a wire from a relay with exactly one reachable

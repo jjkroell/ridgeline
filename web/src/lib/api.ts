@@ -376,6 +376,21 @@ export interface InjectionReport {
 	unresolvedHops: number;
 	bridges: BridgeCandidate[];
 	injectors: InjectorCandidate[];
+	migrations: MigrationEvent[];
+}
+
+/** A node that stopped being heard directly while its traffic kept arriving
+ *  relayed. The pubkey is unchanged, so nothing else notices it moved. */
+export interface MigrationEvent {
+	key: string;
+	name: string;
+	role?: string;
+	lastDirectAt: string;
+	lastRelayAt: string;
+	relayedAfter: number;
+	/** Set when a bridge carries its traffic — the difference between "moved
+	 *  behind a bridge" and "drifted out of earshot". */
+	viaBridge?: string;
 }
 export interface BlockEntry {
 	kind: string; // observer | bridge | node

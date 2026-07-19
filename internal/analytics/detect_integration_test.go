@@ -53,6 +53,14 @@ func TestDetectInjectionIntegration(t *testing.T) {
 			t.Logf("        behind: %s (%s) transit=%.0f%%", f.Name, f.Key[:10], f.TransitPct)
 		}
 	}
+	for _, m := range rep.Migrations {
+		via := ""
+		if m.ViaBridge != "" {
+			via = "  -> now behind " + m.ViaBridge
+		}
+		t.Logf("  MIGRATED %s (%s) lastDirect=%s relayedAfter=%d%s",
+			m.Name, m.Key[:10], m.LastDirectAt[:19], m.RelayedAfter, via)
+	}
 	for _, in := range rep.Injectors {
 		t.Logf("  INJECTOR %s exclusive=%d", in.Observer, in.ExclusiveCount)
 	}

@@ -482,6 +482,39 @@
 				{/if}
 			</section>
 
+			<!-- Nodes that stopped being heard directly -->
+			{#if report.migrations.length > 0}
+				<section class="panel rise mt-6">
+					<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
+						<h2 class="font-display text-fg text-sm font-700 tracking-wide">NO LONGER HEARD DIRECTLY</h2>
+						<span class="label normal-case text-fg-faint"
+							>still relaying, but no observer hears them at zero hops</span
+						>
+						<span class="label ml-auto tnum">{report.migrations.length}</span>
+					</div>
+					<div class="divide-line/60 divide-y">
+						{#each report.migrations as m (m.key)}
+							<div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3">
+								<a href="/nodes/{m.key}" class="text-fg hover:text-signal text-sm font-600">{m.name}</a>
+								<span class="font-mono text-fg-faint text-[0.62rem]">{m.key.slice(0, 12)}…</span>
+								{#if m.viaBridge}
+									<Tooltip
+										text="A bridge candidate carries this node's traffic since it went quiet — it moved to the far side rather than simply out of range."
+									>
+										<span class="bg-amber/15 text-amber rounded-full px-2 py-0.5 text-[0.62rem] font-600"
+											>now behind {m.viaBridge}</span
+										>
+									</Tooltip>
+								{/if}
+								<span class="label normal-case tnum text-fg-faint"
+									>last heard directly {ago(m.lastDirectAt)} · {m.relayedAfter} relayed since</span
+								>
+							</div>
+						{/each}
+					</div>
+				</section>
+			{/if}
+
 			<!-- MQTT injectors -->
 			<section class="panel rise mt-6">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">

@@ -92,3 +92,54 @@ func TestDetectInjectionRejectsUnsignedAdverts(t *testing.T) {
 			"origin should never have been scored", len(rep.Injectors))
 	}
 }
+
+// TestDetectInjectionUsesAllPayloadTypes covers the path-evidence change: a
+// packet's route is in the clear whatever its payload, so every payload type
+// contributes. Before this, the scan skipped anything that wasn't an advert,
+// which made a companion that never adverts contribute nothing at all — even
+// though its messages crossed the bridge with a full path attached.
+func TestDetectInjectionUsesAllPayloadTypes(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "paths.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer st.Close()
+
+	// A GroupText packet relayed over two hops — no advert, so the old scan
+	// discarded it entirely.
+	raw := "15" + "82" + "AAAAAA" + "BBBBBB" + "C6DEAD" + "0011223344556677"
+	pkt, err := meshcore.DecodeHex(raw)
+	if err != nil || pkt == nil || pkt.Advert != nil || len(pkt.Path) != 2 {
+		t.Fatalf("fixture is not a 2-hop non-advert packet: %v", err)
+	}
+
+	now := time.Now().UTC()
+	for i := 0; i < 5; i++ {
+		if err := st.Record(store.Observation{
+			Packet: pkt, RawHex: raw, ObserverID: "obs-a",
+			ReceivedAt: now.Add(-time.Duration(i) * time.Minute),
+		}); err != nil {
+			t.Fatalf("record: %v", err)
+		}
+	}
+
+	rep, err := DetectInjection(st, nil, now.Add(-6*time.Hour).Format(time.RFC3339Nano), 0)
+	if err != nil {
+		t.Fatalf("detect: %v", err)
+	}
+	if rep.PacketsScanned != 5 {
+		t.Errorf("PacketsScanned = %d, want 5", rep.PacketsScanned)
+	}
+	if rep.PathsScanned != 5 {
+		t.Errorf("PathsScanned = %d, want 5 — non-advert packets must contribute path evidence",
+			rep.PathsScanned)
+	}
+	if rep.AdvertsScanned != 0 {
+		t.Errorf("AdvertsScanned = %d, want 0 (nothing here is an advert)", rep.AdvertsScanned)
+	}
+	// Both hops are unknown to this store, so they must count as unresolved rather
+	// than silently joining into a fabricated adjacency.
+	if rep.UnresolvedHops != 10 {
+		t.Errorf("UnresolvedHops = %d, want 10", rep.UnresolvedHops)
+	}
+}

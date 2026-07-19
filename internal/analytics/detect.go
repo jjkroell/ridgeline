@@ -27,10 +27,17 @@ type InjectionReport struct {
 	// those dropped because their Ed25519 signature did not verify. Surfaced so an
 	// operator can see how much of the traffic was unusable rather than wondering
 	// why a busy window produced few candidates.
-	AdvertsScanned  int                 `json:"advertsScanned"`
-	AdvertsRejected int                 `json:"advertsRejected"`
-	Bridges         []BridgeCandidate   `json:"bridges"`   // RF bridges
-	Injectors       []InjectorCandidate `json:"injectors"` // rogue MQTT publishers
+	AdvertsScanned  int `json:"advertsScanned"`
+	AdvertsRejected int `json:"advertsRejected"`
+	// PacketsScanned counts every decoded packet; PathsScanned those carrying at
+	// least one hop; UnresolvedHops those whose hash prefix matched no single node
+	// (ambiguous 1-byte hops are common). A candidate resting mostly on
+	// unresolvable hops deserves less confidence, so the totals are surfaced.
+	PacketsScanned int                 `json:"packetsScanned"`
+	PathsScanned   int                 `json:"pathsScanned"`
+	UnresolvedHops int                 `json:"unresolvedHops"`
+	Bridges        []BridgeCandidate   `json:"bridges"`   // RF bridges
+	Injectors      []InjectorCandidate `json:"injectors"` // rogue MQTT publishers
 }
 
 // ForeignNode is a node identified as injected (heard only via a bridge/injector).
@@ -62,6 +69,21 @@ type BridgeCandidate struct {
 	// overlapping (co-located) bridge ranks the same as a distant one.
 	ForeignKm float64       `json:"foreignKm"`
 	Foreign   []ForeignNode `json:"foreign"` // foreign nodes through it, by transit share desc
+
+	// Path evidence, gathered from EVERY payload type rather than adverts alone.
+	// PathVolume is how many packets this relay carried. NextHops is how many
+	// distinct relays it was ever observed handing off to, and NextHopTopShare the
+	// share taken by its most common one.
+	//
+	// These describe how the relay behaves physically. RF is broadcast, so which
+	// neighbour picks a packet up next varies: on this mesh the median relay hands
+	// off to 13 distinct next hops with a 44% top share. A relay whose egress is a
+	// WIRE has exactly one possible next hop forever — the measured bridge sat at
+	// 1 distinct hop over 1,417 packets. Reported here for review; ranking on it
+	// is deliberately left to a later change.
+	PathVolume      int     `json:"pathVolume"`
+	NextHops        int     `json:"nextHops"`
+	NextHopTopShare float64 `json:"nextHopTopShare"`
 }
 
 // InjectorCandidate is an observer that is the sole source of a population of
@@ -99,6 +121,7 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 	}
 	resolve := newPrefixResolver(nodes)
 
+	var packets, pathed, unresolved int       // all payload types
 	var scanned, rejected int                 // adverts seen / dropped as unverifiable
 	directlyHeard := map[string]bool{}        // origin heard at zero hops
 	reporters := map[string]map[string]bool{} // origin -> set of observer ids
@@ -106,21 +129,62 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 	// via[relay][origin] = # of origin's observed paths that include relay. The
 	// per-observation count (not a union) is what lets us measure captivity.
 	via := map[string]map[string]int{}
+	// Path facts collected from EVERY payload type, not just adverts. A packet's
+	// route is in the clear regardless of whether its payload is; only the
+	// *origin* needs an advert to attribute. Restricting path evidence to adverts
+	// discarded most of what a bridge reveals about itself — a companion that
+	// never adverts contributed nothing at all, despite its messages crossing the
+	// bridge with a full path attached.
+	adjacency := map[string]map[string]int{} // relay -> next relay -> times observed
+	relayVolume := map[string]int{}          // relay -> packets it carried
 
 	for _, ro := range raws {
 		pkt, err := meshcore.DecodeHex(ro.RawHex)
-		if err != nil || pkt == nil || pkt.Advert == nil || pkt.Advert.PublicKey == "" {
+		if err != nil || pkt == nil {
+			continue
+		}
+		packets++
+
+		// --- Path facts: every payload type contributes. ---
+		if len(pkt.Path) > 0 {
+			pathed++
+			prev := ""
+			carried := map[string]bool{}
+			for _, h := range pkt.Path {
+				k := resolve(h)
+				if k == "" {
+					// An ambiguous hash prefix is UNKNOWN, not absent: it breaks the
+					// adjacency chain rather than joining the hops either side of it,
+					// which would fabricate a link that was never observed.
+					unresolved++
+					prev = ""
+					continue
+				}
+				ku := strings.ToUpper(k)
+				if !carried[ku] {
+					carried[ku] = true
+					relayVolume[ku]++
+				}
+				if prev != "" {
+					if adjacency[prev] == nil {
+						adjacency[prev] = map[string]int{}
+					}
+					adjacency[prev][ku]++
+				}
+				prev = ku
+			}
+		}
+
+		// --- Origin facts: verified adverts only. ---
+		if pkt.Advert == nil || pkt.Advert.PublicKey == "" {
 			continue
 		}
 		scanned++
-		// Only trust adverts whose Ed25519 signature verifies. A corrupt advert
-		// carries a corrupt public key and a corrupt path-length byte, which
-		// invents both a phantom origin and a phantom route through whichever
-		// relays its garbage hops happen to resolve to. Left ungated these
-		// dominate the output: on the dev mesh ~half of all adverts in a 24h
-		// window fail this check, and every candidate the detector produced was
-		// built from them. The signature is the originator's own, so a packet
-		// that passes has an authentic key and an intact payload.
+		// Only trust adverts whose Ed25519 signature verifies: a corrupt public key
+		// invents an origin that never existed, and those phantoms land squarely in
+		// the injector rule ("sole source of many origins"). The signature covers
+		// the advert payload, so a packet that passes has an authentic key — it
+		// says nothing about the path, which is mutable by design.
 		if !pkt.Advert.SignatureValid {
 			rejected++
 			continue
@@ -157,6 +221,9 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 
 	report := &InjectionReport{
 		WindowHours:     windowHoursFrom(sinceISO),
+		PacketsScanned:  packets,
+		PathsScanned:    pathed,
+		UnresolvedHops:  unresolved,
 		AdvertsScanned:  scanned,
 		AdvertsRejected: rejected,
 		Bridges:         []BridgeCandidate{},
@@ -199,6 +266,18 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 			ForeignThrough:  len(foreign),
 			CaptiveFraction: capFrac,
 			Foreign:         foreign,
+			PathVolume:      relayVolume[relay],
+		}
+		if next := adjacency[relay]; len(next) > 0 {
+			total, top := 0, 0
+			for _, v := range next {
+				total += v
+				if v > top {
+					top = v
+				}
+			}
+			bc.NextHops = len(next)
+			bc.NextHopTopShare = float64(top) / float64(total)
 		}
 		if haveMesh {
 			if fLat, fLon, ok := captiveCentroid(foreign); ok {

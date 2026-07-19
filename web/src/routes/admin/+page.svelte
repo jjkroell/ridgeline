@@ -349,8 +349,18 @@
 			<div class="panel rise mt-6 flex flex-wrap items-center gap-x-6 gap-y-1 px-5 py-3">
 				<span class="label normal-case text-fg-faint">Scanned</span>
 				<span class="font-mono text-fg-dim text-xs tnum"
-					>{report.advertsScanned.toLocaleString()} adverts over {report.windowHours.toFixed(0)}h</span
+					>{report.packetsScanned.toLocaleString()} packets · {report.pathsScanned.toLocaleString()} with
+					paths · {report.advertsScanned.toLocaleString()} adverts, over {report.windowHours.toFixed(0)}h</span
 				>
+				{#if report.unresolvedHops > 0}
+					<Tooltip
+						text="Hops whose hash prefix matched no single node — ambiguous 1-byte hops are common. These count as unknown rather than being silently dropped, so a candidate resting mostly on them deserves less weight."
+					>
+						<span class="text-fg-faint font-mono text-xs tnum"
+							>{report.unresolvedHops.toLocaleString()} hops unresolved</span
+						>
+					</Tooltip>
+				{/if}
 				{#if report.advertsRejected > 0}
 					<Tooltip
 						text="Adverts whose Ed25519 signature didn't verify. A corrupt public key invents a node that never existed, so these are dropped before scoring — they used to surface as injector candidates."
@@ -388,6 +398,22 @@
 									{#if b.foreignKm > 5}
 										<Tooltip text="distance of the captive cluster from the mesh — a hint only, not used for ranking">
 											<span class="label normal-case tnum text-fg-faint">{b.foreignKm.toFixed(0)} km</span>
+										</Tooltip>
+									{/if}
+									<!-- Physical behaviour, from all payload types. One next hop over many
+									     packets means the egress is a wire; several means it radiates. -->
+									{#if b.pathVolume > 0}
+										<Tooltip
+											text="Distinct nodes this relay was seen handing off to, across {b.pathVolume.toLocaleString()} packets. RF is broadcast, so the next hop varies — a typical relay here has ~13 at ~44%. Exactly one, over many packets, is the signature of a wired link rather than a radio."
+										>
+											<span
+												class="label normal-case tnum {b.nextHops === 1 && b.pathVolume >= 200
+													? 'text-amber'
+													: 'text-fg-faint'}"
+												>{b.nextHops} next hop{b.nextHops === 1 ? '' : 's'} · {(
+													b.nextHopTopShare * 100
+												).toFixed(0)}%</span
+											>
 										</Tooltip>
 									{/if}
 									<div class="ml-auto flex items-center gap-2">

@@ -339,6 +339,12 @@ export interface ForeignNode {
 	captive?: boolean; // transitPct >= 95% (no alternative route)
 }
 export interface BridgeCandidate {
+	/** How the relay behaves physically, from all payload types. RF is broadcast so
+	 *  the next hop varies (median relay: 13 distinct, 44% top share); a relay whose
+	 *  egress is a wire has exactly one, forever. */
+	pathVolume: number;
+	nextHops: number;
+	nextHopTopShare: number;
 	nodeKey: string;
 	name: string;
 	captiveCount: number; // foreign nodes ≥95% captive to this node
@@ -359,6 +365,12 @@ export interface InjectionReport {
 	 *  existed). Shown so a quiet result reads as "clean data", not "broken scan". */
 	advertsScanned: number;
 	advertsRejected: number;
+	/** Every decoded packet, those carrying at least one hop, and hops whose hash
+	 *  prefix matched no single node. Path evidence comes from all payload types,
+	 *  not just adverts. */
+	packetsScanned: number;
+	pathsScanned: number;
+	unresolvedHops: number;
 	bridges: BridgeCandidate[];
 	injectors: InjectorCandidate[];
 }

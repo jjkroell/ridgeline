@@ -147,7 +147,7 @@
 			<div class="border-line/60 bg-panel mb-3 rounded-2xl border px-4 py-3">
 				<div class="label normal-case text-fg-faint mb-1">Scan</div>
 				<div class="font-mono text-fg-dim text-[0.68rem]">
-					{report.advertsScanned.toLocaleString()} adverts / {report.windowHours.toFixed(0)}h
+					{report.packetsScanned.toLocaleString()} packets · {report.advertsScanned.toLocaleString()} adverts / {report.windowHours.toFixed(0)}h
 					{#if report.advertsRejected > 0}
 						· <span class="text-amber">{report.advertsRejected.toLocaleString()} rejected (bad signature)</span>
 					{:else}
@@ -170,6 +170,11 @@
 							</div>
 							<div class="text-fg-faint mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[0.62rem]">
 								<span class="text-coral">{b.captiveCount}/{b.foreignThrough} captive</span>
+									{#if b.pathVolume > 0}
+										<span class={b.nextHops === 1 && b.pathVolume >= 200 ? 'text-amber' : ''}
+											>{b.nextHops} next hop{b.nextHops === 1 ? '' : 's'}</span
+										>
+									{/if}
 								<span>{(b.captiveFraction * 100).toFixed(0)}% of foreign</span>
 								{#if b.foreignKm > 5}<span>{b.foreignKm.toFixed(0)} km</span>{/if}
 								<button onclick={() => (expanded[b.nodeKey] = !expanded[b.nodeKey])} class="active:text-signal underline">{expanded[b.nodeKey] ? 'hide' : 'show'} nodes</button>

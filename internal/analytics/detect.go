@@ -137,10 +137,16 @@ type BridgeCandidate struct {
 	Known bool `json:"known,omitempty"`
 }
 
-// MigrationEvent records a node that stopped being heard directly while its
-// traffic kept arriving relayed — the signature of a node moving to the far side
-// of a bridge (or simply out of every observer's earshot). The pubkey is
-// unchanged, so nothing else in the system notices.
+// MigrationEvent records a node that stopped being heard directly and whose
+// traffic now arrives through a bridge — it changed sides. The pubkey is
+// unchanged, so nothing else in the system notices it moved.
+//
+// Losing direct reception has several causes: a frequency change, the node
+// moving, an antenna or propagation change, or the observer that used to hear it
+// going offline. Only the first is a side change, and a bridge picking the node
+// up afterwards is what distinguishes it — so events without an attributable
+// bridge are not reported here. On the dev mesh that is the difference between
+// one event and eight.
 type MigrationEvent struct {
 	Key          string `json:"key"`
 	Name         string `json:"name"`
@@ -540,6 +546,9 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 				ev.ViaBridge = b.Name
 				break
 			}
+		}
+		if ev.ViaBridge == "" {
+			continue // out of earshot, not a side change — see the type comment
 		}
 		report.Migrations = append(report.Migrations, ev)
 	}

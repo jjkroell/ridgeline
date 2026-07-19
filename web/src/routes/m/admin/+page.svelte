@@ -48,7 +48,11 @@
 
 	const isBlocked = (kind: string, key: string) => blocks.some((b) => b.kind === kind && b.key.toUpperCase() === key.toUpperCase());
 	const isAllowed = (key: string) => blocks.some((b) => b.kind === 'allow' && b.key.toUpperCase() === key.toUpperCase());
-	const visibleBridges = $derived((report?.bridges ?? []).filter((b) => !isAllowed(b.nodeKey)));
+	// Dismissed isn't a bridge; known is already decided. Both leave the candidate
+	// list — known bridges keep their own section below.
+	const visibleBridges = $derived(
+		(report?.bridges ?? []).filter((b) => !isAllowed(b.nodeKey) && !b.known && !isKnown(b.nodeKey))
+	);
 	const isKnown = (key: string) => blocks.some((b) => b.kind === 'known' && b.key.toUpperCase() === key.toUpperCase());
 	// A sanctioned bridge is not quarantined — it gets its own list.
 	const knownEntries = $derived(blocks.filter((b) => b.kind === 'known'));
@@ -205,9 +209,7 @@
 								{#if isBlocked('bridge', b.nodeKey)}
 									<span class="text-amber self-center text-xs">quarantined</span>
 								{:else}
-									{#if !(b.known || isKnown(b.nodeKey))}
-										<button onclick={() => markKnown(b)} disabled={busy === b.nodeKey} class="border-signal/40 text-signal flex-1 rounded-xl border py-2 text-xs font-600 disabled:opacity-50">Known</button>
-									{/if}
+									<button onclick={() => markKnown(b)} disabled={busy === b.nodeKey} class="border-signal/40 text-signal flex-1 rounded-xl border py-2 text-xs font-600 disabled:opacity-50">Known</button>
 									<button onclick={() => dismissBridge(b)} disabled={busy === b.nodeKey} class="border-line text-fg-dim flex-1 rounded-xl border py-2 text-xs font-600 disabled:opacity-50">Dismiss</button>
 									<button onclick={() => quarantineBridge(b)} disabled={busy === b.nodeKey} class="border-amber/40 text-amber flex-1 rounded-xl border py-2 text-xs font-600 disabled:opacity-50">Quarantine</button>
 								{/if}
@@ -252,7 +254,7 @@
 
 		<!-- quarantine list -->
 		{#if report && report.migrations.length > 0}
-			<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">NO LONGER HEARD DIRECTLY · {report.migrations.length}</h2>
+			<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">MOVED BEHIND A BRIDGE · {report.migrations.length}</h2>
 			<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
 				{#each report.migrations as m (m.key)}
 					<div class="px-4 py-2.5">
@@ -260,7 +262,7 @@
 						{#if m.viaBridge}
 							<span class="text-amber ml-1 text-[0.62rem]">now behind {m.viaBridge}</span>
 						{/if}
-						<div class="text-fg-faint font-mono text-[0.62rem]">{m.relayedAfter} relayed since it went quiet</div>
+						<div class="text-fg-faint font-mono text-[0.62rem]">{m.relayedAfter} relayed since it stopped being heard directly</div>
 					</div>
 				{/each}
 			</div>

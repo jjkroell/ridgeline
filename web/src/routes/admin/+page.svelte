@@ -84,7 +84,14 @@
 	// Bridge candidates minus any the admin has dismissed as known-good.
 	const isKnown = (key: string) =>
 		blocks.some((b) => b.kind === 'known' && b.key.toUpperCase() === key.toUpperCase());
-	const visibleBridges = $derived((report?.bridges ?? []).filter((b) => !isAllowed(b.nodeKey)));
+	// Candidates are things to decide about. A dismissed node isn't a bridge and a
+	// known one is already decided — both belong out of this list (known bridges
+	// keep their own section, so they stay visible).
+	const visibleBridges = $derived(
+		(report?.bridges ?? []).filter(
+			(b) => !isAllowed(b.nodeKey) && !b.known && !isKnown(b.nodeKey)
+		)
+	);
 
 	async function quarantineBridge(b: BridgeCandidate) {
 		busy = b.nodeKey;
@@ -414,13 +421,6 @@
 									<span class="h-2 w-2 shrink-0 rounded-full" style="background:var(--color-coral)"></span>
 									<a href="/nodes/{b.nodeKey}" class="text-fg hover:text-signal font-600">{b.name}</a>
 									<span class="font-mono text-fg-faint text-[0.62rem]">{b.nodeKey.slice(0, 12)}…</span>
-									{#if b.known || isKnown(b.nodeKey)}
-										<Tooltip text="You marked this bridge as sanctioned. It's still detected and listed — the traffic is real — but it isn't a finding that needs acting on.">
-											<span class="bg-signal/15 text-signal rounded-full px-2 py-0.5 text-[0.62rem] font-600"
-												>known bridge</span
-											>
-										</Tooltip>
-									{/if}
 									{#each b.signals as sig (sig)}
 										<Tooltip
 											text={sig === 'wired'
@@ -470,15 +470,13 @@
 										{#if isBlocked('bridge', b.nodeKey)}
 											<span class="label text-amber">quarantined</span>
 										{:else}
-											{#if !(b.known || isKnown(b.nodeKey))}
-												<Tooltip text="A real bridge you run on purpose — keep it listed but stop treating it as a new finding. Nothing is blocked or hidden.">
-													<button
-														onclick={() => markKnown(b)}
-														disabled={busy === b.nodeKey}
-														class="border-signal/40 text-signal hover:bg-signal/15 ml-2 rounded-[var(--radius)] border px-3 py-1 text-xs font-600 transition-colors disabled:opacity-50"
-													>Known</button>
-												</Tooltip>
-											{/if}
+											<Tooltip text="A real bridge you run on purpose. It moves to the Known bridges list and stops appearing as a candidate. Nothing is blocked or hidden.">
+												<button
+													onclick={() => markKnown(b)}
+													disabled={busy === b.nodeKey}
+													class="border-signal/40 text-signal hover:bg-signal/15 ml-2 rounded-[var(--radius)] border px-3 py-1 text-xs font-600 transition-colors disabled:opacity-50"
+												>Known</button>
+											</Tooltip>
 											<Tooltip text="Not a bridge — stop flagging this node">
 												<button
 													onclick={() => dismissBridge(b)}
@@ -528,9 +526,9 @@
 			{#if report.migrations.length > 0}
 				<section class="panel rise mt-6">
 					<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
-						<h2 class="font-display text-fg text-sm font-700 tracking-wide">NO LONGER HEARD DIRECTLY</h2>
+						<h2 class="font-display text-fg text-sm font-700 tracking-wide">MOVED BEHIND A BRIDGE</h2>
 						<span class="label normal-case text-fg-faint"
-							>still relaying, but no observer hears them at zero hops</span
+							>nodes that stopped being heard directly and now arrive through a bridge</span
 						>
 						<span class="label ml-auto tnum">{report.migrations.length}</span>
 					</div>

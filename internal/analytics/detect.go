@@ -450,6 +450,14 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 				captive++
 			}
 		}
+		// A wired egress is the fingerprint; carrying a far side is the function.
+		// Without at least one node reaching the mesh through it, this relay is
+		// bridging nothing — it is an ordinary repeater with exactly one reachable
+		// neighbour, which looks identical in the path data and is far more common.
+		// Requiring a far side is what separates the two.
+		if len(foreign) == 0 {
+			continue
+		}
 		sort.Slice(foreign, func(i, j int) bool { return foreign[i].TransitPct > foreign[j].TransitPct })
 		bc := BridgeCandidate{
 			Signals:         []string{signalWired},

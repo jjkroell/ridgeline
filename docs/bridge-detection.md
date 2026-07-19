@@ -185,9 +185,17 @@ reception arrives after its newer relayed ones and resets their count to zero,
 hiding precisely the migrations being looked for.
 
 `minWiredPackets = 100` is the bar for a single observed next hop to count as
-evidence. It cannot separate a wire from a relay with exactly one reachable
-neighbour, so a handful of ordinary relays appear alongside real bridges; they
-carry 100–260 packets against the bridge's 1,417, and the console's Dismiss
-action exists for them. Nodes listed as "behind" a wired relay must route ≥25%
+evidence. That fingerprint alone is not enough: an ordinary repeater with exactly
+one reachable neighbour looks identical in the path data and is far more common.
+What separates them is FUNCTION — a bridge carries a far side, a chained repeater
+carries nothing — so a wired candidate must have at least one node reaching the
+mesh through it. Requiring that removed every ordinary repeater from the console
+(`#1`, `NW Dublin at 14th`, `425.ve7gnr`, `HELTEC REPEATER`, `MERCS.ca_Mill Lake`,
+`Ve7lse Test 2`) while keeping the bridge.
+
+The cost is real: a bridge whose far side is silent in the selected window no
+longer appears in it. The bridge drops out of a 6h window for that reason and is
+present at 24h and 7d. A bridge carrying nothing is arguably not something to
+act on, but the shorter windows are now less sensitive. Nodes listed as "behind" a wired relay must route ≥25%
 of their traffic through it, or the list fills with nodes that crossed it once
 while flooding.

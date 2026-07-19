@@ -298,7 +298,12 @@
 
 	// Purged entries are deleted (not "quarantined") — they stay blocked so they
 	// can't re-ingest, but they belong in their own section, not the quarantine list.
-	const quarantineEntries = $derived(blocks.filter((b) => b.reason !== 'purged'));
+	// A sanctioned bridge is not quarantined — nothing is blocked or hidden — so
+	// it gets its own list rather than sitting under "blocked/dismissed".
+	const knownEntries = $derived(blocks.filter((b) => b.kind === 'known'));
+	const quarantineEntries = $derived(
+		blocks.filter((b) => b.reason !== 'purged' && b.kind !== 'known')
+	);
 	const purgedEntries = $derived(blocks.filter((b) => b.reason === 'purged'));
 </script>
 
@@ -394,15 +399,14 @@
 			</div>
 
 			<!-- RF bridges -->
+			{#if visibleBridges.length > 0}
 			<section class="panel rise mt-6">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
 					<h2 class="font-display text-fg text-sm font-700 tracking-wide">RF BRIDGE CANDIDATES</h2>
 					<span class="label normal-case text-fg-faint">nodes funnelling never-heard-direct traffic in</span>
 					<span class="label ml-auto tnum">{visibleBridges.length}</span>
 				</div>
-				{#if visibleBridges.length === 0}
-					<div class="text-fg-faint px-5 py-8 text-center text-sm">No RF bridge signature detected in this window.</div>
-				{:else}
+				{#if true}
 					<div class="divide-line/40 divide-y">
 						{#each visibleBridges as b (b.nodeKey)}
 							<div class="px-5 py-3">
@@ -516,6 +520,9 @@
 					</div>
 				{/if}
 			</section>
+			{/if}
+
+			
 
 			<!-- Nodes that stopped being heard directly -->
 			{#if report.migrations.length > 0}
@@ -551,15 +558,14 @@
 			{/if}
 
 			<!-- MQTT injectors -->
+			{#if (report.injectors?.length ?? 0) > 0}
 			<section class="panel rise mt-6">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
 					<h2 class="font-display text-fg text-sm font-700 tracking-wide">MQTT INJECTOR CANDIDATES</h2>
 					<span class="label normal-case text-fg-faint">observers that are the sole source of nodes</span>
 					<span class="label ml-auto tnum">{report.injectors?.length ?? 0}</span>
 				</div>
-				{#if (report.injectors?.length ?? 0) === 0}
-					<div class="text-fg-faint px-5 py-8 text-center text-sm">No rogue MQTT publisher detected in this window.</div>
-				{:else}
+				{#if true}
 					<div class="divide-line/40 divide-y">
 						{#each report.injectors as i (i.observer)}
 							<div class="px-5 py-3">
@@ -599,19 +605,47 @@
 					</div>
 				{/if}
 			</section>
+			{/if}
+
+		
+		{/if}
+
+		<!-- Known bridges: real, sanctioned, and deliberately kept -->
+		{#if knownEntries.length > 0}
+			<section class="panel rise mt-6">
+				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
+					<h2 class="font-display text-fg text-sm font-700 tracking-wide">KNOWN BRIDGES</h2>
+					<span class="label normal-case text-fg-faint"
+						>bridges you run on purpose — still detected and listed, nothing blocked</span
+					>
+					<span class="label ml-auto tnum">{knownEntries.length}</span>
+				</div>
+				<div class="divide-line/40 divide-y">
+					{#each knownEntries as b (b.kind + b.key)}
+						<div class="flex items-center gap-3 px-5 py-2.5 text-sm">
+							<span class="label text-signal !text-[0.58rem]">known</span>
+							<a href="/nodes/{b.key}" class="text-fg hover:text-signal min-w-0 flex-1 truncate">{b.name || b.key}</a>
+							{#if b.reason}<span class="text-fg-faint text-xs">{b.reason}</span>{/if}
+							<button
+								onclick={() => removeBlock(b)}
+								disabled={busy === b.kind + b.key}
+								class="label hover:text-signal disabled:opacity-50">unmark</button
+							>
+						</div>
+					{/each}
+				</div>
+			</section>
 		{/if}
 
 		<!-- Active quarantines -->
+		{#if quarantineEntries.length > 0}
 		<section class="panel rise mt-6">
 			<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
 				<h2 class="font-display text-fg text-sm font-700 tracking-wide">QUARANTINE LIST</h2>
 				<span class="label normal-case text-fg-faint">blocked = dropped at ingest + hidden · dismissed = excluded from detection</span>
 				<span class="label ml-auto tnum">{quarantineEntries.length}</span>
 			</div>
-			{#if quarantineEntries.length === 0}
-				<div class="text-fg-faint px-5 py-8 text-center text-sm">Nothing quarantined or dismissed.</div>
-			{:else}
-				<div class="divide-line/40 divide-y">
+			<div class="divide-line/40 divide-y">
 					{#each quarantineEntries as b (b.kind + b.key)}
 						<div class="flex items-center gap-3 px-5 py-2.5 text-sm">
 							<span class="label !text-[0.58rem]" style="color:{kindColor[b.kind] ?? 'var(--color-fg-dim)'}">{kindLabel(b.kind)}</span>
@@ -625,8 +659,8 @@
 						</div>
 					{/each}
 				</div>
-			{/if}
 		</section>
+		{/if}
 
 		<!-- Purged (deleted + still blocked so they can't re-ingest) -->
 		{#if purgedEntries.length > 0}

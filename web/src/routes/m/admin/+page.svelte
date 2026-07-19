@@ -50,7 +50,9 @@
 	const isAllowed = (key: string) => blocks.some((b) => b.kind === 'allow' && b.key.toUpperCase() === key.toUpperCase());
 	const visibleBridges = $derived((report?.bridges ?? []).filter((b) => !isAllowed(b.nodeKey)));
 	const isKnown = (key: string) => blocks.some((b) => b.kind === 'known' && b.key.toUpperCase() === key.toUpperCase());
-	const quarantineEntries = $derived(blocks.filter((b) => b.reason !== 'purged'));
+	// A sanctioned bridge is not quarantined — it gets its own list.
+	const knownEntries = $derived(blocks.filter((b) => b.kind === 'known'));
+	const quarantineEntries = $derived(blocks.filter((b) => b.reason !== 'purged' && b.kind !== 'known'));
 	const purgedEntries = $derived(blocks.filter((b) => b.reason === 'purged'));
 
 	async function quarantineBridge(b: BridgeCandidate) {
@@ -163,11 +165,10 @@
 			</div>
 
 			<!-- bridges -->
+			{#if visibleBridges.length > 0}
 			<h2 class="font-display text-fg mb-2 px-1 text-xs font-700 tracking-wide">RF BRIDGE CANDIDATES · {visibleBridges.length}</h2>
 			<div class="flex flex-col gap-2">
-				{#if visibleBridges.length === 0}
-					<div class="border-line/60 bg-panel text-fg-faint rounded-2xl border px-4 py-6 text-center text-sm">No RF bridge signature in this window.</div>
-				{:else}
+				{#if true}
 					{#each visibleBridges as b (b.nodeKey)}
 						<div class="border-line/60 bg-panel rounded-2xl border p-3.5">
 							<div class="flex items-center gap-2">
@@ -216,13 +217,15 @@
 					{/each}
 				{/if}
 			</div>
+			{/if}
+
+			
 
 			<!-- injectors -->
+			{#if (report.injectors?.length ?? 0) > 0}
 			<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">MQTT INJECTORS · {report.injectors?.length ?? 0}</h2>
 			<div class="flex flex-col gap-2">
-				{#if (report.injectors?.length ?? 0) === 0}
-					<div class="border-line/60 bg-panel text-fg-faint rounded-2xl border px-4 py-6 text-center text-sm">No rogue publisher in this window.</div>
-				{:else}
+				{#if true}
 					{#each report.injectors as i (i.observer)}
 						<div class="border-line/60 bg-panel rounded-2xl border p-3.5">
 							<div class="flex items-center gap-2">
@@ -244,6 +247,9 @@
 			</div>
 		{/if}
 
+		
+		{/if}
+
 		<!-- quarantine list -->
 		{#if report && report.migrations.length > 0}
 			<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">NO LONGER HEARD DIRECTLY · {report.migrations.length}</h2>
@@ -258,13 +264,28 @@
 					</div>
 				{/each}
 			</div>
+			{/if}
+
+		
 		{/if}
 
+		{#if knownEntries.length > 0}
+			<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">KNOWN BRIDGES · {knownEntries.length}</h2>
+			<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
+				{#each knownEntries as b (b.kind + b.key)}
+					<div class="flex items-center gap-3 px-4 py-2.5 text-sm">
+						<span class="label text-signal !text-[0.55rem]">known</span>
+						<a href="/m/nodes/{b.key}" class="text-fg min-w-0 flex-1 truncate">{b.name || b.key.slice(0, 14)}</a>
+						<button onclick={() => removeBlock(b)} disabled={busy === b.kind + b.key} class="text-fg-faint active:text-signal text-xs disabled:opacity-50">unmark</button>
+					</div>
+				{/each}
+			</div>
+		{/if}
+
+		{#if quarantineEntries.length > 0}
 		<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">QUARANTINE LIST · {quarantineEntries.length}</h2>
 		<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
-			{#if quarantineEntries.length === 0}
-				<div class="text-fg-faint px-4 py-6 text-center text-sm">Nothing quarantined.</div>
-			{:else}
+			{#if true}
 				{#each quarantineEntries as b (b.kind + b.key)}
 					<div class="flex items-center gap-3 px-4 py-2.5 text-sm">
 						<span class="label !text-[0.55rem]" style="color:{kindColor[b.kind]}">{kindLabel(b.kind)}</span>

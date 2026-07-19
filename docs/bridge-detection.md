@@ -126,11 +126,41 @@ there was no way to tell whether a tweak helped.
 
 ## Phasing
 
-1. **Signature gate** — reject adverts failing Ed25519 verification.
-2. **All-payload path extraction** — decouple path evidence from advert decoding.
-3. **Determinism scoring** — behind the existing window selector, so old and new
-   can be compared on identical data.
+1. ✅ **Signature gate** — reject adverts failing Ed25519 verification.
+2. ✅ **All-payload path extraction** — path evidence from every payload type,
+   origin attribution still from verified adverts only.
+3. ✅ **Wired detector** — runs alongside captivity; each candidate is labelled
+   with the signal(s) that produced it.
 4. **Recency + changepoint** classification.
 5. **Known-bridge registry.**
 
 Findings surface in the admin console; no automatic notifications.
+
+## Results after phase 3
+
+Both rules run and neither subsumes the other:
+
+- **captivity** finds a bridge with a LARGE far side — many nodes with no
+  alternative route in.
+- **wired** finds one with a SERIAL egress, however few nodes sit behind it.
+
+Measured on the dev mesh, the bridge is now the top candidate at every window:
+
+    [wired]     KOD - Cokley 6      pathVol=1417  nextHops=1  topShare=100%
+                  behind: KOD - Jesse 625 (74% transit)
+    [captivity] Str8Peter SenseCap  pathVol=248   nextHops=7  topShare=42%
+
+Captivity still produces its false positive, but the path evidence now sits
+beside it and contradicts it at a glance: seven next hops is a radio.
+
+Candidates are ranked by number of signals, then by packets carried — ranking on
+captive count first would push a bridge carrying 1,400 packets below a relay that
+squeaked past the threshold with 102.
+
+`minWiredPackets = 100` is the bar for a single observed next hop to count as
+evidence. It cannot separate a wire from a relay with exactly one reachable
+neighbour, so a handful of ordinary relays appear alongside real bridges; they
+carry 100–260 packets against the bridge's 1,417, and the console's Dismiss
+action exists for them. Nodes listed as "behind" a wired relay must route ≥25%
+of their traffic through it, or the list fills with nodes that crossed it once
+while flooding.

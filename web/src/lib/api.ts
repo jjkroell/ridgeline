@@ -345,6 +345,9 @@ export interface BridgeCandidate {
 	pathVolume: number;
 	nextHops: number;
 	nextHopTopShare: number;
+	/** Which rule produced this candidate: "captivity" (a population with no
+	 *  alternative route in), "wired" (an egress that never varies), or both. */
+	signals: string[];
 	nodeKey: string;
 	name: string;
 	captiveCount: number; // foreign nodes ≥95% captive to this node

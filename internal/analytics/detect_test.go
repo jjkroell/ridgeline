@@ -143,3 +143,73 @@ func TestDetectInjectionUsesAllPayloadTypes(t *testing.T) {
 		t.Errorf("UnresolvedHops = %d, want 10", rep.UnresolvedHops)
 	}
 }
+
+// TestDetectInjectionWiredSignal covers the second detector: a relay whose
+// egress never varies. RF is broadcast, so a radiating relay picks up
+// alternative next hops as traffic grows; one that never does is handing off
+// over a cable. This is what finds a bridge with a far side too small for the
+// captivity rule — the bridge that motivated it has two adverting nodes behind
+// it and scores zero captive nodes.
+func TestDetectInjectionWiredSignal(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "wired.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer st.Close()
+
+	wired := "AAAAAA" + strings.Repeat("0", 58)   // hands off only to nextHop
+	nextHop := "BBBBBB" + strings.Repeat("0", 58) // radiates onward
+	other := "CCCCCC" + strings.Repeat("0", 58)
+	nodes := []store.Node{
+		{PublicKey: wired, Name: "Wired Relay", Role: "Repeater"},
+		{PublicKey: nextHop, Name: "Next Hop", Role: "Repeater"},
+		{PublicKey: other, Name: "Other", Role: "Repeater"},
+	}
+
+	rec := func(raw string, n int) {
+		pkt, err := meshcore.DecodeHex(raw)
+		if err != nil || pkt == nil {
+			t.Fatalf("fixture decode: %v", err)
+		}
+		now := time.Now().UTC()
+		for i := 0; i < n; i++ {
+			if err := st.Record(store.Observation{
+				Packet: pkt, RawHex: raw, ObserverID: "obs-a",
+				ReceivedAt: now.Add(-time.Duration(i) * time.Second),
+			}); err != nil {
+				t.Fatalf("record: %v", err)
+			}
+		}
+	}
+	// header 0x15 = GroupText/Flood, pathLen 0x82 = 3-byte hashes, 2 hops.
+	rec("15"+"82"+"AAAAAA"+"BBBBBB"+"C6DEAD"+"0011223344556677", minWiredPackets+20)
+	// The next hop DOES vary its own egress — it must not be flagged.
+	rec("15"+"82"+"BBBBBB"+"CCCCCC"+"C6DEAD"+"0011223344556677", 40)
+	rec("15"+"82"+"BBBBBB"+"AAAAAA"+"C6DEAD"+"0011223344556677", 40)
+
+	rep, err := DetectInjection(st, nodes, time.Now().Add(-6*time.Hour).UTC().Format(time.RFC3339Nano), 0)
+	if err != nil {
+		t.Fatalf("detect: %v", err)
+	}
+	var got *BridgeCandidate
+	for i := range rep.Bridges {
+		if rep.Bridges[i].NodeKey == wired {
+			got = &rep.Bridges[i]
+		}
+		if rep.Bridges[i].NodeKey == nextHop {
+			t.Errorf("a relay with two distinct next hops must not be flagged wired")
+		}
+	}
+	if got == nil {
+		t.Fatalf("wired relay not flagged; candidates=%d", len(rep.Bridges))
+	}
+	if len(got.Signals) != 1 || got.Signals[0] != signalWired {
+		t.Errorf("Signals = %v, want [%s]", got.Signals, signalWired)
+	}
+	if got.NextHops != 1 || got.NextHopTopShare != 1 {
+		t.Errorf("NextHops=%d TopShare=%.2f, want 1 and 1.00", got.NextHops, got.NextHopTopShare)
+	}
+	if got.CaptiveCount != 0 {
+		t.Errorf("CaptiveCount = %d; this candidate exists precisely because captivity found nothing", got.CaptiveCount)
+	}
+}

@@ -18,6 +18,28 @@ const (
 	minCaptiveNodes    = 3   // captive foreign nodes needed to flag a bridge
 	minCaptiveFraction = 0.6 // captive must be a majority of the relay's foreign set
 	minExclusiveNodes  = 3   // nodes sourced by only one observer, to flag an injector
+
+	// minWiredPackets is how much traffic a relay must have carried before a
+	// single observed next hop counts as evidence of a wired egress rather than
+	// coincidence. RF is broadcast, so a radiating relay accumulates alternative
+	// next hops as samples grow — the median relay here reaches 13. Seeing none
+	// over this many packets is not something a radio does; the measured bridge
+	// sat at 1 over 1,417. It cannot, however, distinguish a wire from a relay
+	// with exactly one reachable neighbour, so these are candidates for review
+	// (and the console's Dismiss action exists for the latter).
+	minWiredPackets = 100
+
+	// minBehindTransit is the share of its traffic an origin must route through a
+	// wired relay before being listed as sitting behind it. Without a floor the
+	// list fills with nodes that happened to cross it once — 1% transit is a
+	// coincidence of flooding, not a topology claim.
+	minBehindTransit = 0.25
+)
+
+// Signal names reported on a candidate, so an operator can see which rule fired.
+const (
+	signalCaptivity = "captivity" // a population of nodes with no alternative route in
+	signalWired     = "wired"     // an egress that never varies — a cable, not an antenna
 )
 
 // InjectionReport lists detected ingress points for foreign/injected traffic.
@@ -84,6 +106,14 @@ type BridgeCandidate struct {
 	PathVolume      int     `json:"pathVolume"`
 	NextHops        int     `json:"nextHops"`
 	NextHopTopShare float64 `json:"nextHopTopShare"`
+
+	// Signals names which rule produced this candidate — "captivity", "wired", or
+	// both. They catch different things and neither subsumes the other: captivity
+	// finds a LARGE far side (many nodes with no alternative route in), wired
+	// finds a SERIAL one (a relay whose egress never varies) no matter how few
+	// nodes sit behind it. The bridge that motivated this work has only two
+	// adverting far-side nodes and is invisible to captivity entirely.
+	Signals []string `json:"signals"`
 }
 
 // InjectorCandidate is an observer that is the sole source of a population of
@@ -230,6 +260,7 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 		Injectors:       []InjectorCandidate{},
 	}
 	meshLat, meshLon, haveMesh := centroid(nodes)
+	byRelay := map[string]bool{} // relays already reported, so the two rules merge
 
 	// Bridge candidates by captivity.
 	for relay, origins := range via {
@@ -259,7 +290,9 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 			continue // most of its foreign traffic has alternative routes → legit relay
 		}
 		sort.Slice(foreign, func(i, j int) bool { return foreign[i].TransitPct > foreign[j].TransitPct })
+		byRelay[relay] = true
 		bc := BridgeCandidate{
+			Signals:         []string{signalCaptivity},
 			NodeKey:         relay,
 			Name:            displayName(byKey[relay], relay),
 			CaptiveCount:    captive,
@@ -286,12 +319,82 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 		}
 		report.Bridges = append(report.Bridges, bc)
 	}
-	// Rank by captive count, then captive fraction. Geography is NOT a factor.
-	sort.Slice(report.Bridges, func(i, j int) bool {
-		if report.Bridges[i].CaptiveCount != report.Bridges[j].CaptiveCount {
-			return report.Bridges[i].CaptiveCount > report.Bridges[j].CaptiveCount
+	// Bridge candidates by wired egress. RF is broadcast, so a relay accumulates
+	// alternative next hops as traffic grows; one that never does is handing off
+	// over a cable. This is independent of how many nodes sit behind it, which is
+	// what captivity measures — a bridge serving two nodes is invisible to that
+	// rule but obvious here.
+	for relay, next := range adjacency {
+		if len(next) != 1 || relayVolume[relay] < minWiredPackets {
+			continue
 		}
-		return report.Bridges[i].CaptiveFraction > report.Bridges[j].CaptiveFraction
+		if byRelay[relay] {
+			// Both rules fired on the same relay: label it, don't duplicate it.
+			for i := range report.Bridges {
+				if report.Bridges[i].NodeKey == relay {
+					report.Bridges[i].Signals = append(report.Bridges[i].Signals, signalWired)
+					break
+				}
+			}
+			continue
+		}
+		// Everything routed through it that was never heard directly — the far
+		// side, listed even though it is far below the captivity thresholds.
+		var foreign []ForeignNode
+		captive := 0
+		for origin, cnt := range via[relay] {
+			if directlyHeard[origin] {
+				continue
+			}
+			frac := float64(cnt) / float64(max(1, obsTotal[origin]))
+			if frac < minBehindTransit {
+				continue // crossed it once while flooding; not behind it
+			}
+			n := byKey[origin]
+			fn := ForeignNode{
+				Key: origin, Name: displayName(n, origin), Role: n.Role,
+				Latitude: n.Latitude, Longitude: n.Longitude,
+				TransitPct: frac * 100, Captive: frac >= captiveTransit,
+			}
+			foreign = append(foreign, fn)
+			if fn.Captive {
+				captive++
+			}
+		}
+		sort.Slice(foreign, func(i, j int) bool { return foreign[i].TransitPct > foreign[j].TransitPct })
+		bc := BridgeCandidate{
+			Signals:         []string{signalWired},
+			NodeKey:         relay,
+			Name:            displayName(byKey[relay], relay),
+			CaptiveCount:    captive,
+			ForeignThrough:  len(foreign),
+			CaptiveFraction: float64(captive) / float64(max(1, len(foreign))),
+			Foreign:         foreign,
+			PathVolume:      relayVolume[relay],
+			NextHops:        1,
+			NextHopTopShare: 1,
+		}
+		if haveMesh {
+			if fLat, fLon, ok := captiveCentroid(foreign); ok {
+				bc.ForeignKm = haversineKm(meshLat, meshLon, fLat, fLon)
+			}
+		}
+		report.Bridges = append(report.Bridges, bc)
+	}
+
+	// Rank by how many signals fired, then by how much traffic the claim rests on.
+	// PathVolume is the evidence base for both rules — ranking on captive count
+	// first would push a bridge carrying 1,400 packets below a relay that squeaked
+	// past the threshold with 102. Geography is NOT a factor.
+	sort.Slice(report.Bridges, func(i, j int) bool {
+		a, b := report.Bridges[i], report.Bridges[j]
+		if len(a.Signals) != len(b.Signals) {
+			return len(a.Signals) > len(b.Signals)
+		}
+		if a.PathVolume != b.PathVolume {
+			return a.PathVolume > b.PathVolume
+		}
+		return a.CaptiveCount > b.CaptiveCount
 	})
 
 	// MQTT injector candidates: observers that are the sole source of foreign nodes.

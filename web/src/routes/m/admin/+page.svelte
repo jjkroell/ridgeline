@@ -169,7 +169,12 @@
 								<a href="/m/nodes/{b.nodeKey}" class="text-fg min-w-0 flex-1 truncate text-sm font-600">{b.name}</a>
 							</div>
 							<div class="text-fg-faint mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[0.62rem]">
-								<span class="text-coral">{b.captiveCount}/{b.foreignThrough} captive</span>
+								{#each b.signals as sig (sig)}
+										<span class={sig === 'wired' ? 'text-amber' : 'text-coral'}>{sig}</span>
+									{/each}
+									{#if b.foreignThrough > 0}
+										<span class="text-coral">{b.captiveCount}/{b.foreignThrough} captive</span>
+									{/if}
 									{#if b.pathVolume > 0}
 										<span class={b.nextHops === 1 && b.pathVolume >= 200 ? 'text-amber' : ''}
 											>{b.nextHops} next hop{b.nextHops === 1 ? '' : 's'}</span

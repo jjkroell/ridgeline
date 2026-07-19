@@ -3,6 +3,7 @@ package analytics
 import (
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,9 +46,12 @@ func TestDetectInjectionIntegration(t *testing.T) {
 		rep.PacketsScanned, rep.PathsScanned, rep.UnresolvedHops,
 		rep.AdvertsScanned, rep.AdvertsRejected, len(rep.Bridges), len(rep.Injectors))
 	for _, b := range rep.Bridges {
-		t.Logf("  BRIDGE %s (%s) captive=%d/%d capFrac=%.2f km=%.0f | pathVol=%d nextHops=%d topShare=%.0f%%",
-			b.Name, b.NodeKey[:12], b.CaptiveCount, b.ForeignThrough, b.CaptiveFraction, b.ForeignKm,
+		t.Logf("  [%s] %s (%s) captive=%d/%d | pathVol=%d nextHops=%d topShare=%.0f%%",
+			strings.Join(b.Signals, "+"), b.Name, b.NodeKey[:12], b.CaptiveCount, b.ForeignThrough,
 			b.PathVolume, b.NextHops, b.NextHopTopShare*100)
+		for _, f := range b.Foreign {
+			t.Logf("        behind: %s (%s) transit=%.0f%%", f.Name, f.Key[:10], f.TransitPct)
+		}
 	}
 	for _, in := range rep.Injectors {
 		t.Logf("  INJECTOR %s exclusive=%d", in.Observer, in.ExclusiveCount)

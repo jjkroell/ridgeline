@@ -391,10 +391,27 @@
 									<span class="h-2 w-2 shrink-0 rounded-full" style="background:var(--color-coral)"></span>
 									<a href="/nodes/{b.nodeKey}" class="text-fg hover:text-signal font-600">{b.name}</a>
 									<span class="font-mono text-fg-faint text-[0.62rem]">{b.nodeKey.slice(0, 12)}…</span>
-									<Tooltip text="foreign nodes with no alternative route — ≥95% of their traffic transits this node">
-										<span class="label normal-case tnum text-coral">{b.captiveCount}/{b.foreignThrough} captive</span>
-									</Tooltip>
-									<span class="label normal-case tnum text-fg-faint">{(b.captiveFraction * 100).toFixed(0)}% of foreign</span>
+									{#each b.signals as sig (sig)}
+										<Tooltip
+											text={sig === 'wired'
+												? 'Every packet this relay handed on went to the same node. RF is broadcast, so a radiating relay picks up alternative next hops as traffic grows — one that never does is handing off over a cable. Finds a bridge however few nodes sit behind it.'
+												: 'A population of nodes with no alternative route into the mesh — ≥95% of their traffic transits this node. Finds a bridge with a large far side.'}
+										>
+											<span
+												class="rounded-full px-2 py-0.5 text-[0.62rem] font-600 {sig === 'wired'
+													? 'bg-amber/15 text-amber'
+													: 'bg-coral/15 text-coral'}">{sig}</span
+											>
+										</Tooltip>
+									{/each}
+									{#if b.foreignThrough > 0}
+										<Tooltip text="foreign nodes with no alternative route — ≥95% of their traffic transits this node">
+											<span class="label normal-case tnum text-coral">{b.captiveCount}/{b.foreignThrough} captive</span>
+										</Tooltip>
+									{/if}
+									{#if b.foreignThrough > 0}
+										<span class="label normal-case tnum text-fg-faint">{(b.captiveFraction * 100).toFixed(0)}% of foreign</span>
+									{/if}
 									{#if b.foreignKm > 5}
 										<Tooltip text="distance of the captive cluster from the mesh — a hint only, not used for ranking">
 											<span class="label normal-case tnum text-fg-faint">{b.foreignKm.toFixed(0)} km</span>

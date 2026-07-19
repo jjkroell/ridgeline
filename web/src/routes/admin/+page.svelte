@@ -82,6 +82,8 @@
 		blocks.some((b) => b.kind === 'allow' && b.key.toUpperCase() === key.toUpperCase());
 
 	// Bridge candidates minus any the admin has dismissed as known-good.
+	const isKnown = (key: string) =>
+		blocks.some((b) => b.kind === 'known' && b.key.toUpperCase() === key.toUpperCase());
 	const visibleBridges = $derived((report?.bridges ?? []).filter((b) => !isAllowed(b.nodeKey)));
 
 	async function quarantineBridge(b: BridgeCandidate) {
@@ -103,6 +105,23 @@
 			msg = `Quarantined ${b.name} + ${captive.length} captive nodes — hidden from maps/feed and dropped at ingest.`;
 		} catch (e) {
 			msg = `quarantine: ${(e as Error).message}`;
+		} finally {
+			busy = '';
+		}
+	}
+
+	// Mark a bridge as sanctioned. Unlike Dismiss — which asserts a candidate is
+	// NOT a bridge and hides it — this asserts it is one and is wanted, so it
+	// stays visible, labelled, and sorted below anything unexpected.
+	async function markKnown(b: BridgeCandidate) {
+		busy = b.nodeKey;
+		msg = '';
+		try {
+			await admin.block(auth.csrf, { kind: 'known', key: b.nodeKey, name: b.name, reason: 'known bridge' });
+			await refreshBlocks();
+			msg = `${b.name} marked as a known bridge — it stays listed but won't read as a new finding.`;
+		} catch (e) {
+			msg = `mark known: ${(e as Error).message}`;
 		} finally {
 			busy = '';
 		}
@@ -391,6 +410,13 @@
 									<span class="h-2 w-2 shrink-0 rounded-full" style="background:var(--color-coral)"></span>
 									<a href="/nodes/{b.nodeKey}" class="text-fg hover:text-signal font-600">{b.name}</a>
 									<span class="font-mono text-fg-faint text-[0.62rem]">{b.nodeKey.slice(0, 12)}…</span>
+									{#if b.known || isKnown(b.nodeKey)}
+										<Tooltip text="You marked this bridge as sanctioned. It's still detected and listed — the traffic is real — but it isn't a finding that needs acting on.">
+											<span class="bg-signal/15 text-signal rounded-full px-2 py-0.5 text-[0.62rem] font-600"
+												>known bridge</span
+											>
+										</Tooltip>
+									{/if}
 									{#each b.signals as sig (sig)}
 										<Tooltip
 											text={sig === 'wired'
@@ -434,6 +460,13 @@
 										</Tooltip>
 									{/if}
 									<div class="ml-auto flex items-center gap-2">
+										{#if !(b.known || isKnown(b.nodeKey))}
+											<button
+												onclick={() => markKnown(b)}
+												disabled={busy === b.nodeKey}
+												class="label hover:text-signal disabled:opacity-50">mark known</button
+											>
+										{/if}
 										<button onclick={() => (expanded[b.nodeKey] = !expanded[b.nodeKey])} class="label hover:text-signal">
 											{expanded[b.nodeKey] ? 'hide' : 'show'} nodes
 										</button>

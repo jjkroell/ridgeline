@@ -348,6 +348,8 @@ export interface BridgeCandidate {
 	/** Which rule produced this candidate: "captivity" (a population with no
 	 *  alternative route in), "wired" (an egress that never varies), or both. */
 	signals: string[];
+	/** Operator has sanctioned this bridge: still reported, but not a finding. */
+	known?: boolean;
 	nodeKey: string;
 	name: string;
 	captiveCount: number; // foreign nodes ≥95% captive to this node

@@ -130,6 +130,11 @@ type BridgeCandidate struct {
 	// nodes sit behind it. The bridge that motivated this work has only two
 	// adverting far-side nodes and is invisible to captivity entirely.
 	Signals []string `json:"signals"`
+
+	// Known marks a bridge the operator has sanctioned. It stays in the report —
+	// the bridge is real and worth seeing — but it is not a finding that needs
+	// acting on, and it sorts last so genuine news stays at the top.
+	Known bool `json:"known,omitempty"`
 }
 
 // MigrationEvent records a node that stopped being heard directly while its
@@ -350,6 +355,7 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 
 	meshLat, meshLon, haveMesh := centroid(nodes)
 	byRelay := map[string]bool{} // relays already reported, so the two rules merge
+	known := st.KnownBridges()
 
 	// Bridge candidates by captivity.
 	for relay, origins := range via {
@@ -483,8 +489,16 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 	// PathVolume is the evidence base for both rules — ranking on captive count
 	// first would push a bridge carrying 1,400 packets below a relay that squeaked
 	// past the threshold with 102. Geography is NOT a factor.
+	for i := range report.Bridges {
+		report.Bridges[i].Known = known[strings.ToUpper(report.Bridges[i].NodeKey)]
+	}
 	sort.Slice(report.Bridges, func(i, j int) bool {
 		a, b := report.Bridges[i], report.Bridges[j]
+		// A sanctioned bridge is not news: it sorts last however strong its
+		// evidence, so an unexpected one is never buried under the expected one.
+		if a.Known != b.Known {
+			return !a.Known
+		}
 		if len(a.Signals) != len(b.Signals) {
 			return len(a.Signals) > len(b.Signals)
 		}

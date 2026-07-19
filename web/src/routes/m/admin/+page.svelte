@@ -49,6 +49,7 @@
 	const isBlocked = (kind: string, key: string) => blocks.some((b) => b.kind === kind && b.key.toUpperCase() === key.toUpperCase());
 	const isAllowed = (key: string) => blocks.some((b) => b.kind === 'allow' && b.key.toUpperCase() === key.toUpperCase());
 	const visibleBridges = $derived((report?.bridges ?? []).filter((b) => !isAllowed(b.nodeKey)));
+	const isKnown = (key: string) => blocks.some((b) => b.kind === 'known' && b.key.toUpperCase() === key.toUpperCase());
 	const quarantineEntries = $derived(blocks.filter((b) => b.reason !== 'purged'));
 	const purgedEntries = $derived(blocks.filter((b) => b.reason === 'purged'));
 
@@ -60,6 +61,11 @@
 			await refreshBlocks();
 			msg = `Quarantined ${b.name} + ${captive.length} captive nodes.`;
 		} catch (e) { msg = `quarantine: ${(e as Error).message}`; } finally { busy = ''; }
+	}
+	async function markKnown(b: BridgeCandidate) {
+		busy = b.nodeKey; msg = '';
+		try { await admin.block(auth.csrf, { kind: 'known', key: b.nodeKey, name: b.name, reason: 'known bridge' }); await refreshBlocks(); msg = `${b.name} marked as a known bridge.`; }
+		catch (e) { msg = `mark known: ${(e as Error).message}`; } finally { busy = ''; }
 	}
 	async function dismissBridge(b: BridgeCandidate) {
 		busy = b.nodeKey; msg = '';
@@ -198,6 +204,9 @@
 								{#if isBlocked('bridge', b.nodeKey)}
 									<span class="text-amber self-center text-xs">quarantined</span>
 								{:else}
+									{#if !(b.known || isKnown(b.nodeKey))}
+										<button onclick={() => markKnown(b)} disabled={busy === b.nodeKey} class="border-signal/40 text-signal flex-1 rounded-xl border py-2 text-xs font-600 disabled:opacity-50">Known</button>
+									{/if}
 									<button onclick={() => dismissBridge(b)} disabled={busy === b.nodeKey} class="border-line text-fg-dim flex-1 rounded-xl border py-2 text-xs font-600 disabled:opacity-50">Dismiss</button>
 									<button onclick={() => quarantineBridge(b)} disabled={busy === b.nodeKey} class="border-amber/40 text-amber flex-1 rounded-xl border py-2 text-xs font-600 disabled:opacity-50">Quarantine</button>
 								{/if}

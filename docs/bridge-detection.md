@@ -114,10 +114,16 @@ modes means dual-homing or a spoofed key. Same statistic, different verdict.
 
 ## Registry
 
-Let an operator mark a node as a sanctioned bridge — ideally tied to node claims,
-since ownership is already provable over RF. A known bridge then renders as such
-instead of recurring as a candidate. Same principle as the purge policy: a claim
-beats a heuristic.
+An operator can mark a bridge as sanctioned (blocklist kind `known`). This is the
+opposite assertion to `allow`/Dismiss, which says a candidate is NOT a bridge and
+hides it: `known` says it IS one and is wanted, so it stays visible and labelled.
+Nothing is blocked or hidden — a sanctioned bridge's traffic is exactly the
+traffic the operator wants to keep.
+
+Known bridges sort last however strong their evidence, so an unexpected bridge is
+never buried beneath the expected one. Without this the operator's own bridge is
+the top finding on every scan forever, which is the alert fatigue this work set
+out to avoid.
 
 ## Validation set
 
@@ -133,7 +139,8 @@ there was no way to tell whether a tweak helped.
    with the signal(s) that produced it.
 4. ✅ **Recency + changepoint** classification — side membership from recent
    evidence, and nodes that stop being heard directly reported in their own right.
-5. **Known-bridge registry.**
+5. ✅ **Known-bridge registry** — mark a bridge as sanctioned; it stays reported
+   and labelled, sorted below anything unexpected.
 
 Findings surface in the admin console; no automatic notifications.
 

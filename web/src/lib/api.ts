@@ -354,6 +354,11 @@ export interface InjectorCandidate {
 }
 export interface InjectionReport {
 	windowHours: number;
+	/** Adverts decoded in the window, and how many were dropped because their
+	 *  Ed25519 signature didn't verify (a corrupt key invents a node that never
+	 *  existed). Shown so a quiet result reads as "clean data", not "broken scan". */
+	advertsScanned: number;
+	advertsRejected: number;
 	bridges: BridgeCandidate[];
 	injectors: InjectorCandidate[];
 }

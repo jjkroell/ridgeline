@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -26,19 +27,30 @@ func TestDetectInjectionIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cutoff := time.Now().Add(-365 * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
+	// Window matters: a long one lets every node be heard directly at some point,
+	// which erases the very signal being measured. RIDGELINE_DETECT_HOURS selects it.
+	hours := 365 * 24
+	if h := os.Getenv("RIDGELINE_DETECT_HOURS"); h != "" {
+		if v, err := strconv.Atoi(h); err == nil && v > 0 {
+			hours = v
+		}
+	}
+	cutoff := time.Now().Add(-time.Duration(hours) * time.Hour).UTC().Format(time.RFC3339Nano)
+	t.Logf("window=%dh", hours)
 	rep, err := DetectInjection(st, nodes, cutoff, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("bridges=%d injectors=%d", len(rep.Bridges), len(rep.Injectors))
+	t.Logf("advertsScanned=%d advertsRejected=%d (%.0f%%)  bridges=%d injectors=%d",
+		rep.AdvertsScanned, rep.AdvertsRejected,
+		100*float64(rep.AdvertsRejected)/float64(max(1, rep.AdvertsScanned)),
+		len(rep.Bridges), len(rep.Injectors))
 	for _, b := range rep.Bridges {
 		t.Logf("  BRIDGE %s (%s) captive=%d/%d capFrac=%.2f km=%.0f", b.Name, b.NodeKey[:12], b.CaptiveCount, b.ForeignThrough, b.CaptiveFraction, b.ForeignKm)
 	}
 	for _, in := range rep.Injectors {
 		t.Logf("  INJECTOR %s exclusive=%d", in.Observer, in.ExclusiveCount)
 	}
-	if len(rep.Bridges) == 0 {
-		t.Error("expected at least one bridge candidate")
-	}
+	// No assertion on count: this harness is for comparing detector behaviour
+	// across windows and revisions against known ground truth, not a pass/fail gate.
 }

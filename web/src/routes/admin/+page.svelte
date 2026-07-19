@@ -344,6 +344,26 @@
 
 		<!-- Detection results -->
 		{#if report}
+			<!-- Scan summary: says how much evidence the verdict rests on, so an
+			     empty result reads as "clean window" rather than "scan broken". -->
+			<div class="panel rise mt-6 flex flex-wrap items-center gap-x-6 gap-y-1 px-5 py-3">
+				<span class="label normal-case text-fg-faint">Scanned</span>
+				<span class="font-mono text-fg-dim text-xs tnum"
+					>{report.advertsScanned.toLocaleString()} adverts over {report.windowHours.toFixed(0)}h</span
+				>
+				{#if report.advertsRejected > 0}
+					<Tooltip
+						text="Adverts whose Ed25519 signature didn't verify. A corrupt public key invents a node that never existed, so these are dropped before scoring — they used to surface as injector candidates."
+					>
+						<span class="text-amber font-mono text-xs tnum"
+							>{report.advertsRejected.toLocaleString()} rejected (bad signature)</span
+						>
+					</Tooltip>
+				{:else}
+					<span class="text-fg-faint font-mono text-xs">all signatures verified</span>
+				{/if}
+			</div>
+
 			<!-- RF bridges -->
 			<section class="panel rise mt-6">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">

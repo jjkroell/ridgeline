@@ -22,9 +22,15 @@ const (
 
 // InjectionReport lists detected ingress points for foreign/injected traffic.
 type InjectionReport struct {
-	WindowHours float64             `json:"windowHours"`
-	Bridges     []BridgeCandidate   `json:"bridges"`   // RF bridges
-	Injectors   []InjectorCandidate `json:"injectors"` // rogue MQTT publishers
+	WindowHours float64 `json:"windowHours"`
+	// AdvertsScanned counts adverts decoded in the window; AdvertsRejected counts
+	// those dropped because their Ed25519 signature did not verify. Surfaced so an
+	// operator can see how much of the traffic was unusable rather than wondering
+	// why a busy window produced few candidates.
+	AdvertsScanned  int                 `json:"advertsScanned"`
+	AdvertsRejected int                 `json:"advertsRejected"`
+	Bridges         []BridgeCandidate   `json:"bridges"`   // RF bridges
+	Injectors       []InjectorCandidate `json:"injectors"` // rogue MQTT publishers
 }
 
 // ForeignNode is a node identified as injected (heard only via a bridge/injector).
@@ -93,6 +99,7 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 	}
 	resolve := newPrefixResolver(nodes)
 
+	var scanned, rejected int                 // adverts seen / dropped as unverifiable
 	directlyHeard := map[string]bool{}        // origin heard at zero hops
 	reporters := map[string]map[string]bool{} // origin -> set of observer ids
 	obsTotal := map[string]int{}              // origin -> # of its observed (pathed) adverts
@@ -103,6 +110,19 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 	for _, ro := range raws {
 		pkt, err := meshcore.DecodeHex(ro.RawHex)
 		if err != nil || pkt == nil || pkt.Advert == nil || pkt.Advert.PublicKey == "" {
+			continue
+		}
+		scanned++
+		// Only trust adverts whose Ed25519 signature verifies. A corrupt advert
+		// carries a corrupt public key and a corrupt path-length byte, which
+		// invents both a phantom origin and a phantom route through whichever
+		// relays its garbage hops happen to resolve to. Left ungated these
+		// dominate the output: on the dev mesh ~half of all adverts in a 24h
+		// window fail this check, and every candidate the detector produced was
+		// built from them. The signature is the originator's own, so a packet
+		// that passes has an authentic key and an intact payload.
+		if !pkt.Advert.SignatureValid {
+			rejected++
 			continue
 		}
 		origin := strings.ToUpper(pkt.Advert.PublicKey)
@@ -136,9 +156,11 @@ func DetectInjection(st *store.Store, nodes []store.Node, sinceISO string, scanC
 	}
 
 	report := &InjectionReport{
-		WindowHours: windowHoursFrom(sinceISO),
-		Bridges:     []BridgeCandidate{},
-		Injectors:   []InjectorCandidate{},
+		WindowHours:     windowHoursFrom(sinceISO),
+		AdvertsScanned:  scanned,
+		AdvertsRejected: rejected,
+		Bridges:         []BridgeCandidate{},
+		Injectors:       []InjectorCandidate{},
 	}
 	meshLat, meshLon, haveMesh := centroid(nodes)
 

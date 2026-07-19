@@ -144,6 +144,18 @@
 		</div>
 
 		{#if report}
+			<div class="border-line/60 bg-panel mb-3 rounded-2xl border px-4 py-3">
+				<div class="label normal-case text-fg-faint mb-1">Scan</div>
+				<div class="font-mono text-fg-dim text-[0.68rem]">
+					{report.advertsScanned.toLocaleString()} adverts / {report.windowHours.toFixed(0)}h
+					{#if report.advertsRejected > 0}
+						· <span class="text-amber">{report.advertsRejected.toLocaleString()} rejected (bad signature)</span>
+					{:else}
+						· all signatures verified
+					{/if}
+				</div>
+			</div>
+
 			<!-- bridges -->
 			<h2 class="font-display text-fg mb-2 px-1 text-xs font-700 tracking-wide">RF BRIDGE CANDIDATES · {visibleBridges.length}</h2>
 			<div class="flex flex-col gap-2">

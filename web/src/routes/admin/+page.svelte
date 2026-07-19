@@ -460,19 +460,21 @@
 										</Tooltip>
 									{/if}
 									<div class="ml-auto flex items-center gap-2">
-										{#if !(b.known || isKnown(b.nodeKey))}
-											<button
-												onclick={() => markKnown(b)}
-												disabled={busy === b.nodeKey}
-												class="label hover:text-signal disabled:opacity-50">mark known</button
-											>
-										{/if}
 										<button onclick={() => (expanded[b.nodeKey] = !expanded[b.nodeKey])} class="label hover:text-signal">
 											{expanded[b.nodeKey] ? 'hide' : 'show'} nodes
 										</button>
 										{#if isBlocked('bridge', b.nodeKey)}
 											<span class="label text-amber">quarantined</span>
 										{:else}
+											{#if !(b.known || isKnown(b.nodeKey))}
+												<Tooltip text="A real bridge you run on purpose — keep it listed but stop treating it as a new finding. Nothing is blocked or hidden.">
+													<button
+														onclick={() => markKnown(b)}
+														disabled={busy === b.nodeKey}
+														class="border-signal/40 text-signal hover:bg-signal/15 ml-2 rounded-[var(--radius)] border px-3 py-1 text-xs font-600 transition-colors disabled:opacity-50"
+													>Known</button>
+												</Tooltip>
+											{/if}
 											<Tooltip text="Not a bridge — stop flagging this node">
 												<button
 													onclick={() => dismissBridge(b)}

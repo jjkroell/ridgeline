@@ -3,6 +3,8 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"sort"
+	"time"
 )
 
 // Observers used to be identified by their friendly name, which is a label the
@@ -71,46 +73,53 @@ func migrateObserversToPubkey(db *sql.DB) error {
 
 	// Merge every row that shares a public key. A rename produced two rows for one
 	// physical receiver, so the merged row must span both: earliest first_seen,
-	// latest last_seen, summed packet count. The label and live status come from
-	// whichever row was heard from most recently — that is the current name.
-	merged := map[string]*observer{}
+	// latest last_seen, summed packet count.
+	//
+	// Everything that describes the observer's CURRENT identity — its label, live
+	// status, region, radio, and whether it is retired — is taken wholesale from
+	// the most recent row, rather than combined field by field. That keeps the
+	// merged row internally consistent (a label from one era can't end up beside a
+	// status from another), and it means a receiver that was retired under an old
+	// name and has since come back reporting is NOT left hidden: the current row
+	// isn't retired, so the merged observer isn't either.
+	groups := map[string][]observer{}
 	order := []string{}
 	for _, o := range all {
 		key := o.pubkey
 		if key == "" {
 			key = o.id // no public key: keep it keyed by name
 		}
-		cur, seen := merged[key]
-		if !seen {
-			cp := o
-			if cp.name == "" {
-				cp.name = o.id // the old id WAS the friendly name
-			}
-			cp.id = key
-			merged[key] = &cp
+		if _, seen := groups[key]; !seen {
 			order = append(order, key)
-			continue
 		}
-		if o.firstSeen < cur.firstSeen {
-			cur.firstSeen = o.firstSeen
+		groups[key] = append(groups[key], o)
+	}
+
+	merged := map[string]*observer{}
+	for key, rows := range groups {
+		// Most recent last. Timestamps are PARSED, not string-compared: the packet
+		// path writes RFC3339Nano and the status path plain RFC3339, and as strings
+		// '.' (0x2E) sorts before 'Z' (0x5A) — so within the same second a
+		// fractional timestamp would compare as EARLIER than a whole-second one.
+		sort.SliceStable(rows, func(i, j int) bool {
+			return obsTimeLess(rows[i].lastSeen, rows[j].lastSeen)
+		})
+		cur := rows[len(rows)-1]
+		if cur.name == "" {
+			cur.name = cur.id // the old id WAS the friendly name
 		}
-		if o.lastSeen > cur.lastSeen {
-			// This row is the more recent identity, so its label and status win.
-			cur.lastSeen = o.lastSeen
-			if o.name != "" {
-				cur.name = o.name
-			} else {
-				cur.name = o.id
+		cur.id = key
+		cur.packetCount = 0
+		for _, o := range rows {
+			if obsTimeLess(o.firstSeen, cur.firstSeen) {
+				cur.firstSeen = o.firstSeen
 			}
-			cur.region, cur.statusJSON = o.region, o.statusJSON
-			cur.lastStatusAt, cur.radio = o.lastStatusAt, o.radio
+			if obsTimeLess(cur.lastSeen, o.lastSeen) {
+				cur.lastSeen = o.lastSeen
+			}
+			cur.packetCount += o.packetCount
 		}
-		cur.packetCount += o.packetCount
-		// A retirement anywhere in the group retires the merged observer: the
-		// operator retired this physical receiver, whatever it was called then.
-		if o.retiredAt.Valid && !cur.retiredAt.Valid {
-			cur.retiredAt = o.retiredAt
-		}
+		merged[key] = &cur
 	}
 
 	tx, err := db.Begin()
@@ -154,4 +163,20 @@ func migrateObserversToPubkey(db *sql.DB) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// obsTimeLess reports whether observer timestamp a is earlier than b.
+//
+// Observer timestamps are not written in one format: the packet path stamps
+// RFC3339Nano and the status path plain RFC3339. Compared as strings those
+// interleave wrongly — '.' (0x2E) sorts before 'Z' (0x5A), so within the same
+// second a fractional timestamp reads as EARLIER than a whole-second one. Parse
+// both; fall back to a string compare only if either is unparseable.
+func obsTimeLess(a, b string) bool {
+	ta, errA := time.Parse(time.RFC3339, a)
+	tb, errB := time.Parse(time.RFC3339, b)
+	if errA != nil || errB != nil {
+		return a < b
+	}
+	return ta.Before(tb)
 }

@@ -99,3 +99,70 @@ func TestMigrateObserversToPubkey(t *testing.T) {
 		t.Errorf("observers after re-run = %d, want 2 (merged + keyless)", total)
 	}
 }
+
+// TestMigrateMergeTakesCurrentIdentity verifies that the merged observer's
+// identity fields come from the MOST RECENT row. In particular a receiver that
+// was retired under an old name and has since come back reporting must NOT stay
+// hidden — the current row isn't retired, so the merged observer isn't either.
+func TestMigrateMergeTakesCurrentIdentity(t *testing.T) {
+	st := testStore(t)
+	pk := "BB22CC33DD44EE55FF66AA11BB22CC33DD44EE55FF66AA11BB22CC33DD44EE55"
+
+	// Retired under the old name...
+	if _, err := st.db.Exec(`
+		INSERT INTO observers (id, region, pubkey, first_seen, last_seen, packet_count, retired_at)
+		VALUES ('Old Name','R1',?, '2026-01-01T00:00:00Z','2026-02-01T00:00:00Z',4,'2026-02-01T00:00:00Z')`, pk); err != nil {
+		t.Fatalf("insert retired row: %v", err)
+	}
+	// ...then back on the air under a new one, not retired.
+	if _, err := st.db.Exec(`
+		INSERT INTO observers (id, region, pubkey, first_seen, last_seen, packet_count)
+		VALUES ('New Name','R1',?, '2026-03-01T00:00:00Z','2026-04-01T00:00:00Z',6)`, pk); err != nil {
+		t.Fatalf("insert active row: %v", err)
+	}
+
+	if err := migrateObserversToPubkey(st.db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	var name string
+	var retired *string
+	var packets int
+	if err := st.db.QueryRow(`
+		SELECT COALESCE(name,''), retired_at, packet_count FROM observers WHERE id = ?`, pk).
+		Scan(&name, &retired, &packets); err != nil {
+		t.Fatalf("merged observer not found: %v", err)
+	}
+	if name != "New Name" {
+		t.Errorf("name = %q, want the current label %q", name, "New Name")
+	}
+	if retired != nil {
+		t.Errorf("retired_at = %v, want nil — the receiver is reporting again", *retired)
+	}
+	if packets != 10 {
+		t.Errorf("packet_count = %d, want 10 (4+6 across both names)", packets)
+	}
+}
+
+// TestObsTimeLessHandlesMixedPrecision guards the timestamp comparison. The
+// packet path writes RFC3339Nano and the status path plain RFC3339; compared as
+// strings '.' sorts before 'Z', so a fractional timestamp would read as earlier
+// than a whole-second one inside the same second.
+func TestObsTimeLessHandlesMixedPrecision(t *testing.T) {
+	nano := "2026-07-20T04:13:05.999999Z"
+	whole := "2026-07-20T04:13:05Z"
+
+	if nano < whole != true {
+		t.Fatal("precondition: expected the naive string compare to be wrong")
+	}
+	if obsTimeLess(nano, whole) {
+		t.Errorf("obsTimeLess(%s, %s) = true, want false — the fractional time is LATER", nano, whole)
+	}
+	if !obsTimeLess(whole, nano) {
+		t.Errorf("obsTimeLess(%s, %s) = false, want true", whole, nano)
+	}
+	// Unparseable input still gives a deterministic ordering.
+	if obsTimeLess("zzz", "aaa") {
+		t.Error("unparseable timestamps should fall back to a string compare")
+	}
+}

@@ -10,7 +10,7 @@ func TestAdminDeleteObserver(t *testing.T) {
 
 	// Seed an observer row (id has spaces, like the real "VE7NA - 808 Wing RS").
 	const obsID = "VE7NA - 808 Wing RS"
-	if err := st.UpsertObserverStatus(obsID, "YCD", "", "", "", "2026-07-06T20:39:32Z"); err != nil {
+	if err := st.UpsertObserverStatus(obsID, "Observer Label", "R1", "", "", "", "2026-07-06T20:39:32Z"); err != nil {
 		t.Fatalf("seed observer: %v", err)
 	}
 	if obs, _ := st.ListObservers(); len(obs) != 1 {

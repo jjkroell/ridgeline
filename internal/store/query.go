@@ -118,7 +118,9 @@ func (s *Store) Stats() (Stats, error) {
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM nodes`).Scan(&st.Nodes); err != nil {
 		return st, err
 	}
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM observers`).Scan(&st.Observers); err != nil {
+	// Retired observers are excluded so this agrees with the observers page,
+	// which lists only the active ones.
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM observers WHERE retired_at IS NULL`).Scan(&st.Observers); err != nil {
 		return st, err
 	}
 	var last *string

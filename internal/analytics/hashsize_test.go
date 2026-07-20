@@ -67,7 +67,7 @@ func TestConsensusHashSizes(t *testing.T) {
 	now := time.Now().UTC()
 	rec := func(p *meshcore.Packet, hex, obs string, ago time.Duration) {
 		if err := st.Record(store.Observation{
-			Packet: p, RawHex: hex, ObserverID: obs, Region: "YVR",
+			Packet: p, RawHex: hex, ObserverID: obs, Region: "R1",
 			ReceivedAt: now.Add(-ago),
 		}); err != nil {
 			t.Fatal(err)
@@ -108,7 +108,7 @@ func TestConsensusHashSizesPerTransmission(t *testing.T) {
 	now := time.Now().UTC()
 	rec := func(p *meshcore.Packet, hex, obs string, ago time.Duration) {
 		if err := st.Record(store.Observation{
-			Packet: p, RawHex: hex, ObserverID: obs, Region: "YVR",
+			Packet: p, RawHex: hex, ObserverID: obs, Region: "R1",
 			ReceivedAt: now.Add(-ago),
 		}); err != nil {
 			t.Fatal(err)
@@ -134,7 +134,7 @@ func TestConsensusHashSizesPerTransmission(t *testing.T) {
 	}
 }
 
-// TestConsensusHashSizesIgnoresZeroHop reproduces the VE7SCC-R1 bug: a node
+// TestConsensusHashSizesIgnoresZeroHop reproduces a real 3-byte-node bug: a node
 // configured 3-byte floods its size at ~47h intervals (few transmissions), but
 // emits frequent zero-hop adverts that always decode as size 1. Each zero-hop
 // advert lands minutes apart, so it would form its own vote and bury the genuine
@@ -172,7 +172,7 @@ func TestConsensusHashSizesIgnoresZeroHop(t *testing.T) {
 	now := time.Now().UTC()
 	rec := func(p *meshcore.Packet, hex, obs string, ago time.Duration) {
 		if err := st.Record(store.Observation{
-			Packet: p, RawHex: hex, ObserverID: obs, Region: "YVR",
+			Packet: p, RawHex: hex, ObserverID: obs, Region: "R1",
 			ReceivedAt: now.Add(-ago),
 		}); err != nil {
 			t.Fatal(err)

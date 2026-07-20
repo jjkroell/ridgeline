@@ -8,8 +8,8 @@ func TestAdminDeleteObserver(t *testing.T) {
 	st, base, cleanup := newAuthEnv(t)
 	defer cleanup()
 
-	// Seed an observer row (id has spaces, like the real "VE7NA - 808 Wing RS").
-	const obsID = "VE7NA - 808 Wing RS"
+	// Seed an observer row (id has spaces, like real observer names do).
+	const obsID = "Test Observer One"
 	if err := st.UpsertObserverStatus(obsID, "Observer Label", "R1", "", "", "", "2026-07-06T20:39:32Z"); err != nil {
 		t.Fatalf("seed observer: %v", err)
 	}

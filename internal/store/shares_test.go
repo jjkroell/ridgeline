@@ -76,8 +76,8 @@ func TestLocationShares(t *testing.T) {
 
 func TestSharedWithMe(t *testing.T) {
 	st := testStore(t)
-	owner, _ := st.CreateUser("owner@example.com", "h", "VE7OWN")
-	me, _ := st.CreateUser("me@example.com", "h", "VE7ME")
+	owner, _ := st.CreateUser("owner@example.com", "h", "OP-OWNER")
+	me, _ := st.CreateUser("me@example.com", "h", "OP-ME")
 
 	// A grant is unseen by default and appears in the grantee's list.
 	if err := st.ShareLocation(locNode, owner.ID, me.ID); err != nil {
@@ -87,7 +87,7 @@ func TestSharedWithMe(t *testing.T) {
 	if err != nil || len(mine) != 1 {
 		t.Fatalf("expected 1 shared node, got %d err=%v", len(mine), err)
 	}
-	if mine[0].SharedByName != "VE7OWN" || mine[0].Seen {
+	if mine[0].SharedByName != "OP-OWNER" || mine[0].Seen {
 		t.Errorf("share should name owner + be unseen, got %+v", mine[0])
 	}
 	if n, _ := st.UnseenShareCount(me.ID); n != 1 {

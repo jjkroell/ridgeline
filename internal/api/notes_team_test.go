@@ -26,16 +26,16 @@ func TestTeamNotesAndUserSearch(t *testing.T) {
 
 	owner := newClient(t, base)
 	_, ob := owner.do("POST", "/api/auth/register",
-		map[string]string{"email": "owner@example.com", "password": "hunter2hunter2", "displayName": "VE7OWN"}, false)
+		map[string]string{"email": "owner@example.com", "password": "hunter2hunter2", "displayName": "OP-OWNER"}, false)
 	ownerID := int64(owner.user(ob)["id"].(float64))
 
 	friend := newClient(t, base)
 	friend.do("POST", "/api/auth/register",
-		map[string]string{"email": "friend@example.com", "password": "hunter2hunter2", "displayName": "VE7FRIEND"}, false)
+		map[string]string{"email": "friend@example.com", "password": "hunter2hunter2", "displayName": "OP-FRIEND"}, false)
 
 	stranger := newClient(t, base)
 	stranger.do("POST", "/api/auth/register",
-		map[string]string{"email": "stranger@example.com", "password": "hunter2hunter2", "displayName": "VE7STRANGER"}, false)
+		map[string]string{"email": "stranger@example.com", "password": "hunter2hunter2", "displayName": "OP-STRANGER"}, false)
 
 	// Owner claims the node.
 	admin.do("POST", "/api/admin/users/flags",
@@ -49,11 +49,11 @@ func TestTeamNotesAndUserSearch(t *testing.T) {
 
 	// User search: the endpoint is auth-gated + returns 200. (The `do` helper only
 	// decodes JSON objects, so the bare-array body is verified via the store.)
-	if resp, _ := owner.do("GET", "/api/users/search?q=VE7FR", nil, false); resp.StatusCode != 200 {
+	if resp, _ := owner.do("GET", "/api/users/search?q=OP-FR", nil, false); resp.StatusCode != 200 {
 		t.Errorf("user search should be 200, got %d", resp.StatusCode)
 	}
-	if got, _ := st.SearchUsersByName("VE7FR", ownerID, 8); len(got) != 1 || got[0].DisplayName != "VE7FRIEND" {
-		t.Fatalf("search should find VE7FRIEND, got %v", got)
+	if got, _ := st.SearchUsersByName("OP-FR", ownerID, 8); len(got) != 1 || got[0].DisplayName != "OP-FRIEND" {
+		t.Fatalf("search should find OP-FRIEND, got %v", got)
 	}
 	// A too-short query returns an empty list (200, not an error).
 	if resp, _ := owner.do("GET", "/api/users/search?q=x", nil, false); resp.StatusCode != 200 {

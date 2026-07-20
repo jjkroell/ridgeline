@@ -257,7 +257,7 @@ func TestKnownBridgeIsNotBlocked(t *testing.T) {
 	st := testStore(t)
 	bridge := "0485454C383E00112233445566778899AABBCCDDEEFF00112233445566778899"
 
-	if err := st.AddBlock(BlockKnown, bridge, "KOD - Cokley 6", "operator's own bridge"); err != nil {
+	if err := st.AddBlock(BlockKnown, bridge, "Test Bridge Far", "operator's own bridge"); err != nil {
 		t.Fatalf("mark known: %v", err)
 	}
 	if st.ShouldDrop(advertPkt(bridge), "obs-a") {

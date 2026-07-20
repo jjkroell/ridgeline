@@ -44,14 +44,14 @@ func TestNodeHistory(t *testing.T) {
 	// Record chronologically (oldest first), as the daemon ingests in arrival
 	// order — RawWindow's id-DESC scan then yields newest first.
 	if err := st.Record(store.Observation{
-		Packet: relay, RawHex: relayHex, ObserverID: "obs-C", Region: "YVR",
+		Packet: relay, RawHex: relayHex, ObserverID: "obs-C", Region: "R1",
 		ReceivedAt: now.Add(-2 * time.Minute),
 	}); err != nil {
 		t.Fatal(err)
 	}
 	for i, obsID := range []string{"obs-B", "obs-A"} {
 		if err := st.Record(store.Observation{
-			Packet: adv, RawHex: advertFixture, ObserverID: obsID, Region: "YVR",
+			Packet: adv, RawHex: advertFixture, ObserverID: obsID, Region: "R1",
 			ReceivedAt: now.Add(-time.Duration(1-i) * time.Minute),
 		}); err != nil {
 			t.Fatal(err)
@@ -136,7 +136,7 @@ func TestNodeObservers(t *testing.T) {
 	}
 	for _, a := range adverts {
 		if err := st.Record(store.Observation{
-			Packet: adv, RawHex: advertFixture, ObserverID: a.obs, Region: "YVR",
+			Packet: adv, RawHex: advertFixture, ObserverID: a.obs, Region: "R1",
 			SNR: a.snr, ReceivedAt: a.t,
 		}); err != nil {
 			t.Fatal(err)

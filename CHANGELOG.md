@@ -4,6 +4,40 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.6.0] — 2026-07-28
+
+### Added
+- **Five colour themes, replacing the light/dark toggle.** Ridgeline (the
+  default dark), Slate (deep blueprint navy, cyan accent), Graphite (warm
+  near-black brown, brass accent), Paper (warm topographic light) and Mist (cool
+  blue-grey light, indigo accent). A picker in the sidebar and the mobile More
+  sheet previews each theme with its own ground and accent colour. Every palette
+  clears WCAG AA for body and dimmed text, and 3:1 for the faint tier and
+  accents, in both light and dark.
+- **Ago/Clock timestamp toggle on the live feed.** Wall-clock time was
+  previously reachable only by opening a row's detail modal. A segmented control
+  in the toolbar switches every row between elapsed and clock time, on desktop
+  and mobile, persisted under `ridgeline-time-mode`.
+
+### Fixed
+- **Relative timestamps no longer go stale.** `ago()` was computed during
+  render, so a label only refreshed when something else re-rendered the feed —
+  which arriving packets happened to do. Pausing the feed, or a quiet mesh, left
+  every "2m" frozen. The store now owns a 10s clock.
+- **Tooltips are anchored by their measured width, not `max-w-[250px]`.** Any
+  tooltip whose trigger centred within 133px of a viewport edge was pushed to a
+  fixed position; in the sidebar that collapsed a whole row of controls onto one
+  shared spot. The edge-overflow protection it existed for is unchanged.
+- **The feed's Time column widens for clock timestamps** — it was a fixed 34px,
+  sized for "2m", and a wall clock overflowed into the Type badge.
+
+### Internal
+- Themes are selected by `data-theme` on `<html>` (values mutually exclusive, so
+  blocks never compete on specificity). The `theme-light` class now only marks a
+  light base and is what `map-util.isLight()` reads, so all basemap, hillshade
+  and Leaflet call sites were untouched by going from two themes to five.
+  `theme.mode` is gone: call sites use `theme.id` and `theme.isLight`.
+
 ## [v0.5.5] — 2026-07-20
 
 ### Fixed

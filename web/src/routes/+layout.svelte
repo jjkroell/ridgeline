@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import { live } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
+	import { timeMode } from '$lib/time-mode.svelte';
 	import { channels } from '$lib/channels.svelte';
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemap } from '$lib/basemap.svelte';
@@ -25,6 +26,7 @@
 
 	onMount(() => {
 		theme.init();
+		timeMode.init();
 		channels.init();
 		favorites.init();
 		basemap.init();

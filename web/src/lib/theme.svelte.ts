@@ -34,15 +34,15 @@ export const THEMES: ThemeDef[] = [
 		id: 'slate',
 		label: 'Slate',
 		light: false,
-		swatch: ['#111519', '#1a2027', '#6fa8d6'],
-		themeColor: '#0d1114'
+		swatch: ['#0b1220', '#142032', '#5cc8ff'],
+		themeColor: '#0b1220'
 	},
 	{
 		id: 'graphite',
 		label: 'Graphite',
 		light: false,
-		swatch: ['#171512', '#221f1a', '#cba95f'],
-		themeColor: '#121110'
+		swatch: ['#14100c', '#221b14', '#e0a63f'],
+		themeColor: '#14100c'
 	},
 	{
 		id: 'light',
@@ -55,8 +55,8 @@ export const THEMES: ThemeDef[] = [
 		id: 'mist',
 		label: 'Mist',
 		light: true,
-		swatch: ['#e8ecef', '#fdfeff', '#0d7f96'],
-		themeColor: '#e8ecef'
+		swatch: ['#dbe3ec', '#f7fafd', '#2b5fa8'],
+		themeColor: '#dbe3ec'
 	}
 ];
 

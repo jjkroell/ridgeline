@@ -17,8 +17,17 @@
 </script>
 
 <div class="flex flex-col gap-1.5">
-	<span class="label">Theme</span>
-	<div class="flex items-center gap-1.5" role="radiogroup" aria-label="Colour theme">
+	<!-- .label is tracked out 0.14em, which leaves a trailing gap after the last
+	     glyph; the matching indent cancels it so the text optically centres. -->
+	<span class="label {compact ? '' : 'text-center [text-indent:0.14em]'}">Theme</span>
+	<!-- Centred in the desktop sidebar, where the row is narrower than the column.
+	     Left-aligned when compact: the mobile sheet is full-width, so centring
+	     would strand the swatches away from their label. -->
+	<div
+		class="flex items-center gap-1.5 {compact ? '' : 'justify-center'}"
+		role="radiogroup"
+		aria-label="Colour theme"
+	>
 		{#each THEMES as t (t.id)}
 			<Tooltip text={t.label}>
 				<button

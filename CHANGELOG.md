@@ -4,6 +4,15 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.6.1] — 2026-08-02
+
+### Changed
+- **Channels and Map swapped places in the navigation.** Channels moves up to
+  sit directly under Feed, and the static Map drops to where Channels was,
+  between Topology and Identity. Applied to both the desktop sidebar (and its
+  narrow-screen header nav, which renders the same list) and the mobile More
+  sheet, so the two layouts stay in the same order.
+
 ## [v0.6.0] — 2026-07-28
 
 ### Added

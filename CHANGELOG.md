@@ -4,6 +4,63 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.7.0] — 2026-08-06
+
+### Added
+- **Per-node clock health.** Every advert carries the node's own clock;
+  comparing that against when the advert was first heard gives the node's
+  offset from the server. Shown on node detail (desktop and mobile) and in a
+  new CLOCK HEALTH panel on Analytics listing the worst offenders. Only the
+  earliest reception of each advert counts, because MeshCore re-floods an
+  advert payload unchanged and later copies still carry the original timestamp
+  — counting those would make a healthy node look progressively further behind.
+  Only signature-verified adverts are trusted, and the median across adverts is
+  used so one queued or corrupt reading cannot move the figure. Nodes stamped
+  years out are reported separately as **never set** (MeshCore falls back to
+  the firmware build date) rather than as an absurd drift; that is a different
+  fault with a different fix. Live on the dev mesh this immediately found ~19
+  Island repeaters sharing a clock ~27h 57m fast, and 14 nodes that never had
+  a clock set.
+- **Per-packet route map.** A transmission's detail now opens a map of the
+  route(s) it took — one coloured path per observer, earliest reception first,
+  with an All-paths overlay and click-to-isolate. Observers often report
+  different paths for the same flood, so drawing them separately shows that
+  spread instead of collapsing it into a single "best" path that never existed.
+  A hop whose prefix matches several located nodes is drawn dashed with hollow
+  nodes: it is an inference, not a measurement. Shared by desktop and mobile.
+  Drilling into a single repeat shows just that observer's route, with the
+  route selector hidden since there is nothing to choose between. A Trace's
+  header path is never drawn — those bytes are per-hop SNR, not relay hops.
+- **Unscoped-flood relay counts.** Per node, how many plain (unscoped) FLOOD
+  transmissions it forwarded, alongside a new FLOOD SCOPING panel on Analytics
+  showing what share of the mesh's floods carry a region scope. On a mesh using
+  scoping, a repeater running `flood.max.unscoped 0` should forward none, so a
+  non-zero count is a base-config problem on that node. The panel checks
+  adoption first and says so plainly: this mesh is currently ~8% scoped, so the
+  counts are presented as reference rather than as faults, and only switch to
+  fault framing once scoping is actually in use.
+- **Route flag on the feed.** Every row now carries its routing mode —
+  `FLOOD` (unscoped, amber), `T·FLOOD` (region-scoped), `DIRECT`, `T·DIRECT` —
+  so an unscoped flood is visible as it arrives rather than only in aggregate.
+  A toolbar toggle narrows the feed to unscoped floods alone, with a live
+  count, on desktop and mobile.
+- **Shareable map links.** `/map` and `/live-map` (and their mobile screens)
+  now carry centre, zoom, basemap and role filter in the URL, with a Copy link
+  button. Panning updates the URL in place, so a reload keeps your view.
+  Following someone's link never overwrites your own saved basemap preference
+  — it applies for that visit only.
+
+### Changed
+- **Static Map moves directly under Live Map in the desktop navigation.**
+- **Relay traffic share is now weighted by time-on-air, not packet count.** A
+  200-byte advert occupies the channel far longer than a short ack, but the old
+  ratio counted them equally, understating relays that carry bulk traffic and
+  overstating ones that carry chatter. The share keeps its meaning (fraction of
+  relayed traffic transiting the node) and its scale; only the weighting
+  changes. Node detail also reports absolute airtime relayed. Measured over 24h
+  on the dev mesh this reordered 138 of 154 relays, 17 of them in the top 25,
+  while leaving the four busiest unchanged.
+
 ## [v0.6.1] — 2026-08-02
 
 ### Changed

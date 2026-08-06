@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
+	import { replaceState } from '$app/navigation';
 	import { goto } from '$app/navigation';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
@@ -14,6 +16,8 @@
 	import { ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
 	import { computeCoverage, covered, distKm, type CoverageResult } from '$lib/coverage';
 	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
+	import CopyMapLink from '$lib/components/CopyMapLink.svelte';
+	import { parseMapView, hasMapView, shareUrl } from '$lib/map-share';
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
 	import { hasWebGL } from '$lib/webgl';
 
@@ -23,6 +27,22 @@
 	let fbBanner = $state(true); // WebGL-free banner open? (offsets the basemap selector below it)
 	let nodes = $state<Node[]>([]);
 	let didFit = false;
+
+	// Shareable view state. A link frames the map (suppressing the auto-fit)
+	// and previews its basemap without persisting it over the viewer's own.
+	const incoming = parseMapView(page.url);
+	const fromLink = hasMapView(incoming);
+	function currentView() {
+		const c = map?.getCenter();
+		return { lat: c?.lat, lon: c?.lng, zoom: map?.getZoom(), basemap: basemap.id };
+	}
+	function linkUrl() {
+		return shareUrl(page.url, currentView());
+	}
+	function syncUrl() {
+		if (!map) return;
+		replaceState(shareUrl(page.url, currentView()), {});
+	}
 	let basemapLight = false;
 
 	// RF coverage prediction
@@ -104,7 +124,7 @@
 		fit();
 	}
 	function fit() {
-		if (!map || didFit || nodes.length === 0) return;
+		if (!map || didFit || fromLink || nodes.length === 0) return;
 		const b = new maplibregl.LngLatBounds();
 		for (const n of nodes) b.extend([n.longitude!, n.latitude!]);
 		map.fitBounds(b, { padding: 56, maxZoom: 11, duration: 0 });
@@ -208,6 +228,7 @@
 
 	onMount(() => {
 		basemap.init();
+		if (incoming.basemap) basemap.preview(incoming.basemap);
 		webglOk = hasWebGL();
 		if (!webglOk) {
 			refresh();
@@ -219,10 +240,11 @@
 		map = new maplibregl.Map({
 			container: mapEl,
 			style: basemapStyle(currentBasemap, basemapLight),
-			center: [-123.65, 49.25],
-			zoom: 7,
+			center: [incoming.lon ?? -123.65, incoming.lat ?? 49.25],
+			zoom: incoming.zoom ?? 7,
 			attributionControl: { compact: true }
 		});
+		map.on('moveend', syncUrl);
 		map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'top-right');
 		map.on('load', () => {
 			if (!map) return;
@@ -263,6 +285,7 @@
 		<BasemapSelector compact posClass={fbBanner ? 'top-16 left-3' : 'top-3 left-3'} />
 	{:else}
 	<div bind:this={mapEl} class="h-full w-full"></div>
+	<div class="absolute top-3 left-3 z-20"><CopyMapLink url={linkUrl} compact /></div>
 
 	<div class="border-line/60 bg-ink-2/80 pointer-events-none absolute top-3 left-3 z-10 rounded-full border px-3 py-1.5 backdrop-blur-md">
 		<span class="text-fg-dim font-mono text-[0.62rem] tnum">{nodes.length} located</span>

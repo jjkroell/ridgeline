@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
+	import { replaceState } from '$app/navigation';
 	import Seo from '$lib/components/Seo.svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
@@ -18,7 +20,9 @@
 	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
 	import NodeModal from '$lib/components/NodeModal.svelte';
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
+	import CopyMapLink from '$lib/components/CopyMapLink.svelte';
 	import { hasWebGL } from '$lib/webgl';
+	import { parseMapView, hasMapView, shareUrl } from '$lib/map-share';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -31,6 +35,32 @@
 	let nodeKey = $state<string | null>(null);
 
 	const visible = $derived(allLocated.filter((n) => selectedRoles.has(n.role)));
+
+	// ── Shareable view state ──────────────────────────────────────────────────
+	// An incoming link frames the map instead of the usual fit-to-nodes, and
+	// suppresses that auto-fit so it can't yank the recipient off the view they
+	// were sent. The camera is mirrored back into the URL as they pan, so a
+	// reload or a copied address bar keeps the same place.
+	const incoming = parseMapView(page.url);
+	const fromLink = hasMapView(incoming);
+
+	function currentView() {
+		const c = map?.getCenter();
+		return {
+			lat: c?.lat,
+			lon: c?.lng,
+			zoom: map?.getZoom(),
+			basemap: basemap.id,
+			roles: [...selectedRoles]
+		};
+	}
+	function linkUrl() {
+		return shareUrl(page.url, currentView());
+	}
+	function syncUrl() {
+		if (!map) return;
+		replaceState(shareUrl(page.url, currentView()), {});
+	}
 
 	// ── RF coverage prediction (terrain line-of-sight from a planned repeater) ──
 	let coverageMode = $state(false);
@@ -324,7 +354,8 @@
 		// must still fetch even though the MapLibre source/fit below are skipped.
 		if (!map) return;
 		if (ready) updateSource();
-		if (!didFit && allLocated.length > 0) {
+		// A shared link already framed the map — never override it with a fit.
+		if (!didFit && !fromLink && allLocated.length > 0) {
 			fitToNodes();
 			didFit = true;
 		}
@@ -332,6 +363,10 @@
 
 	onMount(() => {
 		basemap.init();
+		// A link's basemap/roles apply to this visit only — preview() deliberately
+		// does not persist, so the recipient's own saved choice survives.
+		if (incoming.basemap) basemap.preview(incoming.basemap);
+		if (incoming.roles) selectedRoles = new Set(incoming.roles);
 		webglOk = hasWebGL();
 		if (!webglOk) {
 			// No WebGL → skip MapLibre entirely; the Leaflet FallbackMap just needs
@@ -345,8 +380,8 @@
 		map = new maplibregl.Map({
 			container: mapEl,
 			style: basemapStyle(currentBasemap, basemapLight),
-			center: [-123.65, 49.25],
-			zoom: 9,
+			center: [incoming.lon ?? -123.65, incoming.lat ?? 49.25],
+			zoom: incoming.zoom ?? 9,
 			attributionControl: { compact: true }
 		});
 		map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
@@ -362,6 +397,9 @@
 		});
 		// Re-add overlays after a basemap (theme) style swap drops them.
 		map.on('styledata', ensureOverlays);
+		// Mirror the camera into the URL. moveend only (not every frame), and
+		// replaceState so panning never fills the back button with history.
+		map.on('moveend', syncUrl);
 		const t = setInterval(plot, 10000);
 		return () => {
 			clearInterval(t);
@@ -411,6 +449,9 @@
 		<div bind:this={mapEl} class="h-full w-full"></div>
 		<MapRoleFilter bind:selected={selectedRoles} />
 		<BasemapSelector />
+		<!-- Top-centre: the left (role filter) and right (basemap) controls both
+		     expand downward when opened, so stacking under either collides. -->
+		<div class="absolute top-3 left-1/2 z-10 -translate-x-1/2"><CopyMapLink url={linkUrl} /></div>
 		{/if}
 
 		<!-- Coverage prediction control (bottom-left; panel expands upward) — shared by

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
+	import { replaceState } from '$app/navigation';
 	import Seo from '$lib/components/Seo.svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
@@ -20,6 +22,8 @@
 	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
 	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
+	import CopyMapLink from '$lib/components/CopyMapLink.svelte';
+	import { parseMapView, shareUrl } from '$lib/map-share';
 	import NodeModal from '$lib/components/NodeModal.svelte';
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
 	import ChimeControls from '$lib/components/ChimeControls.svelte';
@@ -34,6 +38,30 @@
 	let located: Node[] = $state([]); // all located nodes (pulse resolution uses these)
 	let animCount = $state(0);
 	let selectedRoles = $state(new Set(['Repeater', 'RoomServer', 'ChatNode', 'Sensor']));
+
+	// ── Shareable view state ──────────────────────────────────────────────────
+	// A link frames the map and applies its basemap/role filter for this visit
+	// only; basemap.preview() deliberately does not persist, so the recipient's
+	// own saved choice is untouched.
+	const incoming = parseMapView(page.url);
+
+	function currentView() {
+		const c = map?.getCenter();
+		return {
+			lat: c?.lat,
+			lon: c?.lng,
+			zoom: map?.getZoom(),
+			basemap: basemap.id,
+			roles: [...selectedRoles]
+		};
+	}
+	function linkUrl() {
+		return shareUrl(page.url, currentView());
+	}
+	function syncUrl() {
+		if (!map) return;
+		replaceState(shareUrl(page.url, currentView()), {});
+	}
 
 	// ── Low-key audio: a mellow wind-chime as each pulse reaches a node ─────
 	let soundOn = $state(false);
@@ -407,6 +435,8 @@
 		}
 
 		basemap.init();
+		if (incoming.basemap) basemap.preview(incoming.basemap);
+		if (incoming.roles) selectedRoles = new Set(incoming.roles);
 		webglOk = hasWebGL();
 		if (!webglOk) {
 			// No WebGL → no live propagation (it needs MapLibre); show a static
@@ -420,8 +450,8 @@
 		map = new maplibregl.Map({
 			container: mapEl,
 			style: basemapStyle(currentBasemap, basemapLight),
-			center: [-123.9, 49.2],
-			zoom: 8.4,
+			center: [incoming.lon ?? -123.9, incoming.lat ?? 49.2],
+			zoom: incoming.zoom ?? 8.4,
 			attributionControl: { compact: true }
 		});
 		map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
@@ -437,6 +467,9 @@
 		});
 		// Re-add overlays after a basemap (theme) style swap drops them.
 		map.on('styledata', ensureOverlays);
+		// Mirror the camera into the URL on moveend (replaceState, so panning
+		// never fills the back button).
+		map.on('moveend', syncUrl);
 		const t = setInterval(loadNodes, 30000);
 		requestAnimationFrame(frame);
 		return () => {
@@ -489,6 +522,9 @@
 		{:else}
 		<div bind:this={mapEl} class="h-full w-full"></div>
 		<BasemapSelector />
+		<!-- Top-centre: the left (map control) and right (basemap) panels both
+		     expand downward when opened, so stacking under either collides. -->
+		<div class="absolute top-3 left-1/2 z-10 -translate-x-1/2"><CopyMapLink url={linkUrl} /></div>
 
 		<MapRoleFilter bind:selected={selectedRoles} title="Map Control" bind:open={mapCtrlOpen}>
 			<div class="label mb-1.5">Audio</div>

@@ -167,7 +167,14 @@
 <div class="space-y-4 {compact ? 'px-4 py-4' : 'px-6 py-6 md:px-10'}">
 	<!-- Length selector (= which ID-length cohort) -->
 	<div class="panel rise px-5 py-4">
-		<div class="label mb-3">Hash ID length</div>
+		<div class="mb-3 flex items-center justify-between gap-3">
+			<div class="label">Hash ID length</div>
+			<a
+				href="{compact ? '/m' : ''}/hash-ids"
+				class="text-fg-faint hover:text-signal shrink-0 text-xs transition-colors"
+				>How to change this →</a
+			>
+		</div>
 		<div class="flex gap-2">
 			{#each [1, 2, 3] as const as l (l)}
 				<button

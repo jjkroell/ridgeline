@@ -4,6 +4,28 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.7.1] — 2026-08-12
+
+### Added
+- **Multi-byte hash ID guide (`/hash-ids`).** A linkable explainer for why a
+  mesh benefits from moving off 1-byte path IDs, and exactly how to change a
+  repeater, room server or companion. Built as a prerendered route rather than
+  a modal so individual answers can be shared directly — `#why`, `#repeaters`,
+  `#companions` — and so it is indexable and readable without JavaScript, the
+  same treatment `/about` gets. The collision odds are computed from the
+  birthday problem over the 254 usable 1-byte IDs (`00`/`FF` reserved): a coin
+  flip at 20 routing nodes and effectively certain at 50, which is the argument
+  for moving, stated as arithmetic rather than as advice. The cost is stated
+  too — every hop carries that many bytes, so 2 bytes is the recommendation
+  rather than 3 by default.
+  The point the guide leads with is the one operators most often miss: the path
+  width is chosen by whoever *originates* a packet, not by the repeaters
+  carrying it, so a companion's setting governs the whole route even though a
+  companion never appears in a path and cannot itself collide. A mesh whose
+  clients are still on 1 byte keeps 1-byte paths no matter how its repeaters
+  are configured. Reachable from the Hash ID planner, the mobile More sheet,
+  and the sitemap.
+
 ## [v0.7.0] — 2026-08-06
 
 ### Added

@@ -41,9 +41,11 @@
 	];
 
 	const modes = [
+		// Usable, not raw. MeshCore rejects a key whose FIRST byte is 00 or FF
+		// (Identity.cpp), so each extra byte multiplies 254 rather than 256.
 		{ mode: 0, bytes: 1, space: '254', note: 'Legacy default' },
-		{ mode: 1, bytes: 2, space: '65,534', note: 'Recommended' },
-		{ mode: 2, bytes: 3, space: '16,777,214', note: 'Large meshes' }
+		{ mode: 1, bytes: 2, space: '65,024', note: 'Common target' },
+		{ mode: 2, bytes: 3, space: '16,646,144', note: 'Large meshes' }
 	];
 </script>
 
@@ -70,6 +72,10 @@
 					the route can be retraced and replies can be sent back. It doesn't have room for a full
 					32-byte public key, so it writes only the <span class="text-fg">first 1, 2 or 3 bytes</span
 					> — the node's <em>hash ID</em>. That's the ID the planner analyses.
+				</p>
+				<p class="text-fg-faint text-xs">
+					It's a public-key <em>prefix</em> used as a routing label, not a separate
+					cryptographic hash. "Hash ID" is MeshCore's own term, so Ridgeline uses it too.
 				</p>
 			</section>
 
@@ -105,39 +111,44 @@
 					</table>
 				</div>
 				<p class="text-fg-faint text-xs">
-					Odds that at least two nodes collide. At 1 byte it's a coin flip by 20 nodes and a
-					certainty by 50 — collisions aren't an edge case, they're the expected state of any mesh
-					that grows.
+					Odds that <em>at least one</em> duplicate prefix exists in the counted routing population —
+					not the odds that any particular packet fails. At 1 byte it's a coin flip by 20 routing
+					nodes and effectively certain by 50, so uniqueness stops being a safe assumption long
+					before the 254 figure suggests.
 				</p>
 			</section>
 
 			<section class="space-y-2">
-				<div class="label">What a collision actually breaks</div>
+				<div class="label">What a duplicate prefix actually affects</div>
 				<ul class="text-fg-dim space-y-1.5">
 					<li class="flex gap-2">
 						<span class="text-coral shrink-0">·</span>
 						<span
-							><span class="text-fg">Misrouting.</span> A directly-routed packet names the next hop by
-							hash. If two repeaters answer to it, the wrong one can pick the packet up — or both do,
-							duplicating the transmission and burning airtime twice.</span
+							><span class="text-fg">Ambiguous path analysis — the certain one.</span> Two repeaters
+							with the same prefix can't be told apart from the path bytes alone, so hop attribution,
+							topology, coverage and route explanations all become guesses. Ridgeline marks these
+							inferred hops rather than pretending to know.</span
 						>
 					</li>
 					<li class="flex gap-2">
-						<span class="text-coral shrink-0">·</span>
+						<span class="text-amber shrink-0">·</span>
 						<span
-							><span class="text-fg">False loop detection.</span> A repeater that sees its own ID in a
-							path it never touched treats the packet as a loop and drops it. Legitimate traffic disappears,
-							and it looks like a coverage problem rather than an ID problem.</span
-						>
-					</li>
-					<li class="flex gap-2">
-						<span class="text-coral shrink-0">·</span>
-						<span
-							><span class="text-fg">Unreadable topology.</span> Ridgeline can't tell which of the colliding
-							nodes carried a hop, so path maps, hop counts and coverage analysis all get blurry.</span
+							><span class="text-fg">Possible forwarding ambiguity — the uncertain one.</span> Forwarding
+							compares a path entry against a node's own key prefix at the packet's width, so two
+							colliding repeaters in the same RF neighbourhood can both read an entry as themselves.
+							Whether that changes anything depends on topology, duplicate suppression and loop-detect
+							settings.</span
 						>
 					</li>
 				</ul>
+				<div class="border-line bg-ink/50 rounded-[var(--radius)] border p-3">
+					<p class="text-fg-dim text-xs">
+						<span class="text-fg">Worth being precise:</span> MeshCore's own FAQ says that with duplicate
+						1-byte IDs "packets continue to pass through repeaters and the mesh is not harmed in any way"
+						— it "does make it harder for tools to analyze paths." Treat wider IDs as buying back
+						<em>observability and headroom</em>, not as a repair for traffic that is currently failing.
+					</p>
+				</div>
 			</section>
 
 			<section class="space-y-2">
@@ -148,9 +159,27 @@
 					LoRa link, on every relay.
 				</p>
 				<p class="text-fg-dim">
-					<span class="text-signal">2 bytes is the sweet spot for most meshes.</span> It costs one extra
-					byte per hop and takes a 50-node mesh from near-certain collisions to under 2%. Go to 3 bytes
-					when the mesh is genuinely large or you want headroom for growth.
+					On cost alone, <span class="text-signal">2 bytes is the usual compromise</span>: one extra
+					byte per hop, and a 50-node mesh goes from near-certain duplicates to under 2%. But cost is
+					not the only constraint — read the compatibility note before you change anything.
+				</p>
+			</section>
+
+			<section class="border-coral/50 bg-coral/5 space-y-2 rounded-[var(--radius)] border p-3">
+				<div class="label text-coral">Check firmware first — this one bites</div>
+				<p class="text-fg-dim">
+					Per MeshCore's FAQ, <span class="text-fg">repeaters on firmware older than 1.14 only
+					repeat 1-byte packets and silently drop 2- and 3-byte ones.</span> Not an error, not a
+					fallback — the packet just disappears at that hop.
+				</p>
+				<p class="text-fg-dim">
+					So on a mixed-firmware mesh, widening can cost you paths that work today. Confirm the
+					repeaters your traffic actually routes through are on 1.14+, and agree a target width with
+					your regional MeshCore community rather than switching unilaterally.
+				</p>
+				<p class="text-fg-faint text-xs">
+					Wider paths also cap hop count, since the path field is a fixed 64 bytes: roughly 63 hops
+					at 1 byte, 32 at 2, and 21 at 3. Not a practical limit for most meshes, but it is a limit.
 				</p>
 			</section>
 
@@ -243,9 +272,12 @@
 
 			<section class="border-amber/40 bg-amber/5 rounded-[var(--radius)] border p-3">
 				<p class="text-fg-dim text-xs">
-					<span class="text-amber">Pick your ID before you switch.</span> Changing width changes which
-					nodes you can collide with — a free 1-byte ID says nothing about whether your 2-byte ID is free.
-					Use the planner behind this dialog to check the target length first.
+					<span class="text-amber">Check the width your traffic will actually use.</span> Prefixes
+					nest: if two keys differ in their first byte they differ in the first two as well, so a
+					prefix that is unique at 1 byte is <em>necessarily</em> unique at 2 and 3. The risk runs the
+					other way — a prefix that looks unique at 3 bytes can still collide when a sender emits a
+					1-byte path. The useful question is not "is my ID free?" but
+					<em>"is it unique at the narrowest width my traffic will travel at?"</em>
 				</p>
 			</section>
 		</section>
@@ -297,9 +329,9 @@
 			<section class="space-y-2">
 				<div class="label">Firmware support</div>
 				<p class="text-fg-dim">
-					Needs reasonably current companion firmware — older builds don't report or accept the
-					setting, and the option simply won't appear in your app. If it's missing, update the
-					radio's firmware first.
+					Needs firmware 1.14 or newer. Older builds don't report or accept the setting, so the
+					option simply won't appear in your app — if it's missing, check the firmware version
+					before concluding the radio can't do it.
 				</p>
 			</section>
 

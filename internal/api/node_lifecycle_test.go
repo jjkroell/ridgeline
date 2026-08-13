@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -180,4 +181,38 @@ func inList(t *testing.T, base, node string) bool {
 		}
 	}
 	return false
+}
+
+// Retention prunes a silent node's row (PurgeTargets) but deliberately KEEPS the
+// claim, so the owner reconnects if the node returns. Those claims render as
+// "Dormant" on the account page — and until now had no release control anywhere,
+// because the only one lived on a node page that no longer exists. Releasing
+// must therefore work with the node row gone: claimDelete never touches the
+// nodes table, and this pins that.
+func TestClaimRelease_WorksWhenNodeRowIsGone(t *testing.T) {
+	st, _, node, owner, _, cleanup := seedClaimedNode(t)
+	defer cleanup()
+
+	// Simulate the retention sweep: node row removed, claim left behind.
+	if _, err := st.PurgeTargets(nil, nil, []string{node}); err != nil {
+		t.Fatalf("purge: %v", err)
+	}
+	nodes, _ := st.ListNodes()
+	for _, n := range nodes {
+		if strings.EqualFold(n.PublicKey, node) {
+			t.Fatal("precondition: node row should be gone")
+		}
+	}
+	// The claim is now orphaned — exactly the "Dormant" state.
+	if _, cs := owner.do("GET", "/api/nodes/"+node+"/claim", nil, false); cs["ownedByMe"] != true {
+		t.Fatal("precondition: the claim should have survived the purge")
+	}
+
+	resp, _ := owner.do("DELETE", "/api/claims/"+node, nil, true)
+	if resp.StatusCode != 200 {
+		t.Fatalf("releasing a dormant claim should succeed, got %d", resp.StatusCode)
+	}
+	if _, cs := owner.do("GET", "/api/nodes/"+node+"/claim", nil, false); cs["ownedByMe"] == true {
+		t.Error("claim should be gone after release")
+	}
 }

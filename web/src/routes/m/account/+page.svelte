@@ -9,6 +9,26 @@
 	import DeleteAccountPanel from '$lib/components/DeleteAccountPanel.svelte';
 
 	let myNodes = $state<ClaimWithNode[]>([]);
+	// Dormant claims have no node page to release from — see the desktop account
+	// page for the full reasoning. Without this they are unremovable.
+	let releasing = $state('');
+	let releaseErr = $state('');
+
+	async function releaseClaim(pubkey: string, name: string) {
+		if (releasing) return;
+		if (!confirm(`Release your claim on ${name}?\n\nThis node is no longer in the mesh. If it advertises again it will come back unclaimed.`))
+			return;
+		releasing = pubkey;
+		releaseErr = '';
+		try {
+			await claims.release(auth.csrf, pubkey);
+			myNodes = myNodes.filter((n) => n.nodePubkey !== pubkey);
+		} catch (e) {
+			releaseErr = e instanceof Error ? e.message : 'Could not release the claim';
+		} finally {
+			releasing = '';
+		}
+	}
 	async function loadMyNodes() {
 		try {
 			myNodes = await claims.mine();
@@ -179,6 +199,12 @@
 							{#if !c.nodePresent}
 								<span class="border-line text-fg-dim rounded-full border px-2.5 py-1 text-xs font-600"
 									>Dormant</span
+								>
+								<button
+									onclick={() => releaseClaim(c.nodePubkey, c.nodeName || shortKey(c.nodePubkey))}
+									disabled={releasing === c.nodePubkey}
+									class="text-fg-faint hover:text-coral shrink-0 text-xs underline underline-offset-2 disabled:opacity-50"
+									>{releasing === c.nodePubkey ? '…' : 'Release'}</button
 								>
 							{:else if c.status === 'verified'}
 								<span class="bg-signal/15 text-signal rounded-full px-2.5 py-1 text-xs font-600">Owned</span>

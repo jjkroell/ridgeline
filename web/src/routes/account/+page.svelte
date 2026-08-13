@@ -2,7 +2,14 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
-	import { authApi, claims, shares, type ClaimWithNode, type SharedWithMe } from '$lib/api';
+	import {
+		authApi,
+		claims,
+		nodeLifecycle,
+		shares,
+		type ClaimWithNode,
+		type SharedWithMe
+	} from '$lib/api';
 	import { ago, shortKey } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import OwnershipIcon from '$lib/components/OwnershipIcon.svelte';
@@ -57,6 +64,30 @@
 	// the nodes table, so it works fine with the node gone.
 	let releasing = $state('');
 	let releaseErr = $state('');
+
+	// A dormant node's row is already gone, so releasing the claim leaves the
+	// owner's NOTES orphaned with nothing to attach to. Scrub cascades those too,
+	// but its only other entry point is the node detail page — which does not
+	// exist for a dormant node. Hence this second, explicit action.
+	async function purgeClaim(pubkey: string, name: string) {
+		if (releasing) return;
+		if (
+			!confirm(
+				`Delete everything for ${name}?\n\nRemoves your claim, your notes, and any private location for this node. It cannot be undone.`
+			)
+		)
+			return;
+		releasing = pubkey;
+		releaseErr = '';
+		try {
+			await nodeLifecycle.scrub(auth.csrf, pubkey);
+			myNodes = myNodes.filter((n) => n.nodePubkey !== pubkey);
+		} catch (e) {
+			releaseErr = e instanceof Error ? e.message : 'Could not delete this node';
+		} finally {
+			releasing = '';
+		}
+	}
 
 	async function releaseClaim(pubkey: string, name: string) {
 		if (releasing) return;
@@ -252,8 +283,16 @@
 								<button
 									onclick={() => releaseClaim(c.nodePubkey, c.nodeName || shortKey(c.nodePubkey))}
 									disabled={releasing === c.nodePubkey}
-									class="text-fg-faint hover:text-coral shrink-0 text-xs underline underline-offset-2 transition-colors disabled:opacity-50"
+									class="text-fg-faint hover:text-fg shrink-0 text-xs underline underline-offset-2 transition-colors disabled:opacity-50"
+									title="Give up ownership. Your notes on this node are kept."
 									>{releasing === c.nodePubkey ? 'Releasing…' : 'Release'}</button
+								>
+								<button
+									onclick={() => purgeClaim(c.nodePubkey, c.nodeName || shortKey(c.nodePubkey))}
+									disabled={releasing === c.nodePubkey}
+									class="text-fg-faint hover:text-coral shrink-0 text-xs underline underline-offset-2 transition-colors disabled:opacity-50"
+									title="Remove the claim, your notes and any private location for this node."
+									>Delete everything</button
 								>
 							{:else if c.status === 'verified'}
 								<span class="bg-signal/15 text-signal rounded-full px-2.5 py-1 text-xs font-600"

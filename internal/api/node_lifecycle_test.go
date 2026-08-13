@@ -216,3 +216,33 @@ func TestClaimRelease_WorksWhenNodeRowIsGone(t *testing.T) {
 		t.Error("claim should be gone after release")
 	}
 }
+
+// Scrubbing a DORMANT node (row already pruned by retention, claim surviving)
+// must still cascade the user-authored data. This is what makes "delete
+// everything" reachable for a node that no longer has a detail page.
+func TestScrubDormantNode_CascadesUserData(t *testing.T) {
+	st, _, node, owner, _, cleanup := seedClaimedNode(t)
+	defer cleanup()
+
+	owner.do("POST", "/api/nodes/"+node+"/notes", map[string]any{"body": "my repeater", "visibility": "public"}, true)
+	owner.do("PUT", "/api/nodes/"+node+"/location", map[string]any{"latitude": 49.1, "longitude": -123.9, "label": "home"}, true)
+
+	// Retention prunes the row; the claim (and the notes) survive.
+	if _, err := st.PurgeTargets(nil, nil, []string{node}); err != nil {
+		t.Fatalf("purge: %v", err)
+	}
+	if n, _ := st.NotesForNode(node, 0, false); len(n) != 1 {
+		t.Fatalf("precondition: expected the note to survive the purge, got %d", len(n))
+	}
+
+	resp, _ := owner.do("POST", "/api/nodes/"+node+"/scrub", map[string]any{"deleteHistory": true}, true)
+	if resp.StatusCode != 200 {
+		t.Fatalf("scrubbing a dormant node should succeed, got %d", resp.StatusCode)
+	}
+	if n, _ := st.NotesForNode(node, 0, false); len(n) != 0 {
+		t.Errorf("scrub must cascade notes, %d left", len(n))
+	}
+	if _, cs := owner.do("GET", "/api/nodes/"+node+"/claim", nil, false); cs["ownedByMe"] == true {
+		t.Error("scrub must release the claim")
+	}
+}

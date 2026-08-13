@@ -52,9 +52,14 @@
 	const groups = $derived(analysis.genuine);
 	const artifacts = $derived(analysis.artifacts);
 	const used = $derived(usedPrefixes(nodes, byteLen));
-	const space = $derived(1 << (8 * byteLen)); // 256 / 65536 / 16,777,216
+	// Usable, not raw: MeshCore rejects keys whose FIRST byte is 00 or FF
+	// (Identity.cpp), so each extra byte multiplies 254, not 256.
+	// 254 / 65,024 / 16,646,144 — same convention as the /hash-ids guide.
+	const space = $derived(254 * 256 ** (byteLen - 1));
 	const status = $derived(prefixStatus(nodes, byteLen, prefix));
 	const want = $derived(byteLen * 2);
+	// Every path-participating node is exposed at whatever width the sender picks.
+	const pathNodeCount = $derived(nodes.filter(isPathNode).length);
 
 	// Same-length path nodes occupying the typed prefix (shown when it's in use).
 	const occupants = $derived(
@@ -192,16 +197,19 @@
 			{/each}
 		</div>
 		<div class="text-fg-faint mt-3 text-xs leading-relaxed">
-			Each node is configured for a {byteLen}-byte ID (the first {byteLen}
-			byte{byteLen > 1 ? 's' : ''} of its key) and can only collide with other {byteLen}-byte nodes.
+			This is the width of the <em>packet</em>, not a per-node setting. A relay writes its prefix at
+			whatever width the sender chose, so at {byteLen} byte{byteLen > 1 ? 's' : ''}
+			<span class="text-fg-dim">every</span> routing node is identified by its first {byteLen}
+			byte{byteLen > 1 ? 's' : ''} — whatever its own adverts use.
 			{#if !loading}
 				<span class="text-fg-dim tnum">{used.size.toLocaleString()} of {space.toLocaleString()}</span
 				>
-				IDs are taken by the {cohorts[byteLen].toLocaleString()}
-				routing node{cohorts[byteLen] === 1 ? '' : 's'} at this length.{#if cohorts.unknown}
-					<span class="text-fg-dim"
-						>{cohorts.unknown} node{cohorts.unknown === 1 ? '' : 's'} haven't advertised a length yet.</span
-					>{/if}
+				IDs are taken across all {pathNodeCount.toLocaleString()}
+				routing node{pathNodeCount === 1 ? '' : 's'}.
+				<span class="text-fg-dim"
+					>Adverts today: {cohorts[1]} at 1 byte, {cohorts[2]} at 2, {cohorts[3]} at 3{#if cohorts.unknown}, {cohorts.unknown}
+						not yet advertised{/if}.</span
+				>
 				Companions are excluded — they don't repeat packets, so they never appear in a path.
 			{/if}
 		</div>
@@ -210,14 +218,14 @@
 	<!-- Genuine collisions -->
 	<div class="panel rise px-5 py-4" style="animation-delay:40ms">
 		<div class="mb-1 flex items-center justify-between gap-3">
-			<div class="label">Collisions among {byteLen}-byte nodes</div>
+			<div class="label">Collisions in a {byteLen}-byte path</div>
 			<span class="text-fg-faint font-mono text-xs tnum">
 				{groups.length} group{groups.length === 1 ? '' : 's'}
 			</span>
 		</div>
 		<div class="text-fg-faint mb-3 text-xs">
-			Only nodes configured at {byteLen} byte{byteLen > 1 ? 's' : ''} are compared, and records with
-			corrupted keys are filtered out below.
+			All routing nodes are compared at this packet width; records with corrupted keys are filtered
+			out below.
 		</div>
 		{#if loading}
 			<div class="text-fg-faint py-4 text-sm">Loading nodes…</div>

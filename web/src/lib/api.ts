@@ -278,6 +278,10 @@ export interface TopologyEdge {
 	a: string;
 	b: string;
 	weight: number;
+	/** Every observation of this adjacency was resolved from 1-byte path hops.
+	 *  Those are weak evidence (the 1-byte space is ~97% saturated), so the link
+	 *  is probably real but is an inference, not a measurement. Drawn dashed. */
+	inferred?: boolean;
 }
 export interface Topology {
 	nodes: TopologyNode[];

@@ -4,6 +4,33 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.8.0] — 2026-08-13
+
+### Changed
+- **Node retention no longer accepts 1-byte relay hops as proof of life.** A node
+  that stops advertising is kept if something credits it as still relaying, and
+  hops are recorded at whatever width the *sender* chose. The 1-byte space turns
+  out to be ~97% saturated within a week of real traffic — 248 of 256 possible
+  values observed — so a 1-byte hop matching a node is background traffic from
+  whoever actually relayed, not evidence about that node. The effect was that any
+  node with a unique 1-byte prefix (123 of 293 here) could never be swept: 25 of
+  30 silent nodes were being held alive this way, one of them 33 days without an
+  advert.
+
+  Retention now requires evidence at **2 bytes or wider**, where the space is
+  99.3% unsaturated and a unique match is real attribution. The new
+  `nodeRetentionMinHopBytes` option (default 2) restores the previous behaviour
+  if set to 1. Nodes that are genuinely relaying keep their reprieve — they show
+  up at 2 or 3 bytes as soon as they carry anyone's wider packet, which is 91% of
+  traffic — and anything removed reappears the moment it advertises again.
+
+  Considered and rejected: matching the evidence width to each node's *own*
+  configured hash size. A node's setting governs what it originates, not how it
+  is written down when relaying someone else's packet — measured here, 1-byte
+  nodes appear at 2–3 bytes constantly and 3-byte nodes appear at 1 byte — so
+  that rule would have re-admitted saturated evidence for exactly the nodes most
+  affected, and set a weaker liveness bar for operators who hadn't upgraded.
+
 ## [v0.7.4] — 2026-08-12
 
 ### Fixed

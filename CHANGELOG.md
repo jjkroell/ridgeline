@@ -4,6 +4,25 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.9.2] — 2026-08-13
+
+### Changed
+- **Picking an ID and generating a key pair are now desktop-only.** Both panels
+  are gone from the phone layout, replaced by a short note saying where to find
+  them. A 3-byte vanity search is a brute-force loop over millions of keypairs —
+  minutes of sustained CPU, which on a phone means heat and battery for
+  something you do once per node — and the panels needed more width than a
+  handset has. The collision analysis, which is the genuinely useful part on a
+  phone, is unchanged.
+
+### Fixed
+- **The identity page no longer scrolls sideways on a phone.** It was the only
+  page that did. The picker and key-generator sat in a grid whose items default
+  to `min-width: auto`, so a child with wide content pushed the column past the
+  viewport instead of shrinking. Removing those panels from the phone layout
+  removes the cause; the grid also gained the missing `min-width: 0` for the
+  desktop layout.
+
 ## [v0.9.1] — 2026-08-13
 
 ### Fixed

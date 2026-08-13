@@ -4,6 +4,22 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.7.4] — 2026-08-12
+
+### Fixed
+- **The planner no longer tells 1-byte node operators there is nothing to fix.**
+  v0.7.3's "who fixes this" note said flatly that the listed nodes were not at
+  fault — true for a node advertising wider than the selected width, which
+  appears only because someone else sent a narrow packet through it, but wrong
+  for one whose own adverts already use that width. That node originates narrow
+  paths itself and its operator has a direct fix in `set path.hash.mode`, so the
+  note was steering exactly the people who could act away from acting. On the
+  live mesh that was 12 of the 105 nodes listed, across 11 of 49 groups. The
+  note is now conditional: it counts the nodes advertising at the selected
+  width and points their operators at the repeater instructions, then explains
+  the remainder separately. The per-node badge highlights those actionable
+  nodes rather than the bystanders, which was the wrong way round.
+
 ## [v0.7.3] — 2026-08-12
 
 ### Changed

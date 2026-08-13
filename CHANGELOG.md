@@ -4,6 +4,47 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.7.2] — 2026-08-12
+
+Three issues raised on the public repo, all confirmed and fixed.
+
+### Fixed
+- **One metadata set per route (#1).** Prerendered pages emitted six duplicated
+  tags — `title`, `description`, `og:title`, `og:description`, `twitter:title`,
+  `twitter:description` — with the generic shell value first, so link previews
+  in Discord, iMessage and similar could show a generic Ridgeline card instead
+  of the page being shared. The generic block now sits after
+  `%sveltekit.head%`, and a postbuild step strips it from prerendered HTML
+  entirely, leaving one authoritative set. The SPA fallback shell keeps the
+  generic card. Fifteen routes that had no metadata at all gained it, including
+  per-node and per-observer titles on the detail pages — the case that matters
+  most when someone shares a link to a specific node.
+- **Narrow-screen header no longer overflows the page (#2).** The mobile header
+  rendered all eleven navigation items in one non-wrapping row, making the
+  document 692px wide at every viewport below the desktop breakpoint and
+  letting the whole page pan sideways. It is now a menu button and panel, with
+  a 44px tap target; collapsed links are absent from the DOM so keyboard focus
+  cannot land off-screen. Verified from 320px to 1024px.
+- **Hash-ID guide corrected against MeshCore's own documentation (#3).** The
+  page shipped in v0.7.1 with a missing compatibility warning: repeaters older
+  than firmware 1.14 silently drop 2- and 3-byte packets, so recommending two
+  bytes unconditionally was advice that could black-hole traffic. The
+  recommendation is now conditional on firmware and regional coordination. The
+  planner warning was also backwards — prefixes nest, so a prefix unique at one
+  byte is necessarily unique at two and three, and the risk runs from longer
+  prefixes to shorter packet widths. Collision consequences are no longer
+  overstated: MeshCore's FAQ says packets continue to pass and duplicates
+  mainly cost path analysis, so the page now separates the certain
+  analysis cost from the possible forwarding effect. Address-space figures
+  corrected to 254 / 65,024 / 16,646,144, since `00`/`FF` are reserved on the
+  first byte only.
+- **Planner measured the wrong population (#3).** Collision analysis compared
+  only nodes whose own advert width matched the selected width, but a relay
+  writes its prefix at the width the *sender* chose. On the live mesh that
+  reported one colliding group at one byte where the real exposure is 48 — a
+  48x understatement. It now compares every path-participating node at the
+  selected packet width.
+
 ## [v0.7.1] — 2026-08-12
 
 ### Added

@@ -4,6 +4,19 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.9.3] — 2026-08-13
+
+### Changed
+- **The hash-ID guide is no longer in the mobile navigation menu.** It is still
+  linked from the identity page itself, where it is relevant, and remains
+  reachable by URL — it just no longer takes a slot in the More sheet.
+
+### Fixed
+- **The collision panel had two "how to" links in one sentence.** The first
+  pointed at the repeater instructions and the second at the companion ones,
+  which read as a stutter rather than a choice. Only the sender link remains,
+  which is the one that matters: the sender chooses the path width.
+
 ## [v0.9.2] — 2026-08-13
 
 ### Changed

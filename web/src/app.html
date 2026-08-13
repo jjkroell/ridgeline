@@ -5,6 +5,9 @@
 		<link rel="icon" href="%sveltekit.assets%/favicon.svg" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<meta name="theme-color" content="#070a0e" />
+		<!-- Route metadata (title/description/og:*/twitter:title+description) is owned
+		     by $lib/components/Seo.svelte so exactly one set is emitted per route.
+		     Only invariant tags live here. See issue #1 on Ridgeline-public. -->
 		<!-- PWA / installable mobile app (scope /m) -->
 		<link rel="manifest" href="/manifest.webmanifest" />
 		<link rel="apple-touch-icon" href="/icons/apple-touch-180.png" />
@@ -16,11 +19,6 @@
 		<!-- Primary SEO. Per-page routes override title/description via <svelte:head>
 		     (see $lib/components/Seo.svelte); these are the crawl-time defaults for
 		     the SPA fallback and any page that doesn't set its own. -->
-		<title>Ridgeline — MeshCore Mesh Observatory · Vancouver Island &amp; Lower Mainland BC</title>
-		<meta
-			name="description"
-			content="Ridgeline is a live observatory for the MeshCore LoRa mesh network across Vancouver Island and the Lower Mainland of British Columbia. Track nodes, repeaters, coverage and packet activity in real time on the mesh's alternate frequency (currently 910.425 MHz)."
-		/>
 		<meta
 			name="keywords"
 			content="MeshCore, MeshCore mesh, LoRa mesh, mesh network, Vancouver Island, Lower Mainland, British Columbia, BC, coastal mesh, amateur radio, ham radio, 910.425 MHz, 910.425, alternate frequency, alt frequency, secondary frequency, off-grid communication, mesh observability, mesh map, node coverage, repeater map"
@@ -41,24 +39,11 @@
 		<!-- Open Graph (Facebook, Discord, Slack, iMessage, etc.) -->
 		<meta property="og:type" content="website" />
 		<meta property="og:site_name" content="Ridgeline" />
-		<meta
-			property="og:title"
-			content="Ridgeline — MeshCore Mesh Observatory for coastal BC"
-		/>
-		<meta
-			property="og:description"
-			content="Live map and analytics for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland. Nodes, repeaters, coverage and packets on the alternate frequency (currently 910.425 MHz)."
-		/>
 		<meta property="og:image" content="https://ridgeline.ve7kod.ca/icons/icon-512.png" />
 		<meta property="og:locale" content="en_CA" />
 
 		<!-- Twitter / X card -->
 		<meta name="twitter:card" content="summary" />
-		<meta name="twitter:title" content="Ridgeline — MeshCore Mesh Observatory for coastal BC" />
-		<meta
-			name="twitter:description"
-			content="Live map and analytics for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland — on the 910.425 MHz alternate frequency."
-		/>
 		<meta name="twitter:image" content="https://ridgeline.ve7kod.ca/icons/icon-512.png" />
 
 		<!-- Structured data: helps search engines understand what Ridgeline is and
@@ -118,6 +103,28 @@
 		     (see $lib/analytics.ts + $lib/consent.svelte.ts), as GDPR/ePrivacy
 		     require for non-essential analytics. -->
 		%sveltekit.head%
+
+		<!-- Generic fallback, deliberately placed AFTER %sveltekit.head% so that a
+		     route's own tags come first for unfurlers that take the first match.
+		     On prerendered routes these are stripped entirely at build time by
+		     scripts/dedupe-head.mjs, leaving exactly one authoritative set.
+		     They exist for the SPA fallback shell, which renders with ssr=false
+		     and so carries no route metadata of its own. -->
+		<title>Ridgeline — MeshCore Mesh Observatory · Vancouver Island &amp; Lower Mainland BC</title>
+		<meta
+			name="description"
+			content="Ridgeline is a live observatory for the MeshCore LoRa mesh network across Vancouver Island and the Lower Mainland of British Columbia. Track nodes, repeaters, coverage and packet activity in real time on the mesh's alternate frequency (currently 910.425 MHz)."
+		/>
+		<meta property="og:title" content="Ridgeline — MeshCore Mesh Observatory for coastal BC" />
+		<meta
+			property="og:description"
+			content="Live map and analytics for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland. Nodes, repeaters, coverage and packets on the alternate frequency (currently 910.425 MHz)."
+		/>
+		<meta name="twitter:title" content="Ridgeline — MeshCore Mesh Observatory for coastal BC" />
+		<meta
+			name="twitter:description"
+			content="Live map and analytics for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland — on the 910.425 MHz alternate frequency."
+		/>
 	</head>
 	<body data-sveltekit-preload-data="hover">
 		<div style="display: contents">%sveltekit.body%</div>

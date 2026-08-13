@@ -4,6 +4,26 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.7.3] — 2026-08-12
+
+### Changed
+- **Hash-ID planner presents width ambiguity as conditional, not as a node
+  defect.** v0.7.2 corrected the maths — a relay stamps its prefix at the width
+  the *sender* chose, so any routing node can be ambiguous inside a narrow path
+  — but kept calling the result a "collision". Listing a node that advertises
+  at 3 bytes under that heading reads as an accusation that its configuration
+  is broken, when its own adverts are perfectly unambiguous. The panel is now
+  "Ambiguous in an N-byte path", each node carries a badge showing the width
+  its own adverts use, and a note names who can actually fix it: the senders
+  still emitting narrow paths, not the nodes listed.
+- **The planner now measures rather than warns.** It shows the share of traffic
+  observed at the selected width over the last 24 hours, so a reader can tell a
+  live problem from a theoretical one — currently around 9% at one byte and 60%
+  at two. Below 1% it says so explicitly. Checked against 3,000 recent packets:
+  53.6% of hops inside 1-byte paths are ambiguous and 93.3% of those packets
+  carry at least one, while 2- and 3-byte paths have none — so the one-byte
+  figure is a live measurement, not a projection.
+
 ## [v0.7.2] — 2026-08-12
 
 Three issues raised on the public repo, all confirmed and fixed.

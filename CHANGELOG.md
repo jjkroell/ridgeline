@@ -4,6 +4,31 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.9.7] — 2026-08-16
+
+### Fixed
+- **Nodes in a distant part of the mesh were missing from both maps.** The
+  corrupt-GPS detector tested latitude and longitude independently against the
+  3×IQR whiskers of every located node. On a mesh with one dense cluster that
+  spread is very small, so a real regional group a few hundred kilometres out
+  failed both axes at once and was dropped from the static map, the live map,
+  the node-detail inset and the dashboard mini-map — silently, because those
+  views hide suspect nodes rather than marking them. Three nodes in the northern
+  group were affected, one missing the latitude cutoff by about 800 m, while a
+  fourth sat just inside and rendered normally; that mix is what made the
+  behaviour look arbitrary. Coordinates are now judged on distance from the mesh
+  centroid — a single measurement, so being moderately north *and* moderately
+  west no longer compounds into a rejection — and a node within 500 km is never
+  flagged however tightly the rest of the mesh is clustered. A genuinely distant
+  outlier is still caught.
+- **Null island is now detected as the error it is.** A node that has never had a
+  GPS fix reports 0,0. Those were being caught incidentally by the same
+  statistical test, which also meant they skewed it: they dragged the centre and
+  the spread, so whether a real remote node was visible depended on how many
+  broken ones happened to be on air, and cleaning the broken ones up would have
+  hidden more real ones. 0,0 and out-of-range coordinates are now rejected
+  directly and excluded from the statistics.
+
 ## [v0.9.6] — 2026-08-13
 
 ### Fixed

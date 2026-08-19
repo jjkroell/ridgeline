@@ -9,6 +9,16 @@
 		{ k: 'Spreading factor', v: 'SF 7' },
 		{ k: 'Coding rate', v: 'CR 5' }
 	];
+
+	// The second network, joined to the one above by the wired pair at Mt Cokley.
+	// Note the slower spreading factor — it is not just a different frequency, so
+	// a radio set up for one will not hear the other even after retuning.
+	const radio909: { k: string; v: string }[] = [
+		{ k: 'Frequency', v: '909.000 MHz' },
+		{ k: 'Bandwidth', v: '62.5 kHz' },
+		{ k: 'Spreading factor', v: 'SF 8' },
+		{ k: 'Coding rate', v: 'CR 5' }
+	];
 </script>
 
 <Seo
@@ -78,6 +88,39 @@
 			you see here reflects it: who is transmitting, who is relaying, and how far
 			each signal carries.
 		</p>
+	</section>
+
+	<section class="text-fg-dim mt-10 space-y-4">
+		<h2 class="text-fg text-xl font-700">The second network on 909 MHz</h2>
+		<p>
+			Not everything on the mesh is on the alternate frequency. A separate group
+			of nodes runs on <strong>909.000 MHz</strong> at a slower spreading factor,
+			and the two networks are joined by a pair of repeaters wired together at
+			<strong>Mt Cokley</strong>, above Parksville. One listens on each frequency,
+			and whatever either of them hears is handed across to the other.
+		</p>
+		<p>
+			Every receiver feeding Ridgeline sits on the alternate frequency, so nothing
+			here can hear 909 directly. A node on that side shows up only once its
+			traffic has crossed the Mt Cokley link — and that crossing is exactly how we
+			work out which nodes live over there. They're marked in violet everywhere
+			they appear, with their frequency shown under the name.
+		</p>
+		<p>
+			One thing worth noting if you're setting a radio up: the 909 side also uses a
+			different <strong>spreading factor</strong>, so retuning the frequency alone
+			isn't enough to hear it.
+		</p>
+		<dl
+			class="border-line/70 divide-line/60 not-prose my-2 divide-y overflow-hidden rounded-[var(--radius)] border"
+		>
+			{#each radio909 as row (row.k)}
+				<div class="flex items-center justify-between gap-4 px-4 py-3">
+					<dt class="text-fg-dim text-sm">{row.k}</dt>
+					<dd class="font-mono text-fg text-sm tnum">{row.v}</dd>
+				</div>
+			{/each}
+		</dl>
 	</section>
 
 	<section class="text-fg-dim mt-10 space-y-4">

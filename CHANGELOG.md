@@ -4,6 +4,19 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.12.2] — 2026-08-19
+
+### Fixed
+- **The airport picker no longer resizes while you search it.** It sized to its
+  contents, so typing collapsed the panel from full height to a couple of rows —
+  it moved under the pointer between keystrokes, taking the results you were
+  aiming at with it. It now holds one height throughout.
+
+### Added
+- **The observer guide covers meshcoretomqtt**, not just the MeshCore firmware
+  CLI — it's the other route in common use, and the connection details are the
+  same two values either way.
+
 ## [v0.12.1] — 2026-08-19
 
 ### Changed

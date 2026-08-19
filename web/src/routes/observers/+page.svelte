@@ -72,29 +72,30 @@
 					<div class="flex items-start justify-between">
 						<div class="min-w-0">
 							<div class="text-fg truncate text-sm font-bold">{o.name ?? o.id}</div>
-							<div class="mt-1 flex items-center gap-2">
-								{#if o.region}
-									<span class="label">{o.region}</span>
-								{/if}
-								<!-- Marks an observer that has moved to the authenticated broker.
-								     Its absence is the useful signal during the migration: no
-								     badge means still on the anonymous broker. -->
-								{#if o.jwtAuthAt}
-									<Tooltip text="Authenticated to the broker with its own node key — last {ago(o.jwtAuthAt)}">
-										<span class="text-lime font-mono text-[0.6rem] font-600 tracking-wider">JWT AUTH</span>
-									</Tooltip>
-								{/if}
-							</div>
+							{#if o.region}
+								<div class="label mt-1">{o.region}</div>
+							{/if}
 						</div>
-						<!-- On standby the Reporting/Silent label is misleading: the receiver
-						     IS still reporting, we are just discarding it. Say Standby instead. -->
-						{#if o.standbySince}
-							<StandbyBadge observer={o} compact />
-						{:else}
-							<span class="label shrink-0 {isFresh(o.lastSeen) ? '!text-signal' : '!text-fg-faint'}">
-								{isFresh(o.lastSeen) ? 'Reporting' : 'Silent'}
-							</span>
-						{/if}
+						<!-- Right column: the card's state, stacked. On standby the
+						     Reporting/Silent label is misleading — the receiver IS still
+						     reporting, we are just discarding it — so say Standby instead. -->
+						<div class="flex shrink-0 flex-col items-end gap-1">
+							{#if o.standbySince}
+								<StandbyBadge observer={o} compact />
+							{:else}
+								<span class="label {isFresh(o.lastSeen) ? '!text-signal' : '!text-fg-faint'}">
+									{isFresh(o.lastSeen) ? 'Reporting' : 'Silent'}
+								</span>
+							{/if}
+							<!-- Marks an observer that has moved to the authenticated broker.
+							     Its absence is the useful signal during the migration: nothing
+							     here means still on the anonymous broker. -->
+							{#if o.jwtAuthAt}
+								<Tooltip text="Authenticated to the broker with its own node key — last {ago(o.jwtAuthAt)}">
+									<span class="text-lime font-mono text-[0.6rem] font-600 tracking-wider">JWT AUTH</span>
+								</Tooltip>
+							{/if}
+						</div>
 					</div>
 					<div class="border-line/60 mt-4 flex items-end justify-between border-t pt-3">
 						<div>

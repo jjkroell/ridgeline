@@ -4,6 +4,15 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.12.4] — 2026-08-19
+
+### Changed
+- The meshcoretomqtt instructions now name the file the config goes in
+  (`/etc/mctomqtt/config.d/00-user.toml`) and the restart that makes it take
+  effect — the two steps most easily got wrong, since it's a drop-in directory
+  rather than one obvious file and an edit does nothing until the service
+  restarts.
+
 ## [v0.12.3] — 2026-08-19
 
 ### Changed

@@ -39,7 +39,7 @@
 	<div class="flex items-center gap-4">
 		<button
 			onclick={() => (showSetup = true)}
-			class="border-line text-fg-dim hover:border-line-bright hover:text-fg rounded-[var(--radius)] border px-3 py-1.5 text-xs transition-colors"
+			class="border-signal/50 bg-signal/10 text-signal hover:bg-signal/20 rounded-[var(--radius)] border px-3 py-1.5 text-xs font-600 transition-colors"
 			>Add an observer</button
 		>
 		<div class="font-mono text-fg-dim text-xs">

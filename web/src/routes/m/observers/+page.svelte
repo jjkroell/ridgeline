@@ -43,7 +43,7 @@
 		<div class="text-fg-faint font-mono text-[0.62rem]">{observers.length} listening posts</div>
 		<button
 			onclick={() => (showSetup = true)}
-			class="border-line/60 text-fg-dim active:bg-line/40 ml-auto rounded-full border px-3 py-1 font-mono text-[0.62rem]"
+			class="border-signal/50 bg-signal/10 text-signal active:bg-signal/20 ml-auto rounded-full border px-3 py-1 font-mono text-[0.62rem]"
 			>Add an observer</button
 		>
 	</div>

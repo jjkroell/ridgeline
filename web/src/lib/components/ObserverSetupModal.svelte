@@ -53,7 +53,10 @@ set wifi.pwd YOUR_PASSWORD`;
 	// The meshcoretomqtt script is the other common route locally. Same two values
 	// as the firmware CLI — server and audience — and it authenticates identically
 	// (v1_{PUBKEY} with an Ed25519 JWT), so there is still nothing to hand out.
-	const mc2mqtt = $derived(`[[broker]]
+	// No [topics] block: the script already builds the meshcore/{IATA}/{key}/…
+	// layout from its own IATA setting, so repeating it here is just another
+	// place for the two to disagree.
+	const mc2mqtt = `[[broker]]
 name = "ridgeline"
 enabled = true
 server = "${AUDIENCE}"
@@ -65,11 +68,7 @@ enabled = true
 
 [broker.auth]
 method = "token"
-audience = "${AUDIENCE}"
-
-[topics]
-packets = "meshcore/${iataToken}/{PUBLIC_KEY}/packets"
-status = "meshcore/${iataToken}/{PUBLIC_KEY}/status"`);
+audience = "${AUDIENCE}"`;
 
 	const verify = `get mqtt.status
 get mqtt1.preset
@@ -215,9 +214,12 @@ reboot`);
 				>
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
+				<!-- Accented: it's the one control in this guide that does something
+				     rather than linking away, and it's easy to miss between two code
+				     blocks. -->
 				<button
 					onclick={() => (showIata = true)}
-					class="border-line text-fg-dim hover:border-line-bright hover:text-fg rounded-[var(--radius)] border px-3 py-1.5 text-sm transition-colors"
+					class="border-signal/50 bg-signal/10 text-signal hover:bg-signal/20 rounded-[var(--radius)] border px-3 py-1.5 text-sm font-600 transition-colors"
 					>{iata ? `Region: ${iata} — change` : 'Find your IATA code'}</button
 				>
 				{#if iata}

@@ -53,8 +53,11 @@
 
 <!-- Fixed height: the list is the whole point of this modal and it shrinks hard
      as you type, so sizing to content makes the panel leap about under the
-     pointer between one keystroke and the next. -->
-<Modal {onclose} size="2xl" height="h-[80vh]">
+     pointer between one keystroke and the next.
+     Mobile-first: the sheet keeps the full 80vh, where it reads as a normal
+     bottom sheet and the screen is small anyway. Desktop halves it — a
+     full-height panel there is mostly empty space once a search narrows it. -->
+<Modal {onclose} size="2xl" height="h-[80vh] md:h-[40vh]">
 	<div class="border-line/70 flex items-center gap-3 border-b px-5 py-4">
 		<h2 class="font-display text-fg text-base font-700">Canadian IATA codes</h2>
 		<button onclick={onclose} class="label hover:text-signal ml-auto transition-colors">Back</button

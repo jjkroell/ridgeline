@@ -4,6 +4,17 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.12.3] — 2026-08-19
+
+### Changed
+- The airport picker is half as tall on desktop, where the full-height panel was
+  mostly empty space once a search narrowed it. The mobile sheet is unchanged.
+- **"Add an observer" and "Find your IATA code" now stand out.** Both are the
+  only control that does anything on their surface, and both looked like plain
+  bordered text.
+- Dropped the redundant `[topics]` block from the meshcoretomqtt example — the
+  script builds those topics from its own region setting.
+
 ## [v0.12.2] — 2026-08-19
 
 ### Fixed

@@ -4,6 +4,25 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.11.0] — 2026-08-19
+
+Infrastructure only — nothing changes on the site for visitors.
+
+### Added
+- **Observers can now authenticate.** MeshCore observer firmware can sign a token
+  with its own node key, and Ridgeline now verifies it, so an observer proves it
+  owns the public key it publishes under. Until now the broker accepted anyone who
+  could reach it, which meant traffic could be injected under any observer's
+  identity — and since observers are keyed by public key, and the injection
+  detection trusts that identity, that was the gap worth closing.
+- **A second, authenticated broker runs beside the existing one**, rather than
+  replacing it. Observers in the field are serial-console devices that can only be
+  moved one at a time, so both brokers feed the same database and a half-migrated
+  network is a normal state to sit in. Nothing has to be reconfigured at once, and
+  a node that moves keeps its identity and its history.
+- Ridgeline can ingest from several brokers at once, which is what makes the above
+  possible.
+
 ## [v0.10.4] — 2026-08-19
 
 ### Fixed

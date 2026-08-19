@@ -54,6 +54,12 @@
 				<div class="flex items-center gap-2.5">
 					<span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background:{reporting ? 'var(--color-signal)' : 'var(--color-fg-faint)'}"></span>
 					<span class="text-fg min-w-0 flex-1 truncate text-sm font-600">{o.name ?? o.id}</span>
+					{#if o.jwtAuthAt}
+						<span
+							class="border-signal/40 bg-signal/10 text-signal shrink-0 rounded-full border px-1.5 py-0.5 font-mono text-[0.55rem] leading-none"
+							>JWT</span
+						>
+					{/if}
 					{#if o.standbySince}
 						<StandbyBadge observer={o} compact />
 					{:else if o.region}<span class="label !text-[0.55rem] shrink-0">{o.region}</span>{/if}

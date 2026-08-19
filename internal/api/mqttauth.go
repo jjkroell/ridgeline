@@ -151,6 +151,10 @@ func (s *Server) mqttAuthUser(w http.ResponseWriter, r *http.Request) {
 		s.log.Info("mqtt observer authenticated for the first time",
 			"pubkey", claims.PublicKey, "owner", claims.Owner, "client", claims.Client)
 	}
+	// Persist it too, so "which observers have migrated?" survives a restart and
+	// can be shown on the observer itself rather than only in this process's
+	// memory. Throttled and a no-op for an observer with no row yet.
+	s.store.RecordObserverJWTAuth(claims.PublicKey)
 	writeJSON(w, mqttAuthReply{Ok: true})
 }
 

@@ -82,6 +82,11 @@ type Email struct {
 	From     string `json:"from"`     // envelope + header From, e.g. noreply@ve7kod.ca
 	FromName string `json:"fromName"` // display name, e.g. "Ridgeline"
 	BaseURL  string `json:"baseURL"`  // public origin, e.g. https://ridgeline.ve7kod.ca
+	// ReplyTo is where replies should go when From is an unattended address.
+	// Optional: omitted entirely when empty, so mail keeps its current headers.
+	// Worth setting if anything sent from here ever invites a reply — a message
+	// that says "reply to this" from a noreply address bounces.
+	ReplyTo string `json:"replyTo"`
 }
 
 // Enabled reports whether outbound email is fully configured. Requiring the

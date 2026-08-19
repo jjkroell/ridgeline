@@ -10,6 +10,7 @@
 	//   - the CLI is the observer-firmware branch's slot syntax (mqttN.*), not the
 	//     older compile-time build (see observer.gessaman.com/docs)
 	import Modal from './Modal.svelte';
+	import IataPickerModal from './IataPickerModal.svelte';
 
 	let { onclose }: { onclose: () => void } = $props();
 
@@ -17,6 +18,14 @@
 	const AUDIENCE = 'mqtt2.ve7kod.ca';
 
 	let copied = $state<string | null>(null);
+	// The picker stacks on top of this modal; while it's open this one must stop
+	// answering Escape, or one press would close both.
+	let showIata = $state(false);
+	// Once a code is chosen it replaces the placeholder in the command blocks, so
+	// the copy buttons hand over something ready to paste.
+	let iata = $state<string | null>(null);
+	const IATA_PLACEHOLDER = 'YOUR_IATA';
+	const iataToken = $derived(iata ?? IATA_PLACEHOLDER);
 	async function copy(label: string, text: string) {
 		try {
 			await navigator.clipboard.writeText(text);
@@ -29,11 +38,11 @@
 
 	// Slot 1 is the uplink; slot 2 ships preset to the Let's Mesh EU analyzer, so
 	// it is explicitly disabled rather than left to publish elsewhere by default.
-	const uplink = `set mqtt1.preset custom
+	const uplink = $derived(`set mqtt1.preset custom
 set mqtt1.server ${BROKER}
 set mqtt1.audience ${AUDIENCE}
 set mqtt2.preset none
-set mqtt.iata YVR`;
+set mqtt.iata ${iataToken}`);
 
 	const radio = `set radio 910.425,62.5,7,5
 set tx 22`;
@@ -45,14 +54,14 @@ set wifi.pwd YOUR_PASSWORD`;
 get mqtt1.preset
 get wifi.status`;
 
-	const everything = `${radio}
+	const everything = $derived(`${radio}
 set name YOUR_OBSERVER_NAME
 ${wifi}
 ${uplink}
-reboot`;
+reboot`);
 </script>
 
-<Modal {onclose} size="2xl">
+<Modal {onclose} size="2xl" closeOnEscape={!showIata}>
 	<div class="border-line/70 flex items-center gap-3 border-b px-5 py-4">
 		<h2 class="font-display text-fg text-base font-700">Add an observer</h2>
 		<button onclick={onclose} class="label hover:text-signal ml-auto transition-colors"
@@ -161,12 +170,25 @@ reboot`;
 					>{copied === 'uplink' ? '✓' : 'copy'}</button
 				>
 			</div>
+			<div class="flex flex-wrap items-center gap-2">
+				<button
+					onclick={() => (showIata = true)}
+					class="border-line text-fg-dim hover:border-line-bright hover:text-fg rounded-[var(--radius)] border px-3 py-1.5 text-sm transition-colors"
+					>{iata ? `Region: ${iata} — change` : 'Find your IATA code'}</button
+				>
+				{#if iata}
+					<button
+						onclick={() => (iata = null)}
+						class="text-fg-faint hover:text-fg text-xs transition-colors">reset</button
+					>
+				{/if}
+			</div>
 			<p class="text-fg-faint text-xs leading-relaxed">
-				Use <code class="text-fg-dim font-mono">YCD</code> instead of
-				<code class="text-fg-dim font-mono">YVR</code> for the Nanaimo side — it becomes
-				the region on your observer's topic. If you'd rather keep feeding the Let's
-				Mesh analyzer as well, leave slots 1 and 2 alone and put the settings above
-				on <code class="text-fg-dim font-mono">mqtt3</code> instead.
+				<code class="text-fg-dim font-mono">{iataToken}</code> is the nearest airport's
+				IATA code — it becomes the region your observer is grouped under. If you'd
+				rather keep feeding the Let's Mesh analyzer as well, leave slots 1 and 2
+				alone and put the settings above on
+				<code class="text-fg-dim font-mono">mqtt3</code> instead.
 			</p>
 		</section>
 
@@ -203,3 +225,16 @@ reboot`;
 		</section>
 	</div>
 </Modal>
+
+<!-- Rendered AFTER the modal above, not before: both overlays are z-50, so DOM
+     order is what decides which one paints on top. Moved earlier in the file and
+     the picker opens invisibly behind the guide, which looks like a dead link. -->
+{#if showIata}
+	<IataPickerModal
+		onclose={() => (showIata = false)}
+		onpick={(code) => {
+			iata = code;
+			showIata = false;
+		}}
+	/>
+{/if}

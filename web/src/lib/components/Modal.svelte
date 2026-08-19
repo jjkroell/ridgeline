@@ -8,18 +8,25 @@
 		onclose,
 		size = 'lg',
 		maxWidth,
+		closeOnEscape = true,
 		children
 	}: {
 		onclose: () => void;
 		size?: 'lg' | '2xl';
 		/** Override the size-derived max-width with an explicit Tailwind class. */
 		maxWidth?: string;
+		/**
+		 * Set false while a modal is stacked on top of this one. Both listen on
+		 * window, so a single Escape would otherwise close the whole stack instead
+		 * of just the topmost.
+		 */
+		closeOnEscape?: boolean;
 		children: Snippet;
 	} = $props();
 	const maxW = $derived(maxWidth ?? (size === '2xl' ? 'md:max-w-2xl' : 'md:max-w-lg'));
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
+<svelte:window onkeydown={(e) => e.key === 'Escape' && closeOnEscape && onclose()} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div

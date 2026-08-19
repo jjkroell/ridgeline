@@ -4,6 +4,20 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.14.0] — 2026-08-19
+
+### Added
+- **Read-only subscriber accounts on the authenticated broker**, so a third
+  party can pull the raw packet stream for their own site. They are a third
+  account shape beside observers and the ingest consumer: a plain
+  username/password with no node identity, scoped to a set of topic filters, and
+  deliberately *not* superusers — unlike the ingest consumer they are bound by
+  the ACL check, which is what stops them publishing. Configure them under
+  `mqttAuth.subscribers` and see `deploy/README.md` for the runbook; the broker
+  needs no change, since it already delegates every decision to ridgelined.
+- `GET /api/admin/mqtt-auth` now lists the configured subscribers, their scope,
+  and whether each has connected since the daemon started.
+
 ## [v0.13.3] — 2026-08-19
 
 ### Changed

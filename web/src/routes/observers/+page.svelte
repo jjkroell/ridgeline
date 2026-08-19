@@ -81,10 +81,7 @@
 								     badge means still on the anonymous broker. -->
 								{#if o.jwtAuthAt}
 									<Tooltip text="Authenticated to the broker with its own node key — last {ago(o.jwtAuthAt)}">
-										<span
-											class="border-signal/40 bg-signal/10 text-signal rounded-full border px-1.5 py-0.5 font-mono text-[0.6rem] leading-none"
-											>JWT</span
-										>
+										<span class="text-lime font-mono text-[0.6rem] font-600 tracking-wider">JWT</span>
 									</Tooltip>
 								{/if}
 							</div>

@@ -91,6 +91,35 @@
 	</section>
 
 	<section class="text-fg-dim mt-10 space-y-4">
+		<h2 class="text-fg text-xl font-700">Radio settings (910.425 MHz)</h2>
+		<p>
+			Every radio on the mesh speaks the same LoRa dialect. Below are the exact
+			parameters — the MeshCore <strong>default North America</strong> preset, with
+			the frequency moved to <strong>910.425 MHz</strong>. A radio that doesn't
+			match all four won't hear a thing, so if you're setting one up, copy them
+			precisely.
+		</p>
+		<dl
+			class="border-line/70 divide-line/60 not-prose my-2 divide-y overflow-hidden rounded-[var(--radius)] border"
+		>
+			{#each radio as row (row.k)}
+				<div class="flex items-center justify-between gap-4 px-4 py-3">
+					<dt class="text-fg-dim text-sm">{row.k}</dt>
+					<dd class="text-signal font-mono text-sm font-600 tabular-nums">{row.v}</dd>
+				</div>
+			{/each}
+		</dl>
+		<p>
+			It's a narrow-band profile. The 62.5&nbsp;kHz channel keeps the receiver
+			sensitive enough to pull weak signals off distant ridges, while SF7 keeps
+			each packet short on the air — and airtime is the scarce resource on a
+			shared frequency. Short packets are what let the mesh keep growing without
+			nodes talking over one another. The 4/5 coding rate adds just enough error
+			correction to survive a noisy channel.
+		</p>
+	</section>
+
+	<section class="text-fg-dim mt-10 space-y-4">
 		<h2 class="text-fg text-xl font-700">The second network on 909 MHz</h2>
 		<p>
 			Not everything on the mesh is on the alternate frequency. A separate group
@@ -138,34 +167,6 @@
 		</p>
 	</section>
 
-	<section class="text-fg-dim mt-10 space-y-4">
-		<h2 class="text-fg text-xl font-700">Radio settings</h2>
-		<p>
-			Every radio on the mesh speaks the same LoRa dialect. Below are the exact
-			parameters — the MeshCore <strong>default North America</strong> preset, with
-			the frequency moved to <strong>910.425 MHz</strong>. A radio that doesn't
-			match all four won't hear a thing, so if you're setting one up, copy them
-			precisely.
-		</p>
-		<dl
-			class="border-line/70 divide-line/60 not-prose my-2 divide-y overflow-hidden rounded-[var(--radius)] border"
-		>
-			{#each radio as row (row.k)}
-				<div class="flex items-center justify-between gap-4 px-4 py-3">
-					<dt class="text-fg-dim text-sm">{row.k}</dt>
-					<dd class="text-signal font-mono text-sm font-600 tabular-nums">{row.v}</dd>
-				</div>
-			{/each}
-		</dl>
-		<p>
-			It's a narrow-band profile. The 62.5&nbsp;kHz channel keeps the receiver
-			sensitive enough to pull weak signals off distant ridges, while SF7 keeps
-			each packet short on the air — and airtime is the scarce resource on a
-			shared frequency. Short packets are what let the mesh keep growing without
-			nodes talking over one another. The 4/5 coding rate adds just enough error
-			correction to survive a noisy channel.
-		</p>
-	</section>
 
 	<section class="text-fg-dim mt-10 space-y-4">
 		<h2 class="text-fg text-xl font-700">Join the network</h2>

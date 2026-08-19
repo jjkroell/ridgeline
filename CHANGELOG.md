@@ -4,6 +4,25 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.12.0] — 2026-08-19
+
+### Added
+- **Pick your region from a searchable list of Canadian airports.** The setup
+  guide used to hardcode Vancouver's code with Nanaimo's as the alternative,
+  which only helps someone already on this side of the strait. It now offers all
+  477 Canadian IATA codes, grouped by province and filtering as you type across
+  code, city, airport and province — so "vancouver", "yvr" and "british" all land
+  somewhere useful. Choosing one fills it into every command block on the way out.
+
+## [v0.11.2] — 2026-08-19
+
+### Changed
+- **The observer guide no longer implies you need a dedicated radio.** You may
+  not have to flash anything at all: a computer can read a companion radio you
+  already own, OpenHop runs repeater, room server and observer as one process,
+  and both the MeshCore Bot and the Home Assistant integration can observe
+  alongside what they already do. Links the catalogue of those options.
+
 ## [v0.11.1] — 2026-08-19
 
 ### Added

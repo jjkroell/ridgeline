@@ -143,7 +143,10 @@ export function fmtRadio(r?: string): string {
 	if (!r) return '—';
 	const [f, b, s, c] = r.split(',');
 	const parts: string[] = [];
-	if (f) parts.push(`${+(+f).toFixed(3)}`);
+	// Keep the trailing zeros: a radio frequency is read to 3 decimals, and
+	// "909" for 909.000 looks like a different (or truncated) setting next to a
+	// neighbouring "910.425".
+	if (f) parts.push((+f).toFixed(3));
 	if (b) parts.push(`${b}k`);
 	if (s) parts.push(`SF${s}`);
 	if (c) parts.push(`CR${c}`);

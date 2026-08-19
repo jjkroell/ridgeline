@@ -13,7 +13,7 @@
 	import { basemapStyle, basemapHasHillshade, basemapHasLocalTerrain, collapseAttribution, ensureLocalTerrain } from '$lib/map-basemap';
 	import { basemap } from '$lib/basemap.svelte';
 	import { ensureHillshade } from '$lib/map-hillshade';
-	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, locatedNodes } from '$lib/map-util';
+	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, SEGMENT_COLOR, locatedNodes } from '$lib/map-util';
 	import { ago, shortKey, fmtSnr, snrColor } from '$lib/format';
 	import { PulseEngine } from '$lib/live-pulse';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -271,6 +271,8 @@
 						color: ROLE_HEX[n.role] ?? '#8394a1',
 						name: n.name,
 						pubkey: n.publicKey,
+						// Marks a node beyond a sanctioned bridge so the dot can carry a ring.
+						offSegment: !!n.viaBridge,
 						fav: favorites.has(n.publicKey)
 					}
 				}))
@@ -344,8 +346,8 @@
 				],
 				'circle-color': ['get', 'color'],
 				'circle-opacity': 0.85,
-				'circle-stroke-width': 1,
-				'circle-stroke-color': inkColor()
+				'circle-stroke-width': ['case', ['get', 'offSegment'], 2, 1],
+				'circle-stroke-color': ['case', ['get', 'offSegment'], SEGMENT_COLOR, inkColor()]
 			}
 		});
 		map.addLayer({

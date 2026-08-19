@@ -4,6 +4,15 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.13.3] — 2026-08-19
+
+### Changed
+- The JWT AUTH flag is plain lime text in the card's right-hand column, under
+  Reporting/Silent, rather than a pill beside the region. It marks a fact about
+  the observer's state, not its identity — and as a pill it competed with the
+  state it sits next to. (Supersedes the v0.13.1 and v0.13.2 deploy stamps,
+  which were intermediate steps of this same change.)
+
 ## [v0.13.0] — 2026-08-19
 
 ### Added

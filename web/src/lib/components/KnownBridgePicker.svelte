@@ -129,7 +129,7 @@
 		<input
 			id="peer-radio"
 			bind:value={peerRadio}
-			placeholder="909.000,62.5,8,5"
+			placeholder="915.000,62.5,8,5"
 			class="border-line bg-panel-2/40 text-fg placeholder:text-fg-faint w-full rounded-[var(--radius)] border px-3 py-1.5 font-mono text-xs"
 		/>
 		<p class="text-fg-faint mt-1.5 text-[0.62rem]">

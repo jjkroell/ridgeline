@@ -126,6 +126,13 @@ func (s *Server) mqttAuthUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !strings.HasPrefix(strings.ToLower(req.Username), strings.ToLower(auth.ObserverUsernamePrefix)) {
+		// Log the username here too. A client whose username is simply shaped
+		// differently -- a non-MeshCore observer implementation, say -- is
+		// indistinguishable from silence if this path stays quiet, and the
+		// broker only reports the bare reason without saying who sent it.
+		s.log.Info("mqtt auth rejected: username is not an observer identity",
+			"username", req.Username, "clientid", req.ClientID,
+			"want_prefix", auth.ObserverUsernamePrefix)
 		mqttAuthDeny(w, "unknown account")
 		return
 	}

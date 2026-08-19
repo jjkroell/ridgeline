@@ -51,7 +51,10 @@
 	}
 </script>
 
-<Modal {onclose} size="2xl">
+<!-- Fixed height: the list is the whole point of this modal and it shrinks hard
+     as you type, so sizing to content makes the panel leap about under the
+     pointer between one keystroke and the next. -->
+<Modal {onclose} size="2xl" height="h-[80vh]">
 	<div class="border-line/70 flex items-center gap-3 border-b px-5 py-4">
 		<h2 class="font-display text-fg text-base font-700">Canadian IATA codes</h2>
 		<button onclick={onclose} class="label hover:text-signal ml-auto transition-colors">Back</button
@@ -74,7 +77,9 @@
 		</div>
 	</div>
 
-	<div class="overflow-y-auto px-5 py-3">
+	<!-- min-h-0 lets this flex child actually shrink so it scrolls, rather than
+	     growing past the panel and pushing the footer off. -->
+	<div class="min-h-0 flex-1 overflow-y-auto px-5 py-3">
 		{#if matches.length === 0}
 			<p class="text-fg-faint py-8 text-center text-sm">
 				Nothing matches that. Try a city or province name.

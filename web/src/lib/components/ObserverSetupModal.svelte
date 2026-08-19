@@ -70,6 +70,8 @@ enabled = true
 method = "token"
 audience = "${AUDIENCE}"`;
 
+	const mc2restart = 'sudo systemctl restart mctomqtt';
+
 	const verify = `get mqtt.status
 get mqtt1.preset
 get wifi.status`;
@@ -203,7 +205,8 @@ reboot`);
 
 			<div class="text-fg-faint pt-1 text-xs">
 				Or, if you're running the <span class="text-fg-dim font-mono">meshcoretomqtt</span>
-				script, in its <span class="text-fg-dim font-mono">config.toml</span>:
+				script, in
+				<span class="text-fg-dim font-mono">/etc/mctomqtt/config.d/00-user.toml</span>:
 			</div>
 			<div class="border-line bg-ink flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2">
 				<pre class="text-fg flex-1 overflow-x-auto font-mono text-xs leading-relaxed">{mc2mqtt}</pre>
@@ -211,6 +214,15 @@ reboot`);
 					onclick={() => copy('mc2mqtt', mc2mqtt)}
 					class="text-fg-faint hover:text-fg shrink-0 text-xs"
 					>{copied === 'mc2mqtt' ? '✓' : 'copy'}</button
+				>
+			</div>
+			<div class="text-fg-faint text-xs">Then restart it:</div>
+			<div class="border-line bg-ink flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2">
+				<pre class="text-fg flex-1 overflow-x-auto font-mono text-xs leading-relaxed">{mc2restart}</pre>
+				<button
+					onclick={() => copy('mc2restart', mc2restart)}
+					class="text-fg-faint hover:text-fg shrink-0 text-xs"
+					>{copied === 'mc2restart' ? '✓' : 'copy'}</button
 				>
 			</div>
 			<div class="flex flex-wrap items-center gap-2">

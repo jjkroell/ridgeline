@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Config is the daemon's runtime configuration.
@@ -117,6 +118,26 @@ type MQTTAuth struct {
 	// superuser so it can subscribe across every observer's topics.
 	ConsumerUsername string `json:"consumerUsername"`
 	ConsumerPassword string `json:"consumerPassword"`
+	// Subscribers are read-only downstream consumers -- third parties pulling
+	// the raw packet stream for their own site. Each gets its own credential so
+	// it can be revoked without touching the others, and NONE of them are
+	// superusers: unlike the ingest consumer above they are bound by the ACL
+	// check, which is what keeps them from publishing.
+	Subscribers []MQTTSubscriber `json:"subscribers"`
+}
+
+// MQTTSubscriber is one read-only downstream consumer of the authenticated
+// broker. Never hand out ConsumerUsername/Password for this: that account is a
+// superuser and is shared with ridgelined's own ingest, so it cannot be revoked
+// without breaking ingestion.
+type MQTTSubscriber struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	// Topics are the subscription filters this consumer may read, defaulting to
+	// meshcore/# (the whole feed). Narrow it to scope someone to one region,
+	// e.g. ["meshcore/YCD/#"]. A requested filter is allowed only when one of
+	// these fully covers it, so "meshcore/+/+/packets" is refused here.
+	Topics []string `json:"topics"`
 }
 
 // Default returns a Config populated with sensible defaults for local
@@ -182,6 +203,31 @@ func Load(path string) (Config, error) {
 		// host. Derive from the primary rather than leaving it to be forgotten.
 		if cfg.ExtraBrokers[i].ClientID == "" {
 			cfg.ExtraBrokers[i].ClientID = fmt.Sprintf("%s-extra-%d", cfg.MQTT.ClientID, i+1)
+		}
+	}
+
+	// Downstream subscriber accounts are checked BEFORE observer tokens, so a
+	// misconfigured one could shadow a real identity or the ingest consumer.
+	// Refuse to start rather than serve a broker with an ambiguous account.
+	seen := make(map[string]bool, len(cfg.MQTTAuth.Subscribers))
+	for i := range cfg.MQTTAuth.Subscribers {
+		sub := &cfg.MQTTAuth.Subscribers[i]
+		switch {
+		case sub.Username == "":
+			return cfg, fmt.Errorf("config: mqttAuth.subscribers[%d] has no username", i)
+		case sub.Password == "":
+			// An empty password would authenticate anyone naming the account.
+			return cfg, fmt.Errorf("config: mqttAuth.subscribers[%d] (%s) has no password", i, sub.Username)
+		case strings.HasPrefix(strings.ToLower(sub.Username), "v1_"):
+			return cfg, fmt.Errorf("config: mqttAuth.subscribers[%d] (%s) uses the v1_ observer prefix", i, sub.Username)
+		case sub.Username == cfg.MQTTAuth.ConsumerUsername:
+			return cfg, fmt.Errorf("config: mqttAuth.subscribers[%d] (%s) collides with the ingest consumer", i, sub.Username)
+		case seen[sub.Username]:
+			return cfg, fmt.Errorf("config: mqttAuth.subscribers[%d] (%s) is a duplicate", i, sub.Username)
+		}
+		seen[sub.Username] = true
+		if len(sub.Topics) == 0 {
+			sub.Topics = []string{"meshcore/#"}
 		}
 	}
 	return cfg, nil

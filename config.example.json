@@ -19,6 +19,13 @@
   "mqttAuth": {
     "audience": "mqtt2.ve7kod.ca",
     "consumerUsername": "ridgelined",
-    "consumerPassword": "CHANGE_ME_consumer_secret"
+    "consumerPassword": "CHANGE_ME_consumer_secret",
+    "subscribers": [
+      {
+        "username": "example-site",
+        "password": "CHANGE_ME_subscriber_secret",
+        "topics": ["meshcore/#"]
+      }
+    ]
   }
 }

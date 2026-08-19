@@ -26,6 +26,18 @@ type MQTTAuthConfig struct {
 	// verification. Empty disables the account entirely.
 	ConsumerUsername string
 	ConsumerPassword string
+	// Subscribers are read-only downstream consumers of the raw packet stream:
+	// password accounts, like the ingest consumer, but deliberately NOT
+	// superusers, so every topic they touch goes through the ACL check.
+	Subscribers []MQTTSubscriber
+}
+
+// MQTTSubscriber is one read-only downstream consumer, with the subscription
+// filters it is scoped to.
+type MQTTSubscriber struct {
+	Username string
+	Password string
+	Topics   []string
 }
 
 // Enabled reports whether observer token auth is configured.
@@ -48,8 +60,9 @@ type mqttAuthReply struct {
 	Error string `json:"Error,omitempty"`
 }
 
-// observerSeen records an observer that has authenticated since this process
-// started.
+// observerSeen records an account that has authenticated since this process
+// started — an observer keyed by public key, or a downstream subscriber keyed
+// by username.
 type observerSeen struct {
 	PublicKey string    `json:"pubkey"`
 	FirstAuth time.Time `json:"firstAuth"`
@@ -81,6 +94,17 @@ func (m *mqttAuthState) record(pubkey string, now time.Time) bool {
 	e.LastAuth = now
 	e.Count++
 	return false
+}
+
+// get returns the record for one key, if it has authenticated at all.
+func (m *mqttAuthState) get(key string) (observerSeen, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, ok := m.seen[key]
+	if !ok {
+		return observerSeen{}, false
+	}
+	return *e, true
 }
 
 func (m *mqttAuthState) list() []observerSeen {
@@ -125,6 +149,19 @@ func (s *Server) mqttAuthUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A read-only downstream consumer, likewise identified by password alone.
+	// Checked before the observer path so a subscriber never has to look like
+	// one; config.Load refuses a subscriber named v1_* precisely so this
+	// ordering cannot shadow a real observer identity.
+	if sub, ok := s.mqttSubscriber(req.Username, req.Password); ok {
+		if first := s.mqttSubSeen.record(sub.Username, time.Now()); first {
+			s.log.Info("mqtt subscriber connected", "username", sub.Username,
+				"clientid", req.ClientID, "topics", strings.Join(sub.Topics, ","))
+		}
+		writeJSON(w, mqttAuthReply{Ok: true})
+		return
+	}
+
 	if !strings.HasPrefix(strings.ToLower(req.Username), strings.ToLower(auth.ObserverUsernamePrefix)) {
 		// Log the username here too. A client whose username is simply shaped
 		// differently -- a non-MeshCore observer implementation, say -- is
@@ -159,7 +196,10 @@ func (s *Server) mqttAuthUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // mqttAuthSuperuser grants the ingest consumer a blanket pass so it can
-// subscribe across every observer's topics. Observers are never superusers.
+// subscribe across every observer's topics. Observers are never superusers, and
+// neither are downstream subscribers: superuser bypasses the ACL check
+// entirely, which is the only thing standing between a subscriber and
+// publishing forged packets under someone else's identity.
 func (s *Server) mqttAuthSuperuser(w http.ResponseWriter, r *http.Request) {
 	if !s.mqttAuth.Enabled() {
 		http.NotFound(w, r)
@@ -205,12 +245,27 @@ func (s *Server) mqttAuthACL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	write := req.Acc == mosqACLWrite
+
+	// Downstream subscribers are scoped to their configured filters and refused
+	// write. Matched by username only: the password was checked at the user
+	// stage, and this handler is never given one.
+	if sub, ok := s.mqttSubscriberByName(req.Username); ok {
+		if !auth.AuthorizeSubscriberTopic(sub.Topics, req.Topic, write) {
+			s.log.Info("mqtt acl denied for subscriber", "username", req.Username,
+				"topic", req.Topic, "acc", req.Acc, "allowed", strings.Join(sub.Topics, ","))
+			mqttAuthDeny(w, "topic is outside this subscriber's scope")
+			return
+		}
+		writeJSON(w, mqttAuthReply{Ok: true})
+		return
+	}
+
 	// The username was proven to match the token's key at the user stage, so it
 	// is the identity to bind against here.
 	pubkey := strings.ToUpper(strings.TrimPrefix(
 		strings.ToUpper(req.Username), strings.ToUpper(auth.ObserverUsernamePrefix)))
 
-	write := req.Acc == mosqACLWrite
 	if !auth.AuthorizeObserverTopic(pubkey, req.Topic, write) {
 		s.log.Info("mqtt acl denied", "username", req.Username, "topic", req.Topic, "acc", req.Acc)
 		mqttAuthDeny(w, "topic does not belong to this observer")
@@ -222,10 +277,24 @@ func (s *Server) mqttAuthACL(w http.ResponseWriter, r *http.Request) {
 // adminMQTTAuth reports which observers have authenticated against the JWT
 // broker since this process started — the migration progress readout.
 func (s *Server) adminMQTTAuth(w http.ResponseWriter, _ *http.Request, _ store.User) {
+	// Subscribers are listed from config, not from who has connected, so a
+	// provisioned-but-idle consumer is visible as such. Passwords never appear.
+	subs := make([]map[string]any, 0, len(s.mqttAuth.Subscribers))
+	for _, sub := range s.mqttAuth.Subscribers {
+		row := map[string]any{"username": sub.Username, "topics": sub.Topics, "connected": false}
+		if seen, ok := s.mqttSubSeen.get(sub.Username); ok {
+			row["connected"] = true
+			row["firstAuth"] = seen.FirstAuth
+			row["lastAuth"] = seen.LastAuth
+			row["count"] = seen.Count
+		}
+		subs = append(subs, row)
+	}
 	writeJSON(w, map[string]any{
-		"enabled":   s.mqttAuth.Enabled(),
-		"audience":  s.mqttAuth.Audience,
-		"observers": s.mqttAuthSeen.list(),
+		"enabled":     s.mqttAuth.Enabled(),
+		"audience":    s.mqttAuth.Audience,
+		"observers":   s.mqttAuthSeen.list(),
+		"subscribers": subs,
 	})
 }
 
@@ -238,6 +307,37 @@ func (s *Server) isMQTTConsumer(user, pass string) bool {
 	userOK := subtle.ConstantTimeCompare([]byte(user), []byte(s.mqttAuth.ConsumerUsername)) == 1
 	passOK := subtle.ConstantTimeCompare([]byte(pass), []byte(s.mqttAuth.ConsumerPassword)) == 1
 	return userOK && passOK
+}
+
+// mqttSubscriber matches a username/password pair against the configured
+// read-only consumers. Every entry is compared even after a hit so the work does
+// not depend on which account was named.
+func (s *Server) mqttSubscriber(user, pass string) (MQTTSubscriber, bool) {
+	var match MQTTSubscriber
+	found := false
+	for _, sub := range s.mqttAuth.Subscribers {
+		if sub.Username == "" || sub.Password == "" {
+			continue
+		}
+		userOK := subtle.ConstantTimeCompare([]byte(user), []byte(sub.Username)) == 1
+		passOK := subtle.ConstantTimeCompare([]byte(pass), []byte(sub.Password)) == 1
+		if userOK && passOK && !found {
+			match, found = sub, true
+		}
+	}
+	return match, found
+}
+
+// mqttSubscriberByName looks a subscriber up for the ACL stage, which receives
+// no password. Authentication already happened at the user stage; a name that
+// never authenticated cannot reach here with a connection open.
+func (s *Server) mqttSubscriberByName(user string) (MQTTSubscriber, bool) {
+	for _, sub := range s.mqttAuth.Subscribers {
+		if sub.Username != "" && sub.Username == user {
+			return sub, true
+		}
+	}
+	return MQTTSubscriber{}, false
 }
 
 func mqttAuthDeny(w http.ResponseWriter, reason string) {

@@ -34,6 +34,10 @@ func newMQTTAuthEnv(t *testing.T) (string, func()) {
 		Audience:         testAudience,
 		ConsumerUsername: "ridgelined",
 		ConsumerPassword: "consumer-secret",
+		Subscribers: []MQTTSubscriber{
+			{Username: "site-all", Password: "site-secret", Topics: []string{"meshcore/#"}},
+			{Username: "site-ycd", Password: "ycd-secret", Topics: []string{"meshcore/YCD/#"}},
+		},
 	})
 	ts := httptest.NewServer(srv.Handler())
 	return ts.URL, func() { ts.Close(); st.Close() }
@@ -127,6 +131,24 @@ func TestMQTTAuthUser(t *testing.T) {
 		}
 	})
 
+	t.Run("downstream subscriber authenticates by password", func(t *testing.T) {
+		if _, reply := post(t, base, "/api/mqtt-auth/user", map[string]any{
+			"username": "site-all", "password": "site-secret", "clientid": "site-1",
+		}); !reply.Ok {
+			t.Fatalf("subscriber rejected: %q", reply.Error)
+		}
+		if _, reply := post(t, base, "/api/mqtt-auth/user", map[string]any{
+			"username": "site-all", "password": "ycd-secret", "clientid": "site-1",
+		}); reply.Ok {
+			t.Fatal("Ok = true for a subscriber presenting another subscriber's password")
+		}
+		if _, reply := post(t, base, "/api/mqtt-auth/user", map[string]any{
+			"username": "site-nope", "password": "site-secret", "clientid": "site-1",
+		}); reply.Ok {
+			t.Fatal("Ok = true for an unknown subscriber name")
+		}
+	})
+
 	t.Run("ingest consumer authenticates by password", func(t *testing.T) {
 		if _, reply := post(t, base, "/api/mqtt-auth/user", map[string]any{
 			"username": "ridgelined", "password": "consumer-secret", "clientid": "ridgelined",
@@ -163,6 +185,17 @@ func TestMQTTAuthACL(t *testing.T) {
 		{"subscribe to everything", user, "meshcore/#", mosqACLSubscribe, false},
 		{"read another observer", user, "meshcore/YVR/" + otherHex + "/packets", mosqACLRead, false},
 		{"consumer subscribes across observers", "ridgelined", "meshcore/+/+/packets", mosqACLSubscribe, true},
+
+		// Downstream subscribers: read anywhere inside their scope, publish
+		// nowhere at all.
+		{"subscriber subscribes to its whole scope", "site-all", "meshcore/#", mosqACLSubscribe, true},
+		{"subscriber subscribes with wildcards inside scope", "site-all", "meshcore/+/+/packets", mosqACLSubscribe, true},
+		{"subscriber reads a packet topic", "site-all", "meshcore/YVR/" + pubHex + "/packets", mosqACLRead, true},
+		{"subscriber cannot publish in its own scope", "site-all", "meshcore/YVR/" + pubHex + "/packets", mosqACLWrite, false},
+		{"region-scoped subscriber reads its region", "site-ycd", "meshcore/YCD/" + pubHex + "/packets", mosqACLRead, true},
+		{"region-scoped subscriber cannot read another region", "site-ycd", "meshcore/YVR/" + pubHex + "/packets", mosqACLRead, false},
+		{"region-scoped subscriber cannot widen via a wildcard", "site-ycd", "meshcore/+/+/packets", mosqACLSubscribe, false},
+		{"subscriber cannot read broker internals", "site-all", "$SYS/broker/clients/total", mosqACLRead, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -190,6 +223,13 @@ func TestMQTTAuthSuperuser(t *testing.T) {
 		"username": "v1_" + pubHex,
 	}); reply.Ok {
 		t.Error("an observer must never be a superuser")
+	}
+	// Superuser bypasses the ACL check, which is the only thing stopping a
+	// subscriber from publishing.
+	if _, reply := post(t, base, "/api/mqtt-auth/superuser", map[string]any{
+		"username": "site-all",
+	}); reply.Ok {
+		t.Error("a downstream subscriber must never be a superuser")
 	}
 }
 

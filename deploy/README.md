@@ -134,3 +134,63 @@ cd ~/ridgeline/deploy && docker compose up -d --build
 `cd ~/ridgeline/deploy && docker compose down`, `cd ~/CoreScope && docker compose up -d`,
 point the tunnel hostnames back, and `systemctl --user start ridgeline` locally.
 Nothing is destroyed until step 7.
+
+## Giving a third party the raw packet stream
+
+Downstream consumers get their own read-only account on the authenticated
+broker (`mqtt2.ve7kod.ca`). They are not observers — they hold no node key and
+present a plain username/password — and they are **not** superusers, so every
+topic they touch goes through the ACL check.
+
+Add one to the VM's `deploy/config.json` and restart ridgelined. No broker
+change is needed: mosquitto delegates every decision to ridgelined already.
+
+```jsonc
+"mqttAuth": {
+  "audience": "mqtt2.ve7kod.ca",
+  "consumerUsername": "ridgelined",
+  "consumerPassword": "…",
+  "subscribers": [
+    { "username": "somesite",
+      "password": "<32 random chars>",
+      "topics": ["meshcore/#"] }        // or ["meshcore/YCD/#"] to scope by region
+  ]
+}
+```
+
+```bash
+cd ~/ridgeline/deploy && docker compose up -d ridgelined   # picks up config.json
+```
+
+Then give them: host `wss://mqtt2.ve7kod.ca:443` (MQTT over WebSocket — the
+only externally-reachable listener; 1883 is compose-internal), their username
+and password, a **unique client id**, and the topic filter to subscribe to.
+`mqtt.js` and paho both speak this.
+
+Verify with `GET /api/admin/mqtt-auth` (admin session), which lists every
+configured subscriber and whether it has connected since the daemon started.
+
+Notes on operating this:
+
+- **Never hand out `consumerUsername`/`consumerPassword`.** That account is a
+  superuser and is shared with ridgelined's own ingest — it can publish forged
+  packets, and revoking it breaks ingestion.
+- One credential per consumer, so one can be revoked without disturbing others.
+  `config.Load` refuses a subscriber that has no password, uses the `v1_`
+  observer prefix, collides with the consumer, or duplicates another.
+- A requested filter is allowed only if a configured one fully **covers** it, so
+  a subscriber scoped to `meshcore/YCD/#` cannot subscribe to
+  `meshcore/+/+/packets`. `$SYS` is refused regardless of scope.
+- **Revocation is soft.** Removing the entry and restarting ridgelined denies
+  the next ACL check (the auth cache is off, and reads are rechecked per
+  delivered message), but it does not tear down the open connection — recreate
+  `ridgeline-mosquitto-jwt` to actually kick it.
+- **If their site subscribes from the visitor's browser, the credential is
+  public.** That is a legitimate choice — it is read-only — but it re-opens
+  anonymous read. A backend consumer that re-broadcasts to their visitors keeps
+  the credential secret.
+- **Watch the load.** `auth_opt_cache false` means every ACL check is an HTTP
+  round-trip to ridgelined, including the read check on each message delivered
+  to each subscriber. A few consumers on the full firehose multiply that; if it
+  starts to show, cache reads with a short TTL rather than turning caching on
+  wholesale (a stale *write* allow is a spoofing window, which is why it is off).

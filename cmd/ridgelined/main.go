@@ -121,13 +121,23 @@ func run(log *slog.Logger, configPath string) error {
 	// Observer authentication for the JWT broker. Inert until an audience is
 	// configured, so this is a no-op on deployments running only the anonymous
 	// broker.
+	subscribers := make([]api.MQTTSubscriber, 0, len(cfg.MQTTAuth.Subscribers))
+	for _, sub := range cfg.MQTTAuth.Subscribers {
+		subscribers = append(subscribers, api.MQTTSubscriber{
+			Username: sub.Username,
+			Password: sub.Password,
+			Topics:   sub.Topics,
+		})
+	}
 	apiServer.SetMQTTAuth(api.MQTTAuthConfig{
 		Audience:         cfg.MQTTAuth.Audience,
 		ConsumerUsername: cfg.MQTTAuth.ConsumerUsername,
 		ConsumerPassword: cfg.MQTTAuth.ConsumerPassword,
+		Subscribers:      subscribers,
 	})
 	if cfg.MQTTAuth.Audience != "" {
-		log.Info("observer token auth enabled", "audience", cfg.MQTTAuth.Audience)
+		log.Info("observer token auth enabled", "audience", cfg.MQTTAuth.Audience,
+			"subscribers", len(subscribers))
 	}
 
 	// One ingestor per broker, all writing to the same store (store.Record

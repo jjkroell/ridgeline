@@ -63,3 +63,51 @@ func TestExtraBrokerDefaults(t *testing.T) {
 		}
 	}
 }
+
+func TestSubscriberDefaultsAndValidation(t *testing.T) {
+	write := func(t *testing.T, body string) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "config.json")
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		return path
+	}
+	const consumer = `"consumerUsername": "ridgelined", "consumerPassword": "s3cret"`
+
+	t.Run("topics default to the whole feed", func(t *testing.T) {
+		cfg, err := Load(write(t, `{"mqttAuth": {"audience": "a", `+consumer+`,
+		  "subscribers": [{"username": "site", "password": "pw"}]}}`))
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		got := cfg.MQTTAuth.Subscribers[0].Topics
+		if len(got) != 1 || got[0] != "meshcore/#" {
+			t.Errorf("Topics = %v, want [meshcore/#]", got)
+		}
+	})
+
+	// Each of these would produce a broker with an ambiguous or wide-open
+	// account, so loading must fail rather than start and serve it.
+	rejected := map[string]string{
+		"no password":        `{"username": "site"}`,
+		"empty username":     `{"password": "pw"}`,
+		"observer prefix":    `{"username": "v1_ABCD", "password": "pw"}`,
+		"consumer collision": `{"username": "ridgelined", "password": "pw"}`,
+	}
+	for name, sub := range rejected {
+		t.Run(name+" is refused", func(t *testing.T) {
+			if _, err := Load(write(t, `{"mqttAuth": {"audience": "a", `+consumer+`,
+			  "subscribers": [`+sub+`]}}`)); err == nil {
+				t.Fatal("Load succeeded, want an error")
+			}
+		})
+	}
+
+	t.Run("duplicate usernames are refused", func(t *testing.T) {
+		if _, err := Load(write(t, `{"mqttAuth": {"audience": "a", `+consumer+`,
+		  "subscribers": [{"username": "site", "password": "a"}, {"username": "site", "password": "b"}]}}`)); err == nil {
+			t.Fatal("Load succeeded, want an error")
+		}
+	})
+}

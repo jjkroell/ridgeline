@@ -43,6 +43,10 @@ type Server struct {
 	// so far. Inert until SetMQTTAuth supplies an audience.
 	mqttAuth     MQTTAuthConfig
 	mqttAuthSeen *mqttAuthState
+	// Downstream read-only subscribers are tracked separately: mqttAuthSeen
+	// answers "which observers have migrated", and mixing consumers into it
+	// would corrupt the readout that decides when the anonymous broker retires.
+	mqttSubSeen *mqttAuthState
 	// Rate limiters for the unauthenticated email-sending endpoints (register,
 	// resend-verification, forgot-password), keyed by client IP and by target email address.
 	emailIPLimiter   *rateLimiter
@@ -100,6 +104,7 @@ func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
 		up:           websocket.Upgrader{CheckOrigin: sameOriginWS},
 		keyChal:      newKeyChallengeStore(),
 		mqttAuthSeen: newMQTTAuthState(),
+		mqttSubSeen:  newMQTTAuthState(),
 		// ~5 emails/IP then 1 every 2 min; ~2 per target address then 1 every 10 min.
 		emailIPLimiter:   newRateLimiter(1.0/120, 5),
 		emailAddrLimiter: newRateLimiter(1.0/600, 2),

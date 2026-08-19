@@ -50,6 +50,27 @@ set tx 22`;
 	const wifi = `set wifi.ssid YOUR_NETWORK
 set wifi.pwd YOUR_PASSWORD`;
 
+	// The meshcoretomqtt script is the other common route locally. Same two values
+	// as the firmware CLI — server and audience — and it authenticates identically
+	// (v1_{PUBKEY} with an Ed25519 JWT), so there is still nothing to hand out.
+	const mc2mqtt = $derived(`[[broker]]
+name = "ridgeline"
+enabled = true
+server = "${AUDIENCE}"
+port = 443
+transport = "websockets"
+
+[broker.tls]
+enabled = true
+
+[broker.auth]
+method = "token"
+audience = "${AUDIENCE}"
+
+[topics]
+packets = "meshcore/${iataToken}/{PUBLIC_KEY}/packets"
+status = "meshcore/${iataToken}/{PUBLIC_KEY}/status"`);
+
 	const verify = `get mqtt.status
 get mqtt1.preset
 get wifi.status`;
@@ -171,12 +192,26 @@ reboot`);
 				report traffic as you. Setting the audience is what turns that on — there
 				is no password to obtain and nothing to register.
 			</p>
+			<div class="text-fg-faint text-xs">Observer firmware, over serial:</div>
 			<div class="border-line bg-ink flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2">
 				<pre class="text-fg flex-1 overflow-x-auto font-mono text-xs leading-relaxed">{uplink}</pre>
 				<button
 					onclick={() => copy('uplink', uplink)}
 					class="text-fg-faint hover:text-fg shrink-0 text-xs"
 					>{copied === 'uplink' ? '✓' : 'copy'}</button
+				>
+			</div>
+
+			<div class="text-fg-faint pt-1 text-xs">
+				Or, if you're running the <span class="text-fg-dim font-mono">meshcoretomqtt</span>
+				script, in its <span class="text-fg-dim font-mono">config.toml</span>:
+			</div>
+			<div class="border-line bg-ink flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2">
+				<pre class="text-fg flex-1 overflow-x-auto font-mono text-xs leading-relaxed">{mc2mqtt}</pre>
+				<button
+					onclick={() => copy('mc2mqtt', mc2mqtt)}
+					class="text-fg-faint hover:text-fg shrink-0 text-xs"
+					>{copied === 'mc2mqtt' ? '✓' : 'copy'}</button
 				>
 			</div>
 			<div class="flex flex-wrap items-center gap-2">

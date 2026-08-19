@@ -4,6 +4,15 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.13.0] — 2026-08-19
+
+### Added
+- **Observers that have moved to the authenticated broker now carry a JWT badge**
+  on the Observers page. The badge's absence is the useful part: no badge means
+  that station is still publishing to the old broker and has yet to be moved.
+  Recorded when the observer authenticates, so it survives a restart rather than
+  being a live count that resets.
+
 ## [v0.12.4] — 2026-08-19
 
 ### Changed

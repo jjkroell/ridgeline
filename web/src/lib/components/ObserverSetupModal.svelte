@@ -80,34 +80,12 @@ reboot`);
 		<section class="space-y-2">
 			<div class="label">1 · Choose how to run it</div>
 			<p class="text-fg-dim text-sm leading-relaxed">
-				The simplest route is a dedicated board running observer firmware. Any
-				WiFi-capable ESP32 MeshCore board works — Heltec V3/V4, LilyGo T3S3,
-				T-Beam, Station G2, Xiao S3 WIO — and Adam Gessaman's flasher installs the
-				build straight from the browser (Chrome or Edge), so there is nothing to
-				compile.
-			</p>
-			<div class="flex flex-wrap gap-2">
-				<a
-					href="https://observer.gessaman.com/"
-					target="_blank"
-					rel="noopener noreferrer"
-					class="border-line text-fg-dim hover:border-line-bright hover:text-fg rounded-[var(--radius)] border px-3 py-1.5 text-sm transition-colors"
-					>Observer flasher ↗</a
-				>
-				<a
-					href="https://observer.gessaman.com/docs"
-					target="_blank"
-					rel="noopener noreferrer"
-					class="border-line text-fg-dim hover:border-line-bright hover:text-fg rounded-[var(--radius)] border px-3 py-1.5 text-sm transition-colors"
-					>Firmware docs ↗</a
-				>
-			</div>
-			<p class="text-fg-dim text-sm leading-relaxed">
-				But it isn't the only way, and you may not need to reflash anything. A
-				computer can read a companion radio you already have over USB or TCP;
-				OpenHop runs repeater, room server and observer as one Python process;
-				the MeshCore Bot and the Home Assistant integration can both observe
-				alongside what they already do.
+				There are several ways to run an observer, so start by picking the one
+				that fits the hardware you already have. You may not need to flash
+				anything: a computer can read a companion radio over USB or TCP, OpenHop
+				runs repeater, room server and observer as one Python process, and both
+				the MeshCore Bot and the Home Assistant integration can observe alongside
+				what they already do.
 			</p>
 			<div class="flex flex-wrap gap-2">
 				<a
@@ -115,14 +93,45 @@ reboot`);
 					target="_blank"
 					rel="noopener noreferrer"
 					class="border-line text-fg-dim hover:border-line-bright hover:text-fg rounded-[var(--radius)] border px-3 py-1.5 text-sm transition-colors"
-					>Other ways to run an observer ↗</a
+					>Compare the ways to run one ↗</a
 				>
 			</div>
 			<p class="text-fg-faint text-xs leading-relaxed">
-				The commands below are for the firmware route — connect over serial at
-				115200 baud. The other projects set the same four things their own way:
-				broker, audience, region and WiFi.
+				Whichever you choose, it needs the same four things: the broker, the
+				audience, a region and WiFi. Each project names them its own way — the
+				values are in step 4.
 			</p>
+
+			<div class="border-line/70 mt-3 space-y-2 border-t pt-3">
+				<div class="label">Or use a dedicated board</div>
+				<p class="text-fg-dim text-sm leading-relaxed">
+					The simplest route is a board of its own running observer firmware. Any
+					WiFi-capable ESP32 MeshCore board works — Heltec V3/V4, LilyGo T3S3,
+					T-Beam, Station G2, Xiao S3 WIO — and Adam Gessaman's flasher installs
+					the build straight from the browser (Chrome or Edge), so there is
+					nothing to compile.
+				</p>
+				<div class="flex flex-wrap gap-2">
+					<a
+						href="https://observer.gessaman.com/"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="border-line text-fg-dim hover:border-line-bright hover:text-fg rounded-[var(--radius)] border px-3 py-1.5 text-sm transition-colors"
+						>Observer flasher ↗</a
+					>
+					<a
+						href="https://observer.gessaman.com/docs"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="border-line text-fg-dim hover:border-line-bright hover:text-fg rounded-[var(--radius)] border px-3 py-1.5 text-sm transition-colors"
+						>Firmware docs ↗</a
+					>
+				</div>
+				<p class="text-fg-faint text-xs leading-relaxed">
+					Took that route? Connect over serial at 115200 baud and follow the steps
+					below.
+				</p>
+			</div>
 		</section>
 
 		<section class="space-y-2">

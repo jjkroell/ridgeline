@@ -4,6 +4,13 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.10.3] — 2026-08-19
+
+### Changed
+- **About page ordering:** the primary frequency's radio settings now come before
+  the second-network section, so the parameters most people are copying are the
+  first ones they meet. Both settings tables name their frequency in the heading.
+
 ## [v0.10.2] — 2026-08-19
 
 ### Changed

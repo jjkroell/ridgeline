@@ -4,6 +4,38 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.10.0] — 2026-08-19
+
+### Added
+- **Nodes on the far side of a bridge are now marked as being on another
+  frequency.** When a bridge links two RF networks and every observer sits on one
+  side, the nodes on the other side are only ever heard once their traffic
+  crosses — and nothing here can hear what frequency they actually use. Ridgeline
+  now works out which nodes those are and marks them: a violet rail on the row,
+  a violet name, and the frequency in the line under the name, plus a violet ring
+  on every map so a node keeps its role colour as well. The node's own page
+  explains in plain language why it looks different.
+
+  Detection runs every 30 minutes over the last three days and is deliberately
+  strict: the traffic has to cross **in the right direction**, the node must have
+  **never once been heard directly**, and essentially all of its traffic must
+  arrive across the bridge. A crossing proved on short path traces is marked as a
+  likely match rather than a certain one. On the mesh this was built against it
+  found exactly the nodes their operators confirmed, including one whose
+  reconfiguration was visible in the traffic before anyone mentioned it.
+
+  Tell Ridgeline which frequency the far side uses when you mark a bridge as
+  known — it can't be measured from this side, so it has to be typed in.
+
+### Changed
+- **A far-side node no longer reports a frequency it isn't using.** A node's radio
+  settings are inherited from whichever observer heard it, so for a node across a
+  bridge they described a receiver on *this* side — the wrong frequency entirely,
+  stated as fact. Those nodes now show the frequency recorded for the far side of
+  their bridge, or nothing at all if none has been recorded.
+- Frequencies keep their trailing zeros (`909.000`, not `909`), so a reading
+  can't be mistaken for a different or truncated setting next to its neighbours.
+
 ## [v0.9.9] — 2026-08-19
 
 ### Removed

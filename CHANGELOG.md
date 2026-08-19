@@ -4,6 +4,19 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.10.2] — 2026-08-19
+
+### Changed
+- **The About page now covers the 909 MHz side of the network** — the second
+  frequency, the wired repeater pair at Mt Cokley above Parksville that joins it
+  to the alternate frequency, and its radio settings alongside the existing ones.
+  It calls out the different spreading factor, since retuning the frequency alone
+  won't hear that side.
+- **New what's-new announcement**, rewritten around what a visitor actually sees:
+  nodes on the second frequency marked in violet, remote nodes back on the maps,
+  terrain on the node location map, and the expanded About page. Every visitor
+  sees it once on their next load.
+
 ## [v0.10.1] — 2026-08-19
 
 ### Fixed

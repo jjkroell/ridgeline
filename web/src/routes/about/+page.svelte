@@ -146,7 +146,7 @@
 			{#each radio909 as row (row.k)}
 				<div class="flex items-center justify-between gap-4 px-4 py-3">
 					<dt class="text-fg-dim text-sm">{row.k}</dt>
-					<dd class="font-mono text-fg text-sm tnum">{row.v}</dd>
+					<dd class="text-signal font-mono text-sm font-600 tabular-nums">{row.v}</dd>
 				</div>
 			{/each}
 		</dl>

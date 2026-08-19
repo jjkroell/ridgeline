@@ -4,6 +4,16 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.11.1] — 2026-08-19
+
+### Added
+- **"Add an observer" on the Observers page.** The page listed the stations
+  feeding Ridgeline but never said how to become one, so the answer lived in
+  chat logs and in whoever happened to know. The guide covers the whole path —
+  flashing the firmware from the browser, matching the mesh's radio settings,
+  WiFi, and the uplink — with a copy button on each block and one block with
+  everything for a fresh device. On the mobile pages too.
+
 ## [v0.11.0] — 2026-08-19
 
 Infrastructure only — nothing changes on the site for visitors.

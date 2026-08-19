@@ -4,6 +4,13 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.10.4] — 2026-08-19
+
+### Fixed
+- The second network's radio settings on the About page now use the same styling
+  as the primary table — they were rendering in plain body text, so two tables of
+  the same kind of information looked like different kinds of thing.
+
 ## [v0.10.3] — 2026-08-19
 
 ### Changed

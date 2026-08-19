@@ -6,10 +6,12 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
 	import StandbyBadge from '$lib/components/StandbyBadge.svelte';
+	import ObserverSetupModal from '$lib/components/ObserverSetupModal.svelte';
 
 	let observers = $state<Observer[]>([]);
 	let coverage = $state<Record<string, ObserverCoverage>>({});
 	let loading = $state(true);
+	let showSetup = $state(false);
 
 	async function refresh() {
 		try {
@@ -34,10 +36,22 @@
 />
 
 <PageHeader eyebrow="Listening Posts" title="Observers">
-	<div class="font-mono text-fg-dim text-xs">
-		<span class="text-signal tnum">{observers.length}</span> <span class="text-fg-faint">posts</span>
+	<div class="flex items-center gap-4">
+		<button
+			onclick={() => (showSetup = true)}
+			class="border-line text-fg-dim hover:border-line-bright hover:text-fg rounded-[var(--radius)] border px-3 py-1.5 text-xs transition-colors"
+			>Add an observer</button
+		>
+		<div class="font-mono text-fg-dim text-xs">
+			<span class="text-signal tnum">{observers.length}</span>
+			<span class="text-fg-faint">posts</span>
+		</div>
 	</div>
 </PageHeader>
+
+{#if showSetup}
+	<ObserverSetupModal onclose={() => (showSetup = false)} />
+{/if}
 
 <div class="px-6 py-6 md:px-10">
 	{#if loading}

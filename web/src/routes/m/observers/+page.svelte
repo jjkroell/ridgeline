@@ -4,8 +4,10 @@
 	import { api, type Observer } from '$lib/api';
 	import { ago, fmtNum, isFresh } from '$lib/format';
 	import StandbyBadge from '$lib/components/StandbyBadge.svelte';
+	import ObserverSetupModal from '$lib/components/ObserverSetupModal.svelte';
 
 	let observers = $state<Observer[]>([]);
+	let showSetup = $state(false);
 
 	async function refresh() {
 		try {
@@ -32,8 +34,19 @@
 
 <Seo title="Observers" description="Listening posts feeding this observatory." path="/m/observers" />
 
+{#if showSetup}
+	<ObserverSetupModal onclose={() => (showSetup = false)} />
+{/if}
+
 <div class="px-4 py-4">
-	<div class="text-fg-faint mb-2 px-1 font-mono text-[0.62rem]">{observers.length} listening posts</div>
+	<div class="mb-2 flex items-center gap-2 px-1">
+		<div class="text-fg-faint font-mono text-[0.62rem]">{observers.length} listening posts</div>
+		<button
+			onclick={() => (showSetup = true)}
+			class="border-line/60 text-fg-dim active:bg-line/40 ml-auto rounded-full border px-3 py-1 font-mono text-[0.62rem]"
+			>Add an observer</button
+		>
+	</div>
 	<div class="flex flex-col gap-3">
 		{#each observers as o (o.id)}
 			{@const reporting = isFresh(o.lastSeen)}

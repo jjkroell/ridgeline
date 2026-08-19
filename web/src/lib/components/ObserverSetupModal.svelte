@@ -69,12 +69,13 @@ reboot`;
 		</p>
 
 		<section class="space-y-2">
-			<div class="label">1 · Flash the firmware</div>
+			<div class="label">1 · Choose how to run it</div>
 			<p class="text-fg-dim text-sm leading-relaxed">
-				Any WiFi-capable ESP32 MeshCore board works — Heltec V3/V4, LilyGo T3S3,
-				T-Beam, Station G2, Xiao S3 WIO. Adam Gessaman's flasher installs the
-				observer build straight from the browser (Chrome or Edge), so there is
-				nothing to compile.
+				The simplest route is a dedicated board running observer firmware. Any
+				WiFi-capable ESP32 MeshCore board works — Heltec V3/V4, LilyGo T3S3,
+				T-Beam, Station G2, Xiao S3 WIO — and Adam Gessaman's flasher installs the
+				build straight from the browser (Chrome or Edge), so there is nothing to
+				compile.
 			</p>
 			<div class="flex flex-wrap gap-2">
 				<a
@@ -92,8 +93,26 @@ reboot`;
 					>Firmware docs ↗</a
 				>
 			</div>
+			<p class="text-fg-dim text-sm leading-relaxed">
+				But it isn't the only way, and you may not need to reflash anything. A
+				computer can read a companion radio you already have over USB or TCP;
+				OpenHop runs repeater, room server and observer as one Python process;
+				the MeshCore Bot and the Home Assistant integration can both observe
+				alongside what they already do.
+			</p>
+			<div class="flex flex-wrap gap-2">
+				<a
+					href="https://observer.gessaman.com/observer-options"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="border-line text-fg-dim hover:border-line-bright hover:text-fg rounded-[var(--radius)] border px-3 py-1.5 text-sm transition-colors"
+					>Other ways to run an observer ↗</a
+				>
+			</div>
 			<p class="text-fg-faint text-xs leading-relaxed">
-				Then connect over serial at 115200 baud and enter the commands below.
+				The commands below are for the firmware route — connect over serial at
+				115200 baud. The other projects set the same four things their own way:
+				broker, audience, region and WiFi.
 			</p>
 		</section>
 

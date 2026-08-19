@@ -4,6 +4,14 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.12.1] — 2026-08-19
+
+### Changed
+- **The observer guide asks you to choose a method before anything else.** It
+  used to open with the browser flasher, which reads as though a dedicated board
+  is required — so the note that your existing companion radio, OpenHop install
+  or Home Assistant setup would also do came too late to change the decision.
+
 ## [v0.12.0] — 2026-08-19
 
 ### Added

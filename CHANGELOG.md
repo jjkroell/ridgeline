@@ -4,6 +4,36 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.15.3] — 2026-08-24
+
+### Fixed
+- **A bridge's own far end no longer publishes a near-side frequency.** The end
+  of a sanctioned bridge that transmits on the far segment is excluded from
+  segment membership — a bridge is not beyond itself — so none of the far-side
+  blanking reached it and its page served whatever was stored, which on the live
+  mesh was a 910.425 config inherited before v0.15.1 from receivers that had only
+  ever heard it relayed. The startup repair ran its test backwards for this one
+  node: it clears a radio that MATCHES the declared far segment, which is right
+  everywhere else and exactly wrong here, where that config is the correct
+  answer. So the wrong value was kept, and a correct one — a far-side receiver
+  hearing that end directly, the only kind it can ever have — would have been
+  deleted at every open.
+
+### Changed
+- **A bridge's two ends are now named for where they physically sit.** `Near`
+  was documented as this side of the wire and held the end on the far segment;
+  the direction test was written to match, so two errors cancelled and the
+  output was correct. They cancel only while both stay wrong, and correcting
+  either half alone does not fail loudly — swapped ends do not error, they
+  reclassify every real member as a reverse crossing and report an empty far
+  side, which looks exactly like a bridge nobody lives behind. Behaviour is
+  unchanged (verified against a copy of the live database: the same seven nodes
+  with the same confidences), and three things now defend the labelling — the
+  direction rule lives in one function with a table test, which blocklist column
+  holds which end is stated once as the recording convention it is, and each
+  sweep now counts crossings in both directions and **logs a warning naming any
+  bridge whose traffic runs mostly the wrong way**.
+
 ## [v0.15.2] — 2026-08-23
 
 ### Fixed

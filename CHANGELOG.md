@@ -4,6 +4,40 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.16.0] — 2026-08-24
+
+### Added
+- **A relay path can now PROVE which segment a node is on.** `path[0]` is the
+  relay that heard the origin over the air, so when every hop in an advert's
+  path belongs to the far segment, the origin transmitted there — it could not
+  have been demodulated otherwise. Only receptions by a far-side observer count:
+  anything that reached a near-side receiver crossed the bridge by definition,
+  which is the case the operator's declaration already covers. Nodes proven this
+  way get a **measured** radio config instead of the declared stand-in, and the
+  sweep logs how many it established (`measured=`).
+  - A hop is treated as far-side only when **every** node its hash could name is
+    known to be over there. Paths carry a 1-byte hash 59% of the time, which
+    rarely names one node; requiring the whole candidate set makes an ambiguous
+    hop safe rather than merely likely.
+  - The bridge's **near** end is never in the known set, so any advert that
+    actually crossed fails the test — both ends appear in a crossing's path.
+  - It runs one pass over the memberships just decided, deliberately not to a
+    fixpoint, so a single bad seed cannot cascade across the segment.
+  - **A direct reception on this side vetoes the proof.** A near-side receiver
+    demodulating a node measures that it transmits here, and an inference must
+    never overturn a measurement. Caught against live data, where the first cut
+    moved a real near-side node onto the far segment and gave it a 909 radio
+    while the same report rejected it for being heard directly over here.
+
+### Changed
+- **A far-side node keeps a radio that was genuinely measured over there.** The
+  API used to blank every far-side node's radio, because the value was usually a
+  near-side receiver's config inherited from a relayed copy. Now that a receiver
+  sits on the far segment, that same column can hold a real measurement, and the
+  two are told apart by the value itself: a config naming the far segment cannot
+  have come from a near-side receiver, since nothing over here transmits on that
+  channel. A measured value is shown **without** the "declared" marker.
+
 ## [v0.15.5] — 2026-08-24
 
 ### Fixed

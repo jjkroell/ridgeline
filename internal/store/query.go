@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/jjkroell/ridgeline/internal/meshcore"
+	"github.com/jjkroell/ridgeline/internal/radio"
 )
 
 // Node is a row from the nodes table, shaped for API responses.
@@ -242,8 +243,26 @@ func (s *Store) annotateBridgeSegments(nodes []Node) error {
 	}
 	for i := range nodes {
 		if key := nodes[i].ViaBridge; key != "" {
+			l, ok := byKey[key]
+			// A far-side node's stored radio is USUALLY a near-side receiver's
+			// config, inherited before v0.15.1 from a relayed copy, and describes
+			// the listener rather than the node — hence the blanket blanking this
+			// used to do. But once a receiver sits on the far segment, the same
+			// column can hold a genuine measurement of that segment, and blanking
+			// it threw away the only real evidence we have.
+			//
+			// The two cases are told apart by the value itself: a config naming
+			// the FAR segment cannot have come from a near-side receiver, because
+			// nothing on this side transmits or demodulates over there. Compared
+			// numerically — 909.0 and 909.000 are one channel.
+			if ok && l.PeerRadio != "" && radio.SameSegmentString(nodes[i].Radio, l.PeerRadio) {
+				nodes[i].ViaBridgeName = l.Name
+				// ViaBridgeRadio deliberately left empty: this value was measured,
+				// so it must not carry the "declared" marker.
+				continue
+			}
 			nodes[i].Radio = ""
-			if l, ok := byKey[key]; ok {
+			if ok {
 				// The bridge's own name, not an end's: the callout reads "reaches
 				// the network through the X link", and the link is the pair.
 				nodes[i].ViaBridgeName = l.Name

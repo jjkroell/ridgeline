@@ -107,6 +107,11 @@ type SegmentReport struct {
 	// — the far segment's nodes cross inbound constantly while our own traffic
 	// rarely leaves a full path on the way out.
 	ReversedEnds []string `json:"reversedEnds,omitempty"`
+	// MeasuredRadio holds far-segment radio configs PROVEN by relay path, keyed
+	// by uppercase node pubkey. These are measurements, not the operator's
+	// declaration, so the UI shows them without a "declared" marker — see
+	// provenFarSide for what "proven" means here.
+	MeasuredRadio map[string]string `json:"measuredRadio,omitempty"`
 }
 
 type segStat struct {
@@ -405,5 +410,143 @@ func DetectSegments(st *store.Store, nodes []store.Node, links []store.BridgeLin
 			})
 		}
 	}
+	provenFarSide(rep, raws, links, farObs, observers, nodes, stats)
 	return rep, nil
+}
+
+// provenFarSide upgrades far-side nodes from "declared" to MEASURED using the
+// relay path, and adds any node the path proves is over there.
+//
+// The argument: path[0] is the relay that heard the origin OVER THE AIR — the
+// ordering crossingKind already depends on — so if every hop belongs to the far
+// segment, the origin transmitted there. It could not have been demodulated by
+// a far-side relay otherwise. That is the same reasoning that lets a node
+// inherit an observer's config from a direct reception, one hop removed.
+//
+// Only receptions BY A FAR-SIDE OBSERVER are considered. Anything that reached
+// a near-side receiver got here across the bridge by definition, and a crossing
+// is exactly the case the operator's declaration already covers.
+//
+// TWO THINGS KEEP IT HONEST:
+//
+//   - A hop is "on the far segment" only when EVERY node whose key it could
+//     name is known to be over there. Paths carry 1-byte hashes 59% of the
+//     time, which rarely names one node; requiring the whole candidate set to
+//     qualify makes an ambiguous hop safe instead of merely likely, since the
+//     conclusion holds whichever candidate it really was.
+//   - The bridge's NEAR end is on this side and so is never in the known set.
+//     Any advert that actually crossed therefore fails, because both ends
+//     appear in a crossing's path.
+//
+// It runs ONE pass over the memberships the sweep just decided, deliberately
+// not to a fixpoint: each newly proven node would otherwise become evidence for
+// the next, and one bad seed would cascade through the whole far segment.
+func provenFarSide(rep *SegmentReport, raws []store.RawObservation, links []store.BridgeLink,
+	farObs map[string]map[string]bool, observers []store.Observer, nodes []store.Node,
+	stats map[string]map[string]*segStat) {
+
+	obsRadio := make(map[string]string, len(observers))
+	obsKey := make(map[string]string, len(observers))
+	for _, o := range observers {
+		obsRadio[o.ID] = o.Radio
+		if o.PublicKey != "" {
+			obsKey[o.ID] = strings.ToUpper(o.PublicKey)
+		}
+	}
+	allKeys := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		allKeys = append(allKeys, strings.ToUpper(n.PublicKey))
+	}
+	member := map[string]string{} // nodeKey -> bridgeKey, as just decided
+	for _, m := range rep.Members {
+		member[strings.ToUpper(m.NodeKey)] = m.BridgeKey
+	}
+
+	for _, l := range links {
+		// Everything established to be on this far segment, by any route that
+		// does not depend on the path test itself.
+		known := map[string]bool{strings.ToUpper(l.FarEnd()): true}
+		for k, bk := range member {
+			if bk == l.Key {
+				known[k] = true
+			}
+		}
+		for id := range farObs[l.Key] {
+			if k := obsKey[id]; k != "" {
+				known[k] = true
+			}
+		}
+		for _, r := range raws {
+			if !farObs[l.Key][r.ObserverID] {
+				continue
+			}
+			radioCfg := obsRadio[r.ObserverID]
+			if radioCfg == "" {
+				continue // nothing to attribute
+			}
+			pkt, err := meshcore.DecodeHex(r.RawHex)
+			if err != nil || pkt == nil || pkt.Advert == nil || pkt.Advert.PublicKey == "" {
+				continue
+			}
+			path := pkt.RelayPath()
+			if len(path) == 0 {
+				continue // already proof on its own; the sweep counted it
+			}
+			origin := strings.ToUpper(pkt.Advert.PublicKey)
+			if origin == l.NearEnd() || origin == l.FarEnd() {
+				continue
+			}
+			// ★ A DIRECT RECEPTION ON THIS SIDE OUTRANKS ANY PATH PROOF, and
+			// this is the only place the two can disagree. A near-side receiver
+			// demodulating the node is a measurement that it transmits over
+			// here; an all-far-side path is an inference, and an inference must
+			// never overturn a measurement. Without this, a 1-byte hop whose
+			// candidates happen to be far-side nodes is enough to move a
+			// near-side node onto the far segment and stamp it with a radio it
+			// does not use — which is what the sweep already rejects such a node
+			// FOR, in the same run.
+			if st := stats[l.Key][origin]; st != nil && st.zeroHop > 0 {
+				continue
+			}
+			if !pathAllOnSegment(path, known, allKeys) {
+				continue
+			}
+			if rep.MeasuredRadio == nil {
+				rep.MeasuredRadio = map[string]string{}
+			}
+			rep.MeasuredRadio[origin] = radioCfg
+			if _, ok := member[origin]; !ok {
+				member[origin] = l.Key
+				rep.Members = append(rep.Members, store.SegmentMember{
+					NodeKey: origin, BridgeKey: l.Key, Confidence: "confirmed",
+				})
+			}
+		}
+	}
+}
+
+// pathAllOnSegment reports whether every hop names only nodes known to be on
+// one segment. An unresolvable hop — matching no node at all — fails: silence
+// is not evidence, and 0.1% of hops name nobody we have ever seen.
+func pathAllOnSegment(path []string, known map[string]bool, allKeys []string) bool {
+	for _, hop := range path {
+		h := strings.ToUpper(strings.TrimSpace(hop))
+		if h == "" {
+			return false
+		}
+		matched := false
+		for _, k := range allKeys {
+			if !strings.HasPrefix(k, h) {
+				continue
+			}
+			matched = true
+			if !known[k] {
+				return false // this hop could be a node on the other side
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
 }

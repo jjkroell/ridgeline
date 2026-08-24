@@ -20,7 +20,11 @@ package store
 // node. The API suppresses it for far-side nodes and reports the declared value
 // instead.
 
-import "strings"
+import (
+	"strings"
+
+	radiopkg "github.com/jjkroell/ridgeline/internal/radio"
+)
 
 // BridgeLink is a sanctioned bridge with both of its ends known.
 //
@@ -103,6 +107,50 @@ func (s *Store) SetBridgePeerRadio(key, radio string) error {
 	_, err := s.db.Exec(`UPDATE blocklist SET peer_radio = ? WHERE kind = ? AND key = ?`,
 		nullStr(strings.TrimSpace(radio)), BlockKnown, strings.ToUpper(key))
 	return err
+}
+
+// ApplyMeasuredRadios records far-segment radio configs that the relay path
+// PROVED, overwriting whatever a node carried before.
+//
+// Overwrite rather than fill-if-empty: the value being replaced is usually a
+// near-side receiver's config inherited from a relayed copy, which is exactly
+// the misattribution this proves wrong. A measurement outranks it.
+//
+// Only nodes already assigned to a far segment are touched, so this can never
+// stamp a far-side config onto a near-side node — the failure that made the
+// blanket suppression necessary in the first place.
+func (s *Store) ApplyMeasuredRadios(byNode map[string]string) (int, error) {
+	if len(byNode) == 0 {
+		return 0, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	n := 0
+	for key, cfg := range byNode {
+		if cfg == "" {
+			continue
+		}
+		res, err := tx.Exec(
+			`UPDATE nodes SET radio = ? WHERE UPPER(pubkey) = ? AND via_bridge IS NOT NULL`,
+			radiopkg.Normalize(cfg), strings.ToUpper(key))
+		if err != nil {
+			return 0, err
+		}
+		if c, _ := res.RowsAffected(); c > 0 {
+			n++
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 // SegmentMember is one node found to live beyond a bridge.

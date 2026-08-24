@@ -432,10 +432,16 @@ func runSegmentSweep(ctx context.Context, st *store.Store, log *slog.Logger, tri
 			log.Warn("segment sweep: apply", "err", err)
 			return
 		}
+		// Radio configs the relay path proved, rather than the operator's
+		// declaration standing in for them.
+		measured, err := st.ApplyMeasuredRadios(rep.MeasuredRadio)
+		if err != nil {
+			log.Warn("segment sweep: apply measured radios", "err", err)
+		}
 		log.Info("segment sweep: far-side nodes",
 			"bridges", len(links), "marked", n, "scanned", rep.Scanned,
 			"crossings", rep.Crossings, "reverse", rep.Reverse, "rejected", len(rep.Rejected),
-			"far_observers", rep.FarObservers, "observed", rep.Observed)
+			"far_observers", rep.FarObservers, "observed", rep.Observed, "measured", measured)
 		if len(rep.ReversedEnds) > 0 {
 			// Loud on purpose: swapped ends do not error, they just report an
 			// empty far side, which is indistinguishable from a quiet one.

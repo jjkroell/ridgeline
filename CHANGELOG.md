@@ -4,6 +4,21 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.15.2] — 2026-08-23
+
+### Fixed
+- **A node's radio is no longer guessed at display time.** The node page filled
+  an empty value with the most common config among the observers that had heard
+  the node — at any hop count, which is exactly the unfounded claim ingest
+  stopped making in v0.15.1, reintroduced one layer up. It also undid the
+  deliberate blanking of a far-side node's inherited radio, so the page printed a
+  near-side receiver's frequency directly beneath a callout explaining that the
+  far side's frequency cannot be measured from here. An empty radio now means
+  what it says — nothing has heard this node directly — and fills in on the
+  node's next direct advert.
+- The observer API reports the normalized radio config rather than the raw string
+  in the stored status blob, so one channel does not read as two there either.
+
 ## [v0.15.1] — 2026-08-23
 
 ### Fixed

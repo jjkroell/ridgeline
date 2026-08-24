@@ -4,6 +4,35 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.15.0] — 2026-08-23
+
+### Added
+- **Far-side detection now uses receivers on the far side.** Observers are
+  sorted into the segment they can hear by matching their reported radio config
+  against the one declared for a bridge's far side. A receiver over there hears
+  those nodes *directly*, so membership becomes a measurement rather than an
+  inference drawn from which traffic crossed the bridge — recorded as a new
+  confidence, `observed`, alongside `confirmed` and `probable`. The node page
+  says so plainly instead of claiming nothing can hear the node.
+
+### Fixed
+- **A receiver on a bridge's far side no longer breaks the detection it should
+  improve.** The rule "never heard directly" was counted across all observers
+  alike, which was correct only while they all sat on one side: the moment
+  someone added a receiver on the far segment, its ordinary direct receptions
+  disqualified the very nodes the feature exists to find — silently, and
+  reporting "heard directly on this side", which was false. A direct sighting is
+  now read as refuting membership or proving it depending on which side the
+  receiver is on, and a node heard directly from *both* sides is reported as the
+  contradiction it is rather than resolved by guesswork. On the live mesh this
+  recovered a 909 MHz repeater that had been wrongly rejected.
+- **One channel no longer reads as two.** The same 910.425 MHz arrives from the
+  field as both `910.4249877` (a radio reporting its synthesised centre) and
+  `910.425`, and an operator declaring a far side types `909.000` where the
+  receiver there reports `909.0`. Radio configs are now compared numerically and
+  stored rounded to kHz, so grouping, comparison and display see one value.
+  Existing rows are normalized once on startup.
+
 ## [v0.14.0] — 2026-08-19
 
 ### Added

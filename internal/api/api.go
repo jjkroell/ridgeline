@@ -458,40 +458,21 @@ func (s *Server) nodeDetail(w http.ResponseWriter, r *http.Request) {
 		if !gen.IsZero() {
 			resp.GeneratedAt = gen.UTC().Format(time.RFC3339)
 		}
-		// Fall back to the radio of the observers that heard this node when the
-		// stored value isn't set yet (e.g. node hasn't re-advertised since the
-		// observer's radio became known). Most common wins.
-		if node.Radio == "" && d != nil && len(d.Observers) > 0 {
-			node.Radio = resolveRadioFromObservers(s.store, d.Observers)
-		}
+		// NO FALLBACK TO "the radio of whoever heard this node". It used to fill
+		// an empty value with the most common config among the observers that
+		// heard the node at ANY hop count, which is the same unfounded claim
+		// ingest stopped making in v0.15.1 — a relayed copy says nothing about
+		// the sender's PHY. It also silently undid annotateBridgeSegments, which
+		// blanks a far-side node's radio precisely because it describes a
+		// listener on the near side: the page ended up printing that listener's
+		// frequency directly under a callout explaining that the far side's
+		// frequency cannot be measured from here.
+		//
+		// An empty radio now means what it says: nothing has heard this node
+		// directly, so its PHY is unknown. It fills in on the node's next
+		// zero-hop advert.
 	}
 	writeJSON(w, resp)
-}
-
-// resolveRadioFromObservers returns the most common radio config among the
-// observers that heard a node, used when the node's own stored radio is unset.
-func resolveRadioFromObservers(st *store.Store, heard []analytics.ObserverStat) string {
-	obs, err := st.ListObservers()
-	if err != nil {
-		return ""
-	}
-	radioByID := make(map[string]string, len(obs))
-	for _, o := range obs {
-		if o.Status != nil && o.Status.Radio != "" {
-			radioByID[o.ID] = o.Status.Radio
-		}
-	}
-	counts := map[string]int{}
-	best, bestN := "", 0
-	for _, h := range heard {
-		if r := radioByID[h.ID]; r != "" {
-			counts[r]++
-			if counts[r] > bestN {
-				best, bestN = r, counts[r]
-			}
-		}
-	}
-	return best
 }
 
 // nodeHistory returns a node's stored observations over an arbitrary time range

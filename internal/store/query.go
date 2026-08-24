@@ -358,6 +358,13 @@ func (s *Store) listObservers() ([]Observer, error) {
 		if statusJSON != nil && *statusJSON != "" {
 			var st ObserverStatus
 			if json.Unmarshal([]byte(*statusJSON), &st) == nil {
+				// The blob is stored verbatim as it arrived, so its radio string
+				// still carries whatever spelling the device sent. The column is
+				// normalized; prefer it, or one channel reads as two again in
+				// anything that groups on this field.
+				if o.Radio != "" {
+					st.Radio = o.Radio
+				}
 				o.Status = &st
 			}
 		}

@@ -53,8 +53,10 @@ type Node struct {
 	// nothing on this side can hear the far side's settings).
 	ViaBridgeName  string `json:"viaBridgeName,omitempty"`
 	ViaBridgeRadio string `json:"viaBridgeRadio,omitempty"`
-	// ViaBridgeConfidence is "confirmed" (>=2-byte path hops proved the crossing)
-	// or "probable" (a 1-byte path, where only the far end's byte is unique).
+	// ViaBridgeConfidence is how membership was established: "observed" (a
+	// receiver on the far segment heard this node directly — measured, not
+	// inferred), "confirmed" (>=2-byte path hops proved the crossing) or
+	// "probable" (a 1-byte path, where only the far end's byte is unique).
 	ViaBridgeConfidence string `json:"viaBridgeConfidence,omitempty"`
 }
 
@@ -288,6 +290,12 @@ type Observer struct {
 	// StandbyDropped counts packets discarded since this daemon started (see
 	// Store.StandbyDropped). Only meaningful while StandbySince is set.
 	StandbyDropped int64 `json:"standbyDropped,omitempty"`
+	// Radio is the receiver's own "freq,bw,sf,cr", from its latest /status and
+	// normalized to kHz on write. This is what segment detection sorts observers
+	// by: a receiver reporting the far side's channel can hear that segment
+	// directly, so its zero-hop sightings prove membership rather than refuting
+	// it. Empty when the observer has never reported one.
+	Radio string `json:"radio,omitempty"`
 }
 
 // ObserverStatus is an observer's latest self-reported device telemetry, parsed
@@ -327,7 +335,8 @@ func (s *Store) listObservers() ([]Observer, error) {
 		SELECT o.id, COALESCE(o.name,''), COALESCE(o.region,''), COALESCE(o.pubkey,''),
 		       n.latitude, n.longitude, o.first_seen, o.last_seen, o.packet_count,
 		       o.status_json, COALESCE(o.last_status_at,''),
-		       COALESCE(o.standby_since,''), COALESCE(o.jwt_auth_at,'')
+		       COALESCE(o.standby_since,''), COALESCE(o.jwt_auth_at,''),
+		       COALESCE(o.radio,'')
 		FROM observers o
 		LEFT JOIN nodes n ON n.pubkey = o.pubkey
 		ORDER BY o.last_seen DESC`)
@@ -342,7 +351,8 @@ func (s *Store) listObservers() ([]Observer, error) {
 		var statusJSON *string
 		if err := rows.Scan(&o.ID, &o.Name, &o.Region, &o.PublicKey,
 			&o.Latitude, &o.Longitude, &o.FirstSeen, &o.LastSeen, &o.PacketCount,
-			&statusJSON, &o.LastStatusAt, &o.StandbySince, &o.JWTAuthAt); err != nil {
+			&statusJSON, &o.LastStatusAt, &o.StandbySince, &o.JWTAuthAt,
+			&o.Radio); err != nil {
 			return nil, err
 		}
 		if statusJSON != nil && *statusJSON != "" {

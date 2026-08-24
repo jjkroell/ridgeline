@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jjkroell/ridgeline/internal/meshcore"
+	radiopkg "github.com/jjkroell/ridgeline/internal/radio"
 
 	_ "modernc.org/sqlite"
 )
@@ -253,9 +254,9 @@ type Store struct {
 	// started; it is in memory because a per-packet DB write would cost more than
 	// storing the packet. See observer_standby.go.
 	standbyMu        sync.RWMutex
-	standbyObservers map[string]bool       // observer id (exact)
-	standbyDropped   map[string]int64      // observer id -> packets discarded
-	standbySeen      map[string]time.Time  // observer id -> last last_seen refresh
+	standbyObservers map[string]bool      // observer id (exact)
+	standbyDropped   map[string]int64     // observer id -> packets discarded
+	standbySeen      map[string]time.Time // observer id -> last last_seen refresh
 
 	// Set of node pubkeys (UPPER) with an open pending ownership claim. Consulted
 	// on the hot ingest path so the advert verifier only touches the DB for nodes
@@ -350,11 +351,12 @@ func Open(path string) (*Store, error) {
 	// whichever observer heard a node — which for a far-side node is a listener on
 	// THIS side and is therefore wrong. Declaring it here is the only honest source.
 	db.Exec(`ALTER TABLE blocklist ADD COLUMN peer_radio TEXT`)
-	// via_bridge marks a node that is reachable only ACROSS a sanctioned bridge:
+	// via_bridge marks a node that lives on the far side of a sanctioned bridge:
 	// the uppercase pubkey of the bridge's near end. Set by the segment sweep, not
-	// by ingest. via_bridge_conf is 'confirmed' (the crossing was proved with
-	// >=2-byte path hops) or 'probable' (a 1-byte path, where only the far end's
-	// byte is unique). NULL means the node is on this side.
+	// by ingest. via_bridge_conf is how that was established — 'observed' (a
+	// receiver on the far segment heard it directly, a measurement), 'confirmed'
+	// (the crossing was proved with >=2-byte path hops) or 'probable' (a 1-byte
+	// path, where only the far end's byte is unique). NULL means this side.
 	db.Exec(`ALTER TABLE nodes ADD COLUMN via_bridge TEXT`)
 	db.Exec(`ALTER TABLE nodes ADD COLUMN via_bridge_conf TEXT`)
 	// User account status columns (added after the initial users table shipped).
@@ -396,6 +398,13 @@ func Open(path string) (*Store, error) {
 	// harmless today, but exactly the kind of invisible state that turns into a
 	// mystery later. Idempotent.
 	db.Exec(`UPDATE observers SET retired_at = NULL WHERE retired_at IS NOT NULL`)
+	// One-time (and idempotent) rounding of stored radio configs to kHz. Two
+	// spellings of one channel would otherwise be two segments to every consumer
+	// that groups or compares them — see internal/radio.
+	if err := normalizeStoredRadio(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: normalize radio: %w", err)
+	}
 	s := &Store{db: db, needAdvertTxBackfill: needAdvertTxBackfill}
 	if err := s.loadBlocklist(); err != nil {
 		db.Close()
@@ -417,6 +426,7 @@ func Open(path string) (*Store, error) {
 // if a status arrives before any packet. statusJSON is the marshalled
 // ObserverStatus; receivedAt is the server's receipt time (RFC3339).
 func (s *Store) UpsertObserverStatus(id, name, region, pubkey, statusJSON, radio, receivedAt string) error {
+	radio = radiopkg.Normalize(radio)
 	_, err := s.db.Exec(`
 		INSERT INTO observers (id, name, region, pubkey, first_seen, last_seen, packet_count, status_json, last_status_at, radio)
 		VALUES (?,?,?,?,?,?,0,?,?,?)
@@ -520,6 +530,7 @@ func (s *Store) WriteAudit(at string, actorID int64, actorEmail, action, target,
 // last-known value, never evidence the device is live, so it may refresh an
 // observer that already exists but must not conjure one.
 func (s *Store) UpdateObserverStatusIfPresent(id, name, region, pubkey, statusJSON, radio, receivedAt string) (bool, error) {
+	radio = radiopkg.Normalize(radio)
 	res, err := s.db.Exec(`
 		UPDATE observers SET
 			status_json    = ?,

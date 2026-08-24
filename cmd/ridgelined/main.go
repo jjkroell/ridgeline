@@ -436,6 +436,13 @@ func runSegmentSweep(ctx context.Context, st *store.Store, log *slog.Logger, tri
 			"bridges", len(links), "marked", n, "scanned", rep.Scanned,
 			"crossings", rep.Crossings, "reverse", rep.Reverse, "rejected", len(rep.Rejected),
 			"far_observers", rep.FarObservers, "observed", rep.Observed)
+		if len(rep.ReversedEnds) > 0 {
+			// Loud on purpose: swapped ends do not error, they just report an
+			// empty far side, which is indistinguishable from a quiet one.
+			log.Warn("segment sweep: a bridge's two ends look recorded the wrong way round — "+
+				"its far-segment end must be the blocklist entry and its near-side end the peer",
+				"bridges", rep.ReversedEnds, "crossings", rep.Crossings, "reverse", rep.Reverse)
+		}
 	}
 	sweep()
 	t := time.NewTicker(segmentSweepInterval)

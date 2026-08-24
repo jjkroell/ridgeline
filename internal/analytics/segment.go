@@ -20,9 +20,13 @@ package analytics
 // receiver, and it is still what classifies a far-side node that no far-side
 // observer happens to hear. Its three properties:
 //
-//  1. DIRECTION. Relays append their hash as a packet travels, so the path is
-//     ordered and index(near) < index(far) IS the near->far direction. Traffic
-//     crossing the other way is a different fact and is not counted.
+//  1. DIRECTION. Relays append their hash as a packet travels, so the path is in
+//     travel order. A node that LIVES on the far segment has to send its traffic
+//     across the wire to reach a receiver on this side, so its path enters at the
+//     far end and leaves at the near one: index(far) < index(near). The opposite
+//     order is a packet on its way OUT of here, which says nothing about where
+//     its originator lives, and is counted separately as a reverse crossing.
+//     See crossingKind — the rule lives there and nowhere else.
 //
 //  2. WIDTH. The path hash width is the ORIGINATING node's setting, and every
 //     relay appends at that width — so a narrow originator produces narrow hops
@@ -69,6 +73,15 @@ const segMinShare = 0.90
 // nothing. A far-side node advertises regularly, so this costs real cases little.
 const segMinSightings = 5
 
+// Thresholds for calling a bridge's two ends recorded the wrong way round.
+// segMinReverse is a floor so a new or quiet bridge is never accused on a
+// handful of packets; segReverseRatio is how far reverse crossings must
+// outnumber forward ones before it is a conclusion rather than noise.
+const (
+	segMinReverse   = 20
+	segReverseRatio = 4
+)
+
 // SegmentReport is the outcome of one sweep, for logging and the admin console.
 type SegmentReport struct {
 	Members   []store.SegmentMember `json:"members"`
@@ -84,6 +97,16 @@ type SegmentReport struct {
 	// makes "did my new observer get recognised?" answerable from the log.
 	FarObservers int `json:"farObservers"`
 	Observed     int `json:"observed"`
+	// ReversedEnds names bridges whose traffic runs mostly the WRONG way through
+	// the ends as recorded — nearly always a bridge whose two ends were entered
+	// the other way round (store.KnownBridgeLinks explains which column is which).
+	//
+	// It is worth surfacing because the failure is otherwise invisible: swapped
+	// ends do not error, they just stop finding anybody, and an empty far side
+	// looks exactly like a quiet one. A healthy bridge is lopsided the other way
+	// — the far segment's nodes cross inbound constantly while our own traffic
+	// rarely leaves a full path on the way out.
+	ReversedEnds []string `json:"reversedEnds,omitempty"`
 }
 
 type segStat struct {
@@ -98,7 +121,7 @@ type segStat struct {
 }
 
 // farObserverSets sorts receivers onto the far side of each bridge, returning
-// bridgeNear -> observer id -> true, and how many distinct receivers were placed
+// bridgeKey -> observer id -> true, and how many distinct receivers were placed
 // on some far segment.
 //
 // A receiver belongs to a far segment when its reported radio and the operator's
@@ -121,7 +144,7 @@ func farObserverSets(links []store.BridgeLink, observers []store.Observer) (map[
 				}
 			}
 		}
-		out[l.Near] = set
+		out[l.Key] = set
 	}
 	return out, len(seen)
 }
@@ -158,6 +181,80 @@ func (s segStat) verdict() (confidence, reject string) {
 	}
 }
 
+// Crossing classifications returned by crossingKind.
+const (
+	crossNone      = ""
+	crossConfirmed = "confirmed"
+	crossProbable  = "probable"
+	crossReverse   = "reverse"
+)
+
+// crossingKind reads one relay path and reports whether the packet came ACROSS
+// the bridge into this segment.
+//
+// This is the single place the direction rule lives, and the direction is the
+// whole substance of the inferred test. Relays append their hash as a packet
+// travels, so a path is in travel order. Traffic ORIGINATING on the far segment
+// must cross the wire to reach a receiver on this side, entering at the far end
+// and leaving at the near one — so a crossing is index(far) < index(near). The
+// same two hops in the opposite order are one of OUR packets on its way out, and
+// prove nothing about where the originator lives.
+//
+// ⚠ Both ends of a bridge are ordinary relays and appear in plenty of paths that
+// never crossed anything, so presence is not evidence — only order is. Getting
+// the two ends the wrong way round therefore does not fail loudly: it reclassifies
+// every real member as a reverse crossing and reports an empty far side.
+//
+// WIDTH. The path hash width is the ORIGINATING node's setting and every relay
+// appends at that width, so a narrow originator produces narrow hops for the
+// bridge too. A >=2-byte hop identifies a bridge end uniquely on a mesh this
+// size; a 1-byte hop usually does not. Rather than discard narrow traffic (which
+// would make companions, which skew narrow, invisible as a class) a 1-byte
+// crossing is admitted as probable — and only when the FAR end's single byte is
+// unique among known nodes, since that is the end whose identity carries the
+// claim. The near end may be ambiguous without costing anything.
+func crossingKind(path []string, l store.BridgeLink, farByteUnique bool) string {
+	iNearW, iFarW := -1, -1 // >=2-byte positions
+	iNear1, iFar1 := -1, -1 // 1-byte positions
+	for i, hop := range path {
+		h := strings.ToUpper(hop)
+		if h == "" {
+			continue
+		}
+		wide := len(h)/2 >= 2
+		if strings.HasPrefix(l.NearEnd(), h) {
+			if wide && iNearW < 0 {
+				iNearW = i
+			} else if !wide && iNear1 < 0 {
+				iNear1 = i
+			}
+		}
+		if strings.HasPrefix(l.FarEnd(), h) {
+			if wide && iFarW < 0 {
+				iFarW = i
+			} else if !wide && iFar1 < 0 {
+				iFar1 = i
+			}
+		}
+	}
+	switch {
+	case iFarW >= 0 && iNearW >= 0 && iFarW < iNearW:
+		return crossConfirmed
+	case iFarW >= 0 && iNearW >= 0 && iNearW < iFarW:
+		return crossReverse
+	case farByteUnique && iFar1 >= 0 && iNear1 >= 0 && iFar1 < iNear1:
+		return crossProbable
+	}
+	return crossNone
+}
+
+// endsLookReversed reads one bridge's crossing tallies and reports whether its
+// two ends look recorded end-for-end. Kept as its own function so the threshold
+// is stated once and can be tested without a packet window.
+func endsLookReversed(forward, reverse int) bool {
+	return reverse >= segMinReverse && forward*segReverseRatio < reverse
+}
+
 // DetectSegments finds the nodes on the far side of each sanctioned bridge:
 // heard directly by a receiver over there, or else reachable only across the
 // bridge. sinceISO must not predate the bridge being put in place.
@@ -191,21 +288,24 @@ func DetectSegments(st *store.Store, nodes []store.Node, links []store.BridgeLin
 	// A 1-byte far end is only usable when no other known node shares that byte.
 	farByteUnique := map[string]bool{}
 	for _, l := range links {
-		b := l.Far[:2]
+		b := l.FarEnd()[:2]
 		n := 0
 		for _, nd := range nodes {
 			if strings.HasPrefix(strings.ToUpper(nd.PublicKey), b) {
 				n++
 			}
 		}
-		farByteUnique[l.Near] = n <= 1
+		farByteUnique[l.Key] = n <= 1
 	}
 
-	// stats[bridgeNear][originKey]
+	// stats[bridgeKey][originKey]
 	stats := map[string]map[string]*segStat{}
 	for _, l := range links {
-		stats[l.Near] = map[string]*segStat{}
+		stats[l.Key] = map[string]*segStat{}
 	}
+	// Per-bridge crossing tallies, kept only to answer "are this bridge's two
+	// ends recorded the right way round?" — see SegmentReport.ReversedEnds.
+	fwd, rev := map[string]int{}, map[string]int{}
 
 	for _, r := range raws {
 		rep.Scanned++
@@ -218,15 +318,15 @@ func DetectSegments(st *store.Store, nodes []store.Node, links []store.BridgeLin
 
 		for _, l := range links {
 			// The bridge's own ends are not beyond it.
-			if origin == l.Near || origin == l.Far {
+			if origin == l.NearEnd() || origin == l.FarEnd() {
 				continue
 			}
-			s := stats[l.Near][origin]
+			s := stats[l.Key][origin]
 			if s == nil {
 				s = &segStat{}
-				stats[l.Near][origin] = s
+				stats[l.Key][origin] = s
 			}
-			onFarSide := farObs[l.Near][r.ObserverID]
+			onFarSide := farObs[l.Key][r.ObserverID]
 			if len(path) == 0 {
 				// Same event, opposite meanings, decided entirely by which side
 				// the receiver is on.
@@ -248,39 +348,34 @@ func DetectSegments(st *store.Store, nodes []store.Node, links []store.BridgeLin
 			}
 			s.withPath++
 
-			iNearW, iFarW := -1, -1 // >=2-byte positions
-			iNear1, iFar1 := -1, -1 // 1-byte positions
-			for i, hop := range path {
-				h := strings.ToUpper(hop)
-				if h == "" {
-					continue
-				}
-				wide := len(h)/2 >= 2
-				if strings.HasPrefix(l.Near, h) {
-					if wide && iNearW < 0 {
-						iNearW = i
-					} else if !wide && iNear1 < 0 {
-						iNear1 = i
-					}
-				}
-				if strings.HasPrefix(l.Far, h) {
-					if wide && iFarW < 0 {
-						iFarW = i
-					} else if !wide && iFar1 < 0 {
-						iFar1 = i
-					}
-				}
-			}
-			switch {
-			case iNearW >= 0 && iFarW >= 0 && iNearW < iFarW:
+			switch crossingKind(path, l, farByteUnique[l.Key]) {
+			case crossConfirmed:
 				s.confirmed++
 				rep.Crossings++
-			case iNearW >= 0 && iFarW >= 0 && iFarW < iNearW:
-				rep.Reverse++
-			case farByteUnique[l.Near] && iNear1 >= 0 && iFar1 >= 0 && iNear1 < iFar1:
+				fwd[l.Key]++
+			case crossProbable:
 				s.probable++
 				rep.Crossings++
+				fwd[l.Key]++
+			case crossReverse:
+				rep.Reverse++
+				rev[l.Key]++
 			}
+		}
+	}
+
+	// A bridge recorded end-for-end still counts crossings — it just counts them
+	// all backwards. The floor keeps a brand-new or barely-used bridge from being
+	// accused on a handful of packets; the ratio is deliberately lopsided, since
+	// a correctly recorded bridge shows a few genuine reverse crossings and
+	// nothing like a majority of them.
+	for _, l := range links {
+		if endsLookReversed(fwd[l.Key], rev[l.Key]) {
+			name := l.Name
+			if name == "" {
+				name = l.Key[:min(12, len(l.Key))]
+			}
+			rep.ReversedEnds = append(rep.ReversedEnds, name)
 		}
 	}
 
@@ -289,7 +384,7 @@ func DetectSegments(st *store.Store, nodes []store.Node, links []store.BridgeLin
 		names[strings.ToUpper(n.PublicKey)] = n.Name
 	}
 	for _, l := range links {
-		for origin, s := range stats[l.Near] {
+		for origin, s := range stats[l.Key] {
 			conf, reject := s.verdict()
 			if conf == "" && reject == "" {
 				continue // never crossed, never heard over there: not a candidate
@@ -306,7 +401,7 @@ func DetectSegments(st *store.Store, nodes []store.Node, links []store.BridgeLin
 				rep.Observed++
 			}
 			rep.Members = append(rep.Members, store.SegmentMember{
-				NodeKey: origin, BridgeNear: l.Near, Confidence: conf,
+				NodeKey: origin, BridgeKey: l.Key, Confidence: conf,
 			})
 		}
 	}

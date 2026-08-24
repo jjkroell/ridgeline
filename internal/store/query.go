@@ -221,9 +221,11 @@ func (s *Store) annotateBridgeSegments(nodes []Node) error {
 	if err != nil {
 		return err
 	}
-	byNear := make(map[string]BridgeLink, len(links))
+	// Keyed by the bridge's identity, which is what via_bridge stores — not by
+	// either end, whose labelling is a separate question (see BridgeLink).
+	byKey := make(map[string]BridgeLink, len(links))
 	for _, l := range links {
-		byNear[l.Near] = l
+		byKey[l.Key] = l
 	}
 	for i := range nodes {
 		key := nodes[i].ViaBridge
@@ -231,8 +233,10 @@ func (s *Store) annotateBridgeSegments(nodes []Node) error {
 			continue
 		}
 		nodes[i].Radio = ""
-		if l, ok := byNear[key]; ok {
-			nodes[i].ViaBridgeName = l.NearName
+		if l, ok := byKey[key]; ok {
+			// The bridge's own name, not an end's: the callout reads "reaches the
+			// network through the X link", and the link is the pair.
+			nodes[i].ViaBridgeName = l.Name
 			nodes[i].ViaBridgeRadio = l.PeerRadio
 		}
 	}

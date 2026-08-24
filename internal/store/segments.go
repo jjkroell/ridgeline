@@ -22,11 +22,24 @@ package store
 
 import "strings"
 
-// BridgeLink is a sanctioned bridge with both ends known: the near end (the
-// relay detection named) and the peer the operator identified as the far side.
+// BridgeLink is a sanctioned bridge with both of its ends known.
+//
+// ★ Near and Far are PHYSICAL positions, not column names. Near is the end on
+// THIS side of the wire, the segment nearly all our receivers sit on; Far is the
+// end transmitting on the segment PeerRadio describes. Key is separate from
+// both: it is the bridge's identity, what nodes.via_bridge stores, and what the
+// admin console shows — so it stays stable no matter which end is which.
+//
+// The distinction is load-bearing. Every conclusion this package draws comes
+// from the ORDER the two ends appear in a relay path, and reading that order
+// against the wrong end inverts the result silently: nodes on the far segment
+// stop being found and the feature reports an empty far side rather than an
+// error. KnownBridgeLinks documents how the ends are assigned.
 type BridgeLink struct {
-	Near      string // uppercase pubkey, this side of the wire
-	Far       string // uppercase pubkey, the far side
+	Key       string // blocklist key: the bridge's identity (nodes.via_bridge)
+	Name      string // the bridge's name as the operator recorded it
+	Near      string // uppercase pubkey of the end on THIS segment
+	Far       string // uppercase pubkey of the end on the FAR segment
 	NearName  string
 	FarName   string
 	PeerRadio string // operator-declared "freq,bw,sf,cr" of the far segment
@@ -35,28 +48,34 @@ type BridgeLink struct {
 // FarEnd is the bridge end that sits ON the far segment: the radio transmitting
 // the config in PeerRadio. It is the one node for which PeerRadio describes the
 // node itself rather than the segment beyond it.
-//
-// ⚠ TODAY THAT IS Near, NOT Far. Both fields are filled from the blocklist row —
-// Near from its key, Far from its peer — and the operator records the
-// far-segment end AS the key, so the two names are currently inverted with
-// respect to their own doc comments. The direction test in
-// analytics.DetectSegments is written to match that inversion, which is the only
-// reason the labels have never produced a wrong answer. Ask for an end through
-// these accessors rather than naming a field, so correcting the labelling is one
-// edit instead of a hunt.
-func (l BridgeLink) FarEnd() string { return l.Near }
+func (l BridgeLink) FarEnd() string { return l.Far }
 
 // NearEnd is the bridge end on this side of the wire. See FarEnd.
-func (l BridgeLink) NearEnd() string { return l.Far }
+func (l BridgeLink) NearEnd() string { return l.Near }
 
 // KnownBridgeLinks returns sanctioned bridges that have a peer recorded. A
 // known bridge with no peer can't define a segment — a link needs two ends —
 // so it is skipped rather than guessed at.
+//
+// ⚠ WHICH COLUMN HOLDS WHICH END. The row's KEY is the end on the far segment
+// and its PEER is the end on this side. That is the opposite of what the column
+// names suggest, and it is a convention about how a bridge gets RECORDED rather
+// than anything derived from the traffic: the operator sanctions the end that
+// detection surfaced — the one whose relaying looked foreign, which is the end
+// living over there — and then names the end it is wired to over here.
+//
+// It cannot be checked at this layer, so it is checked one layer up instead:
+// DetectSegments counts crossings in both directions and reports the bridge in
+// SegmentReport.ReversedEnds when the traffic runs mostly the wrong way, which
+// is what a bridge recorded end-for-end looks like. Prefer that signal over
+// trusting this comment.
 func (s *Store) KnownBridgeLinks() ([]BridgeLink, error) {
 	rows, err := s.db.Query(`
-		SELECT b.key, b.peer, COALESCE(b.name,''), COALESCE(nf.name,''), COALESCE(b.peer_radio,'')
+		SELECT b.key, b.peer, COALESCE(b.name,''),
+		       COALESCE(nk.name,''), COALESCE(np.name,''), COALESCE(b.peer_radio,'')
 		FROM blocklist b
-		LEFT JOIN nodes nf ON UPPER(nf.pubkey) = b.peer
+		LEFT JOIN nodes nk ON UPPER(nk.pubkey) = b.key
+		LEFT JOIN nodes np ON UPPER(np.pubkey) = b.peer
 		WHERE b.kind = ? AND b.peer IS NOT NULL AND b.peer <> ''`, BlockKnown)
 	if err != nil {
 		return nil, err
@@ -65,10 +84,12 @@ func (s *Store) KnownBridgeLinks() ([]BridgeLink, error) {
 	out := []BridgeLink{}
 	for rows.Next() {
 		var l BridgeLink
-		if err := rows.Scan(&l.Near, &l.Far, &l.NearName, &l.FarName, &l.PeerRadio); err != nil {
+		// key -> Far, peer -> Near: see the note above.
+		if err := rows.Scan(&l.Far, &l.Near, &l.Name, &l.FarName, &l.NearName, &l.PeerRadio); err != nil {
 			return nil, err
 		}
 		l.Near, l.Far = strings.ToUpper(l.Near), strings.ToUpper(l.Far)
+		l.Key = l.Far
 		out = append(out, l)
 	}
 	return out, rows.Err()
@@ -86,9 +107,13 @@ func (s *Store) SetBridgePeerRadio(key, radio string) error {
 
 // SegmentMember is one node found to live beyond a bridge.
 type SegmentMember struct {
-	NodeKey    string // uppercase pubkey
-	BridgeNear string // uppercase pubkey of the bridge it is reached through
-	Confidence string // "confirmed" | "probable"
+	NodeKey string // uppercase pubkey
+	// BridgeKey is the bridge's identity (BridgeLink.Key), NOT either of its
+	// ends. Naming an end here would move this value whenever the labelling of
+	// the ends changed, and it is stored in nodes.via_bridge and rendered in the
+	// admin console.
+	BridgeKey  string
+	Confidence string // "observed" | "confirmed" | "probable"
 }
 
 // ApplySegments replaces the whole far-side assignment in one transaction.
@@ -113,7 +138,7 @@ func (s *Store) ApplySegments(members []SegmentMember) (int, error) {
 	n := 0
 	for _, m := range members {
 		res, err := tx.Exec(`UPDATE nodes SET via_bridge = ?, via_bridge_conf = ? WHERE UPPER(pubkey) = ?`,
-			strings.ToUpper(m.BridgeNear), m.Confidence, strings.ToUpper(m.NodeKey))
+			strings.ToUpper(m.BridgeKey), m.Confidence, strings.ToUpper(m.NodeKey))
 		if err != nil {
 			return 0, err
 		}

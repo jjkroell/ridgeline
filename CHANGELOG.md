@@ -4,6 +4,23 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.15.1] — 2026-08-23
+
+### Fixed
+- **A node's radio is now inherited only from a receiver that heard it
+  directly.** Any hop count could set it before, so a receiver on the 909 MHz
+  segment — which hears the whole 910.425 mesh once its flood traffic crosses the
+  bridge, five to eight hops deep — stamped 909 onto ordinary near-side nodes. A
+  direct demodulation proves the node transmits on that channel, because
+  otherwise the receiver could not have decoded it; a relayed copy proves nothing
+  of the kind. **14 wrongly-labelled nodes are repaired once at startup**, and
+  the one node genuinely on 909 keeps its value.
+- **A node no longer flips between coding rates** depending on which receiver
+  heard it last. LoRa carries the coding rate in the packet header, so a receiver
+  decodes whatever the sender used and its own setting is no evidence about the
+  node's. Where a direct reception names the same RF network as the stored value,
+  the stored value stands.
+
 ## [v0.15.0] — 2026-08-23
 
 ### Added

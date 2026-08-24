@@ -4,6 +4,33 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.15.4] — 2026-08-24
+
+### Added
+- **Filter the node list by frequency.** The Nodes filter sheet gains a
+  **Frequency** section — the whole mesh, the main network, or just the nodes on
+  the far side of a bridge — with live counts on each, shared by the desktop and
+  mobile lists. The far segment is named from the bridge's declared config
+  rather than hardcoded, and the section is hidden entirely on an install with no
+  sanctioned bridge, where it would be a choice between everything and nothing.
+  It filters on the far-side mark, not on the radio value: a far-side node's own
+  radio is deliberately blank, so matching by frequency would find nothing.
+
+### Changed
+- **A bridge's far end reports the far segment's declared config again**, having
+  been cleared to nothing in v0.15.3. It genuinely transmits over there, and with
+  no receiver on this side able to hear it the operator's declaration is the only
+  description of its PHY that exists — so showing it beats showing nothing, as
+  long as it is not passed off as a measurement. A value the node was actually
+  measured on still wins. It is not a member of the far segment (a bridge is not
+  beyond itself), so its page carries none of the "reached across a link"
+  framing.
+- **A declared radio now says so.** Wherever the operator's far-segment config
+  stands in for a measurement — the far-side nodes and now the bridge's far end —
+  the Radio row carries a **declared** marker explaining that no receiver on this
+  side can check it. Previously the value sat in the row looking exactly like a
+  reading.
+
 ## [v0.15.3] — 2026-08-24
 
 ### Fixed

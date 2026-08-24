@@ -178,7 +178,7 @@
 
 	// Overview facts. Compact (modal snapshot) shows a key subset; the full page
 	// shows everything. `c` is an optional value colour.
-	const facts = $derived.by((): { k: string; v: string; c?: string }[] => {
+	const facts = $derived.by((): { k: string; v: string; c?: string; declared?: boolean }[] => {
 		if (!node) return [];
 		const lastRelay = {
 			k: 'Last relay',
@@ -194,17 +194,15 @@
 		const avgSnr = { k: 'Avg SNR', v: detail?.avgSnr != null ? detail.avgSnr.toFixed(1) + ' dB' : '—' };
 		const location = { k: 'Location', v: fmtCoord(node.latitude, node.longitude) };
 		// A far-side node's own radio is blanked server-side (it described a
-		// receiver on THIS side of the bridge). Show the operator-declared config
-		// for the far segment instead, labelled so it is never mistaken for
-		// something the node reported.
-		const radio = node.viaBridge
-			? {
-					k: 'Radio',
-					v: node.viaBridgeRadio
-						? fmtRadio(node.viaBridgeRadio)
-						: 'unknown — far side of a bridge'
-				}
-			: { k: 'Radio', v: fmtRadio(node.radio) };
+		// receiver on THIS side of the bridge), and a bridge's far end never had a
+		// measurable one at all. Both get the operator-declared config for the far
+		// segment, and viaBridgeRadio being set is precisely what says "declared,
+		// not measured" — so it drives the marker rather than a second flag.
+		const radio = node.viaBridgeRadio
+			? { k: 'Radio', v: fmtRadio(node.viaBridgeRadio), declared: true }
+			: node.viaBridge
+				? { k: 'Radio', v: 'unknown — far side of a bridge' }
+				: { k: 'Radio', v: fmtRadio(node.radio) };
 		// Clock health from the timestamp the node stamps into its adverts.
 		const driftColor = { ok: 'var(--color-fg)', warn: 'var(--color-amber)', bad: 'var(--color-coral)' };
 		const clock = detail?.clockUnset
@@ -535,11 +533,22 @@
 				{#each facts as f (f.k)}
 					<div class="flex items-center justify-between gap-3 px-5 py-2.5">
 						<span class="label normal-case shrink-0">{f.k}</span>
-						<span
-							class="label normal-case tnum text-right"
-							style="color:{f.c ?? 'var(--color-fg)'}{f.k === 'Radio' ? ';letter-spacing:0' : ''}"
-							>{f.v}</span
-						>
+						<span class="flex min-w-0 items-center justify-end gap-1.5">
+							{#if f.declared}
+								<!-- Nothing on this side can hear the far segment, so this value
+								     was typed in rather than measured. Saying so next to the
+								     number keeps the row from reading like a reading. -->
+								<Tooltip
+									text="Declared by the operator for the far side of the bridge — no receiver on this side can measure it."
+									><span class="label !text-violet/70 normal-case">declared</span></Tooltip
+								>
+							{/if}
+							<span
+								class="label normal-case tnum text-right"
+								style="color:{f.c ?? 'var(--color-fg)'}{f.k === 'Radio' ? ';letter-spacing:0' : ''}"
+								>{f.v}</span
+							>
+						</span>
 					</div>
 				{/each}
 			</div>

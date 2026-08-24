@@ -206,15 +206,24 @@ func (s *Store) ListNodes() ([]Node, error) {
 // listener and is simply wrong for the node — reporting it would state a
 // falsehood with more confidence than reporting nothing. The operator-declared
 // far-segment config replaces it, and is absent until they declare one.
+//
+// The bridge's own far end gets the declared config too, and for the same
+// reason. It is not a MEMBER of the far segment — a bridge is not beyond itself
+// — so ViaBridge stays empty and its page shows none of the "reached across a
+// link" framing; but it does transmit over there, and with nothing on this side
+// able to hear it, the operator's declaration is the only description of its PHY
+// that exists. A value it was actually MEASURED on wins: a far-side receiver
+// hearing it directly is evidence, and evidence outranks a declaration.
+//
+// ViaBridgeRadio being set is what marks a value as declared rather than
+// measured, on both kinds of node — the UI reads it that way.
 func (s *Store) annotateBridgeSegments(nodes []Node) error {
-	var any bool
-	for i := range nodes {
-		if nodes[i].ViaBridge != "" {
-			any = true
-			break
-		}
-	}
-	if !any {
+	// Cheap in-memory gate: no sanctioned bridge, nothing to annotate, and no
+	// query. This runs on every ListNodes, which every client polls.
+	s.blockMu.RLock()
+	known := len(s.knownBridges)
+	s.blockMu.RUnlock()
+	if known == 0 {
 		return nil
 	}
 	links, err := s.KnownBridgeLinks()
@@ -227,16 +236,24 @@ func (s *Store) annotateBridgeSegments(nodes []Node) error {
 	for _, l := range links {
 		byKey[l.Key] = l
 	}
+	byFarEnd := make(map[string]BridgeLink, len(links))
+	for _, l := range links {
+		byFarEnd[l.FarEnd()] = l
+	}
 	for i := range nodes {
-		key := nodes[i].ViaBridge
-		if key == "" {
+		if key := nodes[i].ViaBridge; key != "" {
+			nodes[i].Radio = ""
+			if l, ok := byKey[key]; ok {
+				// The bridge's own name, not an end's: the callout reads "reaches
+				// the network through the X link", and the link is the pair.
+				nodes[i].ViaBridgeName = l.Name
+				nodes[i].ViaBridgeRadio = l.PeerRadio
+			}
 			continue
 		}
-		nodes[i].Radio = ""
-		if l, ok := byKey[key]; ok {
-			// The bridge's own name, not an end's: the callout reads "reaches the
-			// network through the X link", and the link is the pair.
-			nodes[i].ViaBridgeName = l.Name
+		// A bridge's far end describes itself with the declared config, but only
+		// while nothing has measured it.
+		if l, ok := byFarEnd[strings.ToUpper(nodes[i].PublicKey)]; ok && nodes[i].Radio == "" {
 			nodes[i].ViaBridgeRadio = l.PeerRadio
 		}
 	}

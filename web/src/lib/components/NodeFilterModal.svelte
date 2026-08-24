@@ -3,7 +3,12 @@
 	// (/m/nodes). Holds the role choice and the favorites/claimed switches so the
 	// list header stays quiet — see NodeFilters for the matching order rules.
 	import Modal from './Modal.svelte';
-	import { ROLE_OPTIONS, type NodeFilters } from '$lib/node-filters.svelte';
+	import {
+		ROLE_OPTIONS,
+		farSegmentFreq,
+		hasFarSegment,
+		type NodeFilters
+	} from '$lib/node-filters.svelte';
 	import type { Node } from '$lib/api';
 
 	let {
@@ -19,6 +24,22 @@
 		for (const n of nodes) c[n.role] = (c[n.role] ?? 0) + 1;
 		return c;
 	});
+
+	// The segment control only appears where a bridge actually splits the mesh —
+	// on a self-hosted install with no sanctioned bridge it would be a choice
+	// between "everything" and "nothing".
+	const showSegment = $derived(hasFarSegment(nodes));
+	const farCount = $derived(nodes.filter((n) => n.viaBridge).length);
+	const farFreq = $derived(farSegmentFreq(nodes));
+	const SEGMENTS = $derived([
+		{ key: 'all' as const, label: 'Both frequencies', count: nodes.length },
+		{ key: 'main' as const, label: 'Main network', count: nodes.length - farCount },
+		{
+			key: 'far' as const,
+			label: farFreq ? `${farFreq} MHz` : 'Another frequency',
+			count: farCount
+		}
+	]);
 </script>
 
 <Modal {onclose}>
@@ -51,6 +72,30 @@
 				</button>
 			{/each}
 		</div>
+
+		{#if showSegment}
+			<div class="label mt-5 mb-2">Frequency</div>
+			<div class="flex flex-col gap-1">
+				{#each SEGMENTS as sg (sg.key)}
+					<button
+						onclick={() => (filters.segment = sg.key)}
+						class="flex items-center gap-3 rounded-[var(--radius)] border px-3 py-2 text-left text-sm transition-colors
+							{filters.segment === sg.key
+							? 'border-violet/50 bg-violet/10 text-violet'
+							: 'border-transparent text-fg-dim hover:border-line hover:text-fg'}"
+					>
+						<span class="flex-1">{sg.label}</span>
+						<span class="tnum font-mono text-xs {filters.segment === sg.key ? '' : 'text-fg-faint'}"
+							>{sg.count}</span
+						>
+					</button>
+				{/each}
+			</div>
+			<p class="text-fg-faint mt-2 text-[0.68rem] leading-relaxed">
+				Nodes on the far side of a bridge are reached only across that link. They are marked in
+				violet throughout.
+			</p>
+		{/if}
 
 		<div class="label mt-5 mb-2">Show only</div>
 		<div class="flex flex-col gap-1">

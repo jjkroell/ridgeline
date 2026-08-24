@@ -21,15 +21,38 @@ export const ROLE_OPTIONS: { key: RoleKey; label: string }[] = [
 
 const roleLabel = (k: RoleKey) => ROLE_OPTIONS.find((r) => r.key === k)?.label ?? '';
 
+/** Which side of a sanctioned bridge a node sits on. 'far' is the segment
+ *  reached only across the bridge — the API marks those with viaBridge, which is
+ *  the ONLY reliable signal: a far-side node's own radio is deliberately blank,
+ *  so filtering on frequency would match nothing. */
+export type SegmentKey = 'all' | 'main' | 'far';
+
+/** The far segment's frequency, as the operator declared it on the bridge —
+ *  read off the nodes rather than hardcoded, since it differs per deployment
+ *  and self-hosted installs may have no bridge at all. */
+export function farSegmentFreq(nodes: Node[]): string {
+	const r = nodes.find((n) => n.viaBridgeRadio)?.viaBridgeRadio;
+	return r ? r.split(',')[0] : '';
+}
+
+/** Whether this deployment has any far-side node to filter on. */
+export const hasFarSegment = (nodes: Node[]) => nodes.some((n) => n.viaBridge);
+
 export class NodeFilters {
 	query = $state('');
 	role = $state<RoleKey>('all');
+	segment = $state<SegmentKey>('all');
 	favOnly = $state(false);
 	claimedOnly = $state(false);
 
 	/** Filters in effect, excluding the search box (which is always visible). */
 	get activeCount(): number {
-		return (this.role !== 'all' ? 1 : 0) + (this.favOnly ? 1 : 0) + (this.claimedOnly ? 1 : 0);
+		return (
+			(this.role !== 'all' ? 1 : 0) +
+			(this.segment !== 'all' ? 1 : 0) +
+			(this.favOnly ? 1 : 0) +
+			(this.claimedOnly ? 1 : 0)
+		);
 	}
 
 	/** Reads the active filters back on the control itself, e.g. "Repeaters · Claimed",
@@ -37,6 +60,10 @@ export class NodeFilters {
 	get summary(): string {
 		const parts: string[] = [];
 		if (this.role !== 'all') parts.push(roleLabel(this.role));
+		// Deliberately generic: the frequency belongs on the control that knows
+		// the node list, not in state that does not.
+		if (this.segment === 'far') parts.push('Far side');
+		if (this.segment === 'main') parts.push('Main network');
 		if (this.favOnly) parts.push('Favorites');
 		if (this.claimedOnly) parts.push('Claimed');
 		return parts.join(' · ');
@@ -44,6 +71,7 @@ export class NodeFilters {
 
 	clear() {
 		this.role = 'all';
+		this.segment = 'all';
 		this.favOnly = false;
 		this.claimedOnly = false;
 	}
@@ -55,6 +83,8 @@ export class NodeFilters {
 			if (this.favOnly && !favorites.has(n.publicKey)) return false;
 			if (this.claimedOnly && !n.claimed) return false;
 			if (this.role !== 'all' && n.role !== this.role) return false;
+			if (this.segment === 'far' && !n.viaBridge) return false;
+			if (this.segment === 'main' && n.viaBridge) return false;
 			if (!term) return true;
 			return (
 				(n.name ?? '').toLowerCase().includes(term) || n.publicKey.toLowerCase().includes(term)

@@ -405,8 +405,16 @@ func runSegmentSweep(ctx context.Context, st *store.Store, log *slog.Logger, tri
 			log.Warn("segment sweep: list nodes", "err", err)
 			return
 		}
+		// Observers come along so the detector can tell a receiver on the far
+		// segment from one on this side — the same zero-hop sighting means
+		// opposite things depending on which it was.
+		observers, err := st.ListObservers()
+		if err != nil {
+			log.Warn("segment sweep: list observers", "err", err)
+			return
+		}
 		since := time.Now().Add(-segmentWindow).UTC().Format(time.RFC3339Nano)
-		rep, err := analytics.DetectSegments(st, nodes, links, since, segmentScanCap)
+		rep, err := analytics.DetectSegments(st, nodes, links, observers, since, segmentScanCap)
 		if err != nil {
 			log.Warn("segment sweep: detect", "err", err)
 			return
@@ -418,7 +426,8 @@ func runSegmentSweep(ctx context.Context, st *store.Store, log *slog.Logger, tri
 		}
 		log.Info("segment sweep: far-side nodes",
 			"bridges", len(links), "marked", n, "scanned", rep.Scanned,
-			"crossings", rep.Crossings, "reverse", rep.Reverse, "rejected", len(rep.Rejected))
+			"crossings", rep.Crossings, "reverse", rep.Reverse, "rejected", len(rep.Rejected),
+			"far_observers", rep.FarObservers, "observed", rep.Observed)
 	}
 	sweep()
 	t := time.NewTicker(segmentSweepInterval)

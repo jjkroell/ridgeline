@@ -2,11 +2,17 @@ package store
 
 // Network segments behind sanctioned bridges.
 //
-// A bridge joins two RF networks that this deployment cannot both listen to. If
-// every observer sits on one side, the nodes on the other side are only ever
-// heard after their traffic crosses the wire — so "reached only across bridge X"
-// is the sole evidence that a node lives on the far segment, and the far side's
-// radio settings cannot be observed at all.
+// A bridge joins two RF networks. Where no receiver sits on the far side, the
+// nodes over there are only ever heard after their traffic crosses the wire — so
+// "reached only across bridge X" is the sole evidence that a node lives on the
+// far segment, and the far side's radio settings cannot be observed at all.
+//
+// Once a receiver IS added on the far segment (see analytics.DetectSegments) its
+// direct receptions become better evidence than any of that, and membership is
+// recorded with confidence "observed". The declared radio below is then
+// corroborated rather than unverifiable — but it stays the value reported,
+// because it describes the segment while a node's inherited radio still
+// describes whichever receiver last heard it.
 //
 // That last point is why BridgeLink carries an operator-declared Radio. A
 // far-side node's nodes.radio is inherited from whichever observer heard it,

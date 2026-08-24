@@ -405,7 +405,12 @@
 
 	<!-- Off-segment callout. This is the ONE place that says the far-side radio is
 	     DECLARED rather than measured: the Radio row below states the figure plainly
-	     (that reads better), so the caveat needs a home of its own or it is lost. -->
+	     (that reads better), so the caveat needs a home of its own or it is lost.
+
+	     ⚠ Unless confidence is 'observed'. Then a receiver DOES sit on that
+	     frequency and hears this node directly, and every "we can't hear it / no
+	     way to check" sentence below would be false. Same callout, opposite
+	     claim — keep the two branches honest. -->
 	{#if node.viaBridge}
 		<div class="border-violet/40 bg-violet/5 mb-5 rounded-[var(--radius)] border px-5 py-3.5">
 			<div class="text-violet flex items-center gap-2 text-sm font-600">
@@ -413,6 +418,8 @@
 				{node.viaBridgeRadio ? `On ${node.viaBridgeRadio.split(',')[0]} MHz` : 'On another frequency'}
 				{#if node.viaBridgeConfidence === 'probable'}
 					<span class="label !text-violet/70 normal-case">probable</span>
+				{:else if node.viaBridgeConfidence === 'observed'}
+					<span class="label !text-violet/70 normal-case">confirmed by a receiver there</span>
 				{/if}
 			</div>
 			<!-- Plain language on purpose. Whoever lands here wants to know why this node
@@ -420,19 +427,27 @@
 			     widths, no "declared". The mechanism is still in the code comments and
 			     the changelog for anyone who goes looking. -->
 			<div class="text-fg-dim mt-1.5 text-xs">
-				This node runs on a different frequency, so none of our receivers can hear it
-				directly. Everything we know about it arrives through the
-				<span class="text-fg">{node.viaBridgeName || 'bridge'}</span> link, which passes traffic
-				between the two frequencies.
-				{#if node.viaBridgeRadio}
-					The frequency shown was typed in when that link was set up — there's no way to
-					check it from this side.
+				{#if node.viaBridgeConfidence === 'observed'}
+					This node runs on a different frequency from most of the network. We have a
+					receiver on that frequency and it hears this node directly, so this isn't a
+					guess. Its traffic reaches the rest of the network through the
+					<span class="text-fg">{node.viaBridgeName || 'bridge'}</span> link, which passes
+					traffic between the two frequencies.
 				{:else}
-					Nobody has recorded which frequency that side uses yet.
-				{/if}
-				{#if node.viaBridgeConfidence === 'probable'}
-					It's also a good guess rather than a certainty: the traces this node leaves behind
-					are short, so they could belong to another node.
+					This node runs on a different frequency, so none of our receivers can hear it
+					directly. Everything we know about it arrives through the
+					<span class="text-fg">{node.viaBridgeName || 'bridge'}</span> link, which passes traffic
+					between the two frequencies.
+					{#if node.viaBridgeRadio}
+						The frequency shown was typed in when that link was set up — there's no way to
+						check it from this side.
+					{:else}
+						Nobody has recorded which frequency that side uses yet.
+					{/if}
+					{#if node.viaBridgeConfidence === 'probable'}
+						It's also a good guess rather than a certainty: the traces this node leaves behind
+						are short, so they could belong to another node.
+					{/if}
 				{/if}
 			</div>
 		</div>

@@ -2,9 +2,23 @@ package analytics
 
 // Which nodes live BEYOND a sanctioned bridge?
 //
-// With every observer on one side of a bridge, a node on the far side is only
-// ever heard after its traffic crosses. Three properties make that a usable
-// signal rather than a guess:
+// Observers are sorted into the segment they can hear, by matching the radio
+// config they report against the one the operator declared for the bridge's far
+// side (see internal/radio — the same channel arrives spelled several ways, so
+// this is a numeric comparison, never a string one). That produces two kinds of
+// evidence, and the strong kind is new:
+//
+//   - A FAR-SIDE observer hears the far segment directly. A zero-hop sighting
+//     there is a node transmitting on that frequency, received on that
+//     frequency: membership is measured, not inferred, and no path analysis is
+//     involved. This is reported as confidence "observed".
+//
+//   - With no receiver over there, membership can only be INFERRED from the
+//     traffic that crosses the bridge, which is the original rule below.
+//
+// The inferred rule stands unchanged for every deployment with no far-side
+// receiver, and it is still what classifies a far-side node that no far-side
+// observer happens to hear. Its three properties:
 //
 //  1. DIRECTION. Relays append their hash as a packet travels, so the path is
 //     ordered and index(near) < index(far) IS the near->far direction. Traffic
@@ -19,10 +33,18 @@ package analytics
 //     FAR end's single byte is unique among known nodes. The near end may be
 //     ambiguous; the far end carries the claim.
 //
-//  3. NEVER HEARD DIRECTLY. An observer on this side cannot hear the far side
-//     directly, so a single zero-hop sighting disqualifies a node outright. This
-//     is what separates "lives over there" from "a packet happened to route
-//     through the bridge once", and it is the strongest of the three.
+//  3. NEVER HEARD DIRECTLY BY A NEAR-SIDE OBSERVER. A receiver on this side
+//     cannot hear the far side directly, so one zero-hop sighting BY SUCH A
+//     RECEIVER disqualifies a node outright. This is what separates "lives over
+//     there" from "a packet happened to route through the bridge once", and it
+//     is the strongest of the three.
+//
+//     ⚠ Which observer heard it is the whole point. Counting zero-hop sightings
+//     from every observer alike was correct only while they all sat on one side;
+//     the moment someone adds a receiver on the far segment, that observer hears
+//     far-side nodes directly and the veto fires on exactly the nodes it was
+//     built to find — silently, and reporting "heard directly on this side",
+//     which would be false.
 //
 // The window matters as much as the rule: it must not reach back before the
 // bridge existed. Beforehand its two ends were ordinary RF relays and transiting
@@ -33,6 +55,7 @@ import (
 	"strings"
 
 	"github.com/jjkroell/ridgeline/internal/meshcore"
+	"github.com/jjkroell/ridgeline/internal/radio"
 	"github.com/jjkroell/ridgeline/internal/store"
 )
 
@@ -55,18 +78,93 @@ type SegmentReport struct {
 	// Rejected lists nodes that crossed but failed a test, with the reason —
 	// the interesting half of the output when a node is missing from the map.
 	Rejected map[string]string `json:"rejected,omitempty"`
+	// FarObservers counts receivers found to be sitting on a far segment, and
+	// Observed counts members established by one hearing the node directly.
+	// Both are zero on a deployment with no far-side receiver, which is what
+	// makes "did my new observer get recognised?" answerable from the log.
+	FarObservers int `json:"farObservers"`
+	Observed     int `json:"observed"`
 }
 
 type segStat struct {
-	zeroHop   int
-	withPath  int
-	confirmed int
-	probable  int
+	// zeroHop is a direct sighting by a NEAR-side observer: the disqualifying
+	// one. zeroHopFar is a direct sighting by a receiver on the far segment: the
+	// opposite, and proof of membership.
+	zeroHop    int
+	zeroHopFar int
+	withPath   int
+	confirmed  int
+	probable   int
 }
 
-// DetectSegments finds the nodes reachable only across each sanctioned bridge.
-// sinceISO must not predate the bridge being put in place.
-func DetectSegments(st *store.Store, nodes []store.Node, links []store.BridgeLink, sinceISO string, scanCap int) (*SegmentReport, error) {
+// farObserverSets sorts receivers onto the far side of each bridge, returning
+// bridgeNear -> observer id -> true, and how many distinct receivers were placed
+// on some far segment.
+//
+// A receiver belongs to a far segment when its reported radio and the operator's
+// declared far-side config describe the same RF network — compared numerically,
+// since one channel reaches us spelled several ways (910.4249877 and 910.425 are
+// the same 910.425). An observer with no reported radio, and every observer when
+// the bridge has no declared far side, stays near-side: that is the reading that
+// preserves the old behaviour exactly, and the traffic-based rule still gets its
+// chance.
+func farObserverSets(links []store.BridgeLink, observers []store.Observer) (map[string]map[string]bool, int) {
+	out := make(map[string]map[string]bool, len(links))
+	seen := map[string]bool{}
+	for _, l := range links {
+		set := map[string]bool{}
+		if l.PeerRadio != "" {
+			for _, o := range observers {
+				if o.Radio != "" && radio.SameSegmentString(o.Radio, l.PeerRadio) {
+					set[o.ID] = true
+					seen[o.ID] = true
+				}
+			}
+		}
+		out[l.Near] = set
+	}
+	return out, len(seen)
+}
+
+// verdict decides one node's membership for one bridge from its sighting counts,
+// returning either a confidence or the reason it was rejected. Both empty means
+// the node is not a candidate at all: it never crossed the bridge and was never
+// heard on the far segment, so there is nothing to judge and nothing to report.
+//
+// The order of the tests is the substance. Direct reception decides before any
+// path reasoning, because a receiver hearing a transmission on its own frequency
+// is a measurement while a path is an inference — and when both sides claim to
+// hear a node directly, that contradiction is surfaced rather than resolved.
+func (s segStat) verdict() (confidence, reject string) {
+	via := s.confirmed + s.probable
+	if via == 0 && s.zeroHopFar == 0 {
+		return "", ""
+	}
+	switch {
+	case s.zeroHopFar > 0 && s.zeroHop > 0:
+		return "", "heard directly from both sides"
+	case s.zeroHopFar > 0:
+		return "observed", ""
+	case s.zeroHop > 0:
+		return "", "heard directly on this side"
+	case s.withPath < segMinSightings:
+		return "", "too few sightings to judge"
+	case float64(via)/float64(s.withPath) < segMinShare:
+		return "", "only some traffic crosses the bridge"
+	case s.confirmed > 0:
+		return "confirmed", ""
+	default:
+		return "probable", ""
+	}
+}
+
+// DetectSegments finds the nodes on the far side of each sanctioned bridge:
+// heard directly by a receiver over there, or else reachable only across the
+// bridge. sinceISO must not predate the bridge being put in place.
+//
+// observers may be nil, in which case every receiver is treated as near-side
+// and this behaves exactly as it did before far-side receivers existed.
+func DetectSegments(st *store.Store, nodes []store.Node, links []store.BridgeLink, observers []store.Observer, sinceISO string, scanCap int) (*SegmentReport, error) {
 	rep := &SegmentReport{Members: []store.SegmentMember{}, Rejected: map[string]string{}}
 	if len(links) == 0 {
 		return rep, nil
@@ -78,6 +176,17 @@ func DetectSegments(st *store.Store, nodes []store.Node, links []store.BridgeLin
 	if err != nil {
 		return nil, err
 	}
+
+	// Sort the receivers: which of them sit on a bridge's far segment?
+	//
+	// The operator's declared far-side config is the reference. An observer
+	// reporting a matching channel/bandwidth/spreading factor can hear that
+	// segment, so its direct receptions are ground truth about membership; every
+	// other observer — including one whose radio is unknown — stays near-side,
+	// which is the conservative reading. A bridge with no declared far radio
+	// classifies nobody, and its nodes fall through to the inferred rule.
+	farObs, nFar := farObserverSets(links, observers)
+	rep.FarObservers = nFar
 
 	// A 1-byte far end is only usable when no other known node shares that byte.
 	farByteUnique := map[string]bool{}
@@ -117,8 +226,24 @@ func DetectSegments(st *store.Store, nodes []store.Node, links []store.BridgeLin
 				s = &segStat{}
 				stats[l.Near][origin] = s
 			}
+			onFarSide := farObs[l.Near][r.ObserverID]
 			if len(path) == 0 {
-				s.zeroHop++
+				// Same event, opposite meanings, decided entirely by which side
+				// the receiver is on.
+				if onFarSide {
+					s.zeroHopFar++
+				} else {
+					s.zeroHop++
+				}
+				continue
+			}
+			if onFarSide {
+				// A far-side receiver hearing relayed traffic says nothing about
+				// which side the origin is on — the far segment carries both its
+				// own nodes and everything that crossed the bridge into it. Left
+				// out of the ratio entirely rather than counted as a near-side
+				// sighting that never crossed, which would drag every far-side
+				// node under the share bar.
 				continue
 			}
 			s.withPath++
@@ -165,30 +290,20 @@ func DetectSegments(st *store.Store, nodes []store.Node, links []store.BridgeLin
 	}
 	for _, l := range links {
 		for origin, s := range stats[l.Near] {
-			via := s.confirmed + s.probable
-			if via == 0 {
-				continue
+			conf, reject := s.verdict()
+			if conf == "" && reject == "" {
+				continue // never crossed, never heard over there: not a candidate
 			}
 			label := names[origin]
 			if label == "" {
 				label = origin[:min(12, len(origin))]
 			}
-			// Heard directly by an observer on this side: it is not over there.
-			if s.zeroHop > 0 {
-				rep.Rejected[label] = "heard directly on this side"
+			if reject != "" {
+				rep.Rejected[label] = reject
 				continue
 			}
-			if s.withPath < segMinSightings {
-				rep.Rejected[label] = "too few sightings to judge"
-				continue
-			}
-			if float64(via)/float64(s.withPath) < segMinShare {
-				rep.Rejected[label] = "only some traffic crosses the bridge"
-				continue
-			}
-			conf := "confirmed"
-			if s.confirmed == 0 {
-				conf = "probable"
+			if conf == "observed" {
+				rep.Observed++
 			}
 			rep.Members = append(rep.Members, store.SegmentMember{
 				NodeKey: origin, BridgeNear: l.Near, Confidence: conf,

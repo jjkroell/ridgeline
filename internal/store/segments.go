@@ -32,6 +32,23 @@ type BridgeLink struct {
 	PeerRadio string // operator-declared "freq,bw,sf,cr" of the far segment
 }
 
+// FarEnd is the bridge end that sits ON the far segment: the radio transmitting
+// the config in PeerRadio. It is the one node for which PeerRadio describes the
+// node itself rather than the segment beyond it.
+//
+// ⚠ TODAY THAT IS Near, NOT Far. Both fields are filled from the blocklist row —
+// Near from its key, Far from its peer — and the operator records the
+// far-segment end AS the key, so the two names are currently inverted with
+// respect to their own doc comments. The direction test in
+// analytics.DetectSegments is written to match that inversion, which is the only
+// reason the labels have never produced a wrong answer. Ask for an end through
+// these accessors rather than naming a field, so correcting the labelling is one
+// edit instead of a hunt.
+func (l BridgeLink) FarEnd() string { return l.Near }
+
+// NearEnd is the bridge end on this side of the wire. See FarEnd.
+func (l BridgeLink) NearEnd() string { return l.Far }
+
 // KnownBridgeLinks returns sanctioned bridges that have a peer recorded. A
 // known bridge with no peer can't define a segment — a link needs two ends —
 // so it is skipped rather than guessed at.

@@ -233,6 +233,10 @@ func TestClearMisattributedRadio(t *testing.T) {
 		{"FAR909", "909.0,62.5,8,5", "AAAA"},  // genuinely over there: correct
 		{"NEAR910", "910.425,62.5,7,5", ""},   // ordinary near-side node
 		{"NEAR910CR", "910.425,62.5,7,8", ""}, // same network, other coding rate
+		// The bridge's own two ends. Neither is "beyond" the bridge, so both have
+		// via_bridge NULL and nothing downstream blanks what is stored here.
+		{"AAAA", "910.425,62.5,7,5", ""}, // far end, holding a near-side config: wrong
+		{"BBBB", "910.425,62.5,7,5", ""}, // near end, on the near segment: correct
 	}
 	for _, n := range seed {
 		if _, err := st.db.Exec(
@@ -250,14 +254,16 @@ func TestClearMisattributedRadio(t *testing.T) {
 	}
 	defer st.Close()
 
-	if n := st.MisattributedRadioCleared(); n != 1 {
-		t.Errorf("MisattributedRadioCleared = %d, want 1", n)
+	if n := st.MisattributedRadioCleared(); n != 2 {
+		t.Errorf("MisattributedRadioCleared = %d, want 2", n)
 	}
 	for _, c := range []struct{ pubkey, want string }{
 		{"NEAR909", ""},
 		{"FAR909", "909.0,62.5,8,5"},
 		{"NEAR910", "910.425,62.5,7,5"},
 		{"NEAR910CR", "910.425,62.5,7,8"},
+		{"AAAA", ""},
+		{"BBBB", "910.425,62.5,7,5"},
 	} {
 		if got := nodeRadio(t, st, c.pubkey); got != c.want {
 			t.Errorf("%s radio = %q, want %q", c.pubkey, got, c.want)
@@ -272,5 +278,44 @@ func TestClearMisattributedRadio(t *testing.T) {
 	}
 	if n := st.MisattributedRadioCleared(); n != 0 {
 		t.Errorf("second run cleared %d more rows, want 0", n)
+	}
+}
+
+// The far end of a bridge is the one node whose radio SHOULD read as the far
+// segment, so the misattribution rule has to run backwards for it. Reading it
+// forwards would delete the only measured value that end can ever have — a
+// far-side receiver hearing it zero-hop — and would do so at every open.
+func TestBridgeFarEndKeepsFarSegmentRadio(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "farend.db")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if _, err := st.db.Exec(
+		`INSERT INTO blocklist (kind, key, name, created_at, peer, peer_radio) VALUES (?,?,?,?,?,?)`,
+		BlockKnown, "AAAA", "bridge", "2026-08-01T00:00:00Z", "BBBB", "909.000,62.5,8,5"); err != nil {
+		t.Fatalf("seed bridge: %v", err)
+	}
+	// AAAA is the far end (see BridgeLink.FarEnd) and a far-side receiver has
+	// heard it directly, so 909 here is measured fact, not a misattribution.
+	if _, err := st.db.Exec(
+		`INSERT INTO nodes (pubkey, first_seen, last_seen, advert_count, radio)
+		 VALUES (?,?,?,1,?)`,
+		"AAAA", "2026-08-01T00:00:00Z", "2026-08-01T00:00:00Z", "909.0,62.5,8,5"); err != nil {
+		t.Fatalf("seed far end: %v", err)
+	}
+	st.Close()
+
+	st, err = Open(path) // the repair runs here
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer st.Close()
+
+	if n := st.MisattributedRadioCleared(); n != 0 {
+		t.Errorf("cleared %d rows, want 0 — the far end's own segment is not a misattribution", n)
+	}
+	if got := nodeRadio(t, st, "AAAA"); got != "909.0,62.5,8,5" {
+		t.Errorf("far end radio = %q, want it kept", got)
 	}
 }

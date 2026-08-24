@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"strings"
 
 	"github.com/jjkroell/ridgeline/internal/radio"
 )
@@ -69,6 +70,16 @@ func normalizeStoredRadio(db *sql.DB) error {
 // The reverse case (a far-side node carrying a near-side receiver's config) is
 // left alone: the API already blanks radio for far-side nodes and reports the
 // bridge's declared value instead.
+//
+// THE BRIDGE'S OWN FAR END is the exception to both rules, and needs the test
+// run backwards. It is excluded from segment membership — a bridge is not beyond
+// itself — so via_bridge is NULL for it and nothing downstream blanks its radio;
+// its node page publishes whatever is stored. But it transmits ON the far
+// segment, which makes PeerRadio the one value that is RIGHT for it and any
+// near-side config provably wrong: a receiver on this side cannot hear the far
+// segment, so it can only have overheard that end relayed. Left to the rule
+// above, this end would have kept a wrong value forever and had a correct one
+// deleted the moment a far-side receiver measured it.
 func (s *Store) clearMisattributedRadio() (int, error) {
 	links, err := s.KnownBridgeLinks()
 	if err != nil {
@@ -84,6 +95,7 @@ func (s *Store) clearMisattributedRadio() (int, error) {
 		if err != nil {
 			return cleared, err
 		}
+		farEnd := l.FarEnd()
 		var wrong []string
 		for rows.Next() {
 			var pubkey, r string
@@ -91,7 +103,16 @@ func (s *Store) clearMisattributedRadio() (int, error) {
 				rows.Close()
 				return cleared, err
 			}
-			if radio.SameSegmentString(r, l.PeerRadio) {
+			onFarSegment := radio.SameSegmentString(r, l.PeerRadio)
+			if strings.EqualFold(pubkey, farEnd) {
+				// The far end IS the far segment. Only a value naming some other
+				// network is wrong here.
+				if !onFarSegment {
+					wrong = append(wrong, pubkey)
+				}
+				continue
+			}
+			if onFarSegment {
 				wrong = append(wrong, pubkey)
 			}
 		}

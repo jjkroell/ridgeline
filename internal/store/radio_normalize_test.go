@@ -1,8 +1,12 @@
 package store
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/jjkroell/ridgeline/internal/meshcore"
 )
 
 // One channel must not read as two. Before normalization the live database held
@@ -97,5 +101,176 @@ func TestObserverStatusNormalizesRadio(t *testing.T) {
 	}
 	if len(obs) != 1 || obs[0].Radio != "910.425,62.5,7,5" {
 		t.Errorf("ListObservers radio = %+v, want the normalized config", obs)
+	}
+}
+
+// A node's radio may only be inherited from a DIRECT reception. A relayed copy
+// says nothing about the sender's PHY — it may have crossed a bridge onto
+// another band entirely, which is exactly how a 909 receiver came to stamp 909
+// onto a dozen 910.425 nodes.
+func TestRadioInheritedOnlyFromZeroHop(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "inherit.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer st.Close()
+
+	// Two receivers on different bands.
+	mustStatus(t, st, "obs-910", "910.425,62.5,7,5")
+	mustStatus(t, st, "obs-909", "909.0,62.5,8,5")
+
+	t.Run("a relayed advert sets nothing", func(t *testing.T) {
+		node := seedAdvert(t, st, "obs-909", 6)
+		if got := nodeRadio(t, st, node); got != "" {
+			t.Errorf("radio = %q after a 6-hop copy, want it unset", got)
+		}
+	})
+
+	t.Run("a direct advert sets it", func(t *testing.T) {
+		node := seedAdvert(t, st, "obs-910", 0)
+		if got := nodeRadio(t, st, node); got != "910.425,62.5,7,5" {
+			t.Errorf("radio = %q after a zero-hop advert, want the receiver's config", got)
+		}
+	})
+
+	t.Run("a relayed advert cannot overwrite a measured value", func(t *testing.T) {
+		node := seedAdvert(t, st, "obs-910", 0)
+		reAdvert(t, st, node, "obs-909", 7)
+		if got := nodeRadio(t, st, node); got != "910.425,62.5,7,5" {
+			t.Errorf("radio = %q after a far-side relayed copy, want the direct measurement kept", got)
+		}
+	})
+
+	// Coding rate is carried in the LoRa header, so a receiver decodes any rate
+	// and its own says nothing about the sender's. Rewriting on that basis would
+	// flip a node between ",7,5" and ",7,8" by whoever heard it last.
+	t.Run("same network, different coding rate does not churn", func(t *testing.T) {
+		mustStatus(t, st, "obs-cr8", "910.425,62.5,7,8")
+		node := seedAdvert(t, st, "obs-910", 0)
+		reAdvert(t, st, node, "obs-cr8", 0)
+		if got := nodeRadio(t, st, node); got != "910.425,62.5,7,5" {
+			t.Errorf("radio = %q, want the first value kept rather than churned to the other rate", got)
+		}
+	})
+
+	t.Run("a genuinely different network does overwrite", func(t *testing.T) {
+		node := seedAdvert(t, st, "obs-910", 0)
+		reAdvert(t, st, node, "obs-909", 0) // heard directly on 909: it moved
+		if got := nodeRadio(t, st, node); got != "909.0,62.5,8,5" {
+			t.Errorf("radio = %q, want the new direct measurement", got)
+		}
+	})
+}
+
+// --- helpers for the inheritance tests ---
+
+func mustStatus(t *testing.T, st *Store, id, radio string) {
+	t.Helper()
+	if err := st.UpsertObserverStatus(id, id, "YVR", "", "{}", radio, "2026-08-01T00:00:00Z"); err != nil {
+		t.Fatalf("status for %s: %v", id, err)
+	}
+}
+
+var seedCounter int
+
+// seedAdvert records one signature-valid advert for a fresh node, heard by the
+// named observer at the given hop count, and returns the node's key.
+func seedAdvert(t *testing.T, st *Store, observerID string, hops int) string {
+	t.Helper()
+	seedCounter++
+	pubkey := fmt.Sprintf("%064X", seedCounter)
+	reAdvert(t, st, pubkey, observerID, hops)
+	return pubkey
+}
+
+// reAdvert records another advert for an existing node from a different receiver.
+func reAdvert(t *testing.T, st *Store, pubkey, observerID string, hops int) {
+	t.Helper()
+	seedCounter++
+	obs := Observation{
+		Packet: &meshcore.Packet{
+			MessageHash:  fmt.Sprintf("hash%08x", seedCounter),
+			PathHopCount: hops,
+			Advert:       &meshcore.Advert{PublicKey: pubkey, HasName: true, Name: "n", SignatureValid: true},
+		},
+		RawHex:     "00",
+		ObserverID: observerID,
+		Region:     "YVR",
+		ReceivedAt: time.Now().Add(time.Duration(seedCounter) * time.Minute),
+	}
+	if err := st.Record(obs); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+}
+
+func nodeRadio(t *testing.T, st *Store, pubkey string) string {
+	t.Helper()
+	var radio string
+	st.db.QueryRow(`SELECT COALESCE(radio,'') FROM nodes WHERE pubkey = ?`, pubkey).Scan(&radio)
+	return radio
+}
+
+// The repair for data written under the old rule: a near-side node carrying the
+// far segment's config can only have got it by being overheard from the wrong
+// side, so it is dropped. A node genuinely ON that segment keeps its value, and
+// so does every ordinary near-side node.
+func TestClearMisattributedRadio(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "misattributed.db")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	// A sanctioned bridge whose far side runs 909.
+	if _, err := st.db.Exec(
+		`INSERT INTO blocklist (kind, key, name, created_at, peer, peer_radio) VALUES (?,?,?,?,?,?)`,
+		BlockKnown, "AAAA", "bridge", "2026-08-01T00:00:00Z", "BBBB", "909.000,62.5,8,5"); err != nil {
+		t.Fatalf("seed bridge: %v", err)
+	}
+
+	seed := []struct{ pubkey, radio, viaBridge string }{
+		{"NEAR909", "909.0,62.5,8,5", ""},     // overheard from the far side: wrong
+		{"FAR909", "909.0,62.5,8,5", "AAAA"},  // genuinely over there: correct
+		{"NEAR910", "910.425,62.5,7,5", ""},   // ordinary near-side node
+		{"NEAR910CR", "910.425,62.5,7,8", ""}, // same network, other coding rate
+	}
+	for _, n := range seed {
+		if _, err := st.db.Exec(
+			`INSERT INTO nodes (pubkey, first_seen, last_seen, advert_count, radio, via_bridge)
+			 VALUES (?,?,?,1,?,?)`,
+			n.pubkey, "2026-08-01T00:00:00Z", "2026-08-01T00:00:00Z", n.radio, nullStr(n.viaBridge)); err != nil {
+			t.Fatalf("seed node %s: %v", n.pubkey, err)
+		}
+	}
+	st.Close()
+
+	st, err = Open(path) // the repair runs here
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer st.Close()
+
+	if n := st.MisattributedRadioCleared(); n != 1 {
+		t.Errorf("MisattributedRadioCleared = %d, want 1", n)
+	}
+	for _, c := range []struct{ pubkey, want string }{
+		{"NEAR909", ""},
+		{"FAR909", "909.0,62.5,8,5"},
+		{"NEAR910", "910.425,62.5,7,5"},
+		{"NEAR910CR", "910.425,62.5,7,8"},
+	} {
+		if got := nodeRadio(t, st, c.pubkey); got != c.want {
+			t.Errorf("%s radio = %q, want %q", c.pubkey, got, c.want)
+		}
+	}
+
+	// Idempotent: a second open has nothing left to clear.
+	st.Close()
+	st, err = Open(path)
+	if err != nil {
+		t.Fatalf("third open: %v", err)
+	}
+	if n := st.MisattributedRadioCleared(); n != 0 {
+		t.Errorf("second run cleared %d more rows, want 0", n)
 	}
 }

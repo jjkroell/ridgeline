@@ -239,6 +239,12 @@ type Store struct {
 	// just added, so a caller can seed it once from history.
 	needAdvertTxBackfill bool
 
+	// misattributedRadioCleared counts node radio values dropped at open because
+	// a far-side receiver had written them onto near-side nodes. Reported once at
+	// startup: a silent repair of real data is the kind that gets rediscovered as
+	// a mystery months later.
+	misattributedRadioCleared int
+
 	// Blocklist cache, consulted on the hot ingest path. Guarded separately
 	// from mu so reads don't contend with writes. Refreshed from the table on
 	// open and after every mutation.
@@ -418,6 +424,15 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("store: load pending claims: %w", err)
 	}
+	// One-time repair of radio values a far-side receiver wrote onto near-side
+	// nodes back when any hop count could set one. Needs the blocklist loaded
+	// (that is where sanctioned bridges live), so it runs last.
+	cleared, err := s.clearMisattributedRadio()
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: clear misattributed radio: %w", err)
+	}
+	s.misattributedRadioCleared = cleared
 	return s, nil
 }
 
@@ -674,12 +689,34 @@ func (s *Store) Record(o Observation) error {
 		if a.HasLocation {
 			lat, lon = a.Latitude, a.Longitude
 		}
-		// A node inherits the radio config of the observer that heard it — its
-		// own freq/bw/sf/cr aren't in the packet (they're a PHY setting), but the
-		// observing observer reports them via /status. Prep for network filtering.
+		// A node inherits the radio config of the observer that heard it — its own
+		// freq/bw/sf/cr aren't in the packet (they're a PHY setting), but the
+		// observing observer reports them via /status.
+		//
+		// ⚠ ONLY FROM A ZERO-HOP RECEPTION. A direct demodulation proves the node
+		// transmits on that channel, because otherwise the receiver could not have
+		// decoded it. A relayed copy proves nothing of the kind: it says only that
+		// the packet reached that receiver eventually, possibly across a bridge
+		// onto an entirely different band. Inheriting at any hop count is how a
+		// receiver on the 909 segment came to stamp 909 onto a dozen ordinary
+		// 910.425 nodes whose adverts merely crossed the bridge into it.
 		var observerRadio string
-		if o.ObserverID != "" {
+		if o.ObserverID != "" && p.PathHopCount == 0 {
 			tx.QueryRow(`SELECT COALESCE(radio,'') FROM observers WHERE id = ?`, o.ObserverID).Scan(&observerRadio)
+			// A direct reception pins the channel, bandwidth and spreading factor
+			// — but NOT the coding rate, which LoRa carries in the packet header
+			// so a receiver decodes whatever the sender used. The receiver's own
+			// rate is therefore no evidence about the node's. Where the stored
+			// value already names this same RF network, keep it: rewriting would
+			// flip a node between "…,7,5" and "…,7,8" according to whichever
+			// receiver last heard it, which is churn dressed as information.
+			if observerRadio != "" {
+				var current string
+				tx.QueryRow(`SELECT COALESCE(radio,'') FROM nodes WHERE pubkey = ?`, a.PublicKey).Scan(&current)
+				if current != "" && radiopkg.SameSegmentString(current, observerRadio) {
+					observerRadio = ""
+				}
+			}
 		}
 		// Count actual advert transmissions, not raw observations: re-floods and
 		// multi-observer copies of one advert all arrive within a few seconds, so

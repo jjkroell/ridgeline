@@ -97,6 +97,14 @@ func run(log *slog.Logger, configPath string) error {
 		}
 	}
 
+	// Say so when the store repaired real data on the way up. A silent fix to
+	// values people have been looking at is the kind that gets rediscovered as a
+	// mystery months later.
+	if n := st.MisattributedRadioCleared(); n > 0 {
+		log.Info("cleared radio configs a far-side receiver had written onto near-side nodes",
+			"nodes", n)
+	}
+
 	apiServer := api.New(st, log, version, cfg.WebDir)
 	// Recording a bridge's far side should take effect at once, not at the next
 	// scheduled sweep. One slot: extra requests while a sweep is pending are

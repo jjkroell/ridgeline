@@ -4,6 +4,18 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.15.5] — 2026-08-24
+
+### Fixed
+- **The mobile node page shows a far-segment radio again.** v0.15.4 taught the
+  desktop node page to fall back to the operator-declared config for nodes whose
+  own radio is deliberately blank, but the separate mobile page at `/m/nodes/…`
+  still read the raw radio field alone — so a bridge's far end and all seven
+  far-side nodes rendered an empty Radio row on a phone while the desktop page
+  showed the value. It now uses the same three-way fallback and carries the same
+  **declared** marker, as a plain inline label rather than the desktop tooltip,
+  since there is no hover on touch.
+
 ## [v0.15.4] — 2026-08-24
 
 ### Added

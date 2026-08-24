@@ -84,11 +84,19 @@
 		if (sec < 3600) return `every ~${Math.round(sec / 60)}m`;
 		return `every ~${(sec / 3600).toFixed(1)}h`;
 	}
-	const facts = $derived(
+	const facts = $derived<{ k: string; v: string; c?: string; declared?: boolean }[]>(
 		node
 			? [
 					{ k: 'Status', v: status.label, c: status.color },
-					{ k: 'Radio', v: fmtRadio(node.radio) },
+					// Mirrors the desktop node page: a far-side node's own radio is blanked
+					// server-side and a bridge's far end never had a measurable one, so both
+					// fall back to the operator-declared config for the far segment.
+					// viaBridgeRadio being set is exactly "declared, not measured".
+					node.viaBridgeRadio
+						? { k: 'Radio', v: fmtRadio(node.viaBridgeRadio), declared: true }
+						: node.viaBridge
+							? { k: 'Radio', v: 'unknown — far side of a bridge' }
+							: { k: 'Radio', v: fmtRadio(node.radio) },
 					{ k: 'Location', v: fmtCoord(node.latitude, node.longitude) },
 					{ k: 'Last advert', v: ago(node.lastAdvert || node.lastSeen) + ' ago' },
 					{ k: 'Last relay', v: detail?.relay.lastRelayed ? ago(detail.relay.lastRelayed) + ' ago' : '—' },
@@ -259,7 +267,15 @@
 			{#each facts as f (f.k)}
 				<div class="flex items-center justify-between gap-3 px-4 py-2.5">
 					<span class="label normal-case shrink-0">{f.k}</span>
-					<span class="font-mono text-right text-sm tnum break-all" style="color:{f.c ?? 'var(--color-fg)'}">{f.v}</span>
+					<span class="flex min-w-0 items-center justify-end gap-1.5">
+						{#if f.declared}
+							<!-- Nothing on this side can hear the far segment, so this value was
+							     typed in rather than measured. No hover on touch, so the word
+							     carries the caveat on its own. -->
+							<span class="label !text-violet/70 normal-case shrink-0">declared</span>
+						{/if}
+						<span class="font-mono text-right text-sm tnum break-all" style="color:{f.c ?? 'var(--color-fg)'}">{f.v}</span>
+					</span>
 				</div>
 			{/each}
 		</div>

@@ -92,11 +92,16 @@
 					// server-side and a bridge's far end never had a measurable one, so both
 					// fall back to the operator-declared config for the far segment.
 					// viaBridgeRadio being set is exactly "declared, not measured".
+					// A measured far-segment radio outranks the declared stand-in, so
+					// node.radio is consulted before the far-side fallback. Kept
+					// identical to the desktop page on purpose.
 					node.viaBridgeRadio
 						? { k: 'Radio', v: fmtRadio(node.viaBridgeRadio), declared: true }
-						: node.viaBridge
-							? { k: 'Radio', v: 'unknown — far side of a bridge' }
-							: { k: 'Radio', v: fmtRadio(node.radio) },
+						: node.radio
+							? { k: 'Radio', v: fmtRadio(node.radio) }
+							: node.viaBridge
+								? { k: 'Radio', v: 'unknown — far side of a bridge' }
+								: { k: 'Radio', v: fmtRadio(node.radio) },
 					{ k: 'Location', v: fmtCoord(node.latitude, node.longitude) },
 					{ k: 'Last advert', v: ago(node.lastAdvert || node.lastSeen) + ' ago' },
 					{ k: 'Last relay', v: detail?.relay.lastRelayed ? ago(detail.relay.lastRelayed) + ' ago' : '—' },

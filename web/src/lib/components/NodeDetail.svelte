@@ -198,11 +198,18 @@
 		// measurable one at all. Both get the operator-declared config for the far
 		// segment, and viaBridgeRadio being set is precisely what says "declared,
 		// not measured" — so it drives the marker rather than a second flag.
+		// A far-side node can now carry a radio that was genuinely MEASURED over
+		// there — a receiver on the far segment heard it, or its relay path
+		// proved the segment. That outranks the declared stand-in and must not
+		// be described as unknown, so node.radio is consulted before the
+		// far-side fallback rather than only after it.
 		const radio = node.viaBridgeRadio
 			? { k: 'Radio', v: fmtRadio(node.viaBridgeRadio), declared: true }
-			: node.viaBridge
-				? { k: 'Radio', v: 'unknown — far side of a bridge' }
-				: { k: 'Radio', v: fmtRadio(node.radio) };
+			: node.radio
+				? { k: 'Radio', v: fmtRadio(node.radio) }
+				: node.viaBridge
+					? { k: 'Radio', v: 'unknown — far side of a bridge' }
+					: { k: 'Radio', v: fmtRadio(node.radio) };
 		// Clock health from the timestamp the node stamps into its adverts.
 		const driftColor = { ok: 'var(--color-fg)', warn: 'var(--color-amber)', bad: 'var(--color-coral)' };
 		const clock = detail?.clockUnset

@@ -4,6 +4,15 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.16.1] — 2026-08-24
+
+### Fixed
+- **A measured far-segment radio is shown instead of "unknown".** v0.16.0 let a
+  far-side node hold a genuinely measured radio, but both node pages still
+  tested `viaBridge` before `radio`, so a node with a real reading rendered
+  "unknown — far side of a bridge" — the one state it was no longer in. The
+  measured value is now consulted first on the desktop and mobile pages alike.
+
 ## [v0.16.0] — 2026-08-24
 
 ### Added

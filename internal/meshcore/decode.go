@@ -104,6 +104,8 @@ func Decode(b []byte) (*Packet, error) {
 		p.Trace = decodeTrace(payload)
 	case PayloadControl:
 		p.Control = decodeControl(payload)
+	case PayloadOTA:
+		p.OTA = decodeOTA(payload)
 	}
 
 	p.Valid = true

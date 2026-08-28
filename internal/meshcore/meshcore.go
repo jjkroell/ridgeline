@@ -59,6 +59,7 @@ const (
 	PayloadTrace       PayloadType = 0x09
 	PayloadMultipart   PayloadType = 0x0A
 	PayloadControl     PayloadType = 0x0B
+	PayloadOTA         PayloadType = 0x0C
 	PayloadRawCustom   PayloadType = 0x0F
 )
 
@@ -88,6 +89,8 @@ func (p PayloadType) String() string {
 		return "Multipart"
 	case PayloadControl:
 		return "Control"
+	case PayloadOTA:
+		return "OTA"
 	case PayloadRawCustom:
 		return "RawCustom"
 	default:
@@ -181,6 +184,9 @@ type Packet struct {
 	// so the path list itself is inside Ciphertext and not decoded here. Distinct
 	// from the packet header's Path.
 	ReturnPath *DirectMessage
+
+	// OTA is populated when PayloadType == PayloadOTA.
+	OTA *OTA
 
 	// Trace is populated when PayloadType == PayloadTrace.
 	Trace *Trace
@@ -280,6 +286,67 @@ type Control struct {
 	NodeRole  DeviceRole
 	SNR       float64
 	PublicKey string // responder key (prefix or full), uppercase hex
+}
+
+// OTA sub-message types, the first byte of a PayloadOTA (0x0C) payload.
+// Mirrors OtaMsgType in MeshCore src/helpers/ota/OtaFormat.h.
+const (
+	OTAAdv         uint8 = 0x01
+	OTAQuery       uint8 = 0x02
+	OTAHave        uint8 = 0x03
+	OTAGetManifest uint8 = 0x04
+	OTAManifest    uint8 = 0x05
+	OTAReq         uint8 = 0x06
+	OTAData        uint8 = 0x07
+	OTAReqProof    uint8 = 0x08
+	OTAProof       uint8 = 0x09
+	OTAGetLeaves   uint8 = 0x0A
+	OTALeaves      uint8 = 0x0B
+)
+
+// otaHaveRowBytes is one catalog row in an OTA_HAVE reply:
+// mid(4) + target(4) + fw_version(4) + codec(1) + flags(1) + have_count(2).
+const otaHaveRowBytes = 16
+
+// OTAHaveRow is one advertised .mota in an OTA_HAVE catalog reply.
+type OTAHaveRow struct {
+	ManifestID string `json:"manifest_id"`
+	TargetID   string `json:"target_id"`
+	FWVersion  string `json:"fw_version"`
+	Codec      uint8  `json:"codec"`
+	Flags      uint8  `json:"flags"`
+	Full       bool   `json:"full"`   // flags bit 0 (MFLAG_FULL): full image vs delta
+	Signed     bool   `json:"signed"` // flags bit 1 (MFLAG_SIGNED)
+	HaveCount  uint16 `json:"have_count"`
+}
+
+// OTA is the decoded body of an OTA-over-LoRa (0x0C) packet. The payload is
+// plaintext (integrity comes from the signed .mota manifest, not the link), so
+// every field below is decodable without any key.
+type OTA struct {
+	SubType uint8  `json:"sub_type"`
+	SubName string `json:"sub_name"`
+
+	// SeederID identifies the advertising node on ADV/QUERY/HAVE.
+	SeederID string `json:"seeder_id,omitempty"`
+	// SetDigest is the digest of a seeder's served set (ADV/QUERY/HAVE).
+	SetDigest string `json:"set_digest,omitempty"`
+	// ManifestID identifies the .mota being transferred (all other types).
+	ManifestID string `json:"manifest_id,omitempty"`
+
+	NumMotas     uint8  `json:"num_motas,omitempty"`     // ADV
+	FilterTarget uint32 `json:"filter_target,omitempty"` // QUERY (0 = unfiltered)
+
+	FragIndex uint8 `json:"frag_index,omitempty"` // HAVE/MANIFEST/LEAVES
+	FragTotal uint8 `json:"frag_total,omitempty"`
+
+	Rows []OTAHaveRow `json:"rows,omitempty"` // HAVE catalog
+
+	BlockIndex uint16 `json:"block_index,omitempty"` // REQ/DATA/REQ_PROOF/PROOF
+	WantMask   uint16 `json:"want_mask,omitempty"`   // REQ/GET_MANIFEST/GET_LEAVES
+	FragOffset uint16 `json:"frag_offset,omitempty"` // DATA
+	DataLen    int    `json:"data_len,omitempty"`    // DATA/MANIFEST/LEAVES payload bytes
+	ProofNodes uint8  `json:"proof_nodes,omitempty"` // PROOF
 }
 
 // GroupText is the decoded body of a GroupText (0x05) channel message. The

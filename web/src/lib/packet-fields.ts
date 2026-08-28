@@ -21,7 +21,28 @@ export interface ByteRange {
 }
 
 const up = (s: string) => s.toUpperCase();
+
+/** OTA-over-LoRa sub-message names (MeshCore OtaMsgType, OtaFormat.h). */
+const OTA_SUB: Record<number, string> = {
+	0x01: 'Adv',
+	0x02: 'Query',
+	0x03: 'Have',
+	0x04: 'GetManifest',
+	0x05: 'Manifest',
+	0x06: 'Req',
+	0x07: 'Data',
+	0x08: 'ReqProof',
+	0x09: 'Proof',
+	0x0a: 'GetLeaves',
+	0x0b: 'Leaves'
+};
 const trunc = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s);
+
+/** Little-endian uint16 from 4 hex chars. */
+function le16(h: string): number {
+	if (h.length < 4) return 0;
+	return parseInt(h.slice(0, 2), 16) + parseInt(h.slice(2, 4), 16) * 0x100;
+}
 
 /** Little-endian uint32 from 8 hex chars. */
 function le32(h: string): number {
@@ -243,6 +264,52 @@ export function buildPacketFields(ev: LiveEvent): { fields: PacketField[]; range
 		let to = ps + 9;
 		for (let i = 1; to + ths <= totalBytes; i++, to += ths) {
 			add(to, ths, `Trace Hop ${i}`, up(slice(to, ths)), 'path');
+		}
+	} else if (ev.payloadType === 'OTA' && totalBytes - ps >= 5) {
+		// byte 0 = sub-type, then a 4-byte seeder id (Adv/Query/Have) or manifest id
+		// (all others). Plaintext by design: an OTA transfer's integrity comes from
+		// the signed .mota manifest, not the link, so every field is readable.
+		const st = parseInt(byte(ps), 16);
+		const sub = OTA_SUB[st] ?? 'Unknown';
+		add(ps, 1, 'OTA Type', '0x' + up(byte(ps)), 'flags', sub);
+		const isSeeder = st === 0x01 || st === 0x02 || st === 0x03;
+		add(ps + 1, 4, isSeeder ? 'Seeder ID' : 'Manifest ID', up(slice(ps + 1, 4)), 'tag');
+		const b = ps + 5;
+		if (st === 0x01 && totalBytes - b >= 5) {
+			add(b, 1, 'Motas Served', String(parseInt(byte(b), 16)), 'flags', 'firmware images (.mota) this node is offering to the mesh');
+			add(b + 1, 4, 'Set Digest', up(slice(b + 1, 4)), 'hash');
+		} else if (st === 0x02 && totalBytes - b >= 8) {
+			add(b, 4, 'Set Digest', up(slice(b, 4)), 'hash');
+			const ft = le32(slice(b + 4, 4));
+			add(b + 4, 4, 'Target Filter', up(slice(b + 4, 4)), 'tag', ft === 0 ? 'unfiltered' : undefined);
+		} else if (st === 0x03 && totalBytes - b >= 7) {
+			add(b, 4, 'Set Digest', up(slice(b, 4)), 'hash');
+			add(b + 4, 1, 'Fragment', String(parseInt(byte(b + 4), 16)), 'flags');
+			add(b + 5, 1, 'Fragments', String(parseInt(byte(b + 5), 16)), 'flags');
+			add(b + 6, 1, 'Catalog Rows', String(parseInt(byte(b + 6), 16)), 'flags');
+			if (totalBytes - (b + 7) > 0)
+				add(b + 7, totalBytes - (b + 7), 'Catalog', trunc(up(hex.slice((b + 7) * 2)), 32), 'payload');
+		} else if ((st === 0x04 || st === 0x0a) && totalBytes - b >= 2) {
+			add(b, 2, 'Want Mask', '0x' + le16(slice(b, 2)).toString(16), 'flags');
+		} else if ((st === 0x05 || st === 0x0b) && totalBytes - b >= 2) {
+			add(b, 1, 'Fragment', String(parseInt(byte(b), 16)), 'flags');
+			add(b + 1, 1, 'Fragments', String(parseInt(byte(b + 1), 16)), 'flags');
+			if (totalBytes - (b + 2) > 0)
+				add(b + 2, totalBytes - (b + 2), 'Bytes', trunc(up(hex.slice((b + 2) * 2)), 32), 'payload');
+		} else if (st === 0x06 && totalBytes - b >= 4) {
+			add(b, 2, 'Block', String(le16(slice(b, 2))), 'tag');
+			add(b + 2, 2, 'Want Mask', '0x' + le16(slice(b + 2, 2)).toString(16), 'flags');
+		} else if (st === 0x07 && totalBytes - b >= 4) {
+			add(b, 2, 'Block', String(le16(slice(b, 2))), 'tag');
+			add(b + 2, 2, 'Frag Offset', String(le16(slice(b + 2, 2))), 'flags');
+			if (totalBytes - (b + 4) > 0)
+				add(b + 4, totalBytes - (b + 4), 'Data', trunc(up(hex.slice((b + 4) * 2)), 32), 'payload');
+		} else if ((st === 0x08 || st === 0x09) && totalBytes - b >= 2) {
+			add(b, 2, 'Block', String(le16(slice(b, 2))), 'tag');
+			if (st === 0x09 && totalBytes - (b + 2) >= 1)
+				add(b + 2, 1, 'Proof Nodes', String(parseInt(byte(b + 2), 16)), 'flags');
+		} else if (totalBytes - b > 0) {
+			add(b, totalBytes - b, 'Payload', trunc(up(hex.slice(b * 2)), 32), 'payload');
 		}
 	} else if (ev.payloadType === 'Control' && totalBytes - ps >= 1) {
 		const fb = parseInt(byte(ps), 16);

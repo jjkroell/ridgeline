@@ -7,6 +7,7 @@ package meshcore
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"strings"
 )
 
@@ -120,4 +121,160 @@ func decodeControl(payload []byte) *Control {
 	default:
 		return nil
 	}
+}
+
+// otaSubName maps an OTA sub-message type to its protocol name.
+func otaSubName(t uint8) string {
+	switch t {
+	case OTAAdv:
+		return "Adv"
+	case OTAQuery:
+		return "Query"
+	case OTAHave:
+		return "Have"
+	case OTAGetManifest:
+		return "GetManifest"
+	case OTAManifest:
+		return "Manifest"
+	case OTAReq:
+		return "Req"
+	case OTAData:
+		return "Data"
+	case OTAReqProof:
+		return "ReqProof"
+	case OTAProof:
+		return "Proof"
+	case OTAGetLeaves:
+		return "GetLeaves"
+	case OTALeaves:
+		return "Leaves"
+	default:
+		return "Unknown"
+	}
+}
+
+// decodeOTA decodes an OTA-over-LoRa (0x0C) payload. Layout mirrors the
+// encoders in MeshCore src/helpers/ota/OtaProtocol.cpp: byte 0 is the
+// sub-type, followed by a 4-byte seeder id (ADV/QUERY/HAVE) or manifest id
+// (everything else). All multi-byte fields are little-endian.
+//
+// The payload is plaintext by design — an OTA transfer's integrity rests on
+// the signed manifest inside the .mota, not on link encryption — so this needs
+// no keys and every field is observable.
+func decodeOTA(payload []byte) *OTA {
+	if len(payload) < 5 {
+		return nil
+	}
+	o := &OTA{SubType: payload[0], SubName: otaSubName(payload[0])}
+	id := upperHex(payload[1:5])
+	rest := payload[5:]
+
+	switch o.SubType {
+	case OTAAdv: // seeder(4) + n_motas(1) + set_digest(4)
+		o.SeederID = id
+		if len(rest) < 5 {
+			return nil
+		}
+		o.NumMotas = rest[0]
+		o.SetDigest = upperHex(rest[1:5])
+
+	case OTAQuery: // seeder(4) + set_digest(4) + filter_target(4)
+		o.SeederID = id
+		if len(rest) < 8 {
+			return nil
+		}
+		o.SetDigest = upperHex(rest[0:4])
+		if len(rest) >= 8 {
+			o.FilterTarget = binary.LittleEndian.Uint32(rest[4:8])
+		}
+
+	case OTAHave: // seeder(4) + set_digest(4) + frag_idx(1) + frag_total(1) + n_rows(1) + rows
+		o.SeederID = id
+		if len(rest) < 7 {
+			return nil
+		}
+		o.SetDigest = upperHex(rest[0:4])
+		o.FragIndex, o.FragTotal = rest[4], rest[5]
+		nRows := int(rest[6])
+		rows := rest[7:]
+		for i := 0; i < nRows; i++ {
+			off := i * otaHaveRowBytes
+			if off+otaHaveRowBytes > len(rows) {
+				break // truncated row: keep what decoded rather than discarding the packet
+			}
+			r := rows[off : off+otaHaveRowBytes]
+			flags := r[13]
+			o.Rows = append(o.Rows, OTAHaveRow{
+				ManifestID: upperHex(r[0:4]),
+				TargetID:   upperHex(r[4:8]),
+				FWVersion:  otaVersionString(binary.LittleEndian.Uint32(r[8:12])),
+				Codec:      r[12],
+				Flags:      flags,
+				Full:       flags&0x01 != 0,
+				Signed:     flags&0x02 != 0,
+				HaveCount:  binary.LittleEndian.Uint16(r[14:16]),
+			})
+		}
+
+	case OTAGetManifest, OTAGetLeaves: // mid(4) + want_mask(2)
+		o.ManifestID = id
+		if len(rest) < 2 {
+			return nil
+		}
+		o.WantMask = binary.LittleEndian.Uint16(rest[0:2])
+
+	case OTAManifest, OTALeaves: // mid(4) + frag_idx(1) + frag_total(1) + bytes
+		o.ManifestID = id
+		if len(rest) < 2 {
+			return nil
+		}
+		o.FragIndex, o.FragTotal = rest[0], rest[1]
+		o.DataLen = len(rest) - 2
+
+	case OTAReq: // mid(4) + block_idx(2) + want_mask(2)
+		o.ManifestID = id
+		if len(rest) < 4 {
+			return nil
+		}
+		o.BlockIndex = binary.LittleEndian.Uint16(rest[0:2])
+		o.WantMask = binary.LittleEndian.Uint16(rest[2:4])
+
+	case OTAData: // mid(4) + block_idx(2) + frag_off(2) + data
+		o.ManifestID = id
+		if len(rest) < 4 {
+			return nil
+		}
+		o.BlockIndex = binary.LittleEndian.Uint16(rest[0:2])
+		o.FragOffset = binary.LittleEndian.Uint16(rest[2:4])
+		o.DataLen = len(rest) - 4
+
+	case OTAReqProof: // mid(4) + block_idx(2)
+		o.ManifestID = id
+		if len(rest) < 2 {
+			return nil
+		}
+		o.BlockIndex = binary.LittleEndian.Uint16(rest[0:2])
+
+	case OTAProof: // mid(4) + block_idx(2) + n_proof(1) + proof(n*4)
+		o.ManifestID = id
+		if len(rest) < 3 {
+			return nil
+		}
+		o.BlockIndex = binary.LittleEndian.Uint16(rest[0:2])
+		o.ProofNodes = rest[2]
+
+	default:
+		// Unknown sub-type: keep the id so the packet is still attributable.
+		o.ManifestID = id
+	}
+	return o
+}
+
+// otaVersionString renders the packed fw_version word used in an OTA_HAVE row
+// (major<<24 | minor<<16 | patch<<8 | prerelease) as "v1.17.1".
+func otaVersionString(v uint32) string {
+	if v == 0 {
+		return ""
+	}
+	return fmt.Sprintf("v%d.%d.%d", (v>>24)&0xFF, (v>>16)&0xFF, (v>>8)&0xFF)
 }

@@ -13,7 +13,8 @@
 		Ack: 'var(--color-fg-dim)',
 		Request: 'var(--color-lime)',
 		Response: 'var(--color-lime)',
-		Path: 'var(--color-fg-dim)'
+		Path: 'var(--color-fg-dim)',
+		OTA: 'var(--color-signal-deep)'
 	};
 	const color = $derived(colors[type] ?? 'var(--color-fg-faint)');
 

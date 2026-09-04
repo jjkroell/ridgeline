@@ -54,14 +54,15 @@
 		return () => clearInterval(t);
 	});
 
-	// Admin-only: permanently delete the observer AND every packet it reported.
+	// Admin-only: permanently delete the observer AND every packet it reported —
+	// plus, server-side, the nodes nothing but this observer ever heard.
 	let deleting = $state(false);
 	async function deleteObserver() {
 		if (
 			!(await confirmer.ask({
 				title: `Delete observer "${observer?.name ?? id}"?`,
 				message:
-					'This permanently removes the observer, every packet it reported, and its battery/noise history. This cannot be undone. To stop it contributing new data while keeping its history, use Standby instead.',
+					'This permanently removes the observer, every packet it reported, and its battery/noise history — along with any node that nothing else ever heard, since its only evidence goes with it. Nodes someone has claimed are kept. This cannot be undone. To stop it contributing new data while keeping its history, use Standby instead.',
 				confirmLabel: 'Delete observer',
 				danger: true
 			}))

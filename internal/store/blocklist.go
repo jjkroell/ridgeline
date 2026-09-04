@@ -1,6 +1,7 @@
 package store
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -248,12 +249,18 @@ type PurgeResult struct {
 	// deleted observer.
 	Telemetry int64 `json:"telemetry"`
 	Nodes     int64 `json:"nodes"`
-	Claims    int64 `json:"claims"`
+	// OrphanNodes counts the subset of Nodes that was not named by the caller:
+	// node rows whose every stored advert came from an observer being removed,
+	// so nothing outside that observer's feed ever evidenced them. They are
+	// included in Nodes as well.
+	OrphanNodes int64 `json:"orphanNodes"`
+	Claims      int64 `json:"claims"`
 	Notes     int64 `json:"notes"`
 	Locations int64 `json:"locations"`
 	Shares    int64 `json:"shares"`
-	// SkippedClaimed lists keys the caller held back from the delete because a
-	// user has claimed them (set by the purge handler, not by the store).
+	// SkippedClaimed lists keys held back from the delete because a user has
+	// claimed them — set by the purge handler for the nodes IT was asked to
+	// remove, and by the store for orphans it found on its own.
 	SkippedClaimed []string `json:"skippedClaimed,omitempty"`
 }
 
@@ -262,6 +269,9 @@ type PurgeResult struct {
 // observations whose flood path transits any bridge pubkey in bridges, and the
 // own adverts + node rows of any pubkey in nodes (and bridges). Pubkeys are
 // matched case-insensitively; bridge path matching is by hash-prefix.
+//
+// Removing an observer also removes the node rows that ONLY it evidenced — see
+// the orphan pass below.
 //
 // User-authored data keyed to the node (claims, notes, private location,
 // location shares) is PRESERVED. This is the path the automatic retention sweep
@@ -312,6 +322,20 @@ func (s *Store) purgeTargets(observers, bridges, nodes []string, cascadeUserData
 	}
 	defer tx.Rollback()
 
+	// Removing an observer is meant to read as if it had never connected, so the
+	// nodes that exist ONLY because it heard them go too. A node row is created
+	// by a signature-valid advert and nothing else, and observations are never
+	// pruned, so "which observers evidenced this node" is answerable exactly:
+	// collect the advert keys carried by the rows being deleted, and the keys
+	// carried by the rows that survive. Anything in the first set and not the
+	// second lost its last witness.
+	//
+	// Only when observers are targeted. The automatic retention sweep purges by
+	// node key alone, and must not start inferring extra removals.
+	orphanScan := len(obsSet) > 0
+	condemned := map[string]bool{} // advert keys losing observations here
+	witnessed := map[string]bool{} // advert keys still evidenced afterwards
+
 	// Scan observations once; collect ids to delete by re-decoding raw_hex.
 	rows, err := tx.Query(`SELECT id, raw_hex, COALESCE(observer_id,'') FROM observations`)
 	if err != nil {
@@ -325,22 +349,36 @@ func (s *Store) purgeTargets(observers, bridges, nodes []string, cascadeUserData
 			rows.Close()
 			return res, err
 		}
-		if obsID != "" && obsSet[obsID] {
+		byTarget := obsID != "" && obsSet[obsID]
+		if byTarget && !orphanScan {
 			delIDs = append(delIDs, id)
 			continue
 		}
 		pkt, err := meshcore.DecodeHex(raw)
 		if err != nil || pkt == nil {
-			continue
-		}
-		if pkt.Advert != nil && nodeSet[strings.ToUpper(pkt.Advert.PublicKey)] {
-			delIDs = append(delIDs, id)
-			continue
-		}
-		if len(bridgeSet) > 0 {
-			if hit := pathHitsBridge(pkt.RelayPath(), bridgeSet); hit {
+			// Undecodable: it can still be deleted for its observer, but it
+			// names no node either way.
+			if byTarget {
 				delIDs = append(delIDs, id)
 			}
+			continue
+		}
+		var advertKey string
+		if pkt.Advert != nil {
+			advertKey = strings.ToUpper(pkt.Advert.PublicKey)
+		}
+		del := byTarget ||
+			(advertKey != "" && nodeSet[advertKey]) ||
+			(len(bridgeSet) > 0 && pathHitsBridge(pkt.RelayPath(), bridgeSet))
+		if del {
+			delIDs = append(delIDs, id)
+			if advertKey != "" {
+				condemned[advertKey] = true
+			}
+			continue
+		}
+		if advertKey != "" {
+			witnessed[advertKey] = true
 		}
 	}
 	rows.Close()
@@ -384,6 +422,43 @@ func (s *Store) purgeTargets(observers, bridges, nodes []string, cascadeUserData
 			*c.count += n
 		}
 	}
+	// The orphan pass: node rows whose last witness just left. A user's own data
+	// outranks it — someone who claimed, annotated or geolocated a node did so
+	// about a real radio, and being heard by only one receiver is a coverage
+	// accident rather than evidence the node was fictional. Those are held back
+	// and reported instead. Anything deleted here returns on its next advert, the
+	// same as a node pruned by retention.
+	orphans := make([]string, 0, len(condemned))
+	for k := range condemned {
+		if witnessed[k] || nodeSet[k] {
+			continue // still evidenced elsewhere, or already deleted above
+		}
+		orphans = append(orphans, k)
+	}
+	sort.Strings(orphans) // stable order for the log line and skipped list
+	for _, k := range orphans {
+		var held bool
+		if err := tx.QueryRow(`SELECT EXISTS(
+			SELECT 1 FROM node_claims WHERE UPPER(node_pubkey) = ?
+			UNION ALL SELECT 1 FROM node_notes WHERE UPPER(node_pubkey) = ?
+			UNION ALL SELECT 1 FROM node_private_locations WHERE UPPER(node_pubkey) = ?
+			UNION ALL SELECT 1 FROM location_shares WHERE UPPER(node_pubkey) = ?)`,
+			k, k, k, k).Scan(&held); err != nil {
+			return res, err
+		}
+		if held {
+			res.SkippedClaimed = append(res.SkippedClaimed, k)
+			continue
+		}
+		r, err := tx.Exec(`DELETE FROM nodes WHERE UPPER(pubkey) = ?`, k)
+		if err != nil {
+			return res, err
+		}
+		n, _ := r.RowsAffected()
+		res.Nodes += n
+		res.OrphanNodes += n
+	}
+
 	// Delete observer rows for purged observers, along with their device
 	// telemetry. The telemetry series is keyed by observer id and nothing else
 	// references it, so leaving it behind orphans rows that no page can reach and

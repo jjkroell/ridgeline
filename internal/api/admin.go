@@ -186,6 +186,7 @@ func (s *Server) adminPurge(w http.ResponseWriter, r *http.Request, _ store.User
 	res.SkippedClaimed = append(skippedNodes, skippedBridges...)
 	s.log.Info("admin purged", "observers", len(req.Observers), "bridges", len(req.Bridges),
 		"nodes", len(req.Nodes), "observationsDeleted", res.Observations, "nodesDeleted", res.Nodes,
+		"orphanNodesDeleted", res.OrphanNodes,
 		"claimsDeleted", res.Claims, "notesDeleted", res.Notes,
 		"locationsDeleted", res.Locations, "sharesDeleted", res.Shares,
 		"skippedClaimed", res.SkippedClaimed)
@@ -194,7 +195,10 @@ func (s *Server) adminPurge(w http.ResponseWriter, r *http.Request, _ store.User
 
 // adminDelete permanently deletes nodes and/or observers (their rows + stored
 // observations) with NO blocklist entry — a clean removal, distinct from purge
-// which keeps the ingress blocked. A deleted observer/node that still transmits
+// which keeps the ingress blocked. Deleting an observer also takes the node rows
+// that only it ever evidenced, so the result reads as if it had never published
+// (nodes a user has claimed or annotated are kept, and come back in
+// skippedClaimed). A deleted observer/node that still transmits
 // (or keeps publishing) re-appears on its next report; delete is for retiring
 // stale/old entries, not for stopping active injectors (use purge for that).
 func (s *Server) adminDelete(w http.ResponseWriter, r *http.Request, _ store.User) {
@@ -217,6 +221,7 @@ func (s *Server) adminDelete(w http.ResponseWriter, r *http.Request, _ store.Use
 	}
 	s.log.Info("admin deleted", "nodes", len(req.Nodes), "observers", len(req.Observers),
 		"observationsDeleted", res.Observations, "nodesDeleted", res.Nodes,
+		"orphanNodesDeleted", res.OrphanNodes, "orphansKeptClaimed", len(res.SkippedClaimed),
 		"claimsDeleted", res.Claims, "notesDeleted", res.Notes,
 		"locationsDeleted", res.Locations, "sharesDeleted", res.Shares)
 	writeJSON(w, res)

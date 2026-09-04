@@ -11,12 +11,12 @@
 	];
 
 	// The second network, joined to the one above by the wired pair at Mt Cokley.
-	// Note the slower spreading factor — it is not just a different frequency, so
-	// a radio set up for one will not hear the other even after retuning.
+	// Same settings as above apart from the frequency — the mesh is moving to
+	// 909.000 MHz on 1 October 2026 and stays on SF7.
 	const radio909: { k: string; v: string }[] = [
 		{ k: 'Frequency', v: '909.000 MHz' },
 		{ k: 'Bandwidth', v: '62.5 kHz' },
-		{ k: 'Spreading factor', v: 'SF 8' },
+		{ k: 'Spreading factor', v: 'SF 7' },
 		{ k: 'Coding rate', v: 'CR 5' }
 	];
 </script>
@@ -123,8 +123,8 @@
 		<h2 class="text-fg text-xl font-700">The second network on 909 MHz</h2>
 		<p>
 			Not everything on the mesh is on the alternate frequency. A separate group
-			of nodes runs on <strong>909.000 MHz</strong> at a slower spreading factor,
-			and the two networks are joined by a pair of repeaters wired together at
+			of nodes runs on <strong>909.000 MHz</strong>, and the two networks are
+			joined by a pair of repeaters wired together at
 			<strong>Mt Cokley</strong>, above Parksville. One listens on each frequency,
 			and whatever either of them hears is handed across to the other.
 		</p>
@@ -136,9 +136,8 @@
 			they appear, with their frequency shown under the name.
 		</p>
 		<p>
-			One thing worth noting if you're setting a radio up: the 909 side also uses a
-			different <strong>spreading factor</strong>, so retuning the frequency alone
-			isn't enough to hear it.
+			Apart from the frequency, both sides run identical radio settings, so moving
+			a node across is a matter of changing the frequency and nothing else.
 		</p>
 		<dl
 			class="border-line/70 divide-line/60 not-prose my-2 divide-y overflow-hidden rounded-[var(--radius)] border"

@@ -22,7 +22,7 @@
 		{
 			icon: 'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14',
 			title: 'More on the About page',
-			body: 'The About page now covers the 909 MHz side of the network, where the link between the two frequencies lives, and the radio settings for both — including the different spreading factor, which catches people out.'
+			body: 'The About page now covers the 909 MHz side of the network, where the link between the two frequencies lives, and the radio settings for both.'
 		}
 	];
 </script>

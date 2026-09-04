@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Why the coastal BC MeshCore network moves to 909.000 MHz on October 1st 2026, and how to retune repeaters and companions.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://ridgeline.ve7kod.ca/faq">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A1%3C/text%3E%3C/svg%3E">
+<title>Why 909.000 MHz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap">
+<style>
+:root{
+  --ground:#F4F7F7;
+  --surface:#FFFFFF;
+  --surface-2:#EAF0F0;
+  --ink:#141C1E;
+  --ink-2:#3D4C4F;
+  --ink-3:#6B7B7E;
+  --rule:#D3DEDE;
+  --rule-2:#BCCBCB;
+  --teal:#0E6E78;
+  --teal-soft:#DCEDEE;
+  --amber:#A8620C;
+  --amber-soft:#F6E7D3;
+  --shadow:0 1px 2px rgba(20,28,30,.06),0 8px 24px -16px rgba(20,28,30,.28);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1416;
+    --surface:#151E20;
+    --surface-2:#1C2729;
+    --ink:#E8EFEF;
+    --ink-2:#B4C3C4;
+    --ink-3:#7E9092;
+    --rule:#263335;
+    --rule-2:#354547;
+    --teal:#5CC5CF;
+    --teal-soft:#122F33;
+    --amber:#E0A055;
+    --amber-soft:#33230F;
+    --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 28px -18px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1416;
+  --surface:#151E20;
+  --surface-2:#1C2729;
+  --ink:#E8EFEF;
+  --ink-2:#B4C3C4;
+  --ink-3:#7E9092;
+  --rule:#263335;
+  --rule-2:#354547;
+  --teal:#5CC5CF;
+  --teal-soft:#122F33;
+  --amber:#E0A055;
+  --amber-soft:#33230F;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 28px -18px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  font-size:17px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1120px;margin:0 auto;padding:0 28px 96px}
+.col{max-width:65ch}
+
+/* ---------- masthead ---------- */
+header.top{padding:64px 0 0}
+.eyebrow{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 20px;
+}
+h1{
+  font-family:"IBM Plex Sans Condensed",Arial Narrow,Arial,sans-serif;
+  font-weight:700;
+  font-size:clamp(2.6rem,6.2vw,4.4rem);
+  line-height:1.02;letter-spacing:-.02em;
+  margin:0 0 20px;text-wrap:balance;
+}
+h1 .hz{color:var(--teal)}
+.standfirst{
+  font-size:1.19rem;line-height:1.55;color:var(--ink-2);
+  max-width:60ch;margin:0 0 52px;
+}
+
+/* ---------- config cards ---------- */
+.cfgs{display:grid;grid-template-columns:repeat(auto-fit,minmax(268px,1fr));gap:18px;margin:0 0 64px}
+.cfg{
+  background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+  padding:22px 24px 24px;box-shadow:var(--shadow);
+}
+.cfg .state{
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.15em;
+  text-transform:uppercase;margin:0 0 14px;
+}
+.cfg.old .state{color:var(--amber)}
+.cfg.new .state{color:var(--teal)}
+.cfg .freq{
+  font-family:"IBM Plex Mono",monospace;font-weight:600;
+  font-size:1.85rem;letter-spacing:-.02em;margin:0 0 4px;
+  font-variant-numeric:tabular-nums;
+}
+.cfg.old .freq{color:var(--amber)}
+.cfg.new .freq{color:var(--teal)}
+.cfg .note{font-size:.9rem;color:var(--ink-3);margin:0 0 18px;font-style:italic}
+.cfg dl{
+  margin:0;display:grid;grid-template-columns:auto 1fr;gap:7px 16px;
+  font-family:"IBM Plex Mono",monospace;font-size:13px;
+  font-variant-numeric:tabular-nums;
+}
+.cfg dt{color:var(--ink-3);letter-spacing:.05em;text-transform:uppercase;font-size:10.5px;align-self:center}
+.cfg dd{margin:0;color:var(--ink);font-weight:500;text-align:right}
+
+/* ---------- sections ---------- */
+section{border-top:1px solid var(--rule);padding-top:34px;margin-top:52px}
+h2{
+  font-family:"IBM Plex Sans Condensed",Arial Narrow,Arial,sans-serif;
+  font-weight:600;font-size:clamp(1.5rem,2.9vw,2rem);line-height:1.14;
+  letter-spacing:-.012em;margin:0 0 18px;text-wrap:balance;max-width:26ch;
+}
+h3{
+  font-family:"IBM Plex Sans Condensed",Arial Narrow,Arial,sans-serif;
+  font-weight:600;font-size:1.1rem;letter-spacing:.01em;
+  margin:34px 0 10px;color:var(--ink);
+}
+p{margin:0 0 18px;max-width:65ch}
+strong{font-weight:600}
+em{font-style:italic}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.9em;font-variant-numeric:tabular-nums}
+code{background:var(--surface-2);padding:1px 5px;border-radius:2px;color:var(--ink)}
+
+/* ---------- inline gloss ---------- */
+.gloss{
+  border-left:2px solid var(--rule-2);padding:2px 0 2px 18px;
+  margin:20px 0 26px;max-width:64ch;
+}
+.gloss .gt{
+  font-family:"IBM Plex Sans Condensed",Arial,sans-serif;font-weight:600;
+  font-size:.9rem;letter-spacing:.02em;color:var(--ink-2);margin:0 0 6px;
+}
+.gloss p{font-size:.96rem;color:var(--ink-2);margin:0 0 10px}
+.gloss p:last-child{margin-bottom:0}
+
+/* ---------- command blocks ---------- */
+.cmd{
+  background:var(--surface-2);border:1px solid var(--rule);border-radius:3px;
+  padding:16px 18px;margin:16px 0 18px;overflow-x:auto;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13.5px;line-height:1.85;
+}
+.cmd .line{white-space:pre;display:block}
+.cmd .p{color:var(--ink-3);user-select:none}
+.cmd .c{color:var(--teal);font-weight:500}
+.cmd .r{color:var(--ink-3);font-style:italic}
+
+/* ---------- table ---------- */
+.tblwrap{overflow-x:auto;margin:24px 0 12px;border:1px solid var(--rule);border-radius:3px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:520px;font-family:"IBM Plex Mono",monospace;font-size:13px}
+th,td{padding:11px 18px;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--rule)}
+th:first-child,td:first-child{text-align:left}
+thead th{
+  font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:500;background:var(--surface-2);
+}
+tbody tr:last-child td{border-bottom:none}
+td.b{color:var(--teal);font-weight:600}
+td.a{color:var(--amber);font-weight:600}
+
+/* ---------- callout ---------- */
+.callout{
+  background:var(--surface);border:1px solid var(--rule);
+  border-left:3px solid var(--teal);border-radius:3px;
+  padding:22px 26px;margin:26px 0;box-shadow:var(--shadow);
+}
+.callout.warn{border-left-color:var(--amber)}
+.callout p:last-child{margin-bottom:0}
+.callout .ct{
+  font-family:"IBM Plex Sans Condensed",Arial,sans-serif;font-weight:600;
+  font-size:1.02rem;margin:0 0 8px;color:var(--ink);
+}
+
+/* ---------- list ---------- */
+ul.clean{list-style:none;padding:0;margin:0 0 18px;max-width:65ch}
+ul.clean li{
+  padding-left:22px;position:relative;margin-bottom:11px;
+}
+ul.clean li::before{
+  content:"";position:absolute;left:0;top:.66em;
+  width:9px;height:1px;background:var(--rule-2);
+}
+
+a{color:var(--teal);text-decoration-thickness:1px;text-underline-offset:2px}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--teal);outline-offset:3px;border-radius:2px}
+@media (prefers-reduced-motion:no-preference){
+  .cfg,.callout{transition:border-color .18s ease}
+}
+@media (max-width:600px){
+  /* tables stop scrolling sideways on a phone */
+  .tblwrap{overflow-x:visible}
+  table{min-width:0}
+  th,td{padding:10px 13px}
+
+  /* the three column comparison becomes one card per row */
+  table.cmp,table.cmp thead,table.cmp tbody,table.cmp tr,table.cmp td{display:block}
+  table.cmp thead{display:none}
+  table.cmp tr{padding:13px 15px;border-bottom:1px solid var(--rule)}
+  table.cmp tr:last-child{border-bottom:none}
+  table.cmp td{
+    display:flex;justify-content:space-between;align-items:baseline;gap:14px;
+    padding:4px 0;border-bottom:none;text-align:right;
+  }
+  table.cmp td:first-child{
+    display:block;text-align:left;color:var(--ink);font-weight:600;
+    padding:0 0 9px;margin-bottom:7px;border-bottom:1px solid var(--rule);
+  }
+  table.cmp td[data-label]::before{
+    content:attr(data-label);color:var(--ink-3);font-size:10px;letter-spacing:.12em;
+    text-transform:uppercase;text-align:left;flex:1 1 auto;font-weight:500;
+  }
+}
+@media (max-width:640px){
+  body{font-size:16px}
+  .wrap{padding:0 20px 72px}
+  header.top{padding-top:44px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">Network Change Notice &nbsp;·&nbsp; Coastal BC MeshCore &nbsp;·&nbsp; Cutover October 1st 2026</p>
+  <h1>Why we’re moving to <span class="hz">909.000&thinsp;MHz</span></h1>
+  <p class="standfirst">On <strong>October 1st 2026</strong> the mesh moves to 909.000 MHz. This page explains what changed, how we arrived at the new settings, and what you need to do to your node.</p>
+
+</header>
+
+<div class="cfgs">
+  <div class="cfg new">
+    <p class="state">From October 1st 2026</p>
+    <p class="freq">909.000</p>
+    <p class="note">Set this on your node.</p>
+    <dl>
+      <dt>Frequency</dt><dd>909.000 MHz</dd>
+      <dt>Bandwidth</dt><dd>62.5 kHz</dd>
+      <dt>Spreading</dt><dd>SF7</dd>
+      <dt>Coding rate</dt><dd>CR5 (4/5)</dd>
+    </dl>
+  </div>
+  <div class="cfg old">
+    <p class="state">In use until October 1st 2026</p>
+    <p class="freq">910.425</p>
+    <p class="note">Where the mesh has lived for roughly four months.</p>
+    <dl>
+      <dt>Frequency</dt><dd>910.425 MHz</dd>
+      <dt>Bandwidth</dt><dd>62.5 kHz</dd>
+      <dt>Spreading</dt><dd>SF7</dd>
+      <dt>Coding rate</dt><dd>CR5 (4/5)</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="col">
+
+<section>
+  <h2>Why did we leave the default US/Canada frequency?</h2>
+  <p>The default channel is shared with the entire North American MeshCore population. At that scale the channel carried far more traffic than our own region generates, and the practical result was that <strong>basic mesh functions stopped working for us</strong>:</p>
+  <ul class="clean">
+    <li>Channel messages frequently failed to arrive.</li>
+    <li>Direct messages were unreliable.</li>
+    <li>Remote administration of repeaters was effectively impossible.</li>
+  </ul>
+  <p>The common factor was packet loss from collisions. Too many stations were transmitting into the same channel for any one exchange to complete reliably. Leaving that channel was the only lever available to us, since we cannot control how many stations elsewhere use it.</p>
+  <p>It showed up plainly at the sites that matter most. On the default channel our high elevation repeaters looking south often sat with a noise floor around -90 dBm. That is a punishing floor for a network built to hear distant stations running modest power from poor locations, and it eats straight into the margin those links depend on.</p>
+</section>
+
+<section>
+  <h2>Where does emergency communications fit in?</h2>
+  <p>The SWBC region mesh treats emergency communications as a priority. The MeshCore infrastructure, meaning the repeaters and the sites they live on, is built and maintained with emcomm use in mind rather than as a hobby network that might happen to be useful.</p>
+  <p>That is what sets the standard the network has to meet, and it is the reason the congestion problem was treated as serious rather than merely irritating. The three things that were failing are precisely the things emcomm depends on: getting a message onto a channel, reaching one specific person directly, and being able to administer a repeater without climbing to it. A network that loses traffic on an ordinary weekday cannot be relied on when it matters.</p>
+  <p>It also explains why the choices described on this page lean toward reach and reliability. A quieter channel is worth most to a network whose job is to carry short messages, often from stations running modest antennas in poor locations. The same thinking is behind the order we retune sites in: a repeater stranded on the wrong frequency is a repeater somebody has to drive to.</p>
+  <p>This is infrastructure built and run by volunteers. It is intended to complement the official emergency services, not to replace them, and it is not a substitute for calling 911.</p>
+</section>
+
+<section>
+  <h2>Why not use MeshCore Regions instead?</h2>
+  <p><strong>Regions scope routing, not radio.</strong> A region tag tells a repeater whether to rebroadcast a packet. It does nothing about the packet already on the air. Every radio in range still receives it, and it still occupies the channel for exactly as long as it otherwise would. Collisions happen at the receiver, caused by two transmissions overlapping in time, and the radio energy does not care what region the payload claims to belong to.</p>
+  <p>Scoping therefore only reduces congestion where it stops a retransmission that would otherwise have happened inside your own coverage. For that you need the region boundary to also be a genuine radio boundary, with repeaters either side whose coverage does not cross the line.</p>
+  <p>We cannot build that boundary, and we would not want to. Our best sites are hilltops chosen precisely because they reach as far as possible, and their coverage overlaps heavily by design. On this mesh a single packet is heard by around fifteen receivers on average. The overlap that makes the network resilient is exactly what makes a clean region boundary impossible. Without one, traffic scoped to the far side of the line is still in the air here, still using airtime and still colliding.</p>
+  <p>There is also a case scoping can never address. A station within radio range that is not part of our network is on our channel no matter what region it declares, and the busy areas south of the border are well within range of the Lower Mainland. Region settings cannot remove them from the air. A different frequency can.</p>
+  <p>Leaving scoping alone has a practical benefit as well. A new station joins by setting four radio values and nothing else. There is no region to add, no scope to pick, and no repeater configuration to coordinate with anyone. Its messages flood the mesh the same way everyone else's do, and they are carried from the moment it powers up. For a network that expects people to join quickly, sometimes under pressure, that simplicity is worth protecting.</p>
+</section>
+
+<section>
+  <h2>Why 910.425 first, and why only temporarily?</h2>
+  <p>910.425 MHz was chosen as a <em>test bed</em>, not a destination. The goal was narrow: find out whether the mesh itself was sound once the external traffic load was removed. If the network worked well on a quiet channel, the problem was congestion; if it still did not, the problem was our own topology and hardware.</p>
+  <p>That question was answered, and the mesh has run there for about four months while we looked for a permanent home.</p>
+</section>
+
+<section>
+  <h2>How did we land on 909.000?</h2>
+  <p>Over that period we tested a number of frequencies against two constraints that had to hold simultaneously:</p>
+  <ul class="clean">
+    <li><strong>Inside the ISM band</strong>, so the network stays licence free and legal for all participants.</li>
+    <li><strong>Inside cavity filter specifications</strong>, so sites running filtered, high power or colocated equipment can operate without being detuned or desensitised.</li>
+  </ul>
+  <p>Alongside those two constraints we compared the background noise level at each candidate across the area the mesh covers.</p>
+  <p>909.000 MHz satisfies both requirements and tested well in operation. Nothing else about the radio configuration changes: bandwidth stays at 62.5 kHz, spreading factor at SF7 and coding rate at 5. Only the frequency moves.</p>
+</section>
+
+<section>
+  <h2>Is 909.000 actually better?</h2>
+  <p>On the evidence we have, yes. While testing candidate frequencies we checked the noise floor across the general area the mesh covers, and 909.000 came back noticeably lower, with less interference than the alternatives we measured it against.</p>
+  <p>That matters because the noise floor sets the level a signal has to rise above before a receiver can decode it. A quieter background gives weak and distant stations a better chance of being heard, which is exactly what a wide area mesh depends on.</p>
+
+  <div class="callout warn">
+    <p class="ct">The full picture comes after the migration</p>
+    <p>Only a handful of nodes sit on 909.000 today, and the two channels are still deliberately bridged so nobody is cut off during the move. Traffic levels on the new channel will not mean very much until everyone is actually on it.</p>
+  </div>
+
+  <p>One limit is worth stating plainly. Our monitoring only started after the mesh had already left the default channel, so we have no recorded measurements of how bad things were beforehand. The failed messages and unreachable repeaters described above are what operators experienced at the time, not figures we can pull from a log.</p>
+</section>
+
+<section>
+  <h2>How do I change my node?</h2>
+  <p>Make this change on October 1st 2026. All four values must match. A node with the right frequency but the wrong bandwidth or spreading factor will not be heard by anyone, and will not hear the mesh. The commands below are taken from the MeshCore 1.17.1 firmware source.</p>
+
+  <h3>Companions</h3>
+  <p>Companion nodes are configured from the MeshCore client app on your phone or desktop, over Bluetooth or USB. Connect to your node, open its radio settings, and set the same four values:</p>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Setting</th><th>Value</th></tr></thead>
+      <tbody>
+        <tr><td>Frequency</td><td class="b">909.000 MHz</td></tr>
+        <tr><td>Bandwidth</td><td class="b">62.5 kHz</td></tr>
+        <tr><td>Spreading factor</td><td class="b">7</td></tr>
+        <tr><td>Coding rate</td><td class="b">5</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Save the settings and let the node restart. Your contacts, channels and keys are not affected by a radio change. Only the channel the node listens and transmits on changes.</p>
+  <p>Companion firmware accepts the same <code>set radio</code> command over the serial console if you would rather not use the app, and the syntax is identical to the repeater example below.</p>
+
+  <h3>Repeaters and room servers</h3>
+  <p>Repeaters are configured over the serial console, or remotely through remote administration. Connect at <span class="mono">115200</span> baud, then:</p>
+  <div class="cmd">
+    <span class="line"><span class="p">&gt; </span><span class="c">get radio</span></span>
+    <span class="line"><span class="r">  -&gt; 910.425,62.5,7,5</span></span>
+    <span class="line">&nbsp;</span>
+    <span class="line"><span class="p">&gt; </span><span class="c">set radio 909.000,62.5,7,5</span></span>
+    <span class="line"><span class="r">  -&gt; OK - reboot to apply</span></span>
+    <span class="line">&nbsp;</span>
+    <span class="line"><span class="p">&gt; </span><span class="c">reboot</span></span>
+  </div>
+  <p>The order is <code>freq,bw,sf,cr</code>, separated by commas with no spaces. The new settings are saved immediately but <strong>do not take effect until the node reboots</strong>. Run <code>get radio</code> again after it comes back to confirm it reads <span class="mono">909.0,62.5,7,5</span>.</p>
+
+  <div class="callout warn">
+    <p class="ct">Work from your farthest station inwards</p>
+    <p>A repeater you change over remote administration reboots onto 909.000, and from 910.425 you can no longer reach it. The order you work in therefore matters more than anything else on this page.</p>
+    <p>Remote administration reaches a distant repeater by relaying through the ones in between. Move a nearby repeater to 909.000 first and it leaves 910.425 taking that relay path with it, stranding every station further out.</p>
+    <p>So start with the station that is hardest to reach, then the next one in, and leave <em>your own node until last</em>. Worked in that order the path to everything still on 910.425 stays intact at every step. A repeater you can no longer reach is one you have to go and visit.</p>
+    <p>While the bridge between the two channels is still up it gives you some margin here, but treat that as a fallback rather than the plan. For any site you cannot easily get to in person, use the temporary mode below.</p>
+  </div>
+
+  <h3>Testing a remote site without stranding it</h3>
+  <p>The firmware provides a temporary mode that reverts on its own, which is the safe way to move a site you cannot physically reach:</p>
+  <div class="cmd">
+    <span class="line"><span class="p">&gt; </span><span class="c">tempradio 909.000,62.5,7,5,30</span></span>
+    <span class="line"><span class="r">  -&gt; OK - temp params for 30 mins</span></span>
+  </div>
+  <p>The fifth value is a timeout in minutes. The node switches to 909.000 for that period and then returns to its saved settings by itself. If it turns out to be unreachable on the new channel, you simply wait for it to come back rather than driving to the site. Once you have confirmed it works, make it permanent with <code>set radio</code> followed by <code>reboot</code>.</p>
+
+  <h3>If your node goes quiet afterwards</h3>
+  <p>Check the four values with <code>get radio</code> before assuming a hardware fault. The most common outcomes of a partial change are a node that transmits but is never heard, or one that hears nothing at all. Both are what a mismatched bandwidth or spreading factor looks like from the outside. The firmware accepts any spreading factor from 5 to 12 and any coding rate from 5 to 8, so an incorrect value will be stored without complaint.</p>
+</section>
+
+</div>
+</div>
+</body>
+</html>

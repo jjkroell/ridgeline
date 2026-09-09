@@ -232,6 +232,43 @@ a:focus-visible,summary:focus-visible{outline:2px solid var(--teal);outline-offs
   .wrap{padding:0 20px 72px}
   header.top{padding-top:44px}
 }
+
+/* ---- Contact ---------------------------------------------------------- */
+.contact-cta{margin:2.4rem 0 0;padding-top:1.6rem;border-top:1px solid var(--rule);
+  display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:baseline}
+.contact-cta p{margin:0;color:var(--ink-2);flex:1 1 18rem}
+.btn{font:inherit;font-weight:600;cursor:pointer;border:1px solid var(--teal);
+  background:var(--teal);color:#fff;border-radius:.4rem;padding:.55rem 1.1rem;
+  box-shadow:var(--shadow)}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;color:var(--teal)}
+.btn[disabled]{opacity:.55;cursor:default;filter:none}
+
+/* The dialog is a <dialog>: the browser supplies the modal semantics, the
+   focus trap, Escape-to-close and the backdrop, none of which are worth
+   reimplementing by hand on a static page. */
+dialog.contact{border:1px solid var(--rule-2);border-radius:.6rem;padding:0;
+  background:var(--surface);color:var(--ink);max-width:34rem;width:calc(100% - 2rem);
+  box-shadow:var(--shadow)}
+dialog.contact::backdrop{background:rgba(10,16,18,.55)}
+dialog.contact form{padding:1.4rem 1.5rem 1.2rem}
+dialog.contact h2{margin:0 0 .3rem;font-size:1.15rem}
+dialog.contact .sub{margin:0 0 1.1rem;color:var(--ink-3);font-size:.92rem}
+dialog.contact label{display:block;margin:0 0 .9rem;font-size:.9rem;color:var(--ink-2)}
+dialog.contact label span{display:block;margin-bottom:.28rem;font-weight:600;color:var(--ink)}
+dialog.contact input,dialog.contact textarea{
+  font:inherit;width:100%;box-sizing:border-box;padding:.5rem .6rem;
+  border:1px solid var(--rule-2);border-radius:.35rem;
+  background:var(--ground);color:var(--ink)}
+dialog.contact textarea{min-height:8.5rem;resize:vertical}
+dialog.contact .actions{display:flex;justify-content:flex-end;gap:.6rem;margin-top:.4rem}
+dialog.contact .msg{margin:0 0 .9rem;padding:.55rem .7rem;border-radius:.35rem;font-size:.9rem}
+dialog.contact .msg.err{background:var(--amber-soft);color:var(--amber)}
+dialog.contact .msg.ok{background:var(--teal-soft);color:var(--teal)}
+dialog.contact .count{float:right;font-weight:400;color:var(--ink-3)}
+/* The honeypot. Hidden from people every way a browser understands, and left
+   in the tab order's shadow — a bot that fills every input trips it. */
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 </style>
 </head>
 <body>
@@ -382,6 +419,108 @@ a:focus-visible,summary:focus-visible{outline:2px solid var(--teal);outline-offs
   <h3>If your node goes quiet afterwards</h3>
   <p>Check the four values with <code>get radio</code> before assuming a hardware fault. The most common outcomes of a partial change are a node that transmits but is never heard, or one that hears nothing at all. Both are what a mismatched bandwidth or spreading factor looks like from the outside. The firmware accepts any spreading factor from 5 to 12 and any coding rate from 5 to 8, so an incorrect value will be stored without complaint.</p>
 </section>
+
+
+<div class="contact-cta">
+  <p>Questions about the move, or something on this page that does not match what you are seeing? Get in touch and we will get back to you.</p>
+  <button class="btn" id="contactOpen" type="button">Contact us</button>
+</div>
+
+<dialog class="contact" id="contactDlg" aria-labelledby="contactTitle">
+  <form id="contactForm" method="dialog" novalidate>
+    <h2 id="contactTitle">Contact us</h2>
+    <p class="sub">Questions, comments or concerns about the coastal BC mesh.</p>
+
+    <p class="msg err" id="contactErr" hidden></p>
+    <p class="msg ok" id="contactOk" hidden></p>
+
+    <label><span>Your name <em style="font-weight:400;color:var(--ink-3)">(optional)</em></span>
+      <input name="name" id="cName" autocomplete="name" maxlength="100"></label>
+
+    <label><span>Your email</span>
+      <input name="email" id="cEmail" type="email" autocomplete="email" required
+             placeholder="so we can reply"></label>
+
+    <label><span>Message <span class="count" id="cCount">0 / 4000</span></span>
+      <textarea name="message" id="cMsg" maxlength="4000" required></textarea></label>
+
+    <div class="hp" aria-hidden="true">
+      <label>Website<input name="website" id="cHp" tabindex="-1" autocomplete="off"></label>
+    </div>
+
+    <div class="actions">
+      <button class="btn ghost" type="button" id="contactCancel">Cancel</button>
+      <button class="btn" type="submit" id="contactSend">Send</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(function () {
+  var dlg = document.getElementById('contactDlg');
+  var form = document.getElementById('contactForm');
+  var err = document.getElementById('contactErr');
+  var ok = document.getElementById('contactOk');
+  var send = document.getElementById('contactSend');
+  var msg = document.getElementById('cMsg');
+  var count = document.getElementById('cCount');
+
+  function show(el, text) { el.textContent = text; el.hidden = false; }
+  function reset() { err.hidden = true; ok.hidden = true; send.disabled = false; send.textContent = 'Send'; }
+
+  document.getElementById('contactOpen').addEventListener('click', function () {
+    reset();
+    /* showModal() rather than show(): it is the one that gives a backdrop, traps
+       focus and closes on Escape. */
+    if (dlg.showModal) { dlg.showModal(); } else { dlg.setAttribute('open', ''); }
+  });
+  document.getElementById('contactCancel').addEventListener('click', function () { dlg.close(); });
+
+  msg.addEventListener('input', function () { count.textContent = msg.value.length + ' / 4000'; });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    reset();
+
+    var body = {
+      name: document.getElementById('cName').value,
+      email: document.getElementById('cEmail').value,
+      message: msg.value,
+      website: document.getElementById('cHp').value
+    };
+    if (!body.email.trim() || !body.message.trim()) {
+      show(err, 'An email address and a message are both needed.');
+      return;
+    }
+
+    send.disabled = true;
+    send.textContent = 'Sending…';
+    fetch('/api/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) { return { r: r, j: j }; });
+    }).then(function (res) {
+      if (res.r.ok) {
+        form.reset();
+        count.textContent = '0 / 4000';
+        show(ok, 'Thanks — your message is on its way. We will reply to the address you gave.');
+        send.disabled = true;
+        send.textContent = 'Sent';
+        return;
+      }
+      show(err, res.j.error || ('Could not send (HTTP ' + res.r.status + ').'));
+      send.disabled = false;
+      send.textContent = 'Send';
+    }).catch(function () {
+      show(err, 'Could not reach the server. Check your connection and try again.');
+      send.disabled = false;
+      send.textContent = 'Send';
+    });
+  });
+})();
+</script>
 
 </div>
 </div>

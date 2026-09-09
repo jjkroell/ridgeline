@@ -88,6 +88,10 @@ type Email struct {
 	// Worth setting if anything sent from here ever invites a reply — a message
 	// that says "reply to this" from a noreply address bounces.
 	ReplyTo string `json:"replyTo"`
+	// ContactTo is where the public contact form delivers. Empty disables that
+	// endpoint entirely. Separate from ReplyTo and From on purpose: those are
+	// what recipients see on outbound mail, this is an inbox that receives.
+	ContactTo string `json:"contactTo"`
 }
 
 // Enabled reports whether outbound email is fully configured. Requiring the

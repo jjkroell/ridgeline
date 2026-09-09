@@ -121,6 +121,10 @@ func run(log *slog.Logger, configPath string) error {
 	// Outbound transactional email (verification + note notifications). Disabled
 	// gracefully when no relay is configured.
 	apiServer.SetMailer(mail.New(cfg.Email, log))
+	// Where the public contact form delivers. Empty leaves that endpoint
+	// answering 503, which is the right default for an instance nobody has
+	// pointed at a mailbox.
+	apiServer.SetContactTo(cfg.Email.ContactTo)
 
 	// Per-node analytics snapshot, recomputed periodically over a rolling window.
 	engine := analytics.New(6)

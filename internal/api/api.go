@@ -39,6 +39,9 @@ type Server struct {
 	analytics *analytics.Engine
 	keyChal   *keyChallengeStore // pending private-key ownership challenges
 	mail      mailSender         // outbound transactional email (nil/disabled ok)
+	// contactTo is the single mailbox the public contact form delivers to.
+	// Empty disables the endpoint; the submitter never chooses a recipient.
+	contactTo string
 	// Observer token auth for the JWT broker, and which observers have used it
 	// so far. Inert until SetMQTTAuth supplies an audience.
 	mqttAuth     MQTTAuthConfig
@@ -120,6 +123,7 @@ func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.health)
+	mux.HandleFunc("POST /api/contact", s.contact)
 	mux.HandleFunc("GET /api/stats", s.stats)
 	mux.HandleFunc("GET /api/nodes", s.nodes)
 	mux.HandleFunc("GET /api/nodes/{pubkey}", s.nodeDetail)

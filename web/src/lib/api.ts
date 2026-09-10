@@ -565,7 +565,84 @@ export const admin = {
 		})
 };
 
+// ── Firmware builds ──────────────────────────────────────────────────────────
+export interface FirmwareEnv {
+	name: string;
+	board: string;
+	/** Option ids valid for THIS firmware — an option absent here cannot be honoured. */
+	options: string[];
+	/** RS232 bridge builds are separate upstream environments, not a flag. */
+	isBridge: boolean;
+}
+export interface FirmwareBoard {
+	name: string;
+	envs: FirmwareEnv[];
+}
+export interface FirmwareOption {
+	id: string;
+	label: string;
+	help: string;
+}
+export interface FirmwareCatalogue {
+	tags: string[];
+	boards: FirmwareBoard[];
+	options: FirmwareOption[];
+}
+export interface FirmwareJob {
+	id: number;
+	tag: string;
+	env: string;
+	flags: string;
+	state: 'queued' | 'building' | 'done' | 'failed';
+	error?: string;
+	createdAt: string;
+	startedAt?: string;
+	finishedAt?: string;
+	expiresAt?: string;
+}
+export interface FirmwareArtifact {
+	name: string;
+	bytes: number;
+	/** What the file is called once saved — carries board, version and options. */
+	downloadName: string;
+}
+export interface FirmwareJobResponse {
+	job: FirmwareJob;
+	artifacts: FirmwareArtifact[] | null;
+	/** Queued builds ahead of this one. */
+	ahead: number;
+}
+export interface FirmwareBuildSummary {
+	id: number;
+	tag: string;
+	env: string;
+	/** Option ids this build was made with, resolved back from its flags. */
+	options: string[];
+	finishedAt?: string;
+	expiresAt?: string;
+	artifacts: FirmwareArtifact[];
+}
+export interface FirmwareBuildResponse {
+	job: FirmwareJob;
+	/** An identical build already existed; nothing was queued. */
+	cached: boolean;
+}
+
 export const api = {
+	/** What can be built: vetted release tags, boards/environments, and the option allowlist. */
+	firmwareCatalogue: () => get<FirmwareCatalogue>('/api/firmware/catalogue'),
+	/** Queue a build, or get back an identical one already done or in flight. */
+	firmwareBuild: (csrf: string, body: { tag: string; env: string; options: string[] }) =>
+		mutate<FirmwareBuildResponse>('/api/firmware/build', 'POST', csrf, body),
+	/** Finished builds of one firmware that are still downloadable — so an option
+	 *  set someone else already compiled can be taken rather than rebuilt. */
+	firmwareBuilds: (env: string) =>
+		get<FirmwareBuildSummary[]>(`/api/firmware/builds?env=${encodeURIComponent(env)}`),
+	/** Poll a build's progress, and its artifacts once finished. */
+	firmwareJob: (id: number) => get<FirmwareJobResponse>(`/api/firmware/jobs/${id}`),
+	/** Direct download URL for one artifact — used as an href, not fetched. */
+	firmwareDownloadUrl: (id: number, name: string) =>
+		`/api/firmware/jobs/${id}/download/${encodeURIComponent(name)}`,
 	stats: () => get<Stats>('/api/stats'),
 	nodes: () => get<Node[]>('/api/nodes'),
 	/** One node's row plus its computed analytics snapshot. */

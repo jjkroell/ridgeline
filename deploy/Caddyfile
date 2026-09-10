@@ -22,6 +22,14 @@
 		respond 404
 	}
 
+	# The firmware build agent's endpoints, blocked for the same reason: the agent
+	# reaches ridgelined over the compose network, and these hand out build jobs
+	# and accept their results. Exposing them would let anyone drain the queue or
+	# mark someone else's build complete.
+	handle /api/firmware/agent/* {
+		respond 404
+	}
+
 	handle {
 		reverse_proxy ridgelined:8080
 	}

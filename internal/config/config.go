@@ -31,6 +31,9 @@ type Config struct {
 	// MQTTAuth configures observer token authentication for the authenticated
 	// broker. Empty Audience leaves the /api/mqtt-auth/* endpoints disabled.
 	MQTTAuth MQTTAuth `json:"mqttAuth"`
+	// Firmware configures the on-demand firmware build service. Empty AgentToken
+	// leaves it disabled entirely, endpoints included.
+	Firmware Firmware `json:"firmware"`
 	// NOTE: there is no admin token. The /api/admin/* endpoints are gated by the
 	// account is_admin flag (session auth); the first account registered on a
 	// fresh deployment becomes the protected owner/admin. A legacy "adminToken"
@@ -128,6 +131,36 @@ type MQTTAuth struct {
 	// superusers: unlike the ingest consumer above they are bound by the ACL
 	// check, which is what keeps them from publishing.
 	Subscribers []MQTTSubscriber `json:"subscribers"`
+}
+
+// Firmware configures the on-demand firmware build service.
+//
+// Builds run in a SEPARATE agent process, never in ridgelined: compiling needs a
+// docker daemon, and a docker socket is root on the host — not something the
+// internet-facing service should hold. ridgelined owns the queue and the
+// database; the agent asks it for work over /api/firmware/agent/* and writes
+// artifacts into a directory both can see.
+type Firmware struct {
+	// AgentToken authenticates the build agent. Empty disables the whole feature,
+	// so a deployment that has not deliberately configured this exposes nothing.
+	AgentToken string `json:"agentToken"`
+	// ArtifactDir is where finished builds land, as ridgelined sees it. The agent
+	// writes here (through its own mount) and ridgelined serves downloads from it.
+	ArtifactDir string `json:"artifactDir"`
+	// SourceDir is a MeshCore checkout used ONLY to enumerate boards, environments
+	// and their capabilities for the catalogue. Nothing is built from it.
+	SourceDir string `json:"sourceDir"`
+	// ArtifactTTLHours is how long a finished build is kept before sweeping.
+	// Defaults to 168 (seven days).
+	ArtifactTTLHours int `json:"artifactTtlHours"`
+	// MaxQueued caps the number of jobs waiting at once, so a burst cannot commit
+	// the agent to hours of work. Defaults to 20.
+	MaxQueued int `json:"maxQueued"`
+	// Tags are the upstream release tags the service will build, newest first.
+	// An allowlist rather than a live query of GitHub: it keeps ridgelined off the
+	// network, means the catalogue cannot change under users mid-migration, and
+	// lets the operator vet a release before anyone can build it.
+	Tags []string `json:"tags"`
 }
 
 // MQTTSubscriber is one read-only downstream consumer of the authenticated

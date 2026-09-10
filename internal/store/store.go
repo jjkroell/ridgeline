@@ -228,6 +228,37 @@ CREATE TABLE IF NOT EXISTS location_shares (
 	PRIMARY KEY (node_pubkey, grantee_user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_location_shares_grantee ON location_shares(grantee_user_id);
+-- firmware_jobs are firmware build requests. A build takes minutes, so the API
+-- hands back a job id immediately and the worker fills the row in as it goes.
+--
+-- cache_key is the sha256 of tag|env|flags: two people asking for byte-identical
+-- firmware must not compile it twice. A finished job whose artifacts have not
+-- expired is served directly, which is what keeps the common case instant when a
+-- build itself costs three minutes.
+--
+-- flags is the CANONICALISED option string (sorted, space separated). Sorting
+-- matters: "-D A -D B" and "-D B -D A" produce the same firmware and must hash
+-- to the same key, or the cache silently misses on equivalent requests.
+CREATE TABLE IF NOT EXISTS firmware_jobs (
+	id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	cache_key    TEXT NOT NULL,
+	tag          TEXT NOT NULL,            -- upstream git tag, e.g. repeater-v1.17.1
+	env          TEXT NOT NULL,            -- PlatformIO environment
+	flags        TEXT NOT NULL DEFAULT '', -- canonicalised -D flags
+	state        TEXT NOT NULL,            -- queued | building | done | failed
+	requested_by INTEGER,                  -- users.id at request time; NOT a foreign key
+	error        TEXT NOT NULL DEFAULT '',
+	artifact_dir TEXT NOT NULL DEFAULT '', -- filesystem dir holding the outputs
+	created_at   TEXT NOT NULL,
+	started_at   TEXT,
+	finished_at  TEXT,
+	expires_at   TEXT                      -- when artifacts may be reaped; NULL until done
+);
+CREATE INDEX IF NOT EXISTS idx_fwjobs_state ON firmware_jobs(state);
+-- The cache lookup is "newest usable build for this exact request", so the index
+-- carries state and recency rather than cache_key alone.
+CREATE INDEX IF NOT EXISTS idx_fwjobs_cache ON firmware_jobs(cache_key, state, created_at);
+
 `
 
 // Store wraps a SQLite database.

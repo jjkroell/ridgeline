@@ -46,6 +46,12 @@ type Server struct {
 	// so far. Inert until SetMQTTAuth supplies an audience.
 	mqttAuth     MQTTAuthConfig
 	mqttAuthSeen *mqttAuthState
+	// firmware configures the on-demand build service. Inert until SetFirmware
+	// supplies an agent token; ridgelined never builds anything itself.
+	firmware FirmwareConfig
+	// firmwareLimiter throttles build submissions per ACCOUNT. A build costs
+	// minutes of a core, so this is far tighter than the read-path limiters.
+	firmwareLimiter *rateLimiter
 	// Downstream read-only subscribers are tracked separately: mqttAuthSeen
 	// answers "which observers have migrated", and mixing consumers into it
 	// would corrupt the readout that decides when the anonymous broker retires.
@@ -115,6 +121,7 @@ func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
 		// then 1 every 30s — generous for a mistyped password, tight for guessing.
 		nodeLifecycleLimiter: newRateLimiter(1.0/30, 5), // ~2/min sustained, burst 5
 		authIPLimiter:        newRateLimiter(1.0/6, 10),
+		firmwareLimiter:      newRateLimiter(1.0/60, 3), // ~1/min sustained, burst 3
 		authAddrLimiter:      newRateLimiter(1.0/30, 5),
 	}
 }
@@ -200,6 +207,17 @@ func (s *Server) Handler() http.Handler {
 	// over the compose network and are NOT session-authenticated — the public
 	// edge must block /api/mqtt-auth/* (see deploy/Caddyfile). They 404 until an
 	// audience is configured.
+	mux.HandleFunc("GET /api/firmware/catalogue", s.requireUser(s.firmwareCatalogue))
+	mux.HandleFunc("POST /api/firmware/build", s.requireUser(s.firmwareBuild))
+	mux.HandleFunc("GET /api/firmware/builds", s.requireUser(s.firmwareBuilds))
+	mux.HandleFunc("GET /api/firmware/jobs/{id}", s.requireUser(s.firmwareJob))
+	mux.HandleFunc("GET /api/firmware/jobs/{id}/download/{name}", s.requireUser(s.firmwareDownload))
+
+	// Firmware build agent. Same rule as the mqtt-auth endpoints above: the agent
+	// reaches ridgelined over the compose network and the public edge must block
+	// /api/firmware/agent/* (see deploy/Caddyfile). They 404 without the token.
+	mux.HandleFunc("POST /api/firmware/agent/claim", s.requireAgent(s.firmwareAgentClaim))
+	mux.HandleFunc("POST /api/firmware/agent/result", s.requireAgent(s.firmwareAgentResult))
 	mux.HandleFunc("POST /api/mqtt-auth/user", s.mqttAuthUser)
 	mux.HandleFunc("POST /api/mqtt-auth/superuser", s.mqttAuthSuperuser)
 	mux.HandleFunc("POST /api/mqtt-auth/acl", s.mqttAuthACL)

@@ -65,6 +65,12 @@ services:
     volumes:
       - ./config.json:/config/config.json:ro
       - ./data:/data # migrated ridgeline.db lives here (bind mount)
+      # Finished firmware, written by the build agent and served from here.
+      # READ-ONLY on purpose: ridgelined hands these out, it never produces them.
+      - firmware-artifacts:/firmware:ro
+      # A MeshCore checkout, read only to enumerate boards/environments for the
+      # catalogue. Shared with the builder, which is what keeps it current.
+      - meshcore-src:/meshcore-src:ro
     # No host port: caddy reaches it over the compose network as ridgelined:8080.
     # Health surfaces in `docker ps` (the image self-probes /api/health).
     healthcheck:
@@ -87,7 +93,46 @@ services:
       - caddy-data:/data
       - caddy-config:/config
 
+  # The firmware build agent. Profile-gated: `docker compose up -d` leaves it
+  # alone, `--profile firmware` brings it in, so the build service is opt-in on
+  # a box rather than something a routine deploy switches on.
+  fwagent:
+    build:
+      context: ..
+      dockerfile: deploy/fwagent.Dockerfile
+    image: ridgeline-fwagent:latest
+    container_name: ridgeline-fwagent
+    restart: unless-stopped
+    profiles: ["firmware"]
+    depends_on:
+      - ridgelined
+    command:
+      - "-api=http://ridgelined:8080"
+      - "-image=meshcore-builder:latest"
+      - "-pio-volume=meshcore-pio"
+      - "-src-volume=meshcore-src"
+      - "-out-volume=firmware-artifacts"
+      - "-cpus=2"
+    environment:
+      # Must equal firmware.agentToken in config.json.
+      FWAGENT_TOKEN: ${FWAGENT_TOKEN:?set FWAGENT_TOKEN in deploy/.env}
+    volumes:
+      # The socket is the whole reason this container exists separately. It is
+      # root on the host: nothing else in this file gets it, and this service
+      # publishes no ports.
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Volume names are passed to the host daemon by NAME (see the command above),
+    # so the agent does not mount them itself — but declaring them here makes
+    # compose create them before the first build asks for them.
+
 volumes:
+  # Finished firmware. Written by builder containers the agent launches, read by
+  # ridgelined to serve downloads.
+  firmware-artifacts:
+  # PlatformIO toolchains (~6 GB for nRF52 + ESP32) and the MeshCore checkout.
+  # Volumes rather than image layers so they survive a builder image rebuild.
+  meshcore-pio:
+  meshcore-src:
   mosquitto-data:
   mosquitto-jwt-data:
   caddy-data:

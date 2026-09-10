@@ -19,6 +19,7 @@ import (
 	"github.com/jjkroell/ridgeline/internal/analytics"
 	"github.com/jjkroell/ridgeline/internal/api"
 	"github.com/jjkroell/ridgeline/internal/config"
+	"github.com/jjkroell/ridgeline/internal/firmware"
 	"github.com/jjkroell/ridgeline/internal/ingest"
 	"github.com/jjkroell/ridgeline/internal/mail"
 	"github.com/jjkroell/ridgeline/internal/store"
@@ -152,6 +153,21 @@ func run(log *slog.Logger, configPath string) error {
 			"subscribers", len(subscribers))
 	}
 
+	// On-demand firmware builds. ridgelined owns the queue and the artifacts but
+	// never compiles anything: cmd/fwagent holds the docker socket and asks for
+	// work over /api/firmware/agent/*. Disabled entirely without an agent token.
+	apiServer.SetFirmware(api.FirmwareConfig{
+		AgentToken:       cfg.Firmware.AgentToken,
+		ArtifactDir:      cfg.Firmware.ArtifactDir,
+		SourceDir:        cfg.Firmware.SourceDir,
+		ArtifactTTLHours: cfg.Firmware.ArtifactTTLHours,
+		MaxQueued:        cfg.Firmware.MaxQueued,
+		Tags:             cfg.Firmware.Tags,
+	})
+	if cfg.Firmware.AgentToken != "" {
+		log.Info("firmware build service enabled", "artifactDir", cfg.Firmware.ArtifactDir)
+	}
+
 	// One ingestor per broker, all writing to the same store (store.Record
 	// serializes writes behind a mutex). During the auth migration this is how
 	// the anonymous and authenticated brokers both feed one database.
@@ -207,6 +223,11 @@ func run(log *slog.Logger, configPath string) error {
 	}
 	if cfg.ScrubArtifacts {
 		go runArtifactScrub(ctx, st, log)
+	}
+	// Reaps expired firmware artifacts and rescues jobs an agent abandoned. Only
+	// runs when the build service is configured.
+	if cfg.Firmware.AgentToken != "" {
+		go firmware.NewSweeper(st, log).Run(ctx)
 	}
 
 	<-ctx.Done()

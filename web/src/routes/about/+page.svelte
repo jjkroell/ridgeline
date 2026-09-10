@@ -38,9 +38,7 @@
 		<p class="text-fg-dim">
 			On <strong class="text-fg">1 October 2026</strong> the whole mesh moves to
 			<strong class="text-fg">909.000&thinsp;MHz</strong>. Bandwidth, spreading
-			factor and coding rate do not change &mdash; only the frequency. Every node
-			has to be retuned, and one left behind will neither be heard nor hear the
-			mesh.
+			factor and coding rate do not change &mdash; only the frequency.
 		</p>
 		<p class="text-fg-dim mt-3">
 			<a href="/faq" class="text-signal font-600 hover:underline"

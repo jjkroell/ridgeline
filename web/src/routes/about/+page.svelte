@@ -28,6 +28,27 @@
 />
 
 <article class="mx-auto max-w-3xl px-6 py-12 leading-relaxed">
+	<!-- Network change notice. First thing on the page until the cutover has
+	     happened, because it is the one thing on this site that asks the reader
+	     to go and do something to their own hardware, and it expires. -->
+	<aside
+		class="border-amber/50 bg-amber/5 not-prose mb-10 rounded-[var(--radius)] border border-l-4 px-5 py-4"
+	>
+		<p class="label text-amber mb-2">Network change &middot; 1 October 2026</p>
+		<p class="text-fg-dim">
+			On <strong class="text-fg">1 October 2026</strong> the whole mesh moves to
+			<strong class="text-fg">909.000&thinsp;MHz</strong>. Bandwidth, spreading
+			factor and coding rate do not change &mdash; only the frequency. Every node
+			has to be retuned, and one left behind will neither be heard nor hear the
+			mesh.
+		</p>
+		<p class="text-fg-dim mt-3">
+			<a href="/faq" class="text-signal font-600 hover:underline"
+				>Why we're moving, and how to change your node &rarr;</a
+			>
+		</p>
+	</aside>
+
 	<header class="mb-10">
 		<p class="label text-signal mb-2">MeshCore Observatory</p>
 		<h1 class="font-display text-fg text-3xl font-900 tracking-tight sm:text-4xl">

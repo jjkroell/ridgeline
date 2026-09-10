@@ -37,14 +37,14 @@
 		<meta name="ICBM" content="49.2, -124.0" />
 
 		<!-- Open Graph (Facebook, Discord, Slack, iMessage, etc.) -->
-		<meta property="og:type" content="website" />
-		<meta property="og:site_name" content="Ridgeline" />
-		<meta property="og:image" content="https://ridgeline.ve7kod.ca/icons/icon-512.png" />
+		<meta property="og:type" content="website" data-ridgeline-share />
+		<meta property="og:site_name" content="Ridgeline" data-ridgeline-share />
+		<meta property="og:image" content="https://ridgeline.ve7kod.ca/icons/icon-512.png" data-ridgeline-share />
 		<meta property="og:locale" content="en_CA" />
 
 		<!-- Twitter / X card -->
-		<meta name="twitter:card" content="summary" />
-		<meta name="twitter:image" content="https://ridgeline.ve7kod.ca/icons/icon-512.png" />
+		<meta name="twitter:card" content="summary" data-ridgeline-share />
+		<meta name="twitter:image" content="https://ridgeline.ve7kod.ca/icons/icon-512.png" data-ridgeline-share />
 
 		<!-- Structured data: helps search engines understand what Ridgeline is and
 		     where it operates. -->
@@ -104,25 +104,28 @@
 		     require for non-essential analytics. -->
 		%sveltekit.head%
 
-		<!-- Generic fallback, deliberately placed AFTER %sveltekit.head% so that a
+		<!-- Generic fallback, deliberately placed AFTER the SvelteKit head placeholder so that a
 		     route's own tags come first for unfurlers that take the first match.
 		     On prerendered routes these are stripped entirely at build time by
 		     scripts/dedupe-head.mjs, leaving exactly one authoritative set.
 		     They exist for the SPA fallback shell, which renders with ssr=false
 		     and so carries no route metadata of its own. -->
-		<title>Ridgeline — MeshCore Mesh Observatory · Vancouver Island &amp; Lower Mainland BC</title>
+		<title data-ridgeline-share>Ridgeline — MeshCore Mesh Observatory · Vancouver Island &amp; Lower Mainland BC</title>
 		<meta
 			name="description"
+			data-ridgeline-share
 			content="Ridgeline is a live observatory for the MeshCore LoRa mesh network across Vancouver Island and the Lower Mainland of British Columbia. Track nodes, repeaters, coverage and packet activity in real time on the mesh's alternate frequency (currently 910.425 MHz)."
 		/>
-		<meta property="og:title" content="Ridgeline — MeshCore Mesh Observatory for coastal BC" />
+		<meta property="og:title" content="Ridgeline — MeshCore Mesh Observatory for coastal BC" data-ridgeline-share />
 		<meta
 			property="og:description"
+			data-ridgeline-share
 			content="Live map and analytics for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland. Nodes, repeaters, coverage and packets on the alternate frequency (currently 910.425 MHz)."
 		/>
-		<meta name="twitter:title" content="Ridgeline — MeshCore Mesh Observatory for coastal BC" />
+		<meta name="twitter:title" content="Ridgeline — MeshCore Mesh Observatory for coastal BC" data-ridgeline-share />
 		<meta
 			name="twitter:description"
+			data-ridgeline-share
 			content="Live map and analytics for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland — on the 910.425 MHz alternate frequency."
 		/>
 	</head>

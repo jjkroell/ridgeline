@@ -14,6 +14,7 @@
 	import { basemap } from '$lib/basemap.svelte';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, SEGMENT_COLOR, locatedNodes } from '$lib/map-util';
+	import { attachHoverLabel } from '$lib/map-hover';
 	import { computeCoverage, covered, distKm, type CoverageResult } from '$lib/coverage';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
@@ -322,6 +323,8 @@
 			map.on('mouseenter', layer, () => (map!.getCanvas().style.cursor = 'pointer'));
 			map.on('mouseleave', layer, () => (map!.getCanvas().style.cursor = ''));
 		}
+		// Name-only label while hovering a node dot (not clusters).
+		attachHoverLabel(map, 'unclustered');
 	}
 
 	// Fit to the bulk of nodes, rejecting geographic outliers (bad GPS or far

@@ -382,3 +382,29 @@ html[data-theme='mist'] {
 .leaflet-container .leaflet-tooltip-right::before {
 	border-right-color: var(--color-ink-2);
 }
+
+/* The WebGL maps (/map, /live-map) render the same node hover label as a
+   MapLibre popup rather than a Leaflet tooltip. Same bubble, so the two read
+   identically; keep them in sync with the block above.
+   No tip: MapLibre colours it through per-anchor border-*-color rules and there
+   are eight anchors including the corners, so a plain offset bubble is the
+   honest simplification rather than eight rules that drift out of sync. */
+.maplibregl-popup.node-hover {
+	/* Never swallow the click that opens node detail. */
+	pointer-events: none;
+}
+.maplibregl-popup.node-hover .maplibregl-popup-content {
+	background: var(--color-ink-2);
+	border: 1px solid var(--color-line-bright);
+	color: var(--color-fg-dim);
+	border-radius: var(--radius);
+	padding: 6px 10px;
+	font-size: 0.75rem;
+	line-height: 1.375;
+	font-weight: 500;
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+	white-space: nowrap;
+}
+.maplibregl-popup.node-hover .maplibregl-popup-tip {
+	display: none;
+}

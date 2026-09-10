@@ -14,6 +14,7 @@
 	import { basemap } from '$lib/basemap.svelte';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, SEGMENT_COLOR, locatedNodes } from '$lib/map-util';
+	import { attachHoverLabel } from '$lib/map-hover';
 	import { ago, shortKey, fmtSnr, snrColor } from '$lib/format';
 	import { PulseEngine } from '$lib/live-pulse';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -393,6 +394,8 @@
 		});
 		map.on('mouseenter', 'nodes', () => map && (map.getCanvas().style.cursor = 'pointer'));
 		map.on('mouseleave', 'nodes', () => map && (map.getCanvas().style.cursor = ''));
+		// Name-only label while hovering a node dot.
+		attachHoverLabel(map, 'nodes');
 	}
 
 	// Persist overlay collapse state once loaded (default minimized on first visit).

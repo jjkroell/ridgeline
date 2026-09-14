@@ -25,3 +25,7 @@ handoff.md
 
 # Firmware download blobs (served statically, kept out of git)
 web/static/firmware/
+
+# Python bytecode from the builder patch scripts.
+__pycache__/
+*.pyc

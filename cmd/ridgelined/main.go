@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -42,7 +43,7 @@ func main() {
 	}
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	if err := run(log, *configPath); err != nil {
+	if err := run(log, *configPath, configFlagGiven()); err != nil {
 		log.Error("fatal", "err", err)
 		os.Exit(1)
 	}
@@ -73,11 +74,47 @@ func healthProbe(configPath string) int {
 	return 0
 }
 
-func run(log *slog.Logger, configPath string) error {
+// configFlagGiven reports whether -config was passed on the command line, as
+// opposed to the flag sitting at its default. A path someone typed is a path
+// they expect to be read, so a missing one is their mistake rather than the
+// absent-config case that defaults exist to cover.
+func configFlagGiven() bool {
+	given := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "config" {
+			given = true
+		}
+	})
+	return given
+}
+
+// fatalConfigError reports whether a config load failure must stop the daemon
+// rather than fall back to defaults. Only a genuinely absent file, not asked
+// for by name, is recoverable.
+func fatalConfigError(err error, configRequired bool) bool {
+	return configRequired || !errors.Is(err, fs.ErrNotExist)
+}
+
+func run(log *slog.Logger, configPath string, configRequired bool) error {
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		// Config file is optional in dev; fall back to defaults.
-		log.Warn("using default config", "reason", err)
+		// Falling back to defaults is only ever safe when there is no config at
+		// all — running from a checkout with nothing set up. A file that exists
+		// but does not load is a different thing entirely: the defaults name a
+		// different database and a different broker, so the daemon would come up
+		// healthy, ingest nothing, and write to the wrong file, announcing it at
+		// WARN where nobody is looking. That happened on prod: an empty password
+		// in one subscriber entry swapped in dbPath "ridgeline.db" and broker
+		// tcp://localhost:1883, and the only symptom was a crash loop whose
+		// error named the database, not the config.
+		//
+		// A config the operator explicitly asked for counts as present even when
+		// it is missing, so a typo in -config stops rather than silently
+		// substituting a stand-in deployment.
+		if fatalConfigError(err, configRequired) {
+			return fmt.Errorf("refusing to start on defaults: %w", err)
+		}
+		log.Warn("no config file; using defaults", "path", configPath, "reason", err)
 		cfg = config.Default()
 	}
 	log.Info("ridgelined starting", "version", version, "db", cfg.DBPath, "broker", cfg.MQTT.Broker)

@@ -4,6 +4,72 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.17.0] — 2026-09-14
+
+### Added
+- **On-demand MeshCore firmware builds.** An account can request a build for a
+  board and environment and download the result; the catalogue is enumerated
+  from a MeshCore checkout rather than hand-maintained. Builds never run in
+  `ridgelined` — a separate agent (`cmd/fwagent`) holds the docker socket and
+  asks for work, so the daemon serving the public site needs no toolchain,
+  source tree, or ability to start containers. Jobs are keyed by
+  `sha256(tag|env|flags)`, so identical requests compile once. Off unless
+  `firmware.agentToken` is set, profile-gated in compose, and
+  `/api/firmware/agent/*` is blocked at the edge. ⚠ Enabling it mounts
+  `/var/run/docker.sock` (root-equivalent) and pulls ~6 GB of toolchains —
+  both reasons the default is off.
+- **A contact form on the 909 FAQ.** `POST /api/contact` delivers to a single
+  mailbox named in `email.contactTo`. The request carries no recipient field:
+  the destination is server-side and the submitter cannot influence it, because
+  refusing to let the caller name a destination is the only defence against
+  becoming an open relay that actually works. Rate-limited like the other
+  unauthenticated email endpoints, with a 16 KB body cap, a 4000-character
+  message cap, and a silent honeypot. Answers 503 when unconfigured rather than
+  swallowing messages.
+- **Server-rendered share metadata and node preview cards** — thanks to
+  [@benaltair](https://github.com/benaltair), who contributed this.
+- **OTA-over-LoRa packets are decoded instead of shown as "Unknown".**
+  MeshCore's `PAYLOAD_TYPE_OTA` (0x0C) now decodes all 11 `OtaMsgType`
+  sub-messages, with a per-sub-type breakdown in the packet inspector. The
+  payload is plaintext by design — an OTA transfer's integrity rests on the
+  signed manifest inside the `.mota`, not on link encryption — so every field
+  is observable without a key. Verified against off-air captures from two
+  independent observers.
+- **Node names on hover on the WebGL maps.** `/map` and `/live-map` had no way
+  to identify a dot without clicking it, which the Leaflet fallback has always
+  had. A hover affordance with no pointer events of its own, so it can never
+  swallow the click that opens node detail.
+
+### Fixed
+- **Deleting an observer now scrubs the nodes only it heard.** `purgeTargets`
+  only ever deleted node rows the caller named, and the delete path names none —
+  so every node that existed because that observer heard it was left behind,
+  frozen and unattributable, until the 7-day retention sweep happened to collect
+  it. On prod one delete stranded 200 rows. The scan now attributes adverts as
+  it goes and deletes anything that loses its last witness; this is exact rather
+  than heuristic, because a node row is only created by a signature-valid advert
+  and observations are never pruned. Nodes carrying user-authored data (claim,
+  note, private location, share) are held back and reported. `cmd/orphans`
+  cleans up rows stranded by earlier deletes; read-only unless given `-apply`.
+- **A duplicate `<title>` on `/about` and `/hash-ids`**, introduced while
+  porting the share previews.
+
+### Changed
+- **The 909 move is frequency-only — the mesh stays on SF7.** The pages
+  describing a spreading-factor change no longer matched the plan. `/faq` loses
+  the SF7→SF8 section entirely (symbol-time table, chirp glossary and
+  gain/cost analysis were all reasoning about a change that isn't happening);
+  retune instructions now read `909.000,62.5,7,5`. The About page and
+  announcement modal said retuning the frequency alone would not be enough to
+  hear the 909 side — the opposite of what will be true.
+- **`/about` leads with the cutover notice.** It is the one thing on this site
+  that asks the reader to go and change their own hardware. ⚠ **This expires on
+  1 October 2026** — on the day, the notice, the section below it, the `radio`
+  constant (still `910.425 MHz`) and the Seo description all need rewriting.
+- `web/static/faq.html` is now tracked; it was served from the static directory
+  but never committed, so prod was running a page with no history behind it.
+- Python bytecode from `build-service/` is no longer tracked.
+
 ## [v0.16.1] — 2026-08-24
 
 ### Fixed

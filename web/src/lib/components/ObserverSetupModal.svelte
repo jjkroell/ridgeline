@@ -292,6 +292,28 @@ reboot`);
 				Your station should appear on this page within a few minutes of hearing its
 				first packet.
 			</p>
+
+			<!-- Where a new operator actually gets confused: the station appears,
+			     the counter sits at zero, and nothing explains why. Saying it here
+			     turns "it's broken" into "it's checking". -->
+			<div class="border-line/70 bg-ink/40 mt-3 rounded-[var(--radius)] border px-3 py-2.5">
+				<p class="text-fg-dim text-xs leading-relaxed">
+					<strong class="text-fg">The first few minutes are held, not counted.</strong>
+					Ridgeline can't tell what radio settings a receiver is on until the
+					receiver says so, and that arrives in its first status message —
+					usually within about five minutes of it starting up. Until then
+					everything it hears is kept aside rather than published.
+				</p>
+				<p class="text-fg-dim mt-2 text-xs leading-relaxed">
+					When that status arrives and the settings match the mesh,
+					<strong class="text-fg">everything held is published at once</strong> —
+					nothing your station heard while it was waiting is lost. If the
+					settings don't match, it stays connected and visible but is marked
+					<strong class="text-fg">Wrong preset</strong>, and nothing it heard is
+					kept. Fix the radio and it clears itself on the next status; there is
+					nobody to ask.
+				</p>
+			</div>
 		</section>
 
 		<section class="space-y-2 border-t border-line/70 pt-4">

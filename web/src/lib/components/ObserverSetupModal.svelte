@@ -92,6 +92,34 @@ reboot`);
 	</div>
 
 	<div class="space-y-5 overflow-y-auto px-5 py-4">
+		<!-- Ahead of the explanation on purpose. An observer on another preset
+		     still connects and still publishes; what it reports is a different
+		     mesh, mixed into this one with nothing downstream able to tell them
+		     apart. Saying so after four steps of setup is saying so too late. -->
+		<aside
+			class="border-amber/50 bg-amber/5 rounded-[var(--radius)] border border-l-4 px-4 py-3"
+		>
+			<p class="label text-amber mb-2">This mesh only &middot; one radio preset</p>
+			<p class="text-fg-dim text-sm leading-relaxed">
+				Ridgeline tracks the mesh running
+				<strong class="text-fg">910.425&thinsp;MHz &middot; 62.5&thinsp;kHz &middot; SF7 &middot; CR5</strong>,
+				which moves to <strong class="text-fg">909.000&thinsp;MHz</strong> on
+				<strong class="text-fg">1 October 2026</strong> — frequency only, the other
+				three values stay put.
+			</p>
+			<p class="text-fg-dim mt-2 text-sm leading-relaxed">
+				<strong class="text-fg">Please don't feed data from any other preset.</strong>
+				An observer on different settings hears a different network, and its packets
+				arrive here indistinguishable from this one's — inventing nodes that are not
+				on the mesh and links that do not exist.
+			</p>
+			<p class="text-fg-dim mt-2 text-sm leading-relaxed">
+				<a href="/faq" class="text-signal font-600 hover:underline"
+					>About the 909 move &rarr;</a
+				>
+			</p>
+		</aside>
+
 		<p class="text-fg-dim text-sm leading-relaxed">
 			An observer is a receive-only MeshCore node that reports the packets it hears
 			to Ridgeline over the internet. It doesn't extend the mesh or carry anyone's

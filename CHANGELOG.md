@@ -4,6 +4,54 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.17.1] — 2026-09-14
+
+### Added
+- **Observer data from radios that are not on this mesh is refused.** An observer
+  reporting a preset this deployment does not run is hearing a *different*
+  network, and its packets arrive indistinguishable from this mesh's own —
+  inventing nodes that are not on the mesh and links that do not exist. The
+  accepted presets are listed in config (`observerRadios`); the check is off
+  when that is empty, because the presets belong to one deployment's mesh.
+  - Enforced at ingest, not at connect: the radio config is not known when the
+    broker authenticates, it arrives in a `/status`. Status lands every ~5
+    minutes here, so a verdict — in either direction — follows within one cycle.
+    Readmission is automatic when someone fixes their radio.
+  - **A new observer's packets are held, not stored**, until its first status
+    says what it is on; then they are committed in full or discarded. Held
+    observations keep the arrival time, because re-stamping on release would
+    file a packet under the moment we decided to believe the observer rather
+    than when it was heard. The pen is bounded (500 packets, 30 minutes) —
+    without a cap, anyone who can publish could open an observer id, never send
+    a status, and stream into the daemon's heap.
+  - Matching is by segment, not string equality: coding rate is ignored (LoRa
+    carries CR in the packet header, so a receiver decodes any sender's rate)
+    and frequency is compared numerically, so `909.0` and `909.000` are one
+    channel. A quarantined observer stays connected and keeps publishing status,
+    which is the only way to see what it is set to and tell its owner.
+- **The observer setup modal states the mesh's radio preset** and asks people
+  not to feed data from any other, with the reason. It also explains that a new
+  observer's first few minutes are held rather than lost, which is otherwise
+  indistinguishable from a broken station.
+- `cmd/locdata` extracts first-hop relay evidence for estimating where an
+  unpositioned node is. Its doc comment records what the data showed, including
+  that SNR correlates *positively* with distance here (r=+0.18) and is therefore
+  useless for range.
+
+### Changed
+- **The anonymous MQTT broker is gone.** Every observer authenticates with a
+  JWT, so the unauthenticated broker that ran beside `mqtt2` through the
+  migration has been removed along with its config and port bindings.
+
+### Fixed
+- **An invalid config no longer starts the daemon on defaults.** A config file
+  that failed to load was treated the same as no config at all: log a warning
+  and continue on `config.Default()` — which names a different database and a
+  different broker, so the daemon came up healthy, ingested nothing and wrote
+  somewhere else. It now refuses to start. Absent-config fallback is kept for
+  running from a checkout, but a path given with `-config` counts as present
+  even when missing, so a typo stops rather than substituting a stand-in.
+
 ## [v0.17.0] — 2026-09-14
 
 ### Added

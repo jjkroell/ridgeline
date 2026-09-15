@@ -28,11 +28,16 @@ const (
 	// reaches it; a flooder reaches it immediately and is capped there.
 	holdPerObserver = 500
 
-	// holdTTL is how long packets wait for a status that may never come. Status
-	// arrives every ~5 minutes and the worst gap observed in a day was ~25, so
-	// this is generous. An observer that publishes packets but no status is
-	// broken or lying, and either way its traffic cannot be vouched for.
-	holdTTL = 30 * time.Minute
+	// holdTTL is how long packets wait for a status that may never come, after
+	// which the publisher is quarantined outright. Status arrives every ~5
+	// minutes on this mesh, so twenty is four missed cycles: long enough that a
+	// slow or briefly-offline receiver is never caught, short enough that a
+	// publisher which will never identify itself is dealt with the same hour.
+	//
+	// Reaching this is not a wrong answer, it is no answer — and a publisher
+	// that streams packets for twenty minutes without once saying what radio it
+	// is on cannot be vouched for by anything.
+	holdTTL = 20 * time.Minute
 
 	// holdSweep is how often expired pens are collected.
 	holdSweep = 5 * time.Minute
@@ -46,7 +51,8 @@ type heldObs struct {
 type pen struct {
 	items   []heldObs
 	opened  time.Time
-	dropped int // packets refused because the pen was full
+	dropped int    // packets refused because the pen was full
+	name    string // last friendly name seen, for the log and the quarantine row
 }
 
 // holdObservation parks an observation until this observer's preset is known.
@@ -62,6 +68,9 @@ func (in *Ingestor) holdObservation(observerID string, obs store.Observation) bo
 	if p == nil {
 		p = &pen{opened: time.Now()}
 		in.pens[observerID] = p
+	}
+	if obs.ObserverName != "" {
+		p.name = obs.ObserverName
 	}
 	if len(p.items) >= holdPerObserver {
 		p.dropped++
@@ -121,16 +130,41 @@ func (in *Ingestor) sweepPens() {
 		case <-in.done:
 			return
 		case <-t.C:
-			var expired []string
+			type waiting struct {
+				id   string
+				name string
+				n    int
+				age  time.Duration
+			}
+			var expired, still []waiting
 			in.penMu.Lock()
 			for id, p := range in.pens {
-				if time.Since(p.opened) > holdTTL {
-					expired = append(expired, id)
+				w := waiting{id: id, name: p.name, n: len(p.items), age: time.Since(p.opened)}
+				if w.age > holdTTL {
+					expired = append(expired, w)
+				} else {
+					still = append(still, w)
 				}
 			}
 			in.penMu.Unlock()
-			for _, id := range expired {
-				in.discardHeld(id, "no status within "+holdTTL.String())
+
+			// Anything still inside its grace period is reported rather than left
+			// invisible: until a publisher is quarantined it has no observer row,
+			// so this log line is the only trace it exists.
+			for _, w := range still {
+				in.log.Info("observer awaiting its first status; packets held",
+					"observer", w.id, "name", w.name, "held", w.n,
+					"waiting", w.age.Round(time.Second), "deadline", holdTTL)
+			}
+
+			for _, w := range expired {
+				now := time.Now().UTC().Format(time.RFC3339Nano)
+				if err := in.store.QuarantineSilentObserver(w.id, w.name, now); err != nil {
+					in.log.Error("quarantine silent observer failed", "observer", w.id, "err", err)
+				}
+				in.discardHeld(w.id, "no status within "+holdTTL.String()+" — quarantined")
+				in.log.Warn("observer quarantined: published for the whole grace period without ever reporting a radio preset",
+					"observer", w.id, "name", w.name, "discarded", w.n, "grace", holdTTL)
 			}
 		}
 	}

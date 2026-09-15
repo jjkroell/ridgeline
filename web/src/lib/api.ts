@@ -102,6 +102,11 @@ export interface Observer {
   radioQuarantineRadio?: string;
   /** Packets refused since the daemon started. */
   radioQuarantineDropped?: number;
+  /** Why it was refused: 'preset' = it reported a config this mesh does not
+   *  run; 'no-status' = it published packets for the whole grace period without
+   *  ever saying what radio it was on. The second is no answer rather than a
+   *  wrong one, and needs a different conversation with its owner. */
+  radioQuarantineReason?: string;
   /** Packets discarded during the current stand-down, since the daemon last
    *  started. A live signal that standby is working, not an audited total. */
   standbyDropped?: number;

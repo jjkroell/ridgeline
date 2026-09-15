@@ -394,6 +394,11 @@ func Open(path string) (*Store, error) {
 	// can see what it is set to and tell them.
 	db.Exec(`ALTER TABLE observers ADD COLUMN radio_quarantined_at TEXT`)
 	db.Exec(`ALTER TABLE observers ADD COLUMN radio_quarantine_radio TEXT`)
+	// Why it was quarantined: "preset" (it reported one this mesh does not run)
+	// or "no-status" (it published packets but never said what it was on). The
+	// second is not a wrong answer, it is no answer, and the distinction is what
+	// the operator needs to tell its owner.
+	db.Exec(`ALTER TABLE observers ADD COLUMN radio_quarantine_reason TEXT`)
 	// blocklist.peer records the far side of a SANCTIONED bridge (kind='known'):
 	// the neighbour it carries traffic to, so the console can show the link as
 	// "this node -> that node" instead of naming only one end. Uppercase pubkey,

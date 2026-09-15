@@ -71,7 +71,9 @@
 								? 'text-signal'
 								: ''}
 						>{o.radioQuarantinedAt
-							? 'Wrong preset'
+							? o.radioQuarantineReason === 'no-status'
+								? 'No radio reported'
+								: 'Wrong preset'
 							: o.standbySince
 								? 'Standby'
 								: reporting

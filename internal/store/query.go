@@ -347,6 +347,11 @@ type Observer struct {
 	RadioQuarantineRadio string `json:"radioQuarantineRadio,omitempty"`
 	// RadioQuarantineDropped counts packets refused since this daemon started.
 	RadioQuarantineDropped int64 `json:"radioQuarantineDropped,omitempty"`
+	// RadioQuarantineReason is "preset" when the observer reported a config this
+	// mesh does not run, or "no-status" when it published packets for the whole
+	// grace period without ever saying what radio it was on. The second is not a
+	// wrong answer but no answer, and it is the one worth chasing.
+	RadioQuarantineReason string `json:"radioQuarantineReason,omitempty"`
 }
 
 // ObserverStatus is an observer's latest self-reported device telemetry, parsed
@@ -388,7 +393,8 @@ func (s *Store) listObservers() ([]Observer, error) {
 		       o.status_json, COALESCE(o.last_status_at,''),
 		       COALESCE(o.standby_since,''), COALESCE(o.jwt_auth_at,''),
 		       COALESCE(o.radio,''),
-		       COALESCE(o.radio_quarantined_at,''), COALESCE(o.radio_quarantine_radio,'')
+		       COALESCE(o.radio_quarantined_at,''), COALESCE(o.radio_quarantine_radio,''),
+		       COALESCE(o.radio_quarantine_reason,'')
 		FROM observers o
 		LEFT JOIN nodes n ON n.pubkey = o.pubkey
 		ORDER BY o.last_seen DESC`)
@@ -404,7 +410,8 @@ func (s *Store) listObservers() ([]Observer, error) {
 		if err := rows.Scan(&o.ID, &o.Name, &o.Region, &o.PublicKey,
 			&o.Latitude, &o.Longitude, &o.FirstSeen, &o.LastSeen, &o.PacketCount,
 			&statusJSON, &o.LastStatusAt, &o.StandbySince, &o.JWTAuthAt,
-			&o.Radio, &o.RadioQuarantinedAt, &o.RadioQuarantineRadio); err != nil {
+			&o.Radio, &o.RadioQuarantinedAt, &o.RadioQuarantineRadio,
+			&o.RadioQuarantineReason); err != nil {
 			return nil, err
 		}
 		if statusJSON != nil && *statusJSON != "" {

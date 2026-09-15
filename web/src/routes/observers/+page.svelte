@@ -85,18 +85,32 @@
 								     a stand-down is a deliberate act. Showing the offending
 								     value is the point — it is what the operator has to
 								     quote back to whoever runs the receiver. -->
-								<Tooltip
-									text="Packets refused — this receiver reports {o.radioQuarantineRadio ||
-										'a preset'}, which is not on this mesh. It stays connected; nothing it hears is kept."
-								>
-									<span class="text-amber font-mono text-[0.6rem] font-600 tracking-wider"
-										>WRONG PRESET</span
+								{#if o.radioQuarantineReason === 'no-status'}
+									<!-- Not a wrong answer but no answer: this publisher streamed
+									     packets for the whole grace period without once reporting
+									     a radio config. Worth distinguishing — the fix is
+									     different and so is the conversation. -->
+									<Tooltip
+										text="Packets refused — this publisher never reported a radio config, so nothing can vouch for what it is hearing. It stays connected; nothing it sends is kept."
 									>
-								</Tooltip>
-								{#if o.radioQuarantineRadio}
-									<span class="text-fg-faint font-mono text-[0.6rem]"
-										>{o.radioQuarantineRadio}</span
+										<span class="text-amber font-mono text-[0.6rem] font-600 tracking-wider"
+											>NO RADIO REPORTED</span
+										>
+									</Tooltip>
+								{:else}
+									<Tooltip
+										text="Packets refused — this receiver reports {o.radioQuarantineRadio ||
+											'a preset'}, which is not on this mesh. It stays connected; nothing it hears is kept."
 									>
+										<span class="text-amber font-mono text-[0.6rem] font-600 tracking-wider"
+											>WRONG PRESET</span
+										>
+									</Tooltip>
+									{#if o.radioQuarantineRadio}
+										<span class="text-fg-faint font-mono text-[0.6rem]"
+											>{o.radioQuarantineRadio}</span
+										>
+									{/if}
 								{/if}
 							{:else if o.standbySince}
 								<StandbyBadge observer={o} compact />

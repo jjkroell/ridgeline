@@ -141,3 +141,67 @@ func TestRadioQuarantineKeepsLastSeenAdvancing(t *testing.T) {
 		t.Errorf("dropped count = %d, want 1", n)
 	}
 }
+
+// A publisher that streams packets but never reports a radio must not cycle
+// invisibly: held, expired, discarded, held again, forever, with no observer
+// row anywhere because only storing a packet or receiving a status creates one.
+func TestSilentObserverIsQuarantinedAndVisible(t *testing.T) {
+	s := testStore(t)
+	s.SetAllowedRadios(bothPresets)
+	const id = "silent-1"
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+
+	// No row exists yet — that is the whole problem being fixed.
+	var n int
+	s.db.QueryRow(`SELECT COUNT(*) FROM observers WHERE id = ?`, id).Scan(&n)
+	if n != 0 {
+		t.Fatalf("precondition: expected no observer row, got %d", n)
+	}
+
+	if err := s.QuarantineSilentObserver(id, "Mystery Publisher", now); err != nil {
+		t.Fatal(err)
+	}
+	if !s.ObserverRadioQuarantined(id) {
+		t.Fatal("silent publisher should be quarantined")
+	}
+
+	var name, reason, at string
+	if err := s.db.QueryRow(
+		`SELECT COALESCE(name,''), COALESCE(radio_quarantine_reason,''), COALESCE(radio_quarantined_at,'')
+		   FROM observers WHERE id = ?`, id).Scan(&name, &reason, &at); err != nil {
+		t.Fatalf("no observer row created — it would stay invisible: %v", err)
+	}
+	if name != "Mystery Publisher" || reason != "no-status" || at == "" {
+		t.Errorf("row = name %q reason %q at %q", name, reason, at)
+	}
+
+	// Idempotent: the sweep must not churn the row on every pass.
+	if err := s.QuarantineSilentObserver(id, "Mystery Publisher", now); err != nil {
+		t.Fatal(err)
+	}
+
+	// And it recovers by itself the moment it finally identifies correctly.
+	bad, changed := s.EvaluateObserverRadio(id, "910.425,62.5,7,5", now)
+	if bad || !changed {
+		t.Fatalf("a late but valid status must readmit: bad=%v changed=%v", bad, changed)
+	}
+	var left string
+	s.db.QueryRow(`SELECT COALESCE(radio_quarantine_reason,'') FROM observers WHERE id = ?`, id).Scan(&left)
+	if left != "" {
+		t.Errorf("quarantine reason not cleared on readmission: %q", left)
+	}
+}
+
+// The guard being off must not create rows for publishers it is not judging.
+func TestSilentQuarantineNoopWhenGuardOff(t *testing.T) {
+	s := testStore(t)
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if err := s.QuarantineSilentObserver("x", "X", now); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	s.db.QueryRow(`SELECT COUNT(*) FROM observers WHERE id = 'x'`).Scan(&n)
+	if n != 0 {
+		t.Error("with the guard off, nothing should be quarantined or created")
+	}
+}

@@ -194,10 +194,10 @@ func (s *Store) EvaluateObserverRadio(observerID, reported, at string) (quaranti
 
 	s.mu.Lock()
 	if bad {
-		s.db.Exec(`UPDATE observers SET radio_quarantined_at = ?, radio_quarantine_radio = ? WHERE id = ?`,
+		s.db.Exec(`UPDATE observers SET radio_quarantined_at = ?, radio_quarantine_radio = ?, radio_quarantine_reason = 'preset' WHERE id = ?`,
 			at, radiopkg.Normalize(strings.TrimSpace(reported)), observerID)
 	} else {
-		s.db.Exec(`UPDATE observers SET radio_quarantined_at = NULL, radio_quarantine_radio = NULL WHERE id = ?`,
+		s.db.Exec(`UPDATE observers SET radio_quarantined_at = NULL, radio_quarantine_radio = NULL, radio_quarantine_reason = NULL WHERE id = ?`,
 			observerID)
 	}
 	s.mu.Unlock()
@@ -251,4 +251,56 @@ func (s *Store) RadioQuarantineDropped() map[string]int64 {
 		out[k] = v
 	}
 	return out
+}
+
+// QuarantineSilentObserver refuses an observer that publishes packets but never
+// says what radio it is on.
+//
+// Without this such a publisher cycles forever: its packets are held, the pen
+// expires, they are discarded, the next packet opens a fresh pen. Nothing is
+// ever stored and memory stays bounded, but it never resolves — and because the
+// observer row is only created by storing a packet or by receiving a status, it
+// reached neither, so nothing about it was visible anywhere.
+//
+// So the row is created HERE, which is the first point at which there is
+// something worth saying about this publisher: it has been talking for the whole
+// grace period and has still not identified itself. From now on its packets are
+// dropped at ingest rather than held, which is also cheaper.
+//
+// Creating a row for an unverified publisher is a deliberate trade. It is
+// bounded in practice because reaching the broker at all requires a JWT signed
+// by the publisher's own node key — this is not an open relay — and in time
+// because one row can only appear per publisher per grace period.
+//
+// Recovery is automatic and needs no operator action: if it ever does send a
+// good status, EvaluateObserverRadio clears the quarantine like any other.
+func (s *Store) QuarantineSilentObserver(observerID, observerName, at string) error {
+	if observerID == "" || s.AllowedRadioCount() == 0 {
+		return nil
+	}
+	s.radioMu.Lock()
+	if s.quarantinedRadios == nil {
+		s.quarantinedRadios = map[string]bool{}
+	}
+	already := s.quarantinedRadios[observerID]
+	s.quarantinedRadios[observerID] = true
+	delete(s.confirmedRadios, observerID)
+	s.radioMu.Unlock()
+	if already {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(`
+		INSERT INTO observers (id, name, first_seen, last_seen, packet_count,
+		                       radio_quarantined_at, radio_quarantine_reason)
+		VALUES (?,?,?,?,0,?, 'no-status')
+		ON CONFLICT(id) DO UPDATE SET
+			last_seen               = excluded.last_seen,
+			name                    = COALESCE(NULLIF(excluded.name,''), observers.name),
+			radio_quarantined_at    = excluded.radio_quarantined_at,
+			radio_quarantine_reason = 'no-status'`,
+		observerID, nullStr(observerName), at, at, at)
+	return err
 }

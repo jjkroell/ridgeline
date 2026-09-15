@@ -205,6 +205,19 @@ func run(log *slog.Logger, configPath string, configRequired bool) error {
 		log.Info("firmware build service enabled", "artifactDir", cfg.Firmware.ArtifactDir)
 	}
 
+	// Radio-preset guard. Installed before ingest starts so an observer on a
+	// foreign preset is refused from the first packet rather than after a
+	// window of its traffic has already been stored.
+	st.SetAllowedRadios(cfg.ObserverRadios)
+	if n := st.AllowedRadioCount(); n > 0 {
+		log.Info("observer radio guard enabled", "presets", cfg.ObserverRadios)
+	} else if len(cfg.ObserverRadios) > 0 {
+		// Every entry failed to parse. Silently accepting that would leave the
+		// guard off while the config says it is on.
+		log.Warn("observer radio guard NOT enabled: no configured preset parsed",
+			"observerRadios", cfg.ObserverRadios)
+	}
+
 	// One ingestor per broker, all writing to the same store (store.Record
 	// serializes writes behind a mutex). During the auth migration this is how
 	// the anonymous and authenticated brokers both feed one database.

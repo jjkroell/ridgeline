@@ -80,7 +80,25 @@
 						     Reporting/Silent label is misleading — the receiver IS still
 						     reporting, we are just discarding it — so say Standby instead. -->
 						<div class="flex shrink-0 flex-col items-end gap-1">
-							{#if o.standbySince}
+							{#if o.radioQuarantinedAt}
+								<!-- Ranked above standby: a wrong preset is a fault to fix,
+								     a stand-down is a deliberate act. Showing the offending
+								     value is the point — it is what the operator has to
+								     quote back to whoever runs the receiver. -->
+								<Tooltip
+									text="Packets refused — this receiver reports {o.radioQuarantineRadio ||
+										'a preset'}, which is not on this mesh. It stays connected; nothing it hears is kept."
+								>
+									<span class="text-amber font-mono text-[0.6rem] font-600 tracking-wider"
+										>WRONG PRESET</span
+									>
+								</Tooltip>
+								{#if o.radioQuarantineRadio}
+									<span class="text-fg-faint font-mono text-[0.6rem]"
+										>{o.radioQuarantineRadio}</span
+									>
+								{/if}
+							{:else if o.standbySince}
 								<StandbyBadge observer={o} compact />
 							{:else}
 								<span class="label {isFresh(o.lastSeen) ? '!text-signal' : '!text-fg-faint'}">

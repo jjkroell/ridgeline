@@ -336,6 +336,17 @@ type Observer struct {
 	// directly, so its zero-hop sightings prove membership rather than refuting
 	// it. Empty when the observer has never reported one.
 	Radio string `json:"radio,omitempty"`
+	// RadioQuarantinedAt is set while this observer's packets are being dropped
+	// because the preset it reports is not one this mesh runs (config
+	// observerRadios). Like standby it does NOT hide the observer: staying
+	// visible, with the offending preset alongside, is the only way the operator
+	// can see what is wrong and tell its owner.
+	RadioQuarantinedAt string `json:"radioQuarantinedAt,omitempty"`
+	// RadioQuarantineRadio is the preset that failed, kept separately from Radio
+	// so the reason survives even if the observer later stops reporting one.
+	RadioQuarantineRadio string `json:"radioQuarantineRadio,omitempty"`
+	// RadioQuarantineDropped counts packets refused since this daemon started.
+	RadioQuarantineDropped int64 `json:"radioQuarantineDropped,omitempty"`
 }
 
 // ObserverStatus is an observer's latest self-reported device telemetry, parsed
@@ -376,7 +387,8 @@ func (s *Store) listObservers() ([]Observer, error) {
 		       n.latitude, n.longitude, o.first_seen, o.last_seen, o.packet_count,
 		       o.status_json, COALESCE(o.last_status_at,''),
 		       COALESCE(o.standby_since,''), COALESCE(o.jwt_auth_at,''),
-		       COALESCE(o.radio,'')
+		       COALESCE(o.radio,''),
+		       COALESCE(o.radio_quarantined_at,''), COALESCE(o.radio_quarantine_radio,'')
 		FROM observers o
 		LEFT JOIN nodes n ON n.pubkey = o.pubkey
 		ORDER BY o.last_seen DESC`)
@@ -392,7 +404,7 @@ func (s *Store) listObservers() ([]Observer, error) {
 		if err := rows.Scan(&o.ID, &o.Name, &o.Region, &o.PublicKey,
 			&o.Latitude, &o.Longitude, &o.FirstSeen, &o.LastSeen, &o.PacketCount,
 			&statusJSON, &o.LastStatusAt, &o.StandbySince, &o.JWTAuthAt,
-			&o.Radio); err != nil {
+			&o.Radio, &o.RadioQuarantinedAt, &o.RadioQuarantineRadio); err != nil {
 			return nil, err
 		}
 		if statusJSON != nil && *statusJSON != "" {
@@ -415,9 +427,13 @@ func (s *Store) listObservers() ([]Observer, error) {
 	}
 	// Discard counts live in memory, so they are joined in after the query.
 	dropped := s.StandbyDropped()
+	refused := s.RadioQuarantineDropped()
 	for i := range out {
 		if out[i].StandbySince != "" {
 			out[i].StandbyDropped = dropped[out[i].ID]
+		}
+		if out[i].RadioQuarantinedAt != "" {
+			out[i].RadioQuarantineDropped = refused[out[i].ID]
 		}
 	}
 	return out, nil

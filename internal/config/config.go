@@ -63,6 +63,22 @@ type Config struct {
 	// reappears the moment it publishes again, so this just tidies observers that
 	// have gone silent. Defaults to 60; set 0 to disable.
 	ObserverRetentionMinutes int `json:"observerRetentionMinutes"`
+
+	// ObserverRadios lists the radio presets an observer may report and still
+	// have what it hears kept: "freq,bw,sf,cr" entries, e.g.
+	// ["910.425,62.5,7,5", "909.000,62.5,7,5"] while a network moves between
+	// two channels. An observer reporting anything else is hearing a DIFFERENT
+	// network, and its packets arrive indistinguishable from this one's —
+	// inventing nodes that are not on the mesh and links that do not exist.
+	//
+	// Empty disables the check entirely, which is the default: the presets are
+	// a property of one deployment's mesh, and a self-hoster's are not these.
+	//
+	// Matching is by radio.SameSegment, not string equality, so coding rate is
+	// deliberately ignored — LoRa carries CR in the packet header and a receiver
+	// decodes any sender's rate whatever its own is set to. An observer on CR8
+	// hears this mesh perfectly and must not be quarantined for it.
+	ObserverRadios []string `json:"observerRadios"`
 	// Email configures outbound transactional mail (verification + notifications).
 	// When Host is empty, email is disabled and those features degrade gracefully.
 	Email Email `json:"email"`

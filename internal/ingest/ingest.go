@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -68,11 +69,21 @@ type Ingestor struct {
 	OnObservation func(store.Observation)
 
 	client mqtt.Client
+
+	// Packets from observers that have not yet reported a radio preset, held
+	// until the verdict arrives. See holding_pen.go.
+	penMu sync.Mutex
+	pens  map[string]*pen
+	// commitFn lets tests observe what the pen releases without standing up a
+	// store. nil in production, where commit() is called directly.
+	commitFn func(store.Observation) bool
+	done     chan struct{}
+	once     sync.Once
 }
 
 // New creates an Ingestor.
 func New(cfg config.MQTT, st *store.Store, log *slog.Logger) *Ingestor {
-	return &Ingestor{cfg: cfg, store: st, log: log}
+	return &Ingestor{cfg: cfg, store: st, log: log, done: make(chan struct{})}
 }
 
 // Start connects to the broker and subscribes. It returns once the
@@ -107,13 +118,19 @@ func (in *Ingestor) Start() error {
 	// serving), then proceed regardless; the connection completes/retries later.
 	if !tok.WaitTimeout(10 * time.Second) {
 		in.log.Warn("mqtt connect still pending; retrying in background", "broker", in.cfg.Broker)
+		go in.sweepPens()
 		return nil
 	}
 	return tok.Error()
 }
 
-// Stop disconnects from the broker.
+// Stop disconnects from the broker and stops the pen sweeper.
+//
+// Anything still held is dropped with the process. That is correct: it was never
+// vouched for, and re-admitting unverified packets across a restart would defeat
+// the hold.
 func (in *Ingestor) Stop() {
+	in.once.Do(func() { close(in.done) })
 	if in.client != nil {
 		in.client.Disconnect(250)
 	}
@@ -185,6 +202,21 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
+	// Refuse what an observer on the wrong radio preset reports. It is hearing a
+	// different network, and once stored its packets are indistinguishable from
+	// this mesh's own. Checked AFTER standby so an operator's deliberate
+	// stand-down is reported as that rather than as a config fault, and the
+	// /status path is left alone on purpose: the observer stays connected and
+	// keeps saying what it is set to, which is what makes the fault fixable.
+	if in.store.ObserverRadioQuarantined(observerID) {
+		// Counts the drop and keeps last_seen current — we heard from it, we
+		// just refused the contents. A frozen last_seen would have retention
+		// sweep the row away within the hour, taking the quarantine with it.
+		in.store.RecordRadioQuarantineDrop(observerID, time.Now().UTC().Format(time.RFC3339Nano))
+		in.log.Debug("dropped packet from observer on a foreign radio preset", "observer", observerID)
+		return
+	}
+
 	obs := store.Observation{
 		Packet:         packet,
 		RawHex:         env.Raw,
@@ -198,9 +230,33 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 		// (observers with skewed clocks would poison ordering).
 		ReceivedAt: time.Now(),
 	}
+
+	// An observer that has not yet said what radio it is on gets held rather
+	// than stored. Its first status decides whether any of this is kept, and
+	// arrives within about five minutes. Only while the guard is configured:
+	// with no presets to check against there is nothing to wait for.
+	if in.store.AllowedRadioCount() > 0 && !in.store.ObserverRadioConfirmed(observerID) {
+		if !in.holdObservation(observerID, obs) {
+			in.log.Debug("held-packet cap reached, dropping", "observer", observerID)
+		}
+		return
+	}
+
+	in.commit(obs)
+}
+
+// commit stores an observation and runs everything that follows from storing
+// one. Shared by the live path and by the holding pen's release, so a held
+// packet is not a second-class citizen: it verifies claims and reaches the live
+// feed exactly as it would have.
+func (in *Ingestor) commit(obs store.Observation) bool {
+	if in.commitFn != nil {
+		return in.commitFn(obs)
+	}
+	packet := obs.Packet
 	if err := in.store.Record(obs); err != nil {
 		in.log.Error("store record failed", "err", err)
-		return
+		return false
 	}
 	// Node-ownership claim verification: a signature-valid advert whose node has
 	// a pending claim may carry the verification code in its name. The signature
@@ -219,6 +275,7 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 	if in.OnObservation != nil {
 		in.OnObservation(obs)
 	}
+	return true
 }
 
 // statusEnvelope is the JSON an observer publishes on its /status topic: device
@@ -307,12 +364,19 @@ func (in *Ingestor) handleStatus(msg mqtt.Message) {
 			in.log.Error("update observer status failed", "err", err)
 		} else if !found {
 			in.log.Debug("ignored retained status for unknown observer", "observer", observerID)
+		} else {
+			// A retained status is stale, but it is still this observer saying
+			// what it is set to. Evaluating it means a reconnecting observer
+			// that was fixed while away is readmitted on reconnect rather than
+			// waiting for its next live status.
+			in.evaluateRadio(observerID, observerName, env.Radio, now)
 		}
 		return
 	}
 	if err := in.store.UpsertObserverStatus(observerID, observerName, region, pubkey, string(b), env.Radio, now); err != nil {
 		in.log.Error("store observer status failed", "err", err)
 	}
+	in.evaluateRadio(observerID, observerName, env.Radio, now)
 	// Append a point to the telemetry time series (rate-floored in the store) so
 	// battery/noise/airtime can be trended — the observer row only keeps the latest.
 	if err := in.store.RecordObserverTelemetry(observerID, now, st); err != nil {
@@ -363,4 +427,26 @@ func topicMeta(topic string) (observerID, region string) {
 		observerID = parts[2]
 	}
 	return observerID, region
+}
+
+// evaluateRadio applies the radio-preset guard to a reported config and logs
+// only the transitions. Logging every status would bury the one line that
+// matters — the moment an observer started or stopped being trusted.
+func (in *Ingestor) evaluateRadio(observerID, observerName, reported, at string) {
+	bad, changed := in.store.EvaluateObserverRadio(observerID, reported, at)
+	if !changed {
+		return
+	}
+	if bad {
+		in.log.Warn("observer quarantined: radio preset is not on this mesh",
+			"observer", observerID, "name", observerName, "radio", reported)
+		// Anything held while we waited for this status was heard on that same
+		// wrong preset. It is not this mesh's traffic and must not be stored.
+		in.discardHeld(observerID, "radio preset is not on this mesh")
+		return
+	}
+	in.log.Info("observer radio preset accepted",
+		"observer", observerID, "name", observerName, "radio", reported)
+	// Vouched for — commit whatever arrived before it identified itself.
+	in.releaseHeld(observerID)
 }

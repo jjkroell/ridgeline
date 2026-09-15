@@ -295,6 +295,16 @@ type Store struct {
 	standbyDropped   map[string]int64     // observer id -> packets discarded
 	standbySeen      map[string]time.Time // observer id -> last last_seen refresh
 
+	// Radio-preset guard. allowedRadios is parsed once from config; empty means
+	// the check is off. quarantinedRadios is the set currently failing it, held
+	// in memory for the ingest hot path and rebuilt from the table on open.
+	radioMu           sync.RWMutex
+	allowedRadios     []radiopkg.Profile
+	quarantinedRadios map[string]bool      // observer id (exact) — verdict: refused
+	confirmedRadios   map[string]bool      // observer id (exact) — verdict: accepted
+	radioDropped      map[string]int64     // observer id -> packets discarded
+	radioSeen         map[string]time.Time // observer id -> last last_seen refresh
+
 	// Set of node pubkeys (UPPER) with an open pending ownership claim. Consulted
 	// on the hot ingest path so the advert verifier only touches the DB for nodes
 	// that actually have a claim awaiting a code. Refreshed on claim mutations.
@@ -377,6 +387,13 @@ func Open(path string) (*Store, error) {
 	// precisely so it survives a daemon restart: the question it answers ("who is
 	// left to migrate?") outlives any one process.
 	db.Exec(`ALTER TABLE observers ADD COLUMN jwt_auth_at TEXT`)
+
+	// radio_quarantined_at marks an observer whose reported preset is not one
+	// this deployment accepts (config observerRadios). Its packets are dropped
+	// at ingest; it stays connected and keeps reporting status, so the operator
+	// can see what it is set to and tell them.
+	db.Exec(`ALTER TABLE observers ADD COLUMN radio_quarantined_at TEXT`)
+	db.Exec(`ALTER TABLE observers ADD COLUMN radio_quarantine_radio TEXT`)
 	// blocklist.peer records the far side of a SANCTIONED bridge (kind='known'):
 	// the neighbour it carries traffic to, so the console can show the link as
 	// "this node -> that node" instead of naming only one end. Uppercase pubkey,
@@ -446,6 +463,9 @@ func Open(path string) (*Store, error) {
 	if err := s.loadBlocklist(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("store: load blocklist: %w", err)
+	}
+	if err := s.loadRadioQuarantine(); err != nil {
+		return nil, err
 	}
 	if err := s.loadStandby(); err != nil {
 		db.Close()

@@ -64,8 +64,19 @@
 				<div class="text-fg-faint mt-2 flex items-center gap-2 font-mono text-[0.62rem]">
 					<!-- Standby wins over Reporting/Silent: the receiver is still reporting,
 					     its packets are just being discarded. -->
-					<span class={o.standbySince ? 'text-amber' : reporting ? 'text-signal' : ''}
-						>{o.standbySince ? 'Standby' : reporting ? 'Reporting' : 'Silent'}</span
+					<span
+						class={o.radioQuarantinedAt || o.standbySince
+							? 'text-amber'
+							: reporting
+								? 'text-signal'
+								: ''}
+						>{o.radioQuarantinedAt
+							? 'Wrong preset'
+							: o.standbySince
+								? 'Standby'
+								: reporting
+									? 'Reporting'
+									: 'Silent'}</span
 					>
 					<span>· {fmtNum(o.packetCount)} pkts</span>
 					<span>· {ago(o.lastSeen)}</span>

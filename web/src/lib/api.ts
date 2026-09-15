@@ -1,872 +1,929 @@
 // Typed client for the ridgelined REST API.
 
 export interface Stats {
-	nodes: number;
-	observers: number;
-	observations: number;
-	lastPacketAt?: string;
+  nodes: number;
+  observers: number;
+  observations: number;
+  lastPacketAt?: string;
 }
 
 export interface Node {
-	publicKey: string;
-	name: string;
-	role: string;
-	latitude?: number;
-	longitude?: number;
-	hasLocation: boolean;
-	firstSeen: string;
-	lastSeen: string;
-	lastAdvert?: string;
-	advertCount: number;
-	/** Actual advert transmissions (re-flood / multi-observer copies of one
-	 *  broadcast collapsed by a ~90s gap) — vs advertCount which counts every
-	 *  observation. */
-	advertTxCount: number;
-	/** Path-hash length in bytes (1, 2, or 3), from the node's advert; 0 = unknown. */
-	hashSize: number;
-	/** Set when the node's verified owner has withdrawn it from the map and node
-	 *  lists. Retired nodes are filtered out of /api/nodes, so this is normally
-	 *  only seen on a direct node fetch. */
-	retiredAt?: string;
-	/** Coordinates are a statistical outlier — likely corrupt GPS. */
-	gpsSuspect?: boolean;
-	/** Set when this node is reachable only ACROSS a sanctioned bridge — it lives
-	 *  on a radio segment this deployment cannot hear directly. Uppercase pubkey
-	 *  of the bridge's near end. */
-	viaBridge?: string;
-	viaBridgeName?: string;
-	/** The far segment's radio config, DECLARED by the operator — it cannot be
-	 *  observed, and the node's own `radio` is blanked because it would describe a
-	 *  receiver on this side of the bridge. */
-	viaBridgeRadio?: string;
-	/** 'confirmed' (>=2-byte path hops proved it) or 'probable' (1-byte path). */
-	viaBridgeConfidence?: string;
-	/** "freq,bw,sf,cr" config, inherited from the observer that heard it. */
-	radio?: string;
-	/** Most recent time this node relayed a packet (within the analytics window). */
-	lastRelayed?: string;
-	/** Packets this node relayed in the last hour. */
-	relayCount1h?: number;
-	/** A registered user has verified ownership of this node ("claimed" badge). */
-	claimed?: boolean;
-	/** Median clock offset from the server, seconds; positive = node ahead. */
-	clockDriftSec?: number;
-	/** Adverts stamped years out — a clock that was never set, not drift. */
-	clockUnset?: boolean;
-	/** Unscoped flood transmissions this node forwarded in the relay window. */
-	unscopedRelayCount?: number;
+  publicKey: string;
+  name: string;
+  role: string;
+  latitude?: number;
+  longitude?: number;
+  hasLocation: boolean;
+  firstSeen: string;
+  lastSeen: string;
+  lastAdvert?: string;
+  advertCount: number;
+  /** Actual advert transmissions (re-flood / multi-observer copies of one
+   *  broadcast collapsed by a ~90s gap) — vs advertCount which counts every
+   *  observation. */
+  advertTxCount: number;
+  /** Path-hash length in bytes (1, 2, or 3), from the node's advert; 0 = unknown. */
+  hashSize: number;
+  /** Set when the node's verified owner has withdrawn it from the map and node
+   *  lists. Retired nodes are filtered out of /api/nodes, so this is normally
+   *  only seen on a direct node fetch. */
+  retiredAt?: string;
+  /** Coordinates are a statistical outlier — likely corrupt GPS. */
+  gpsSuspect?: boolean;
+  /** Set when this node is reachable only ACROSS a sanctioned bridge — it lives
+   *  on a radio segment this deployment cannot hear directly. Uppercase pubkey
+   *  of the bridge's near end. */
+  viaBridge?: string;
+  viaBridgeName?: string;
+  /** The far segment's radio config, DECLARED by the operator — it cannot be
+   *  observed, and the node's own `radio` is blanked because it would describe a
+   *  receiver on this side of the bridge. */
+  viaBridgeRadio?: string;
+  /** 'confirmed' (>=2-byte path hops proved it) or 'probable' (1-byte path). */
+  viaBridgeConfidence?: string;
+  /** "freq,bw,sf,cr" config, inherited from the observer that heard it. */
+  radio?: string;
+  /** Most recent time this node relayed a packet (within the analytics window). */
+  lastRelayed?: string;
+  /** Packets this node relayed in the last hour. */
+  relayCount1h?: number;
+  /** A registered user has verified ownership of this node ("claimed" badge). */
+  claimed?: boolean;
+  /** Median clock offset from the server, seconds; positive = node ahead. */
+  clockDriftSec?: number;
+  /** Adverts stamped years out — a clock that was never set, not drift. */
+  clockUnset?: boolean;
+  /** Unscoped flood transmissions this node forwarded in the relay window. */
+  unscopedRelayCount?: number;
 }
 
 export interface ObserverStatus {
-	state?: string; // online | offline
-	radio?: string; // raw "freq,bw,sf,cr"
-	freqMhz?: number;
-	bandwidthKhz?: number;
-	spreadingFactor?: number;
-	codingRate?: number;
-	model?: string;
-	firmware?: string;
-	clientVersion?: string;
-	batteryMv?: number;
-	uptimeSecs?: number;
-	noiseFloor?: number;
-	txAirSecs?: number;
-	rxAirSecs?: number;
-	recvErrors?: number;
-	queueLen?: number;
+  state?: string; // online | offline
+  radio?: string; // raw "freq,bw,sf,cr"
+  freqMhz?: number;
+  bandwidthKhz?: number;
+  spreadingFactor?: number;
+  codingRate?: number;
+  model?: string;
+  firmware?: string;
+  clientVersion?: string;
+  batteryMv?: number;
+  uptimeSecs?: number;
+  noiseFloor?: number;
+  txAirSecs?: number;
+  rxAirSecs?: number;
+  recvErrors?: number;
+  queueLen?: number;
 }
 
 export interface Observer {
-	/** Stable identity — the observer's public key. Use `name` for display. */
-	id: string;
-	/** Operator-chosen label. Falls back to `id` when absent. */
-	name?: string;
-	/** The observer's node public key. Same as `id` for every observer that has
-	 *  one — `id` falls back to the name only when no key was ever seen. */
-	publicKey?: string;
-	region: string;
-	firstSeen: string;
-	lastSeen: string;
-	packetCount: number;
-	/** Latest self-reported device telemetry from the observer's /status message. */
-	status?: ObserverStatus;
-	lastStatusAt?: string;
-	/** Set while the observer is on standby: still connected and still listed,
-	 *  but every packet it publishes is discarded at ingest. It does NOT hide it —
-	 *  being able to see the stand-down is the point. */
-	standbySince?: string;
-	/** Packets discarded during the current stand-down, since the daemon last
-	 *  started. A live signal that standby is working, not an audited total. */
-	standbyDropped?: number;
-	/** Last time this observer authenticated to the broker with a token signed by
-	 *  its own node key. Absent means it never has — i.e. it is still publishing
-	 *  to the anonymous broker and has yet to migrate. */
-	jwtAuthAt?: string;
+  /** Stable identity — the observer's public key. Use `name` for display. */
+  id: string;
+  /** Operator-chosen label. Falls back to `id` when absent. */
+  name?: string;
+  /** The observer's node public key. Same as `id` for every observer that has
+   *  one — `id` falls back to the name only when no key was ever seen. */
+  publicKey?: string;
+  region: string;
+  firstSeen: string;
+  lastSeen: string;
+  packetCount: number;
+  /** Latest self-reported device telemetry from the observer's /status message. */
+  status?: ObserverStatus;
+  lastStatusAt?: string;
+  /** Set while the observer is on standby: still connected and still listed,
+   *  but every packet it publishes is discarded at ingest. It does NOT hide it —
+   *  being able to see the stand-down is the point. */
+  standbySince?: string;
+  /** Set while this observer's packets are refused for reporting a preset
+   *  this mesh does not run. The observer stays visible on purpose. */
+  radioQuarantinedAt?: string;
+  /** The preset that failed, kept even if the observer stops reporting one. */
+  radioQuarantineRadio?: string;
+  /** Packets refused since the daemon started. */
+  radioQuarantineDropped?: number;
+  /** Packets discarded during the current stand-down, since the daemon last
+   *  started. A live signal that standby is working, not an audited total. */
+  standbyDropped?: number;
+  /** Last time this observer authenticated to the broker with a token signed by
+   *  its own node key. Absent means it never has — i.e. it is still publishing
+   *  to the anonymous broker and has yet to migrate. */
+  jwtAuthAt?: string;
 }
 
 export interface Observation {
-	messageHash: string;
-	routeType: string;
-	payloadType: string;
-	pathHops: number;
-	observerId?: string;
-	/** Friendly label for observerId, resolved server-side. */
-	observerName?: string;
-	region?: string;
-	snr?: number;
-	rssi?: number;
-	receivedAt: string;
+  messageHash: string;
+  routeType: string;
+  payloadType: string;
+  pathHops: number;
+  observerId?: string;
+  /** Friendly label for observerId, resolved server-side. */
+  observerName?: string;
+  region?: string;
+  snr?: number;
+  rssi?: number;
+  receivedAt: string;
 }
 
 export interface LiveNode {
-	publicKey: string;
-	name: string;
-	role: string;
-	latitude?: number;
-	longitude?: number;
-	timestamp?: number;
+  publicKey: string;
+  name: string;
+  role: string;
+  latitude?: number;
+  longitude?: number;
+  timestamp?: number;
 }
 
 export interface LiveEvent extends Observation {
-	node?: LiveNode;
-	/** Per-hop relay key prefixes the packet accumulated as it flooded. */
-	path?: string[];
-	payloadVersion?: number;
-	hashSize?: number;
-	transportCodes?: [number, number];
-	payloadRaw?: string;
-	raw?: string;
-	/** GroupText channel fields. channelHash is always set; the rest only when decrypted. */
-	channelHash?: string;
-	channel?: string;
-	sender?: string;
-	text?: string;
+  node?: LiveNode;
+  /** Per-hop relay key prefixes the packet accumulated as it flooded. */
+  path?: string[];
+  payloadVersion?: number;
+  hashSize?: number;
+  transportCodes?: [number, number];
+  payloadRaw?: string;
+  raw?: string;
+  /** GroupText channel fields. channelHash is always set; the rest only when decrypted. */
+  channelHash?: string;
+  channel?: string;
+  sender?: string;
+  text?: string;
 }
 
 // --- Per-node analytics (GET /api/nodes/{pubkey}) ---
 export interface NodeObserverStat {
-	/** Stable identity — the observer's public key. Use `name` for display. */
-	id: string;
-	/** Operator-chosen label. Falls back to `id` when absent. */
-	name?: string;
-	region?: string;
-	count: number;
-	avgSnr?: number;
-	avgRssi?: number;
+  /** Stable identity — the observer's public key. Use `name` for display. */
+  id: string;
+  /** Operator-chosen label. Falls back to `id` when absent. */
+  name?: string;
+  region?: string;
+  count: number;
+  avgSnr?: number;
+  avgRssi?: number;
 }
 export interface NodeNeighbor {
-	publicKey: string;
-	name: string;
-	role: string;
-	count: number;
+  publicKey: string;
+  name: string;
+  role: string;
+  count: number;
 }
 export interface NodePacketRef {
-	messageHash: string;
-	payloadType: string;
-	receivedAt: string;
-	observerId?: string;
-	/** Friendly label for observerId, resolved server-side. */
-	observerName?: string;
-	snr?: number;
-	rssi?: number;
-	pathHops: number;
+  messageHash: string;
+  payloadType: string;
+  receivedAt: string;
+  observerId?: string;
+  /** Friendly label for observerId, resolved server-side. */
+  observerName?: string;
+  snr?: number;
+  rssi?: number;
+  pathHops: number;
 }
 export interface NodeRelay {
-	lastRelayed?: string;
-	count1h: number;
-	count24h: number;
-	active: boolean;
+  lastRelayed?: string;
+  count1h: number;
+  count24h: number;
+  active: boolean;
 }
 export interface NodeAnalytics {
-	publicKey: string;
-	windowHours: number;
-	totalPackets: number; // advert transmissions in window
-	totalObservations: number;
-	packetsToday: number;
-	avgSnr?: number;
-	avgHops?: number;
-	firstHeard?: string;
-	lastHeard?: string;
-	observers: NodeObserverStat[];
-	recentPackets: NodePacketRef[];
-	neighbors: NodeNeighbor[];
-	relay: NodeRelay;
-	/**
-	 * Fraction of relayed channel TIME that transited this node — the summed
-	 * time-on-air of the transmissions it relayed over the summed time-on-air of
-	 * every relayed transmission in the window. Weighted by airtime, not packet
-	 * count: a long advert holds the channel far longer than a short ack.
-	 */
-	trafficShare: number;
-	/** Absolute channel time (ms) this node put on the air relaying, same window. */
-	relayAirtimeMs: number;
-	/**
-	 * UNSCOPED flood transmissions this node forwarded in the relay window. On a
-	 * mesh that uses region scoping, a correctly configured repeater runs
-	 * `flood.max.unscoped 0` and forwards only region-scoped TRANSPORT_FLOOD
-	 * traffic, so a non-zero count points at that node's config. On a mesh that
-	 * has not adopted scoping, unscoped floods are simply normal traffic.
-	 */
-	unscopedRelayCount?: number;
-	bridge: number;
-	/** Median seconds between the node's advert transmissions (heartbeat cadence). */
-	advertIntervalSec?: number;
-	/** Per-hour advert counts over the window, oldest bucket first. */
-	activity: number[];
-	/**
-	 * Median clock offset from the server in seconds — positive when the node
-	 * runs ahead. Derived from the timestamp each advert carries versus when it
-	 * was first heard. Absent with too little evidence, or when clockUnset.
-	 */
-	clockDriftSec?: number;
-	/**
-	 * The node's adverts are stamped years out — a clock that was never set
-	 * (MeshCore falls back to the firmware build date), not one that drifted.
-	 */
-	clockUnset?: boolean;
-	/** Distinct adverts backing the clock verdict. */
-	clockDriftSamples?: number;
+  publicKey: string;
+  windowHours: number;
+  totalPackets: number; // advert transmissions in window
+  totalObservations: number;
+  packetsToday: number;
+  avgSnr?: number;
+  avgHops?: number;
+  firstHeard?: string;
+  lastHeard?: string;
+  observers: NodeObserverStat[];
+  recentPackets: NodePacketRef[];
+  neighbors: NodeNeighbor[];
+  relay: NodeRelay;
+  /**
+   * Fraction of relayed channel TIME that transited this node — the summed
+   * time-on-air of the transmissions it relayed over the summed time-on-air of
+   * every relayed transmission in the window. Weighted by airtime, not packet
+   * count: a long advert holds the channel far longer than a short ack.
+   */
+  trafficShare: number;
+  /** Absolute channel time (ms) this node put on the air relaying, same window. */
+  relayAirtimeMs: number;
+  /**
+   * UNSCOPED flood transmissions this node forwarded in the relay window. On a
+   * mesh that uses region scoping, a correctly configured repeater runs
+   * `flood.max.unscoped 0` and forwards only region-scoped TRANSPORT_FLOOD
+   * traffic, so a non-zero count points at that node's config. On a mesh that
+   * has not adopted scoping, unscoped floods are simply normal traffic.
+   */
+  unscopedRelayCount?: number;
+  bridge: number;
+  /** Median seconds between the node's advert transmissions (heartbeat cadence). */
+  advertIntervalSec?: number;
+  /** Per-hour advert counts over the window, oldest bucket first. */
+  activity: number[];
+  /**
+   * Median clock offset from the server in seconds — positive when the node
+   * runs ahead. Derived from the timestamp each advert carries versus when it
+   * was first heard. Absent with too little evidence, or when clockUnset.
+   */
+  clockDriftSec?: number;
+  /**
+   * The node's adverts are stamped years out — a clock that was never set
+   * (MeshCore falls back to the firmware build date), not one that drifted.
+   */
+  clockUnset?: boolean;
+  /** Distinct adverts backing the clock verdict. */
+  clockDriftSamples?: number;
 }
 export interface NodeDetailResponse {
-	node: Node | null;
-	detail: NodeAnalytics | null;
-	generatedAt?: string;
-	/** Set when the node is quarantined as suspected injected traffic. */
-	quarantined?: boolean;
-	block?: BlockEntry;
+  node: Node | null;
+  detail: NodeAnalytics | null;
+  generatedAt?: string;
+  /** Set when the node is quarantined as suspected injected traffic. */
+  quarantined?: boolean;
+  block?: BlockEntry;
 }
 
 // One stored observation attributable to a node (GET /api/nodes/{pubkey}/history).
 export interface NodeHistoryEntry {
-	messageHash: string;
-	payloadType: string;
-	routeType: string;
-	kind: 'advert' | 'relay';
-	receivedAt: string;
-	observerId?: string;
-	/** Friendly label for observerId, resolved server-side. */
-	observerName?: string;
-	region?: string;
-	snr?: number;
-	rssi?: number;
-	pathHops: number;
-	hopIndex: number;
+  messageHash: string;
+  payloadType: string;
+  routeType: string;
+  kind: "advert" | "relay";
+  receivedAt: string;
+  observerId?: string;
+  /** Friendly label for observerId, resolved server-side. */
+  observerName?: string;
+  region?: string;
+  snr?: number;
+  rssi?: number;
+  pathHops: number;
+  hopIndex: number;
 }
 
 // --- Mesh-wide analytics (GET /api/mesh-analytics) ---
 export interface RadioParams {
-	SpreadingFactor: number;
-	BandwidthHz: number;
-	CodingRate: number;
-	PreambleSymbols: number;
+  SpreadingFactor: number;
+  BandwidthHz: number;
+  CodingRate: number;
+  PreambleSymbols: number;
 }
 export interface MeshKPIs {
-	activeNodes: number;
-	transmissions: number;
-	observations: number;
-	avgLinkScore?: number;
-	floodRedundancy?: number;
-	channelUtilPct: number;
-	congestionTier: string;
+  activeNodes: number;
+  transmissions: number;
+  observations: number;
+  avgLinkScore?: number;
+  floodRedundancy?: number;
+  channelUtilPct: number;
+  congestionTier: string;
 }
 export interface NameCount {
-	label: string;
-	count: number;
+  label: string;
+  count: number;
 }
 export interface HistogramBin {
-	label: string;
-	count: number;
+  label: string;
+  count: number;
 }
 export interface AirtimeBucket {
-	timestamp: string;
-	airtimeMs: number;
-	utilPct: number;
-	transmissions: number;
-	/** Transmissions in the slice that were relayed (≥1 hop). */
-	relayTx: number;
-	/** Mean per-reception link score in the slice (relay-health trend). */
-	avgLinkScore?: number;
+  timestamp: string;
+  airtimeMs: number;
+  utilPct: number;
+  transmissions: number;
+  /** Transmissions in the slice that were relayed (≥1 hop). */
+  relayTx: number;
+  /** Mean per-reception link score in the slice (relay-health trend). */
+  avgLinkScore?: number;
 }
 export interface TopologyNode {
-	publicKey: string;
-	name: string;
-	role: string;
-	relayed: number;
+  publicKey: string;
+  name: string;
+  role: string;
+  relayed: number;
 }
 export interface TopologyEdge {
-	a: string;
-	b: string;
-	weight: number;
-	/** Every observation of this adjacency was resolved from 1-byte path hops.
-	 *  Those are weak evidence (the 1-byte space is ~97% saturated), so the link
-	 *  is probably real but is an inference, not a measurement. Drawn dashed. */
-	inferred?: boolean;
+  a: string;
+  b: string;
+  weight: number;
+  /** Every observation of this adjacency was resolved from 1-byte path hops.
+   *  Those are weak evidence (the 1-byte space is ~97% saturated), so the link
+   *  is probably real but is an inference, not a measurement. Drawn dashed. */
+  inferred?: boolean;
 }
 export interface Topology {
-	nodes: TopologyNode[];
-	edges: TopologyEdge[];
+  nodes: TopologyNode[];
+  edges: TopologyEdge[];
 }
 export interface RelayRank {
-	publicKey: string;
-	name: string;
-	role: string;
-	relayed: number;
-	airtimeMs: number;
+  publicKey: string;
+  name: string;
+  role: string;
+  relayed: number;
+  airtimeMs: number;
 }
 export interface ObserverCoverage {
-	id: string;
-	name?: string;
-	region?: string;
-	observations: number;
-	distinctNodes: number;
-	directNodes: number;
-	/** Median receive-time deviation from consensus (ms) — clock-drift signal. */
-	clockSkewMs?: number;
+  id: string;
+  name?: string;
+  region?: string;
+  observations: number;
+  distinctNodes: number;
+  directNodes: number;
+  /** Median receive-time deviation from consensus (ms) — clock-drift signal. */
+  clockSkewMs?: number;
 }
 export interface DirectLink {
-	observer: string;
-	observerName?: string;
-	nodeKey: string;
-	nodeName: string;
-	role: string;
-	count: number;
+  observer: string;
+  observerName?: string;
+  nodeKey: string;
+  nodeName: string;
+  role: string;
+  count: number;
 }
 export interface MeshAnalytics {
-	generatedAt: string;
-	windowHours: number;
-	radio: RadioParams;
-	kpis: MeshKPIs;
-	payloadTypes: NameCount[];
-	routeTypes: NameCount[];
-	linkScoreHist: HistogramBin[];
-	snrHist: HistogramBin[];
-	airtime: AirtimeBucket[];
-	topRelays: RelayRank[];
-	observers: ObserverCoverage[];
-	directLinks: DirectLink[];
-	directReach: HistogramBin[];
-	hashSizes: NameCount[];
-	topology: Topology;
+  generatedAt: string;
+  windowHours: number;
+  radio: RadioParams;
+  kpis: MeshKPIs;
+  payloadTypes: NameCount[];
+  routeTypes: NameCount[];
+  linkScoreHist: HistogramBin[];
+  snrHist: HistogramBin[];
+  airtime: AirtimeBucket[];
+  topRelays: RelayRank[];
+  observers: ObserverCoverage[];
+  directLinks: DirectLink[];
+  directReach: HistogramBin[];
+  hashSizes: NameCount[];
+  topology: Topology;
 }
 
 export interface NodeActivity {
-	grid: number[][]; // [weekday 0=Sun][hour 0-23]
-	max: number;
-	total: number;
-	days: number;
+  grid: number[][]; // [weekday 0=Sun][hour 0-23]
+  max: number;
+  total: number;
+  days: number;
 }
 
 export interface ObserverAnalytics {
-	id: string;
-	region?: string;
-	windowHours: number;
-	totalPackets: number;
-	packetsPerHour: number;
-	activity: number[]; // per-hour receptions, oldest bucket first
-	payloadTypes: NameCount[];
-	snrHist: HistogramBin[];
-	avgSnr?: number;
-	distinctNodes: number;
-	directNodes: number;
-	clockSkewMs?: number;
-	neighbors: DirectLink[];
+  id: string;
+  region?: string;
+  windowHours: number;
+  totalPackets: number;
+  packetsPerHour: number;
+  activity: number[]; // per-hour receptions, oldest bucket first
+  payloadTypes: NameCount[];
+  snrHist: HistogramBin[];
+  avgSnr?: number;
+  distinctNodes: number;
+  directNodes: number;
+  clockSkewMs?: number;
+  neighbors: DirectLink[];
 }
 
 export interface TelemetryPoint {
-	recordedAt: string;
-	batteryMv?: number;
-	uptimeSecs?: number;
-	noiseFloor?: number;
-	txAirSecs?: number;
-	rxAirSecs?: number;
-	recvErrors?: number;
-	queueLen?: number;
+  recordedAt: string;
+  batteryMv?: number;
+  uptimeSecs?: number;
+  noiseFloor?: number;
+  txAirSecs?: number;
+  rxAirSecs?: number;
+  recvErrors?: number;
+  queueLen?: number;
 }
 
 export interface TelemetrySummary {
-	samples: number;
-	spanHours: number;
-	batteryMv?: number;
-	batteryTrendMvHr?: number;
-	batteryDir?: string; // charging | discharging | stable
-	reboots: number;
-	noiseFloor?: number;
-	noiseTrendDbHr?: number;
-	noiseMin?: number;
-	noiseMax?: number;
-	noiseAvg?: number;
+  samples: number;
+  spanHours: number;
+  batteryMv?: number;
+  batteryTrendMvHr?: number;
+  batteryDir?: string; // charging | discharging | stable
+  reboots: number;
+  noiseFloor?: number;
+  noiseTrendDbHr?: number;
+  noiseMin?: number;
+  noiseMax?: number;
+  noiseAvg?: number;
 }
 
 export interface ObserverTelemetry {
-	id: string;
-	points: TelemetryPoint[];
-	summary: TelemetrySummary;
+  id: string;
+  points: TelemetryPoint[];
+  summary: TelemetrySummary;
 }
 
 async function get<T>(path: string): Promise<T> {
-	const res = await fetch(path, { headers: { accept: 'application/json' } });
-	if (!res.ok) throw new Error(`${path}: ${res.status}`);
-	return res.json() as Promise<T>;
+  const res = await fetch(path, { headers: { accept: "application/json" } });
+  if (!res.ok) throw new Error(`${path}: ${res.status}`);
+  return res.json() as Promise<T>;
 }
 
 // ---- Admin (auth-gated injection detection + quarantine/purge) ----
 
 export interface ForeignNode {
-	key: string;
-	name: string;
-	role?: string;
-	latitude?: number;
-	longitude?: number;
-	transitPct?: number; // % of this node's observed paths through the candidate
-	captive?: boolean; // transitPct >= 95% (no alternative route)
+  key: string;
+  name: string;
+  role?: string;
+  latitude?: number;
+  longitude?: number;
+  transitPct?: number; // % of this node's observed paths through the candidate
+  captive?: boolean; // transitPct >= 95% (no alternative route)
 }
 export interface BridgeCandidate {
-	/** How the relay behaves physically, from all payload types. RF is broadcast so
-	 *  the next hop varies (median relay: 13 distinct, 44% top share); a relay whose
-	 *  egress is a wire has exactly one, forever. */
-	pathVolume: number;
-	nextHops: number;
-	nextHopTopShare: number;
-	/** Share of carried packets where this relay was the LAST hop — where an
-	 *  observer received its own transmission. Zero over real volume means it
-	 *  transmits where nothing is listening. Shown, not ranked on. */
-	terminalShare: number;
-	/** Which rule produced this candidate: "captivity" (a population with no
-	 *  alternative route in), "wired" (an egress that never varies), or both. */
-	signals: string[];
-	/** Operator has sanctioned this bridge: still reported, but not a finding. */
-	known?: boolean;
-	nodeKey: string;
-	name: string;
-	captiveCount: number; // foreign nodes ≥95% captive to this node
-	foreignThrough: number; // foreign nodes routed through it at all
-	captiveFraction: number; // captiveCount / foreignThrough
-	foreignKm: number; // geographic displacement — shown as a hint, not ranked
-	foreign: ForeignNode[];
+  /** How the relay behaves physically, from all payload types. RF is broadcast so
+   *  the next hop varies (median relay: 13 distinct, 44% top share); a relay whose
+   *  egress is a wire has exactly one, forever. */
+  pathVolume: number;
+  nextHops: number;
+  nextHopTopShare: number;
+  /** Share of carried packets where this relay was the LAST hop — where an
+   *  observer received its own transmission. Zero over real volume means it
+   *  transmits where nothing is listening. Shown, not ranked on. */
+  terminalShare: number;
+  /** Which rule produced this candidate: "captivity" (a population with no
+   *  alternative route in), "wired" (an egress that never varies), or both. */
+  signals: string[];
+  /** Operator has sanctioned this bridge: still reported, but not a finding. */
+  known?: boolean;
+  nodeKey: string;
+  name: string;
+  captiveCount: number; // foreign nodes ≥95% captive to this node
+  foreignThrough: number; // foreign nodes routed through it at all
+  captiveFraction: number; // captiveCount / foreignThrough
+  foreignKm: number; // geographic displacement — shown as a hint, not ranked
+  foreign: ForeignNode[];
 }
 export interface InjectorCandidate {
-	observer: string;
-	exclusiveCount: number;
-	exclusive: ForeignNode[];
+  observer: string;
+  exclusiveCount: number;
+  exclusive: ForeignNode[];
 }
 export interface InjectionReport {
-	windowHours: number;
-	/** Adverts decoded in the window, and how many were dropped because their
-	 *  Ed25519 signature didn't verify (a corrupt key invents a node that never
-	 *  existed). Shown so a quiet result reads as "clean data", not "broken scan". */
-	advertsScanned: number;
-	advertsRejected: number;
-	/** Every decoded packet, those carrying at least one hop, and hops whose hash
-	 *  prefix matched no single node. Path evidence comes from all payload types,
-	 *  not just adverts. */
-	packetsScanned: number;
-	pathsScanned: number;
-	unresolvedHops: number;
-	bridges: BridgeCandidate[];
-	injectors: InjectorCandidate[];
-	migrations: MigrationEvent[];
+  windowHours: number;
+  /** Adverts decoded in the window, and how many were dropped because their
+   *  Ed25519 signature didn't verify (a corrupt key invents a node that never
+   *  existed). Shown so a quiet result reads as "clean data", not "broken scan". */
+  advertsScanned: number;
+  advertsRejected: number;
+  /** Every decoded packet, those carrying at least one hop, and hops whose hash
+   *  prefix matched no single node. Path evidence comes from all payload types,
+   *  not just adverts. */
+  packetsScanned: number;
+  pathsScanned: number;
+  unresolvedHops: number;
+  bridges: BridgeCandidate[];
+  injectors: InjectorCandidate[];
+  migrations: MigrationEvent[];
 }
 
 /** A node that stopped being heard directly while its traffic kept arriving
  *  relayed. The pubkey is unchanged, so nothing else notices it moved. */
 export interface MigrationEvent {
-	key: string;
-	name: string;
-	role?: string;
-	lastDirectAt: string;
-	lastRelayAt: string;
-	relayedAfter: number;
-	/** Set when a bridge carries its traffic — the difference between "moved
-	 *  behind a bridge" and "drifted out of earshot". */
-	viaBridge?: string;
+  key: string;
+  name: string;
+  role?: string;
+  lastDirectAt: string;
+  lastRelayAt: string;
+  relayedAfter: number;
+  /** Set when a bridge carries its traffic — the difference between "moved
+   *  behind a bridge" and "drifted out of earshot". */
+  viaBridge?: string;
 }
 export interface BlockEntry {
-	kind: string; // observer | bridge | node | allow | known
-	key: string;
-	name?: string;
-	reason?: string;
-	createdAt: string;
-	/** Far side of a sanctioned bridge (kind 'known'): the neighbour it carries
-	 *  traffic to, as an uppercase pubkey. A link has two ends; this is the other
-	 *  one. Absent when the operator hasn't said which. */
-	peer?: string;
-	/** peer's current display name, resolved server-side at read time so a rename
-	 *  of the far-end node follows through to the link. */
-	peerName?: string;
+  kind: string; // observer | bridge | node | allow | known
+  key: string;
+  name?: string;
+  reason?: string;
+  createdAt: string;
+  /** Far side of a sanctioned bridge (kind 'known'): the neighbour it carries
+   *  traffic to, as an uppercase pubkey. A link has two ends; this is the other
+   *  one. Absent when the operator hasn't said which. */
+  peer?: string;
+  /** peer's current display name, resolved server-side at read time so a rename
+   *  of the far-end node follows through to the link. */
+  peerName?: string;
 }
 export interface PurgeResult {
-	observations: number;
-	nodes: number;
-	/** User-authored data cascaded with a purged node (see store.PurgeTargets). */
-	claims: number;
-	notes: number;
-	locations: number;
-	shares: number;
-	/** Keys held back from a purge because a user has claimed them — evidence the
-	 *  detector misfired, so they're blocked but not deleted. */
-	skippedClaimed?: string[];
+  observations: number;
+  nodes: number;
+  /** User-authored data cascaded with a purged node (see store.PurgeTargets). */
+  claims: number;
+  notes: number;
+  locations: number;
+  shares: number;
+  /** Keys held back from a purge because a user has claimed them — evidence the
+   *  detector misfired, so they're blocked but not deleted. */
+  skippedClaimed?: string[];
 }
 
 // The admin console is gated by the is_admin account (session auth). Reads use
 // the shared session cookie; mutations additionally send the CSRF token.
 export const admin = {
-	detect: (sinceSec = 86400) =>
-		get<InjectionReport>(`/api/admin/detect?since=${sinceSec}`),
-	blocklist: () => get<BlockEntry[]>('/api/admin/blocklist'),
-	/** Quarantine (reversible): drop at ingest + hide; does not delete stored rows.
-	 *  `nodes` optionally blocks extra node pubkeys (a bridge's foreign cluster).
-	 *  kind "allow" dismisses a detection candidate without blocking it. */
-	block: (
-		csrf: string,
-		body: {
-			kind: string;
-			key: string;
-			name?: string;
-			reason?: string;
-			nodes?: string[];
-			/** kind 'known' only — the far side of the bridge. */
-			peer?: string;
-			/** Forget a previously recorded peer (an empty `peer` leaves it alone). */
-			clearPeer?: boolean;
-			/** kind 'known' only — the far segment's "freq,bw,sf,cr", which cannot be
-			 *  observed and must be declared. Send '-' to clear. */
-			peerRadio?: string;
-		}
-	) => mutate<{ ok: boolean }>('/api/admin/block', 'POST', csrf, body),
-	unblock: (csrf: string, kind: string, key: string) =>
-		mutate<{ ok: boolean }>(
-			`/api/admin/block?kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}`,
-			'DELETE',
-			csrf
-		),
-	/** Purge: delete stored data; blocks the INGRESS points (bridges/observers)
-	 *  but deletes `nodes` permanently with no block. */
-	purge: (csrf: string, body: { observers?: string[]; bridges?: string[]; nodes?: string[] }) =>
-		mutate<PurgeResult>('/api/admin/purge', 'POST', csrf, body),
-	/** Permanently delete nodes (adverts + rows) with no blocklist entry. */
-	deleteNodes: (csrf: string, nodes: string[]) =>
-		mutate<PurgeResult>('/api/admin/delete', 'POST', csrf, { nodes }),
-	/** Permanently delete observers, every packet they reported, and their device
-	 *  telemetry, with no block. Destructive — prefer `standbyObserver` for a
-	 *  receiver that has simply left the network, which keeps its history. */
-	deleteObservers: (csrf: string, observers: string[]) =>
-		mutate<PurgeResult>('/api/admin/delete', 'POST', csrf, { observers }),
-	/** Stand an observer down: it stays connected and listed, and every packet it
-	 *  publishes is discarded at ingest until it is returned to service. Nothing
-	 *  already stored changes, and nothing discarded meanwhile is recoverable. */
-	standbyObserver: (csrf: string, observer: string) =>
-		mutate<{ observer: string; standby: boolean }>('/api/admin/observers/standby', 'POST', csrf, {
-			observer
-		}),
-	/** Return an observer to service; ingest resumes on its next packet. */
-	resumeObserver: (csrf: string, observer: string) =>
-		mutate<{ observer: string; standby: boolean }>('/api/admin/observers/resume', 'POST', csrf, {
-			observer
-		})
+  detect: (sinceSec = 86400) =>
+    get<InjectionReport>(`/api/admin/detect?since=${sinceSec}`),
+  blocklist: () => get<BlockEntry[]>("/api/admin/blocklist"),
+  /** Quarantine (reversible): drop at ingest + hide; does not delete stored rows.
+   *  `nodes` optionally blocks extra node pubkeys (a bridge's foreign cluster).
+   *  kind "allow" dismisses a detection candidate without blocking it. */
+  block: (
+    csrf: string,
+    body: {
+      kind: string;
+      key: string;
+      name?: string;
+      reason?: string;
+      nodes?: string[];
+      /** kind 'known' only — the far side of the bridge. */
+      peer?: string;
+      /** Forget a previously recorded peer (an empty `peer` leaves it alone). */
+      clearPeer?: boolean;
+      /** kind 'known' only — the far segment's "freq,bw,sf,cr", which cannot be
+       *  observed and must be declared. Send '-' to clear. */
+      peerRadio?: string;
+    },
+  ) => mutate<{ ok: boolean }>("/api/admin/block", "POST", csrf, body),
+  unblock: (csrf: string, kind: string, key: string) =>
+    mutate<{ ok: boolean }>(
+      `/api/admin/block?kind=${encodeURIComponent(kind)}&key=${encodeURIComponent(key)}`,
+      "DELETE",
+      csrf,
+    ),
+  /** Purge: delete stored data; blocks the INGRESS points (bridges/observers)
+   *  but deletes `nodes` permanently with no block. */
+  purge: (
+    csrf: string,
+    body: { observers?: string[]; bridges?: string[]; nodes?: string[] },
+  ) => mutate<PurgeResult>("/api/admin/purge", "POST", csrf, body),
+  /** Permanently delete nodes (adverts + rows) with no blocklist entry. */
+  deleteNodes: (csrf: string, nodes: string[]) =>
+    mutate<PurgeResult>("/api/admin/delete", "POST", csrf, { nodes }),
+  /** Permanently delete observers, every packet they reported, and their device
+   *  telemetry, with no block. Destructive — prefer `standbyObserver` for a
+   *  receiver that has simply left the network, which keeps its history. */
+  deleteObservers: (csrf: string, observers: string[]) =>
+    mutate<PurgeResult>("/api/admin/delete", "POST", csrf, { observers }),
+  /** Stand an observer down: it stays connected and listed, and every packet it
+   *  publishes is discarded at ingest until it is returned to service. Nothing
+   *  already stored changes, and nothing discarded meanwhile is recoverable. */
+  standbyObserver: (csrf: string, observer: string) =>
+    mutate<{ observer: string; standby: boolean }>(
+      "/api/admin/observers/standby",
+      "POST",
+      csrf,
+      {
+        observer,
+      },
+    ),
+  /** Return an observer to service; ingest resumes on its next packet. */
+  resumeObserver: (csrf: string, observer: string) =>
+    mutate<{ observer: string; standby: boolean }>(
+      "/api/admin/observers/resume",
+      "POST",
+      csrf,
+      {
+        observer,
+      },
+    ),
 };
 
 // ── Firmware builds ──────────────────────────────────────────────────────────
 export interface FirmwareEnv {
-	name: string;
-	board: string;
-	/** Option ids valid for THIS firmware — an option absent here cannot be honoured. */
-	options: string[];
-	/** RS232 bridge builds are separate upstream environments, not a flag. */
-	isBridge: boolean;
+  name: string;
+  board: string;
+  /** Option ids valid for THIS firmware — an option absent here cannot be honoured. */
+  options: string[];
+  /** RS232 bridge builds are separate upstream environments, not a flag. */
+  isBridge: boolean;
 }
 export interface FirmwareBoard {
-	name: string;
-	envs: FirmwareEnv[];
+  name: string;
+  envs: FirmwareEnv[];
 }
 export interface FirmwareOption {
-	id: string;
-	label: string;
-	help: string;
+  id: string;
+  label: string;
+  help: string;
 }
 export interface FirmwareCatalogue {
-	tags: string[];
-	boards: FirmwareBoard[];
-	options: FirmwareOption[];
+  tags: string[];
+  boards: FirmwareBoard[];
+  options: FirmwareOption[];
 }
 export interface FirmwareJob {
-	id: number;
-	tag: string;
-	env: string;
-	flags: string;
-	state: 'queued' | 'building' | 'done' | 'failed';
-	error?: string;
-	createdAt: string;
-	startedAt?: string;
-	finishedAt?: string;
-	expiresAt?: string;
+  id: number;
+  tag: string;
+  env: string;
+  flags: string;
+  state: "queued" | "building" | "done" | "failed";
+  error?: string;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  expiresAt?: string;
 }
 export interface FirmwareArtifact {
-	name: string;
-	bytes: number;
-	/** What the file is called once saved — carries board, version and options. */
-	downloadName: string;
+  name: string;
+  bytes: number;
+  /** What the file is called once saved — carries board, version and options. */
+  downloadName: string;
 }
 export interface FirmwareJobResponse {
-	job: FirmwareJob;
-	artifacts: FirmwareArtifact[] | null;
-	/** Queued builds ahead of this one. */
-	ahead: number;
+  job: FirmwareJob;
+  artifacts: FirmwareArtifact[] | null;
+  /** Queued builds ahead of this one. */
+  ahead: number;
 }
 export interface FirmwareBuildSummary {
-	id: number;
-	tag: string;
-	env: string;
-	/** Option ids this build was made with, resolved back from its flags. */
-	options: string[];
-	finishedAt?: string;
-	expiresAt?: string;
-	artifacts: FirmwareArtifact[];
+  id: number;
+  tag: string;
+  env: string;
+  /** Option ids this build was made with, resolved back from its flags. */
+  options: string[];
+  finishedAt?: string;
+  expiresAt?: string;
+  artifacts: FirmwareArtifact[];
 }
 export interface FirmwareBuildResponse {
-	job: FirmwareJob;
-	/** An identical build already existed; nothing was queued. */
-	cached: boolean;
+  job: FirmwareJob;
+  /** An identical build already existed; nothing was queued. */
+  cached: boolean;
 }
 
 export const api = {
-	/** What can be built: vetted release tags, boards/environments, and the option allowlist. */
-	firmwareCatalogue: () => get<FirmwareCatalogue>('/api/firmware/catalogue'),
-	/** Queue a build, or get back an identical one already done or in flight. */
-	firmwareBuild: (csrf: string, body: { tag: string; env: string; options: string[] }) =>
-		mutate<FirmwareBuildResponse>('/api/firmware/build', 'POST', csrf, body),
-	/** Finished builds of one firmware that are still downloadable — so an option
-	 *  set someone else already compiled can be taken rather than rebuilt. */
-	firmwareBuilds: (env: string) =>
-		get<FirmwareBuildSummary[]>(`/api/firmware/builds?env=${encodeURIComponent(env)}`),
-	/** Poll a build's progress, and its artifacts once finished. */
-	firmwareJob: (id: number) => get<FirmwareJobResponse>(`/api/firmware/jobs/${id}`),
-	/** Direct download URL for one artifact — used as an href, not fetched. */
-	firmwareDownloadUrl: (id: number, name: string) =>
-		`/api/firmware/jobs/${id}/download/${encodeURIComponent(name)}`,
-	stats: () => get<Stats>('/api/stats'),
-	nodes: () => get<Node[]>('/api/nodes'),
-	/** One node's row plus its computed analytics snapshot. */
-	nodeDetail: (pubkey: string) => get<NodeDetailResponse>(`/api/nodes/${encodeURIComponent(pubkey)}`),
-	/** A node's stored observations (own adverts + relayed packets) over the last sinceSec seconds, newest first. */
-	nodeHistory: (pubkey: string, sinceSec = 86400, limit = 300) =>
-		get<NodeHistoryEntry[]>(`/api/nodes/${encodeURIComponent(pubkey)}/history?since=${sinceSec}&limit=${limit}`),
-	/** Per-observer reception of a node's adverts over the last sinceSec seconds (on demand, so the range can span the node's advert cadence). */
-	nodeObservers: (pubkey: string, sinceSec = 3 * 86400) =>
-		get<NodeObserverStat[]>(`/api/nodes/${encodeURIComponent(pubkey)}/observers?since=${sinceSec}`),
-	/** A node's weekday×hour activity heatmap over the last `days` days. */
-	nodeHeatmap: (pubkey: string, days = 7) =>
-		get<NodeActivity>(`/api/nodes/${encodeURIComponent(pubkey)}/heatmap?days=${days}`),
-	observers: () => get<Observer[]>('/api/observers'),
-	/** One observer's feed metrics over the last sinceSec seconds (default 24h, max 7d). */
-	observerAnalytics: (id: string, sinceSec = 86400) =>
-		get<ObserverAnalytics>(`/api/observers/${encodeURIComponent(id)}/analytics?since=${sinceSec}`),
-	/** One observer's device-telemetry time series + derived health summary (default 24h, max 7d). */
-	observerTelemetry: (id: string, sinceSec = 86400) =>
-		get<ObserverTelemetry>(`/api/observers/${encodeURIComponent(id)}/telemetry?since=${sinceSec}`),
-	observations: (limit = 100) => get<Observation[]>(`/api/observations?limit=${limit}`),
-	/** Recent history (default last hour) in the live-event shape, newest first. */
-	recent: (sinceSec = 3600) => get<LiveEvent[]>(`/api/recent?since=${sinceSec}`),
-	/** All observations of one transmission (by message hash) — backs the shareable
-	 *  per-packet deep link. Empty if the hash is unknown or has aged out. */
-	packet: (hash: string) => get<LiveEvent[]>(`/api/packets/${encodeURIComponent(hash)}`),
-	/**
-	 * Channel (GroupText) message history, newest first, one row per distinct
-	 * message. Default & max 24h — for the channel chat reader.
-	 */
-	channelHistory: (sinceSec = 86400) =>
-		get<LiveEvent[]>(`/api/channels/recent?since=${sinceSec}`),
-	/** Mesh-wide analytics over the last sinceSec seconds (default 6h, max 24h). */
-	meshAnalytics: (sinceSec = 21600, bucketMin = 10) =>
-		get<MeshAnalytics>(`/api/mesh-analytics?since=${sinceSec}&bucket=${bucketMin}`)
+  /** What can be built: vetted release tags, boards/environments, and the option allowlist. */
+  firmwareCatalogue: () => get<FirmwareCatalogue>("/api/firmware/catalogue"),
+  /** Queue a build, or get back an identical one already done or in flight. */
+  firmwareBuild: (
+    csrf: string,
+    body: { tag: string; env: string; options: string[] },
+  ) => mutate<FirmwareBuildResponse>("/api/firmware/build", "POST", csrf, body),
+  /** Finished builds of one firmware that are still downloadable — so an option
+   *  set someone else already compiled can be taken rather than rebuilt. */
+  firmwareBuilds: (env: string) =>
+    get<FirmwareBuildSummary[]>(
+      `/api/firmware/builds?env=${encodeURIComponent(env)}`,
+    ),
+  /** Poll a build's progress, and its artifacts once finished. */
+  firmwareJob: (id: number) =>
+    get<FirmwareJobResponse>(`/api/firmware/jobs/${id}`),
+  /** Direct download URL for one artifact — used as an href, not fetched. */
+  firmwareDownloadUrl: (id: number, name: string) =>
+    `/api/firmware/jobs/${id}/download/${encodeURIComponent(name)}`,
+  stats: () => get<Stats>("/api/stats"),
+  nodes: () => get<Node[]>("/api/nodes"),
+  /** One node's row plus its computed analytics snapshot. */
+  nodeDetail: (pubkey: string) =>
+    get<NodeDetailResponse>(`/api/nodes/${encodeURIComponent(pubkey)}`),
+  /** A node's stored observations (own adverts + relayed packets) over the last sinceSec seconds, newest first. */
+  nodeHistory: (pubkey: string, sinceSec = 86400, limit = 300) =>
+    get<NodeHistoryEntry[]>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/history?since=${sinceSec}&limit=${limit}`,
+    ),
+  /** Per-observer reception of a node's adverts over the last sinceSec seconds (on demand, so the range can span the node's advert cadence). */
+  nodeObservers: (pubkey: string, sinceSec = 3 * 86400) =>
+    get<NodeObserverStat[]>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/observers?since=${sinceSec}`,
+    ),
+  /** A node's weekday×hour activity heatmap over the last `days` days. */
+  nodeHeatmap: (pubkey: string, days = 7) =>
+    get<NodeActivity>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/heatmap?days=${days}`,
+    ),
+  observers: () => get<Observer[]>("/api/observers"),
+  /** One observer's feed metrics over the last sinceSec seconds (default 24h, max 7d). */
+  observerAnalytics: (id: string, sinceSec = 86400) =>
+    get<ObserverAnalytics>(
+      `/api/observers/${encodeURIComponent(id)}/analytics?since=${sinceSec}`,
+    ),
+  /** One observer's device-telemetry time series + derived health summary (default 24h, max 7d). */
+  observerTelemetry: (id: string, sinceSec = 86400) =>
+    get<ObserverTelemetry>(
+      `/api/observers/${encodeURIComponent(id)}/telemetry?since=${sinceSec}`,
+    ),
+  observations: (limit = 100) =>
+    get<Observation[]>(`/api/observations?limit=${limit}`),
+  /** Recent history (default last hour) in the live-event shape, newest first. */
+  recent: (sinceSec = 3600) =>
+    get<LiveEvent[]>(`/api/recent?since=${sinceSec}`),
+  /** All observations of one transmission (by message hash) — backs the shareable
+   *  per-packet deep link. Empty if the hash is unknown or has aged out. */
+  packet: (hash: string) =>
+    get<LiveEvent[]>(`/api/packets/${encodeURIComponent(hash)}`),
+  /**
+   * Channel (GroupText) message history, newest first, one row per distinct
+   * message. Default & max 24h — for the channel chat reader.
+   */
+  channelHistory: (sinceSec = 86400) =>
+    get<LiveEvent[]>(`/api/channels/recent?since=${sinceSec}`),
+  /** Mesh-wide analytics over the last sinceSec seconds (default 6h, max 24h). */
+  meshAnalytics: (sinceSec = 21600, bucketMin = 10) =>
+    get<MeshAnalytics>(
+      `/api/mesh-analytics?since=${sinceSec}&bucket=${bucketMin}`,
+    ),
 };
 
 // ---- Accounts / auth ----
 
 export interface AuthUser {
-	id: number;
-	email: string;
-	displayName: string;
-	/** Site administrator: manages members and (later) moderation. */
-	isAdmin: boolean;
-	/** Admin-granted gate for claiming nodes and storing private locations. */
-	canClaim: boolean;
-	/** Suspended: cannot log in; existing sessions are void. */
-	blocked: boolean;
-	/** The protected initial admin — cannot be demoted, blocked, or removed. */
-	isOwner: boolean;
-	/** Whether the account's email address has been confirmed. */
-	emailVerified: boolean;
-	createdAt: string;
-	lastLogin?: string;
+  id: number;
+  email: string;
+  displayName: string;
+  /** Site administrator: manages members and (later) moderation. */
+  isAdmin: boolean;
+  /** Admin-granted gate for claiming nodes and storing private locations. */
+  canClaim: boolean;
+  /** Suspended: cannot log in; existing sessions are void. */
+  blocked: boolean;
+  /** The protected initial admin — cannot be demoted, blocked, or removed. */
+  isOwner: boolean;
+  /** Whether the account's email address has been confirmed. */
+  emailVerified: boolean;
+  createdAt: string;
+  lastLogin?: string;
 }
 
 /** Response from register/login/me: the user (null when signed out) plus the
  *  session's CSRF token, echoed on authenticated mutations via X-CSRF-Token. */
 export interface AuthResponse {
-	user: AuthUser | null;
-	csrfToken?: string;
-	/** Count of nodes newly shared with the user (not yet seen) — account badge. */
-	unseenShares?: number;
-	/** Set by register when a verification email was sent instead of logging in. */
-	verificationSent?: boolean;
-	/** Echoed address for the "check your email" screen / resend. */
-	email?: string;
+  user: AuthUser | null;
+  csrfToken?: string;
+  /** Count of nodes newly shared with the user (not yet seen) — account badge. */
+  unseenShares?: number;
+  /** Set by register when a verification email was sent instead of logging in. */
+  verificationSent?: boolean;
+  /** Echoed address for the "check your email" screen / resend. */
+  email?: string;
 }
 
 /** Error thrown by auth requests; carries the HTTP status and the unverified flag
  *  so the login screen can offer to resend the confirmation email. */
 export class AuthError extends Error {
-	status: number;
-	unverified: boolean;
-	constructor(message: string, status: number, unverified = false) {
-		super(message);
-		this.name = 'AuthError';
-		this.status = status;
-		this.unverified = unverified;
-	}
+  status: number;
+  unverified: boolean;
+  constructor(message: string, status: number, unverified = false) {
+    super(message);
+    this.name = "AuthError";
+    this.status = status;
+    this.unverified = unverified;
+  }
 }
 
 // Session cookies are HttpOnly and set by the server; same-origin fetches send
 // them automatically, so the client never handles the session token directly.
 async function authReq(path: string, body?: unknown): Promise<AuthResponse> {
-	const res = await fetch(path, {
-		method: 'POST',
-		headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json' } : {}) },
-		body: body ? JSON.stringify(body) : undefined
-	});
-	const data = (await res.json().catch(() => ({}))) as AuthResponse & {
-		error?: string;
-		unverified?: boolean;
-	};
-	if (!res.ok) throw new AuthError(data.error ?? `${res.status}`, res.status, !!data.unverified);
-	return data;
+  const res = await fetch(path, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      ...(body ? { "content-type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = (await res.json().catch(() => ({}))) as AuthResponse & {
+    error?: string;
+    unverified?: boolean;
+  };
+  if (!res.ok)
+    throw new AuthError(
+      data.error ?? `${res.status}`,
+      res.status,
+      !!data.unverified,
+    );
+  return data;
 }
 
 export const authApi = {
-	me: () => get<AuthResponse>('/api/auth/me'),
-	register: (email: string, password: string, displayName: string) =>
-		authReq('/api/auth/register', { email, password, displayName }),
-	login: (email: string, password: string) => authReq('/api/auth/login', { email, password }),
-	logout: () => authReq('/api/auth/logout'),
-	/** Confirm an emailed verification token; on success the server logs the user in. */
-	verifyEmail: (token: string) => authReq('/api/auth/verify', { token }),
-	/** Ask for a fresh verification email (always resolves; never reveals account state). */
-	resendVerification: (email: string) =>
-		fetch('/api/auth/resend-verification', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ email })
-		}).then(() => undefined),
-	/** Request a password-reset email (always resolves; never reveals account state). */
-	forgotPassword: (email: string) =>
-		fetch('/api/auth/forgot', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ email })
-		}).then(() => undefined),
-	/** Set a new password from an emailed reset token; on success the server logs the user in. */
-	resetPassword: (token: string, password: string) => authReq('/api/auth/reset', { token, password })
+  me: () => get<AuthResponse>("/api/auth/me"),
+  register: (email: string, password: string, displayName: string) =>
+    authReq("/api/auth/register", { email, password, displayName }),
+  login: (email: string, password: string) =>
+    authReq("/api/auth/login", { email, password }),
+  logout: () => authReq("/api/auth/logout"),
+  /** Confirm an emailed verification token; on success the server logs the user in. */
+  verifyEmail: (token: string) => authReq("/api/auth/verify", { token }),
+  /** Ask for a fresh verification email (always resolves; never reveals account state). */
+  resendVerification: (email: string) =>
+    fetch("/api/auth/resend-verification", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    }).then(() => undefined),
+  /** Request a password-reset email (always resolves; never reveals account state). */
+  forgotPassword: (email: string) =>
+    fetch("/api/auth/forgot", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    }).then(() => undefined),
+  /** Set a new password from an emailed reset token; on success the server logs the user in. */
+  resetPassword: (token: string, password: string) =>
+    authReq("/api/auth/reset", { token, password }),
 };
 
 /** Self-service account editing (authenticated + CSRF). */
 export const account = {
-	/** Change display name; returns the updated account. */
-	updateProfile: (csrf: string, displayName: string) =>
-		mutate<AuthUser>('/api/account/profile', 'PUT', csrf, { displayName }),
-	/** Change password after re-authenticating with the current one. */
-	changePassword: (csrf: string, currentPassword: string, newPassword: string) =>
-		mutate<{ ok: boolean }>('/api/account/password', 'POST', csrf, {
-			currentPassword,
-			newPassword
-		}),
-	/** Change email (re-auth required); the new address must be re-verified. Returns
-	 *  the updated account (emailVerified will be false until confirmed). */
-	changeEmail: (csrf: string, currentPassword: string, newEmail: string) =>
-		mutate<AuthUser>('/api/account/email', 'POST', csrf, { currentPassword, newEmail }),
-	/** Permanently delete the caller's own account (re-auth with password). Every
-	 *  node they owned is released and marked "previously owned by …". */
-	deleteAccount: (csrf: string, password: string) =>
-		mutate<{ ok: boolean }>('/api/account/delete', 'POST', csrf, { password })
+  /** Change display name; returns the updated account. */
+  updateProfile: (csrf: string, displayName: string) =>
+    mutate<AuthUser>("/api/account/profile", "PUT", csrf, { displayName }),
+  /** Change password after re-authenticating with the current one. */
+  changePassword: (
+    csrf: string,
+    currentPassword: string,
+    newPassword: string,
+  ) =>
+    mutate<{ ok: boolean }>("/api/account/password", "POST", csrf, {
+      currentPassword,
+      newPassword,
+    }),
+  /** Change email (re-auth required); the new address must be re-verified. Returns
+   *  the updated account (emailVerified will be false until confirmed). */
+  changeEmail: (csrf: string, currentPassword: string, newEmail: string) =>
+    mutate<AuthUser>("/api/account/email", "POST", csrf, {
+      currentPassword,
+      newEmail,
+    }),
+  /** Permanently delete the caller's own account (re-auth with password). Every
+   *  node they owned is released and marked "previously owned by …". */
+  deleteAccount: (csrf: string, password: string) =>
+    mutate<{ ok: boolean }>("/api/account/delete", "POST", csrf, { password }),
 };
 
 // mutate is the shared helper for authenticated, CSRF-protected state changes
 // (used by the account features). It relies on the same-origin session cookie
 // and sends the session's CSRF token in the header (double-submit).
 export async function mutate<T>(
-	path: string,
-	method: string,
-	csrf: string,
-	body?: unknown
+  path: string,
+  method: string,
+  csrf: string,
+  body?: unknown,
 ): Promise<T> {
-	const res = await fetch(path, {
-		method,
-		headers: {
-			accept: 'application/json',
-			'x-csrf-token': csrf,
-			...(body ? { 'content-type': 'application/json' } : {})
-		},
-		body: body ? JSON.stringify(body) : undefined
-	});
-	if (!res.ok) {
-		let msg = `${res.status}`;
-		try {
-			msg = (await res.json()).error ?? msg;
-		} catch {
-			/* ignore */
-		}
-		throw new Error(msg);
-	}
-	return res.json() as Promise<T>;
+  const res = await fetch(path, {
+    method,
+    headers: {
+      accept: "application/json",
+      "x-csrf-token": csrf,
+      ...(body ? { "content-type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    let msg = `${res.status}`;
+    try {
+      msg = (await res.json()).error ?? msg;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg);
+  }
+  return res.json() as Promise<T>;
 }
 
 // ---- Node ownership claims ----
 
 export interface Claim {
-	id: number;
-	nodePubkey: string;
-	userId: number;
-	/** Verification code (present only on your own pending claim). */
-	code?: string;
-	status: 'pending' | 'verified';
-	createdAt: string;
-	expiresAt?: string;
-	verifiedAt?: string;
+  id: number;
+  nodePubkey: string;
+  userId: number;
+  /** Verification code (present only on your own pending claim). */
+  code?: string;
+  status: "pending" | "verified";
+  createdAt: string;
+  expiresAt?: string;
+  verifiedAt?: string;
 }
 
 export interface ClaimStatus {
-	/** The verified owner (public), if any. */
-	owner?: { userId: number; displayName: string };
-	/** Display name of the node's last owner, kept after they deleted their
-	 *  account. Only set when the node currently has no owner. */
-	previousOwner?: string;
-	ownedByMe: boolean;
-	/** The requesting user's own claim on this node, if any. */
-	mine?: Claim;
-	loggedIn: boolean;
-	/** Whether the requester is allowed to start a claim on this node. */
-	canClaim: boolean;
-	/** True when you own the node but its advertised name still contains the
-	 *  verification code — restore the real name and re-advert to clear it. */
-	nameNeedsReset?: boolean;
+  /** The verified owner (public), if any. */
+  owner?: { userId: number; displayName: string };
+  /** Display name of the node's last owner, kept after they deleted their
+   *  account. Only set when the node currently has no owner. */
+  previousOwner?: string;
+  ownedByMe: boolean;
+  /** The requesting user's own claim on this node, if any. */
+  mine?: Claim;
+  loggedIn: boolean;
+  /** Whether the requester is allowed to start a claim on this node. */
+  canClaim: boolean;
+  /** True when you own the node but its advertised name still contains the
+   *  verification code — restore the real name and re-advert to clear it. */
+  nameNeedsReset?: boolean;
 }
 
 export interface ClaimWithNode extends Claim {
-	nodeName: string;
-	nodeRole: string;
-	/** False when the claimed node isn't currently in the mesh — the retention
-	 *  sweep prunes silent nodes but the owner keeps the claim, so these render
-	 *  as dormant rather than linking to a node page that would 404. */
-	nodePresent: boolean;
+  nodeName: string;
+  nodeRole: string;
+  /** False when the claimed node isn't currently in the mesh — the retention
+   *  sweep prunes silent nodes but the owner keeps the claim, so these render
+   *  as dormant rather than linking to a node page that would 404. */
+  nodePresent: boolean;
 }
 
 /** Result of a scrub — what was actually deleted. */
 export interface ScrubResult {
-	nodes: number;
-	observations: number;
-	claims: number;
-	notes: number;
-	locations: number;
-	shares: number;
+  nodes: number;
+  observations: number;
+  claims: number;
+  notes: number;
+  locations: number;
+  shares: number;
 }
 
 /**
@@ -878,191 +935,252 @@ export interface ScrubResult {
  * claim (an orphaned claim would block the node from ever being re-claimed).
  */
 export const nodeLifecycle = {
-	retire: (csrf: string, pubkey: string) =>
-		mutate<{ retired: boolean }>(`/api/nodes/${encodeURIComponent(pubkey)}/retire`, 'POST', csrf),
-	unretire: (csrf: string, pubkey: string) =>
-		mutate<{ retired: boolean }>(`/api/nodes/${encodeURIComponent(pubkey)}/unretire`, 'POST', csrf),
-	/** Permanent. deleteHistory must be true — the server refuses otherwise. */
-	scrub: (csrf: string, pubkey: string) =>
-		mutate<ScrubResult>(`/api/nodes/${encodeURIComponent(pubkey)}/scrub`, 'POST', csrf, {
-			deleteHistory: true
-		})
+  retire: (csrf: string, pubkey: string) =>
+    mutate<{ retired: boolean }>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/retire`,
+      "POST",
+      csrf,
+    ),
+  unretire: (csrf: string, pubkey: string) =>
+    mutate<{ retired: boolean }>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/unretire`,
+      "POST",
+      csrf,
+    ),
+  /** Permanent. deleteHistory must be true — the server refuses otherwise. */
+  scrub: (csrf: string, pubkey: string) =>
+    mutate<ScrubResult>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/scrub`,
+      "POST",
+      csrf,
+      {
+        deleteHistory: true,
+      },
+    ),
 };
 
 export const claims = {
-	/** Public: ownership + the caller's own claim status for a node. */
-	status: (pubkey: string) => get<ClaimStatus>(`/api/nodes/${encodeURIComponent(pubkey)}/claim`),
-	/** Open or refresh a pending claim; returns the code to embed in the advert name. */
-	create: (csrf: string, pubkey: string) => mutate<Claim>('/api/claims', 'POST', csrf, { pubkey }),
-	/** Cancel a pending claim or release ownership. */
-	release: (csrf: string, pubkey: string) =>
-		mutate<{ ok: boolean }>(`/api/claims/${encodeURIComponent(pubkey)}`, 'DELETE', csrf),
-	/** The caller's own claims (pending + owned) with node display info. */
-	mine: () => get<ClaimWithNode[]>('/api/claims/mine'),
-	/** Private-key proof: request a challenge to sign with the node's private key. */
-	keyChallenge: (csrf: string, pubkey: string) =>
-		mutate<{ challenge: string }>(
-			`/api/nodes/${encodeURIComponent(pubkey)}/claim/key-challenge`,
-			'POST',
-			csrf
-		),
-	/** Private-key proof: submit the signature over the challenge to verify ownership. */
-	keyVerify: (csrf: string, pubkey: string, signature: string) =>
-		mutate<Claim>(`/api/nodes/${encodeURIComponent(pubkey)}/claim/key-verify`, 'POST', csrf, {
-			signature
-		})
+  /** Public: ownership + the caller's own claim status for a node. */
+  status: (pubkey: string) =>
+    get<ClaimStatus>(`/api/nodes/${encodeURIComponent(pubkey)}/claim`),
+  /** Open or refresh a pending claim; returns the code to embed in the advert name. */
+  create: (csrf: string, pubkey: string) =>
+    mutate<Claim>("/api/claims", "POST", csrf, { pubkey }),
+  /** Cancel a pending claim or release ownership. */
+  release: (csrf: string, pubkey: string) =>
+    mutate<{ ok: boolean }>(
+      `/api/claims/${encodeURIComponent(pubkey)}`,
+      "DELETE",
+      csrf,
+    ),
+  /** The caller's own claims (pending + owned) with node display info. */
+  mine: () => get<ClaimWithNode[]>("/api/claims/mine"),
+  /** Private-key proof: request a challenge to sign with the node's private key. */
+  keyChallenge: (csrf: string, pubkey: string) =>
+    mutate<{ challenge: string }>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/claim/key-challenge`,
+      "POST",
+      csrf,
+    ),
+  /** Private-key proof: submit the signature over the challenge to verify ownership. */
+  keyVerify: (csrf: string, pubkey: string, signature: string) =>
+    mutate<Claim>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/claim/key-verify`,
+      "POST",
+      csrf,
+      {
+        signature,
+      },
+    ),
 };
 
 // ---- Node notes ----
 
-export type NoteVisibility = 'public' | 'private' | 'team';
+export type NoteVisibility = "public" | "private" | "team";
 
 export interface Note {
-	id: number;
-	nodePubkey: string;
-	userId: number;
-	authorName: string;
-	visibility: NoteVisibility;
-	body: string;
-	createdAt: string;
-	updatedAt: string;
-	/** The requester may edit/delete this note (author, or owner/admin for delete). */
-	mine: boolean;
+  id: number;
+  nodePubkey: string;
+  userId: number;
+  authorName: string;
+  visibility: NoteVisibility;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  /** The requester may edit/delete this note (author, or owner/admin for delete). */
+  mine: boolean;
 }
 
 /** Notes list plus the caller's posting rights (drives the note-type options). */
 export interface NotesResult {
-	notes: Note[];
-	/** Caller may post "team" notes (node owner or a shared-with user). */
-	canTeam: boolean;
-	/** Caller is signed in (may post at all). */
-	loggedIn: boolean;
+  notes: Note[];
+  /** Caller may post "team" notes (node owner or a shared-with user). */
+  canTeam: boolean;
+  /** Caller is signed in (may post at all). */
+  loggedIn: boolean;
 }
 
 export const notes = {
-	/** Notes visible to the caller (public + own + team-if-in-circle) + their rights. */
-	list: (pubkey: string) => get<NotesResult>(`/api/nodes/${encodeURIComponent(pubkey)}/notes`),
-	create: (csrf: string, pubkey: string, body: string, visibility: NoteVisibility) =>
-		mutate<Note>(`/api/nodes/${encodeURIComponent(pubkey)}/notes`, 'POST', csrf, { body, visibility }),
-	update: (csrf: string, id: number, body: string, visibility: NoteVisibility) =>
-		mutate<Note>(`/api/notes/${id}`, 'PATCH', csrf, { body, visibility }),
-	remove: (csrf: string, id: number) => mutate<{ ok: boolean }>(`/api/notes/${id}`, 'DELETE', csrf)
+  /** Notes visible to the caller (public + own + team-if-in-circle) + their rights. */
+  list: (pubkey: string) =>
+    get<NotesResult>(`/api/nodes/${encodeURIComponent(pubkey)}/notes`),
+  create: (
+    csrf: string,
+    pubkey: string,
+    body: string,
+    visibility: NoteVisibility,
+  ) =>
+    mutate<Note>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/notes`,
+      "POST",
+      csrf,
+      { body, visibility },
+    ),
+  update: (
+    csrf: string,
+    id: number,
+    body: string,
+    visibility: NoteVisibility,
+  ) => mutate<Note>(`/api/notes/${id}`, "PATCH", csrf, { body, visibility }),
+  remove: (csrf: string, id: number) =>
+    mutate<{ ok: boolean }>(`/api/notes/${id}`, "DELETE", csrf),
 };
 
 /** Minimal public identity for the share autocomplete. */
 export interface UserBrief {
-	id: number;
-	displayName: string;
+  id: number;
+  displayName: string;
 }
 
 /** Autocomplete registered users by display name (signed-in only). */
 export const userSearch = (q: string) =>
-	get<UserBrief[]>(`/api/users/search?q=${encodeURIComponent(q)}`);
+  get<UserBrief[]>(`/api/users/search?q=${encodeURIComponent(q)}`);
 
 // ---- Node private exact location (owner-only) ----
 
 export interface PrivateLocation {
-	nodePubkey: string;
-	userId: number;
-	latitude: number;
-	longitude: number;
-	label: string;
-	updatedAt: string;
+  nodePubkey: string;
+  userId: number;
+  latitude: number;
+  longitude: number;
+  label: string;
+  updatedAt: string;
 }
 
 /** GET response: `set` says whether a location exists; `location` is present when it does. */
 export interface PrivateLocationResult {
-	set: boolean;
-	location?: PrivateLocation;
-	/** True only for the node's owner (shared-with viewers get read-only). */
-	canEdit?: boolean;
-	/** Present for a shared-with viewer: who shared the location with them. */
-	sharedBy?: { userId: number; displayName: string };
+  set: boolean;
+  location?: PrivateLocation;
+  /** True only for the node's owner (shared-with viewers get read-only). */
+  canEdit?: boolean;
+  /** Present for a shared-with viewer: who shared the location with them. */
+  sharedBy?: { userId: number; displayName: string };
 }
 
 /** One user a node's private location is shared with. */
 export interface LocationShare {
-	nodePubkey: string;
-	granteeUserId: number;
-	displayName: string;
-	email: string;
-	createdAt: string;
+  nodePubkey: string;
+  granteeUserId: number;
+  displayName: string;
+  email: string;
+  createdAt: string;
 }
 
 export const privateLocation = {
-	/** Fetch a node's private exact location. 200 for the owner or a shared-with
-	 *  user (403 otherwise, so it never confirms a location exists to others). */
-	get: (pubkey: string) =>
-		get<PrivateLocationResult>(`/api/nodes/${encodeURIComponent(pubkey)}/private-location`),
-	/** Owner-only: store/replace the private exact location. */
-	set: (csrf: string, pubkey: string, latitude: number, longitude: number, label: string) =>
-		mutate<PrivateLocationResult>(
-			`/api/nodes/${encodeURIComponent(pubkey)}/private-location`,
-			'PUT',
-			csrf,
-			{ latitude, longitude, label }
-		),
-	/** Owner-only: clear the private exact location. */
-	remove: (csrf: string, pubkey: string) =>
-		mutate<{ ok: boolean }>(
-			`/api/nodes/${encodeURIComponent(pubkey)}/private-location`,
-			'DELETE',
-			csrf
-		)
+  /** Fetch a node's private exact location. 200 for the owner or a shared-with
+   *  user (403 otherwise, so it never confirms a location exists to others). */
+  get: (pubkey: string) =>
+    get<PrivateLocationResult>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/private-location`,
+    ),
+  /** Owner-only: store/replace the private exact location. */
+  set: (
+    csrf: string,
+    pubkey: string,
+    latitude: number,
+    longitude: number,
+    label: string,
+  ) =>
+    mutate<PrivateLocationResult>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/private-location`,
+      "PUT",
+      csrf,
+      { latitude, longitude, label },
+    ),
+  /** Owner-only: clear the private exact location. */
+  remove: (csrf: string, pubkey: string) =>
+    mutate<{ ok: boolean }>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/private-location`,
+      "DELETE",
+      csrf,
+    ),
 };
 
 /** A node whose private location has been shared WITH the current user. */
 export interface SharedWithMe {
-	nodePubkey: string;
-	nodeName: string;
-	nodeRole: string;
-	sharedById: number;
-	sharedByName: string;
-	createdAt: string;
-	seen: boolean;
-	/** False when the shared node isn't currently in the mesh — same dormant
-	 *  treatment as ClaimWithNode.nodePresent. */
-	nodePresent: boolean;
+  nodePubkey: string;
+  nodeName: string;
+  nodeRole: string;
+  sharedById: number;
+  sharedByName: string;
+  createdAt: string;
+  seen: boolean;
+  /** False when the shared node isn't currently in the mesh — same dormant
+   *  treatment as ClaimWithNode.nodePresent. */
+  nodePresent: boolean;
 }
 
 /** Grantee-facing: the nodes shared with me + clearing the "new" badge. */
 export const shares = {
-	mine: () => get<SharedWithMe[]>('/api/shares/mine'),
-	markSeen: (csrf: string) => mutate<{ ok: boolean }>('/api/shares/mark-seen', 'POST', csrf)
+  mine: () => get<SharedWithMe[]>("/api/shares/mine"),
+  markSeen: (csrf: string) =>
+    mutate<{ ok: boolean }>("/api/shares/mark-seen", "POST", csrf),
 };
 
 /** Owner-only management of who a node's private location is shared with. */
 export const locationShares = {
-	list: (pubkey: string) =>
-		get<LocationShare[]>(`/api/nodes/${encodeURIComponent(pubkey)}/location-shares`),
-	/** Grant read access to a registered user (by id from the picker, or email);
-	 *  returns the updated list. */
-	grant: (csrf: string, pubkey: string, grantee: { userId: number } | { email: string }) =>
-		mutate<LocationShare[]>(
-			`/api/nodes/${encodeURIComponent(pubkey)}/location-shares`,
-			'POST',
-			csrf,
-			grantee
-		),
-	/** Revoke a grantee's access. */
-	revoke: (csrf: string, pubkey: string, granteeUserId: number) =>
-		mutate<{ ok: boolean }>(
-			`/api/nodes/${encodeURIComponent(pubkey)}/location-shares/${granteeUserId}`,
-			'DELETE',
-			csrf
-		)
+  list: (pubkey: string) =>
+    get<LocationShare[]>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/location-shares`,
+    ),
+  /** Grant read access to a registered user (by id from the picker, or email);
+   *  returns the updated list. */
+  grant: (
+    csrf: string,
+    pubkey: string,
+    grantee: { userId: number } | { email: string },
+  ) =>
+    mutate<LocationShare[]>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/location-shares`,
+      "POST",
+      csrf,
+      grantee,
+    ),
+  /** Revoke a grantee's access. */
+  revoke: (csrf: string, pubkey: string, granteeUserId: number) =>
+    mutate<{ ok: boolean }>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/location-shares/${granteeUserId}`,
+      "DELETE",
+      csrf,
+    ),
 };
 
 /** Admin member management (session-admin gated). */
 export const adminUsers = {
-	list: () => get<AuthUser[]>('/api/admin/users'),
-	/** Grant/revoke admin. (Claiming is universal, so there's no can-claim flag.) */
-	setAdmin: (csrf: string, id: number, isAdmin: boolean) =>
-		mutate<{ ok: boolean }>('/api/admin/users/flags', 'POST', csrf, { id, isAdmin }),
-	/** Suspend (blocked=true) or restore (blocked=false) an account. */
-	setBlocked: (csrf: string, id: number, blocked: boolean) =>
-		mutate<{ ok: boolean }>('/api/admin/users/block', 'POST', csrf, { id, blocked }),
-	/** Permanently delete an account. */
-	remove: (csrf: string, id: number) =>
-		mutate<{ ok: boolean }>('/api/admin/users/delete', 'POST', csrf, { id })
+  list: () => get<AuthUser[]>("/api/admin/users"),
+  /** Grant/revoke admin. (Claiming is universal, so there's no can-claim flag.) */
+  setAdmin: (csrf: string, id: number, isAdmin: boolean) =>
+    mutate<{ ok: boolean }>("/api/admin/users/flags", "POST", csrf, {
+      id,
+      isAdmin,
+    }),
+  /** Suspend (blocked=true) or restore (blocked=false) an account. */
+  setBlocked: (csrf: string, id: number, blocked: boolean) =>
+    mutate<{ ok: boolean }>("/api/admin/users/block", "POST", csrf, {
+      id,
+      blocked,
+    }),
+  /** Permanently delete an account. */
+  remove: (csrf: string, id: number) =>
+    mutate<{ ok: boolean }>("/api/admin/users/delete", "POST", csrf, { id }),
 };

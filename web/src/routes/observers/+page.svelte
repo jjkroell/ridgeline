@@ -64,9 +64,14 @@
 		<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 			{#each observers as o, i (o.id)}
 				{@const cov = coverage[o.id]}
+				<!-- A quarantined observer is tinted, not just badged. The badge sits
+				     in the corner of one card among twenty; the operator needs to spot
+				     the problem while scanning the grid, not after reading it. -->
 				<a
 					href="/observers/{encodeURIComponent(o.id)}"
-					class="panel panel-hover rise block px-5 py-4"
+					class="panel panel-hover rise block px-5 py-4 {o.radioQuarantinedAt
+						? 'border-coral/50 bg-coral/10'
+						: ''}"
 					style="animation-delay:{i * 40}ms"
 				>
 					<div class="flex items-start justify-between">
@@ -93,7 +98,7 @@
 									<Tooltip
 										text="Packets refused — this publisher never reported a radio config, so nothing can vouch for what it is hearing. It stays connected; nothing it sends is kept."
 									>
-										<span class="text-amber font-mono text-[0.6rem] font-600 tracking-wider"
+										<span class="text-coral font-mono text-[0.6rem] font-600 tracking-wider"
 											>NO RADIO REPORTED</span
 										>
 									</Tooltip>
@@ -102,7 +107,7 @@
 										text="Packets refused — this receiver reports {o.radioQuarantineRadio ||
 											'a preset'}, which is not on this mesh. It stays connected; nothing it hears is kept."
 									>
-										<span class="text-amber font-mono text-[0.6rem] font-600 tracking-wider"
+										<span class="text-coral font-mono text-[0.6rem] font-600 tracking-wider"
 											>WRONG PRESET</span
 										>
 									</Tooltip>

@@ -65,8 +65,10 @@
 					<!-- Standby wins over Reporting/Silent: the receiver is still reporting,
 					     its packets are just being discarded. -->
 					<span
-						class={o.radioQuarantinedAt || o.standbySince
-							? 'text-amber'
+						class={o.radioQuarantinedAt
+							? 'text-coral'
+							: o.standbySince
+								? 'text-amber'
 							: reporting
 								? 'text-signal'
 								: ''}

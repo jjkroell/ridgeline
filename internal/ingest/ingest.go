@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -74,6 +75,10 @@ type Ingestor struct {
 	// until the verdict arrives. See holding_pen.go.
 	penMu sync.Mutex
 	pens  map[string]*pen
+	// Connection-gap accounting. Packets published while disconnected are lost,
+	// so the time spent disconnected is the loss.
+	lostAt   atomic.Value // time.Time of the last connection loss
+	downtime atomic.Int64 // cumulative nanoseconds disconnected
 	// commitFn lets tests observe what the pen releases without standing up a
 	// store. nil in production, where commit() is called directly.
 	commitFn func(store.Observation) bool
@@ -97,12 +102,60 @@ func (in *Ingestor) Start() error {
 		SetClientID(in.cfg.ClientID).
 		SetAutoReconnect(true).
 		SetConnectRetry(true).
-		SetCleanSession(true)
+		// CleanSession stays true, and the subscriptions stay at QoS 0, because
+		// the alternative is worse. A persistent session with QoS 1 would have
+		// the broker redeliver anything missed during a drop — but redelivery is
+		// indistinguishable from a genuine repeat here: 64% of stored
+		// observations already share (observer_id, message_hash) with another
+		// row, one hash appearing 1058 times from a single observer, and MQTT
+		// carries no message identity to dedupe on. Guaranteed delivery would
+		// trade a measured ~0.5% loss for unbounded duplication.
+		//
+		// So the goal is short gaps, not no gaps.
+		SetCleanSession(true).
+		// paho's default reconnect backoff climbs to TEN MINUTES. Nothing here
+		// benefits from backing off that far: the broker is a container on the
+		// same host, and a ten-minute gap would lose far more than the blip that
+		// caused it. Measured gaps were 0-98s; this caps the tail.
+		SetMaxReconnectInterval(15 * time.Second).
+		SetConnectRetryInterval(5 * time.Second).
+		// The broker's auth plugin calls back into this process for every ACL
+		// check, so a burst of publishes can delay a PINGRESP. The defaults
+		// (30s keepalive, 10s ping timeout) turn that into a dropped connection
+		// and a reconnect that loses packets. More tolerance costs only slower
+		// detection of a genuinely dead link, which AutoReconnect then handles.
+		SetKeepAlive(45 * time.Second).
+		SetPingTimeout(15 * time.Second)
+
+	// Until now a dropped connection was invisible: nothing logged it, and the
+	// only trace was a second "subscribed" line appearing later. Packets
+	// published while disconnected are gone — not queued, not retried — so the
+	// loss must at least be visible and measurable.
+	opts.SetConnectionLostHandler(func(_ mqtt.Client, err error) {
+		in.lostAt.Store(time.Now())
+		in.log.Warn("mqtt connection lost — packets published while disconnected are unrecoverable",
+			"broker", in.cfg.Broker, "err", err)
+	})
+	opts.SetReconnectingHandler(func(_ mqtt.Client, _ *mqtt.ClientOptions) {
+		in.log.Info("mqtt reconnecting", "broker", in.cfg.Broker)
+	})
 	if in.cfg.Username != "" {
 		opts.SetUsername(in.cfg.Username)
 		opts.SetPassword(in.cfg.Password)
 	}
 	opts.SetOnConnectHandler(func(c mqtt.Client) {
+		// Report how long the gap was. A reconnect on its own says little; the
+		// downtime is the part that maps to lost packets.
+		if v := in.lostAt.Load(); v != nil {
+			if t, ok := v.(time.Time); ok && !t.IsZero() {
+				d := time.Since(t)
+				in.downtime.Add(int64(d))
+				in.log.Warn("mqtt reconnected after a gap",
+					"broker", in.cfg.Broker, "downtime", d.Round(time.Second),
+					"cumulativeDowntime", time.Duration(in.downtime.Load()).Round(time.Second))
+				in.lostAt.Store(time.Time{})
+			}
+		}
 		for _, topic := range in.cfg.Topics {
 			if tok := c.Subscribe(topic, 0, in.handle); tok.Wait() && tok.Error() != nil {
 				in.log.Error("subscribe failed", "topic", topic, "err", tok.Error())

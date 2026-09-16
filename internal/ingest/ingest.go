@@ -77,8 +77,11 @@ type Ingestor struct {
 	// commitFn lets tests observe what the pen releases without standing up a
 	// store. nil in production, where commit() is called directly.
 	commitFn func(store.Observation) bool
-	done     chan struct{}
-	once     sync.Once
+	// sweepHook fires once the pen sweeper is running, so a test can assert the
+	// goroutine actually started rather than that Start() returned.
+	sweepHook func()
+	done      chan struct{}
+	once      sync.Once
 }
 
 // New creates an Ingestor.
@@ -116,9 +119,16 @@ func (in *Ingestor) Start() error {
 	// the web UI — on the broker being reachable at startup. Wait a short bounded
 	// time for a fast connect (so the common case still logs "subscribed" before
 	// serving), then proceed regardless; the connection completes/retries later.
+	// The pen sweeper is started here, before the connect is waited on, because
+	// its lifetime is the Ingestor's and not the broker's. It previously lived
+	// inside the timeout branch below, which meant that on every NORMAL startup —
+	// broker reachable, connect fast — it never ran at all: pens never expired,
+	// never got logged, and the grace-period quarantine could not fire. The bug
+	// was invisible precisely because its only symptom was silence.
+	go in.sweepPens()
+
 	if !tok.WaitTimeout(10 * time.Second) {
 		in.log.Warn("mqtt connect still pending; retrying in background", "broker", in.cfg.Broker)
-		go in.sweepPens()
 		return nil
 	}
 	return tok.Error()

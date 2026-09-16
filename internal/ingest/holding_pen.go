@@ -125,6 +125,9 @@ func (in *Ingestor) discardHeld(observerID, reason string) {
 func (in *Ingestor) sweepPens() {
 	t := time.NewTicker(holdSweep)
 	defer t.Stop()
+	if in.sweepHook != nil {
+		in.sweepHook()
+	}
 	for {
 		select {
 		case <-in.done:

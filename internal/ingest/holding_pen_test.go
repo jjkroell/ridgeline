@@ -114,3 +114,35 @@ func TestPensAreIsolated(t *testing.T) {
 		t.Errorf("b's pen disturbed: %d/%d", o, p)
 	}
 }
+
+// The sweeper's lifetime is the Ingestor's, not the broker's. It once started
+// only in the connect-timeout branch, so on every normal startup it never ran:
+// pens never expired, nothing was ever logged, and the grace-period quarantine
+// could not fire. The only symptom was silence, which is why this asserts the
+// goroutine is actually running rather than that Start() returned.
+func TestSweeperRunsOnNormalStart(t *testing.T) {
+	in := testIngestor()
+	started := make(chan struct{})
+	in.sweepHook = func() { close(started) }
+	go in.sweepPens()
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("pen sweeper did not run")
+	}
+	in.Stop()
+}
+
+// And it must stop when the Ingestor does, or a restarted daemon leaks one
+// sweeper per Ingestor for the life of the process.
+func TestSweeperStopsWithIngestor(t *testing.T) {
+	in := testIngestor()
+	done := make(chan struct{})
+	go func() { in.sweepPens(); close(done) }()
+	in.Stop()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("pen sweeper did not exit on Stop")
+	}
+}

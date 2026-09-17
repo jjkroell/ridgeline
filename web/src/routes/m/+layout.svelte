@@ -35,8 +35,13 @@
 		{ href: '/m/map', label: 'Map', icon: 'map', desc: 'Node locations & coverage' },
 		{ href: '/m/identity', label: 'Identity', icon: 'keys', desc: 'Collisions & key generator' },
 		{ href: '/m/observers', label: 'Observers', icon: 'observers', desc: 'Listening posts & telemetry' },
-		{ href: '/m/admin', label: 'Admin', icon: 'admin', desc: 'Injection control (restricted)' }
+		{ href: '/m/admin', label: 'Admin', icon: 'admin', desc: 'Injection control (restricted)', adminOnly: true }
 	];
+	// Admin is the only restricted destination; hide its link from anyone who is
+	// not a signed-in admin. isAdmin defaults false until /me resolves, so this
+	// fails closed — the link never flashes for a logged-out visitor. Mirrors the
+	// desktop nav filter in routes/+layout.svelte.
+	const visibleMore = $derived(more.filter((m) => !m.adminOnly || auth.isAdmin));
 
 	const icons: Record<string, string> = {
 		home: 'M3 11l9-8 9 8M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10',
@@ -177,7 +182,7 @@
 		>
 		<div class="bg-line mx-auto mb-3 mt-1 h-1 w-10 rounded-full"></div>
 		<div class="grid grid-cols-1 gap-1">
-			{#each more as m (m.href)}
+			{#each visibleMore as m (m.href)}
 				{@const on = activeTab(m.href)}
 				<a href={m.href} class="flex items-center gap-3 rounded-xl px-3 py-3 {on ? 'bg-signal/10' : 'active:bg-line/40'}">
 					<span class="border-line/60 grid h-10 w-10 shrink-0 place-items-center rounded-xl border {on ? 'bg-signal/15' : 'bg-panel'}">

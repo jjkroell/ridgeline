@@ -4,6 +4,16 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.19.0] — 2026-09-16
+
+### Added
+- **Share cards get full public keys, colour emoji and mobile layouts.** The
+  server-rendered previews now carry a node's full key rather than a truncated
+  one (stable identity), render colour emoji with identicons aligned to match,
+  and come in portrait, square and story layouts for mobile sharing. Noto Emoji
+  and JetBrains Mono are vendored with their upstream licences. Contributed by
+  @benaltair (ports Ridgeline-public#5; PR #2).
+
 ## [v0.18.1] — 2026-09-16
 
 ### Fixed

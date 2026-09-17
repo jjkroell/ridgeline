@@ -432,14 +432,14 @@ func (in *Ingestor) handleStatus(msg mqtt.Message) {
 			// what it is set to. Evaluating it means a reconnecting observer
 			// that was fixed while away is readmitted on reconnect rather than
 			// waiting for its next live status.
-			in.evaluateRadio(observerID, observerName, env.Radio, now)
+			in.evaluateRadio(observerID, observerName, env.Radio, now, true)
 		}
 		return
 	}
 	if err := in.store.UpsertObserverStatus(observerID, observerName, region, pubkey, string(b), env.Radio, now); err != nil {
 		in.log.Error("store observer status failed", "err", err)
 	}
-	in.evaluateRadio(observerID, observerName, env.Radio, now)
+	in.evaluateRadio(observerID, observerName, env.Radio, now, false)
 	// Append a point to the telemetry time series (rate-floored in the store) so
 	// battery/noise/airtime can be trended — the observer row only keeps the latest.
 	if err := in.store.RecordObserverTelemetry(observerID, now, st); err != nil {
@@ -495,17 +495,32 @@ func topicMeta(topic string) (observerID, region string) {
 // evaluateRadio applies the radio-preset guard to a reported config and logs
 // only the transitions. Logging every status would bury the one line that
 // matters — the moment an observer started or stopped being trusted.
-func (in *Ingestor) evaluateRadio(observerID, observerName, reported, at string) {
-	bad, changed := in.store.EvaluateObserverRadio(observerID, reported, at)
-	if !changed {
+func (in *Ingestor) evaluateRadio(observerID, observerName, reported, at string, retained bool) {
+	v := in.store.EvaluateObserverRadio(observerID, reported, at, retained)
+	if !v.Changed {
 		return
 	}
-	if bad {
+	if v.Quarantined {
 		in.log.Warn("observer quarantined: radio preset is not on this mesh",
 			"observer", observerID, "name", observerName, "radio", reported)
 		// Anything held while we waited for this status was heard on that same
 		// wrong preset. It is not this mesh's traffic and must not be stored.
 		in.discardHeld(observerID, "radio preset is not on this mesh")
+		// And anything STORED since its last good status was heard on it too:
+		// a confirmed observer that retunes keeps feeding for up to one status
+		// cycle before this verdict lands. Take that window back.
+		if v.VouchedSince != "" {
+			res, err := in.store.RetractObserverSince(observerID, v.VouchedSince)
+			if err != nil {
+				in.log.Error("retract observations after quarantine failed",
+					"observer", observerID, "since", v.VouchedSince, "err", err)
+			} else {
+				in.log.Warn("retracted what the observer stored since its last good status",
+					"observer", observerID, "name", observerName, "since", v.VouchedSince,
+					"observations", res.Observations, "nodes", res.Nodes,
+					"keptClaimed", len(res.SkippedClaimed))
+			}
+		}
 		return
 	}
 	in.log.Info("observer radio preset accepted",

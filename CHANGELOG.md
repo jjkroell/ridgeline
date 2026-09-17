@@ -4,6 +4,62 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [Unreleased]
+
+### Added
+- **A confirmed observer that retunes has its window retracted.** The radio
+  guard's verdict rides on `/status`, and status lands every five minutes. An
+  observer that was accepted, then moved to another network and kept
+  publishing, stayed confirmed for the rest of that cycle — and everything it
+  heard over there went straight to the database. Measured on prod: 10–30
+  packets per observer per cycle, 60 for the busiest, peaks near 200, each
+  advert among them inventing a node that is not on this mesh. When the
+  quarantine lands, what the observer stored since its last *good* status is
+  now removed: the observations, and any node that first appeared inside that
+  window and that no other observer heard there. A node known before the
+  window, or heard by anyone else in it, was on this mesh and stays; a node a
+  user has claimed, annotated or located is kept and reported, as the
+  observer-delete orphan pass does. Dry-run on a copy of prod: ~25 ms, and for
+  a genuine observer it removes no nodes at all.
+  - The anchor is the time of the last status that passed, advanced on every
+    accepted live status and reset on readmission, so a second fall retracts
+    from the fix, never from the beginning. A retained status — the broker's
+    replay on reconnect — readmits but does not move the anchor: it proves
+    nothing about the observer now.
+- **A publisher that never reports a radio is quarantined**, not cycled
+  forever. Its packets were held, expired, discarded, and the next packet
+  opened a fresh pen — bounded, but never resolved, and invisible, because an
+  observer row is only created by storing a packet or receiving a status and it
+  reached neither. After 20 minutes without a status it now gets a row with
+  reason `no-status`, its packets are dropped at ingest rather than held, and
+  the observers page shows **NO RADIO REPORTED**. Observers still inside their
+  first minutes show as waiting. Recovery is automatic: a good status readmits
+  it like any other.
+- **MQTT reconnect gaps are logged with their duration.** Measured over 16 h
+  the ingest consumer reconnected 20 times, 319 s disconnected in total —
+  0.556 % of packets lost — and nothing logged any of it. paho's reconnect
+  backoff (which climbs to ten minutes by default) is capped at 15 s, and the
+  keepalive is 45 s / ping timeout 15 s so a burst of ACL callbacks cannot
+  drop the link.
+
+### Changed
+- **The holding pen's grace is 20 minutes**, down from 30: status lands every
+  five minutes here, so twenty is four missed cycles.
+- **A quarantined observer's card is tinted**, not just badged, and coral —
+  distinct from standby's amber. A deliberate stand-down and a wrong-network
+  receiver must not look alike.
+
+### Fixed
+- **Installing the accepted presets now re-vets every stored observer.** The
+  confirmed set was rebuilt at open, before the list existed — and with nothing
+  to check against, every observer with any stored preset came up confirmed,
+  foreign ones included, and stayed so until its next status. That was a
+  five-minute window of stored foreign traffic on every restart, and on the day
+  the list is narrowed, the whole fleet at once. Now an observer whose stored
+  preset fails is held until its next status, as a new observer is.
+- The pen sweeper starts on every startup; it was only started when the initial
+  broker connect was slow.
+
 ## [v0.17.1] — 2026-09-14
 
 ### Added

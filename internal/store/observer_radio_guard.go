@@ -1,9 +1,12 @@
 package store
 
 import (
+	"database/sql"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/jjkroell/ridgeline/internal/meshcore"
 	radiopkg "github.com/jjkroell/ridgeline/internal/radio"
 )
 
@@ -50,6 +53,37 @@ func (s *Store) SetAllowedRadios(list []string) {
 	s.radioMu.Lock()
 	s.allowedRadios = ps
 	s.radioMu.Unlock()
+
+	// Re-vet against the list just installed. Open() rebuilt the confirmed set
+	// before any list existed, and with nothing to check against radioAllowed
+	// says yes to everything — so every observer with a stored preset came up
+	// "confirmed", foreign ones included, and stayed that way until its next
+	// status: a five-minute window of stored foreign traffic on every restart,
+	// and on the day the list is narrowed, the whole fleet at once.
+	if err := s.loadRadioQuarantine(); err != nil {
+		return
+	}
+	s.backfillRadioOK()
+}
+
+// backfillRadioOK gives an observer confirmed from its stored preset the anchor
+// a live status would have set. Its last status IS the one that passed —
+// that is what confirmed it — so radio_ok_at = last_status_at is exact, not a
+// guess. Without it a pre-existing observer that later retunes would be
+// quarantined but have nothing retracted.
+func (s *Store) backfillRadioOK() {
+	s.radioMu.RLock()
+	ids := make([]string, 0, len(s.confirmedRadios))
+	for id := range s.confirmedRadios {
+		ids = append(ids, id)
+	}
+	s.radioMu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, id := range ids {
+		s.db.Exec(`UPDATE observers SET radio_ok_at = last_status_at
+		           WHERE id = ? AND radio_ok_at IS NULL AND last_status_at IS NOT NULL`, id)
+	}
 }
 
 // AllowedRadioCount reports how many presets are configured; 0 means the guard
@@ -156,21 +190,40 @@ func (s *Store) ObserverRadioQuarantined(observerID string) bool {
 	return s.quarantinedRadios[observerID]
 }
 
-// EvaluateObserverRadio applies the guard to a freshly reported preset and
-// returns whether the observer is now quarantined, and whether that changed.
+// RadioVerdict is the outcome of evaluating one reported preset.
+type RadioVerdict struct {
+	Quarantined bool
+	Changed     bool // a transition, in either direction; the only thing worth logging
+	// VouchedSince is set only on a confirmed → quarantined transition: the
+	// time of the last status that passed. Everything this observer stored
+	// after it was accepted on the strength of a preset it has since left, and
+	// the caller is expected to retract it — see RetractObserverSince.
+	VouchedSince string
+}
+
+// EvaluateObserverRadio applies the guard to a freshly reported preset.
 //
 // Called from the status path, which is the only place a preset arrives.
 // Clearing is as important as setting: an operator who fixes their radio must
 // come back automatically, without anyone noticing and intervening.
-func (s *Store) EvaluateObserverRadio(observerID, reported, at string) (quarantined, changed bool) {
+//
+// retained says the status is the broker's replay of the observer's last one,
+// not a live report. It still decides admission — that is what readmits an
+// observer fixed while the daemon was away — but it must not move the anchor
+// forward: it proves nothing about the observer NOW, and a later retraction
+// would then start too late and leave foreign rows from before the reconnect.
+// It only sets the anchor when there is none, because no anchor means no
+// retraction at all, which is worse.
+func (s *Store) EvaluateObserverRadio(observerID, reported, at string, retained bool) RadioVerdict {
 	if observerID == "" || s.AllowedRadioCount() == 0 {
-		return false, false
+		return RadioVerdict{}
 	}
 	bad := !s.radioAllowed(reported)
 
 	s.radioMu.Lock()
 	was := s.quarantinedRadios[observerID]
-	firstVerdict := !s.confirmedRadios[observerID] && !was
+	wasConfirmed := s.confirmedRadios[observerID]
+	firstVerdict := !wasConfirmed && !was
 	if s.quarantinedRadios == nil {
 		s.quarantinedRadios = map[string]bool{}
 	}
@@ -186,22 +239,50 @@ func (s *Store) EvaluateObserverRadio(observerID, reported, at string) (quaranti
 	}
 	s.radioMu.Unlock()
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	// A first verdict is a change even when it is "accepted": it is what
 	// releases anything the holding pen is keeping for this observer.
 	if bad == was && !firstVerdict {
-		return bad, false
+		if !bad {
+			// Still good: move the anchor forward. This runs on every accepted
+			// status, so a later fall from grace retracts one status cycle,
+			// not everything since the observer first appeared.
+			s.db.Exec(`UPDATE observers SET `+anchorSet(retained)+` WHERE id = ?`, at, observerID)
+		}
+		return RadioVerdict{Quarantined: bad}
 	}
 
-	s.mu.Lock()
+	v := RadioVerdict{Quarantined: bad, Changed: true}
 	if bad {
-		s.db.Exec(`UPDATE observers SET radio_quarantined_at = ?, radio_quarantine_radio = ?, radio_quarantine_reason = 'preset' WHERE id = ?`,
+		// Read the anchor before clearing it: it is the retraction's start, and
+		// clearing it is what makes a second quarantine — after a readmission
+		// that set a fresh one — retract from the fresh one, never from here.
+		if wasConfirmed {
+			var since *string
+			s.db.QueryRow(`SELECT radio_ok_at FROM observers WHERE id = ?`, observerID).Scan(&since)
+			if since != nil {
+				v.VouchedSince = *since
+			}
+		}
+		s.db.Exec(`UPDATE observers SET radio_quarantined_at = ?, radio_quarantine_radio = ?, radio_quarantine_reason = 'preset', radio_ok_at = NULL WHERE id = ?`,
 			at, radiopkg.Normalize(strings.TrimSpace(reported)), observerID)
 	} else {
-		s.db.Exec(`UPDATE observers SET radio_quarantined_at = NULL, radio_quarantine_radio = NULL, radio_quarantine_reason = NULL WHERE id = ?`,
-			observerID)
+		s.db.Exec(`UPDATE observers SET radio_quarantined_at = NULL, radio_quarantine_radio = NULL, radio_quarantine_reason = NULL, `+anchorSet(retained)+` WHERE id = ?`,
+			at, observerID)
 	}
-	s.mu.Unlock()
-	return bad, true
+	return v
+}
+
+// anchorSet is the SET clause that records an accepted status as the
+// retraction anchor: the status time when live; when retained, whatever is
+// already there, falling back to the status time only if nothing is.
+func anchorSet(retained bool) string {
+	if retained {
+		return "radio_ok_at = COALESCE(radio_ok_at, ?)"
+	}
+	return "radio_ok_at = ?"
 }
 
 // radioTouchInterval throttles the last_seen refresh on the drop path, matching
@@ -303,4 +384,177 @@ func (s *Store) QuarantineSilentObserver(observerID, observerName, at string) er
 			radio_quarantine_reason = 'no-status'`,
 		observerID, nullStr(observerName), at, at, at)
 	return err
+}
+
+// RetractResult is what a retraction removed.
+type RetractResult struct {
+	Observations int64
+	Nodes        int64
+	// SkippedClaimed lists node keys that lost their only witness but were
+	// kept because a user has claimed, annotated or located them.
+	SkippedClaimed []string
+}
+
+// RetractObserverSince removes what an observer stored after `since` — the
+// last status that passed — because its next status did not.
+//
+// This is the window the guard cannot close on its own. The verdict rides on
+// /status, and status lands every five minutes; an observer that retunes to
+// a foreign preset and keeps publishing is *confirmed* for the whole of that
+// interval, and everything it hears on the other network goes straight to the
+// database. Measured on prod: 10–30 packets per observer per cycle, 60 for the
+// busiest, peaks near 200. Those rows invent nodes that are not on this mesh
+// and links that do not exist, and nothing downstream can tell them apart.
+//
+// We cannot know when in the interval the retune happened, so the whole
+// interval goes. Rows heard before `since` were vouched for by a status that
+// passed and are untouched.
+//
+// Nodes: a node row is created only by a signature-valid advert, so the keys
+// carried by the retracted rows are the nodes this window may have invented.
+// One is deleted only if it first appeared inside the window AND no other
+// observer heard an advert for it there — either says it was on this mesh
+// before the retune, or someone on this mesh heard it too. That bounds both
+// scans to the window: the only rows that can witness a node younger than
+// `since` are rows younger than `since`. A node someone has claimed,
+// annotated or located is kept and reported, as the observer-delete orphan
+// pass does; their data is about a real radio.
+//
+// Not undone: a pre-existing node whose last_seen or advert_count a window
+// advert bumped. That needs the same key to be heard on two networks, which
+// is the same device, which is not a phantom.
+func (s *Store) RetractObserverSince(observerID, since string) (RetractResult, error) {
+	var res RetractResult
+	if observerID == "" || since == "" {
+		return res, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return res, err
+	}
+	defer tx.Rollback()
+
+	// The rows being retracted, and the advert keys they carry.
+	rows, err := tx.Query(
+		`SELECT id, raw_hex FROM observations WHERE observer_id = ? AND received_at >= ?`,
+		observerID, since)
+	if err != nil {
+		return res, err
+	}
+	var delIDs []int64
+	condemned := map[string]bool{}
+	for rows.Next() {
+		var id int64
+		var raw string
+		if err := rows.Scan(&id, &raw); err != nil {
+			rows.Close()
+			return res, err
+		}
+		delIDs = append(delIDs, id)
+		if k := advertKeyOf(raw); k != "" {
+			condemned[k] = true
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return res, err
+	}
+	if len(delIDs) == 0 {
+		return res, nil
+	}
+
+	// What everyone else heard in the same window.
+	witnessed := map[string]bool{}
+	if len(condemned) > 0 {
+		wrows, err := tx.Query(
+			`SELECT raw_hex FROM observations WHERE received_at >= ? AND COALESCE(observer_id,'') <> ?`,
+			since, observerID)
+		if err != nil {
+			return res, err
+		}
+		for wrows.Next() {
+			var raw string
+			if err := wrows.Scan(&raw); err != nil {
+				wrows.Close()
+				return res, err
+			}
+			if k := advertKeyOf(raw); k != "" {
+				witnessed[k] = true
+			}
+		}
+		wrows.Close()
+		if err := wrows.Err(); err != nil {
+			return res, err
+		}
+	}
+
+	for _, id := range delIDs {
+		r, err := tx.Exec(`DELETE FROM observations WHERE id = ?`, id)
+		if err != nil {
+			return res, err
+		}
+		n, _ := r.RowsAffected()
+		res.Observations += n
+	}
+	// packet_count is a running total bumped per stored row; keep it honest.
+	if _, err := tx.Exec(
+		`UPDATE observers SET packet_count = MAX(0, packet_count - ?) WHERE id = ?`,
+		res.Observations, observerID); err != nil {
+		return res, err
+	}
+
+	orphans := make([]string, 0, len(condemned))
+	for k := range condemned {
+		if !witnessed[k] {
+			orphans = append(orphans, k)
+		}
+	}
+	sort.Strings(orphans)
+	for _, k := range orphans {
+		var firstSeen string
+		err := tx.QueryRow(`SELECT first_seen FROM nodes WHERE UPPER(pubkey) = ?`, k).Scan(&firstSeen)
+		if err == sql.ErrNoRows {
+			continue // the advert failed signature and never made a node
+		}
+		if err != nil {
+			return res, err
+		}
+		if firstSeen < since {
+			continue // known before the window: on this mesh, not invented here
+		}
+		var held bool
+		if err := tx.QueryRow(`SELECT EXISTS(
+			SELECT 1 FROM node_claims WHERE UPPER(node_pubkey) = ?
+			UNION ALL SELECT 1 FROM node_notes WHERE UPPER(node_pubkey) = ?
+			UNION ALL SELECT 1 FROM node_private_locations WHERE UPPER(node_pubkey) = ?
+			UNION ALL SELECT 1 FROM location_shares WHERE UPPER(node_pubkey) = ?)`,
+			k, k, k, k).Scan(&held); err != nil {
+			return res, err
+		}
+		if held {
+			res.SkippedClaimed = append(res.SkippedClaimed, k)
+			continue
+		}
+		r, err := tx.Exec(`DELETE FROM nodes WHERE UPPER(pubkey) = ?`, k)
+		if err != nil {
+			return res, err
+		}
+		n, _ := r.RowsAffected()
+		res.Nodes += n
+	}
+
+	return res, tx.Commit()
+}
+
+// advertKeyOf returns the uppercase advert pubkey a stored packet carries, or
+// "" when it is not an advert (or does not decode).
+func advertKeyOf(rawHex string) string {
+	pkt, err := meshcore.DecodeHex(rawHex)
+	if err != nil || pkt == nil || pkt.Advert == nil {
+		return ""
+	}
+	return strings.ToUpper(pkt.Advert.PublicKey)
 }

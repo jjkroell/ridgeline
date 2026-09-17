@@ -399,6 +399,12 @@ func Open(path string) (*Store, error) {
 	// second is not a wrong answer, it is no answer, and the distinction is what
 	// the operator needs to tell its owner.
 	db.Exec(`ALTER TABLE observers ADD COLUMN radio_quarantine_reason TEXT`)
+	// radio_ok_at is when this observer LAST reported a preset that passed —
+	// the last moment we knew it was on this mesh. When a later status fails,
+	// everything it stored since then was accepted on the strength of a preset
+	// it no longer runs, and is retracted from here forward. NULL means we have
+	// never vouched for it, so there is nothing to retract.
+	db.Exec(`ALTER TABLE observers ADD COLUMN radio_ok_at TEXT`)
 	// blocklist.peer records the far side of a SANCTIONED bridge (kind='known'):
 	// the neighbour it carries traffic to, so the console can show the link as
 	// "this node -> that node" instead of naming only one end. Uppercase pubkey,

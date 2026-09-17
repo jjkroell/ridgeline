@@ -86,15 +86,15 @@ func TestRadioGuardQuarantineRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bad, changed := s.EvaluateObserverRadio(id, "915.0,125,9,5", now)
-	if !bad || !changed {
-		t.Fatalf("expected quarantine, got bad=%v changed=%v", bad, changed)
+	v := s.EvaluateObserverRadio(id, "915.0,125,9,5", now, false)
+	if !v.Quarantined || !v.Changed {
+		t.Fatalf("expected quarantine, got %+v", v)
 	}
 	if !s.ObserverRadioQuarantined(id) {
 		t.Fatal("observer should be quarantined")
 	}
 	// Idempotent: a second identical status is not a transition.
-	if _, changed = s.EvaluateObserverRadio(id, "915.0,125,9,5", now); changed {
+	if v = s.EvaluateObserverRadio(id, "915.0,125,9,5", now, false); v.Changed {
 		t.Error("re-reporting the same bad preset must not count as a change")
 	}
 	// Survives a reload — the quarantine is in the table, not only in memory.
@@ -105,9 +105,9 @@ func TestRadioGuardQuarantineRoundTrip(t *testing.T) {
 		t.Fatal("quarantine must survive a reload")
 	}
 	// Fixing the radio readmits without anyone intervening.
-	bad, changed = s.EvaluateObserverRadio(id, "909.0,62.5,7,5", now)
-	if bad || !changed {
-		t.Fatalf("expected readmission, got bad=%v changed=%v", bad, changed)
+	v = s.EvaluateObserverRadio(id, "909.0,62.5,7,5", now, false)
+	if v.Quarantined || !v.Changed {
+		t.Fatalf("expected readmission, got %+v", v)
 	}
 	if s.ObserverRadioQuarantined(id) {
 		t.Fatal("observer should have been readmitted")
@@ -181,9 +181,9 @@ func TestSilentObserverIsQuarantinedAndVisible(t *testing.T) {
 	}
 
 	// And it recovers by itself the moment it finally identifies correctly.
-	bad, changed := s.EvaluateObserverRadio(id, "910.425,62.5,7,5", now)
-	if bad || !changed {
-		t.Fatalf("a late but valid status must readmit: bad=%v changed=%v", bad, changed)
+	v := s.EvaluateObserverRadio(id, "910.425,62.5,7,5", now, false)
+	if v.Quarantined || !v.Changed {
+		t.Fatalf("a late but valid status must readmit: %+v", v)
 	}
 	var left string
 	s.db.QueryRow(`SELECT COALESCE(radio_quarantine_reason,'') FROM observers WHERE id = ?`, id).Scan(&left)

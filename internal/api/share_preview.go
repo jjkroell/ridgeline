@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/jjkroell/ridgeline/internal/store"
 	xhtml "golang.org/x/net/html"
@@ -85,7 +86,7 @@ func (s *Server) lookupPreview(r *http.Request, path string) (*sharePreview, err
 	}
 	n.Name = title
 	role := shareRole(n.Role)
-	desc := fmt.Sprintf("%s on the MeshCore mesh. Last advert observed: %s. Open for current details.", role, shareDate(n.LastAdvert))
+	desc := fmt.Sprintf("%s on the MeshCore mesh. Explore this node’s activity, coverage and connections.", role)
 	return &sharePreview{Title: title, Description: desc, Path: "/nodes/" + key, Node: n}, nil
 }
 
@@ -101,32 +102,47 @@ func shareRole(role string) string {
 		return "MeshCore node"
 	}
 }
-func shareDate(s string) string {
-	t, err := time.Parse(time.RFC3339Nano, s)
-	if err != nil {
-		return "Unknown"
-	}
-	return t.UTC().Format("02 Jan 2006, 15:04 UTC")
-}
 func cleanShareText(s string, limit int) string {
-	s = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
-			return ' '
+	var out strings.Builder
+	for s != "" {
+		cluster, emoji := nextShareCluster(s)
+		s = s[len(cluster):]
+		if emoji != nil {
+			// Preserve joiners and tag characters only inside recognized emoji.
+			out.WriteString(cluster)
+		} else {
+			r, _ := utf8.DecodeRuneInString(cluster)
+			if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+				r = ' '
+			}
+			out.WriteRune(r)
 		}
-		return r
-	}, s)
-	r := []rune(strings.Join(strings.Fields(s), " "))
-	if len(r) > limit {
-		return string(r[:limit-1]) + "…"
 	}
-	return string(r)
+	clean := strings.Join(strings.Fields(out.String()), " ")
+	if utf8.RuneCountInString(clean) <= limit {
+		return clean
+	}
+	out.Reset()
+	count := 0
+	for clean != "" {
+		cluster, _ := nextShareCluster(clean)
+		n := utf8.RuneCountInString(cluster)
+		if count+n >= limit {
+			break
+		}
+		out.WriteString(cluster)
+		count += n
+		clean = clean[len(cluster):]
+	}
+	return strings.TrimSpace(out.String()) + "…"
 }
+
 func (p *sharePreview) revision(site shareSite) string {
 	b, _ := json.Marshal(struct {
 		Version int
 		Site    shareSite
 		Preview *sharePreview
-	}{1, site, p})
+	}{4, site, p})
 	h := sha256.Sum256(b)
 	return fmt.Sprintf("%x", h[:12])
 }
@@ -174,8 +190,18 @@ func (s *Server) shareHandler(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		path := r.URL.Path
+		layout := shareCardLayouts["wide"]
 		if imageRequest {
 			path = r.URL.Query().Get("path")
+			if format := r.URL.Query().Get("format"); format != "" {
+				var ok bool
+				layout, ok = shareCardLayouts[format]
+				if !ok {
+					w.Header().Set("Cache-Control", "no-store")
+					http.Error(w, "Unknown card format", http.StatusBadRequest)
+					return
+				}
+			}
 		}
 		p, err := s.lookupPreview(r, path)
 		if err != nil {
@@ -216,7 +242,7 @@ func (s *Server) shareHandler(next http.HandlerFunc) http.HandlerFunc {
 				http.Error(w, "Preview busy", http.StatusServiceUnavailable)
 				return
 			}
-			body, err = renderShareCard(site, *p)
+			body, err = renderShareCard(site, *p, layout)
 			contentType = "image/png"
 		} else {
 			body, err = shareHTML(shell, site, *p)
@@ -226,10 +252,14 @@ func (s *Server) shareHandler(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "Preview unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		// Revalidate against current public data; never promise an immutable snapshot.
-		// A revision changes the URL when data changes, but cannot invalidate a chat
-		// app's already-stored copy. Absolute dates keep those copies honest.
-		w.Header().Set("Cache-Control", "public, max-age=300, must-revalidate")
+		// Identity cards stay stable across new observations. Recheck HTML sooner
+		// so renames get a new revision URL; cache PNGs for a day. These URLs are
+		// not immutable: the endpoint still serves the current public identity.
+		cacheControl := "public, max-age=300, must-revalidate"
+		if imageRequest {
+			cacheControl = "public, max-age=86400, must-revalidate"
+		}
+		w.Header().Set("Cache-Control", cacheControl)
 		w.Header().Set("Content-Type", contentType)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		sum := sha256.Sum256(body)
@@ -302,6 +332,10 @@ func shareHead(site shareSite, p sharePreview) string {
 	esc := html.EscapeString
 	title := p.Title + " · " + site.Name
 	image := p.imageURL(site)
+	alt := p.Title + " — " + p.Description
+	if p.Node != nil {
+		alt += " Public key: " + p.Node.PublicKey + "."
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "<title data-ridgeline-share>%s</title>\n<link data-ridgeline-share rel=\"canonical\" href=\"%s\">\n", esc(title), esc(site.URL+p.Path))
 	for _, tag := range [][3]string{
@@ -310,10 +344,10 @@ func shareHead(site shareSite, p sharePreview) string {
 		{"property", "og:description", p.Description}, {"property", "og:url", site.URL + p.Path},
 		{"property", "og:image", image}, {"property", "og:image:type", "image/png"},
 		{"property", "og:image:width", "1200"}, {"property", "og:image:height", "630"},
-		{"property", "og:image:alt", p.Title + " — " + p.Description},
+		{"property", "og:image:alt", alt},
 		{"name", "twitter:card", "summary_large_image"}, {"name", "twitter:title", title},
 		{"name", "twitter:description", p.Description}, {"name", "twitter:image", image},
-		{"name", "twitter:image:alt", p.Title + " — " + p.Description},
+		{"name", "twitter:image:alt", alt},
 	} {
 		fmt.Fprintf(&b, "<meta data-ridgeline-share %s=\"%s\" content=\"%s\">\n", tag[0], tag[1], esc(tag[2]))
 	}

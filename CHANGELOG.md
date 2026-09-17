@@ -4,7 +4,7 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
-## [Unreleased]
+## [v0.18.0] — 2026-09-16
 
 ### Added
 - **A confirmed observer that retunes has its window retracted.** The radio

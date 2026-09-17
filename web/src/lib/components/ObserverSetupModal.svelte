@@ -108,10 +108,12 @@ reboot`);
 				three values stay put.
 			</p>
 			<p class="text-fg-dim mt-2 text-sm leading-relaxed">
-				<strong class="text-fg">Please don't feed data from any other preset.</strong>
+				<strong class="text-fg">Data from any other preset is refused automatically.</strong>
 				An observer on different settings hears a different network, and its packets
-				arrive here indistinguishable from this one's — inventing nodes that are not
-				on the mesh and links that do not exist.
+				would arrive here indistinguishable from this one's — inventing nodes that are
+				not on the mesh and links that do not exist. Ridgeline checks each observer's
+				reported radio and keeps only what matches, so a mismatched station can't
+				quietly pollute the map — see below for what happens while it's checking.
 			</p>
 			<p class="text-fg-dim mt-2 text-sm leading-relaxed">
 				<a href="/faq" class="text-signal font-600 hover:underline"

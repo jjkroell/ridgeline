@@ -4,6 +4,23 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.19.2] — 2026-09-16
+
+### Fixed
+- **The clean/themed basemap no longer shows an "API key required" watermark.**
+  CARTO deprecated key-less access to its positron/dark-matter basemaps and now
+  stamps that notice onto the tiles, which showed on every Leaflet raster map —
+  most visibly the private-location picker after claiming a node, plus the
+  mini-map widget and the WebGL-free fallback/inset maps. The themed base is now
+  Esri's key-less Light/Dark Gray Canvas (with a matching label overlay), on the
+  same host already used for the imagery and hillshade layers; "Street" moves to
+  Esri World Street Map.
+- **The mobile "More" menu no longer shows the Admin link to non-admins.** It
+  rendered every secondary destination unconditionally; it now filters the
+  restricted Admin entry the same way the desktop nav does. The admin page and
+  its API were already gated server-side — this closes the UI exposure of the
+  link itself.
+
 ## [v0.19.1] — 2026-09-16
 
 ### Changed

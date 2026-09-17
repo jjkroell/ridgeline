@@ -22,6 +22,12 @@
 	import { auth } from '$lib/auth.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import { isLight } from '$lib/map-util';
+	import {
+		esriGrayBaseUrl,
+		esriGrayLabelsUrl,
+		ESRI_CANVAS_ATTR,
+		ESRI_GRAY_MAX_NATIVE
+	} from '$lib/leaflet-basemap';
 	import UserAutocomplete from './UserAutocomplete.svelte';
 
 	interface Props {
@@ -171,6 +177,7 @@
 	let map: any = null;
 	let marker: any = null;
 	let tiles: any = null;
+	let labelTiles: any = null;
 	let pinIcon: any = null;
 	/* eslint-enable @typescript-eslint/no-explicit-any */
 	let curLight = false;
@@ -199,10 +206,11 @@
 	let layerOpen = $state(false);
 	const currentLayer = $derived(LAYERS.find((l) => l.id === layerId) ?? LAYERS[0]);
 
-	const cartoUrl = (light: boolean) =>
-		`https://{s}.basemaps.cartocdn.com/${light ? 'light_all' : 'dark_all'}/{z}/{x}/{y}{r}.png`;
-	const cartoAttr =
-		'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
+	// Themed clean base: Esri Gray Canvas (key-less). CARTO's positron/dark-matter
+	// used to serve this but now stamps an "API key required" watermark on the
+	// tile. The gray base carries no labels, so a Reference overlay (labelTiles)
+	// rides on top for the "map" layer — see initMap/selectLayer.
+	const grayOpts = { maxZoom: 19, maxNativeZoom: ESRI_GRAY_MAX_NATIVE, attribution: ESRI_CANVAS_ATTR };
 
 	// Build the Leaflet tile layer for a base-layer id at the current theme.
 	function makeTiles(id: string, light: boolean) {
@@ -217,11 +225,14 @@
 					}
 				);
 			case 'street':
-				return L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-					subdomains: 'abcd',
-					maxZoom: 19,
-					attribution: cartoAttr
-				});
+				return L.tileLayer(
+					'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+					{
+						maxZoom: 19,
+						attribution:
+							'© <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, HERE, Garmin, © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+					}
+				);
 			case 'topo':
 				return L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
 					subdomains: 'abc',
@@ -231,8 +242,14 @@
 				});
 			case 'map':
 			default:
-				return L.tileLayer(cartoUrl(light), { subdomains: 'abcd', maxZoom: 19, attribution: cartoAttr });
+				return L.tileLayer(esriGrayBaseUrl(light), grayOpts);
 		}
+	}
+
+	// Transparent place/road labels for the themed "map" base (gray canvas ships
+	// none baked in). Added above the base, below the marker pane.
+	function makeLabels(light: boolean) {
+		return L.tileLayer(esriGrayLabelsUrl(light), grayOpts);
 	}
 
 	// Swap the active base layer, preserving the marker + view.
@@ -241,7 +258,14 @@
 		layerOpen = false;
 		if (!map || !L) return;
 		if (tiles) map.removeLayer(tiles);
+		if (labelTiles) {
+			map.removeLayer(labelTiles);
+			labelTiles = null;
+		}
 		tiles = makeTiles(id, curLight).addTo(map);
+		// Only the themed gray-canvas "map" base needs the separate labels overlay.
+		const themed = (LAYERS.find((l) => l.id === id) ?? LAYERS[0]).themed;
+		if (themed) labelTiles = makeLabels(curLight).addTo(map);
 	}
 
 	// Initialise the map once the panel has access and the container is in the DOM.
@@ -267,6 +291,7 @@
 		const center: [number, number] = [lat ?? FALLBACK[0], lon ?? FALLBACK[1]];
 		map = L.map(el, { center, zoom: lat != null ? 14 : 9, attributionControl: true });
 		tiles = makeTiles(layerId, curLight).addTo(map);
+		if (currentLayer.themed) labelTiles = makeLabels(curLight).addTo(map);
 		if (lat != null && lon != null) placeMarker(lat, lon);
 		// Owner may click anywhere to drop / move the pin; viewers can only pan/zoom.
 		if (canEdit) {
@@ -313,7 +338,10 @@
 		const light = isLight();
 		if (!map || !tiles || light === curLight) return;
 		curLight = light;
-		if (currentLayer.themed) tiles.setUrl(cartoUrl(light));
+		if (currentLayer.themed) {
+			tiles.setUrl(esriGrayBaseUrl(light));
+			labelTiles?.setUrl(esriGrayLabelsUrl(light));
+		}
 	});
 
 	onDestroy(() => {

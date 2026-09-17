@@ -143,6 +143,7 @@
 				pane: 'labels',
 				subdomains: spec.labels.subdomains ?? 'abc',
 				maxZoom: spec.labels.maxZoom,
+				maxNativeZoom: spec.labels.maxNativeZoom,
 				attribution: spec.labels.attribution
 			}).addTo(map);
 		}

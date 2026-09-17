@@ -21,6 +21,7 @@
 	let map: any = null;
 	let tiles: any = null;
 	let hillTiles: any = null;
+	let labelTiles: any = null;
 	let dot: any = null;
 	/* eslint-enable @typescript-eslint/no-explicit-any */
 	let curLight = false;
@@ -73,6 +74,16 @@
 					attribution: spec.hillshade.attribution
 				}).addTo(map);
 			}
+			if (spec.labels) {
+				// The gray-canvas base carries no labels; overlay them above the
+				// relief so place/road names stay readable. Added last → on top.
+				labelTiles = L.tileLayer(spec.labels.url, {
+					subdomains: spec.labels.subdomains ?? 'abc',
+					maxZoom: spec.labels.maxZoom,
+					maxNativeZoom: spec.labels.maxNativeZoom,
+					attribution: spec.labels.attribution
+				}).addTo(map);
+			}
 			dot = L.circleMarker([lat, lon], {
 				radius: 6,
 				color: '#0b1f1a',
@@ -105,7 +116,9 @@
 		curLight = light;
 		// Only the base is themed — the Esri relief tiles are fixed grayscale, so
 		// the theme swap re-tunes its blend and weight rather than its URL.
-		tiles.setUrl(leafletBasemap('topo', light).base.url);
+		const spec = leafletBasemap('topo', light);
+		tiles.setUrl(spec.base.url);
+		if (labelTiles && spec.labels) labelTiles.setUrl(spec.labels.url);
 		if (hillTiles) {
 			map.getPane('hillshade').style.mixBlendMode = hillBlend(light);
 			hillTiles.setOpacity(hillOpacity(light));

@@ -3,7 +3,16 @@
 // free, key-less raster source (XYZ tiles). The ids + labels come from the shared
 // BASEMAPS list (map-basemap.ts) so the selector UI and persistence are identical;
 // only the rendering differs. `topo` (the default "Hillshade") layers an Esri
-// shaded-relief overlay on the themed CARTO base to approximate the GL hillshade.
+// shaded-relief overlay on the themed Esri Gray Canvas base to approximate the GL
+// hillshade.
+//
+// The themed clean base used to be CARTO's positron/dark-matter, but CARTO
+// deprecated key-less access and now serves those tiles stamped with an "API key
+// required" watermark. Esri's Light/Dark Gray Canvas is the closest key-less,
+// theme-aware replacement — and it is on the same arcgisonline host already used
+// (key-less) for the imagery and hillshade layers. Base tiles carry no labels;
+// the matching Reference layer carries transparent place/road labels, exactly the
+// base+labels split the terrain layer already relies on.
 
 export interface TileSpec {
 	url: string;
@@ -24,20 +33,38 @@ export interface LeafletBasemap {
 	labels?: TileSpec;
 }
 
-const CARTO_ATTR =
-	'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
+export const ESRI_CANVAS_ATTR =
+	'Tiles © <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a> — Esri, HERE, Garmin, © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
 const ESRI_IMAGERY_ATTR =
 	'Imagery © <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, Maxar, Earthstar Geographics';
+const ESRI_STREET_ATTR =
+	'© <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, HERE, Garmin, © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
 const ESRI_HILLSHADE_ATTR =
 	'Hillshade © <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>';
 const OTM_ATTR =
 	'map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, SRTM | © <a href="https://opentopomap.org" target="_blank" rel="noopener">OpenTopoMap</a>';
 
-const carto = (style: string): TileSpec => ({
-	url: `https://{s}.basemaps.cartocdn.com/${style}/{z}/{x}/{y}{r}.png`,
-	subdomains: 'abcd',
-	maxZoom: 20,
-	attribution: CARTO_ATTR
+// Esri Light/Dark Gray Canvas — key-less, theme-aware. Native to z16 (Leaflet
+// overzooms past that rather than blanking). Base carries no labels; pair it with
+// the Reference overlay for transparent place/road names. Exported so the small
+// Leaflet insets (private-location picker, mini-map) share one source of truth.
+export const esriGrayBaseUrl = (light: boolean): string =>
+	`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${light ? 'Light' : 'Dark'}_Gray_Base/MapServer/tile/{z}/{y}/{x}`;
+export const esriGrayLabelsUrl = (light: boolean): string =>
+	`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${light ? 'Light' : 'Dark'}_Gray_Reference/MapServer/tile/{z}/{y}/{x}`;
+export const ESRI_GRAY_MAX_NATIVE = 16;
+
+const esriGrayBase = (light: boolean): TileSpec => ({
+	url: esriGrayBaseUrl(light),
+	maxZoom: 19,
+	maxNativeZoom: ESRI_GRAY_MAX_NATIVE,
+	attribution: ESRI_CANVAS_ATTR
+});
+const esriGrayLabels = (light: boolean): TileSpec => ({
+	url: esriGrayLabelsUrl(light),
+	maxZoom: 19,
+	maxNativeZoom: ESRI_GRAY_MAX_NATIVE,
+	attribution: ESRI_CANVAS_ATTR
 });
 
 // Opacity + blend mode are applied theme-aware in FallbackMap (screen on dark,
@@ -52,9 +79,15 @@ const ESRI_HILLSHADE: TileSpec = {
 export function leafletBasemap(id: string, light: boolean): LeafletBasemap {
 	switch (id) {
 		case 'minimal':
-			return { base: carto(light ? 'light_all' : 'dark_all') };
+			return { base: esriGrayBase(light), labels: esriGrayLabels(light) };
 		case 'street':
-			return { base: carto('rastertiles/voyager') };
+			return {
+				base: {
+					url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+					maxZoom: 19,
+					attribution: ESRI_STREET_ATTR
+				}
+			};
 		case 'satellite':
 			return {
 				base: {
@@ -75,7 +108,7 @@ export function leafletBasemap(id: string, light: boolean): LeafletBasemap {
 		case 'localterrain':
 			// Self-hosted terrain (Copernicus GLO-30) via the maps.ve7kod.ca tunnel;
 			// two themed renders follow the UI theme. Real tiles to z14 (overzoomed
-			// past that). Themed CARTO label tiles ride on top so place/road names
+			// past that). Themed Esri gray labels ride on top so place/road names
 			// stay crisp at any zoom (full vector roads need WebGL → MapLibre path).
 			return {
 				base: {
@@ -86,17 +119,17 @@ export function leafletBasemap(id: string, light: boolean): LeafletBasemap {
 					attribution:
 						'Terrain: <a href="https://github.com/tilezen/joerd" target="_blank" rel="noopener">Tilezen Joerd</a> recipe · Copernicus GLO-30 · self-hosted'
 				},
-				labels: {
-					url: `https://{s}.basemaps.cartocdn.com/${light ? 'light' : 'dark'}_only_labels/{z}/{x}/{y}{r}.png`,
-					subdomains: 'abcd',
-					maxZoom: 20,
-					attribution: CARTO_ATTR
-				}
+				labels: esriGrayLabels(light)
 			};
 		case 'topo':
 		default:
 			// Shaded relief over the themed base — the closest raster match to the
-			// MapLibre "Hillshade" default.
-			return { base: carto(light ? 'light_all' : 'dark_all'), hillshade: ESRI_HILLSHADE };
+			// MapLibre "Hillshade" default. Gray-canvas labels ride on top so names
+			// stay readable over the relief.
+			return {
+				base: esriGrayBase(light),
+				hillshade: ESRI_HILLSHADE,
+				labels: esriGrayLabels(light)
+			};
 	}
 }

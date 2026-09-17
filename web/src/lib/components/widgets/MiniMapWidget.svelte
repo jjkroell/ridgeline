@@ -9,6 +9,7 @@
 	import { overview } from '$lib/overview.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import { isLight } from '$lib/map-util';
+	import { esriGrayBaseUrl, esriGrayLabelsUrl, ESRI_GRAY_MAX_NATIVE } from '$lib/leaflet-basemap';
 	import { roleColor } from '$lib/format';
 	import type { Node } from '$lib/api';
 
@@ -20,6 +21,7 @@
 	let L: any = null;
 	let map: any = null;
 	let tiles: any = null;
+	let labelTiles: any = null;
 	let layer: any = null;
 	/* eslint-enable @typescript-eslint/no-explicit-any */
 	let ro: ResizeObserver | null = null;
@@ -30,8 +32,9 @@
 	const located = $derived(
 		nodes.filter((n) => n.hasLocation && !n.gpsSuspect && n.latitude != null && n.longitude != null)
 	);
-	const tileUrl = (light: boolean) =>
-		`https://{s}.basemaps.cartocdn.com/${light ? 'light_all' : 'dark_all'}/{z}/{x}/{y}{r}.png`;
+	// Key-less themed base — Esri Gray Canvas (CARTO now watermarks its no-key
+	// tiles). Base has no labels, so a Reference overlay rides on top.
+	const grayOpts = { maxZoom: 19, maxNativeZoom: ESRI_GRAY_MAX_NATIVE };
 
 	function drawNodes() {
 		if (!map || !L) return;
@@ -77,7 +80,8 @@
 				keyboard: false,
 				touchZoom: false
 			});
-			tiles = L.tileLayer(tileUrl(curLight), { subdomains: 'abcd', maxZoom: 19 }).addTo(map);
+			tiles = L.tileLayer(esriGrayBaseUrl(curLight), grayOpts).addTo(map);
+			labelTiles = L.tileLayer(esriGrayLabelsUrl(curLight), grayOpts).addTo(map);
 			drawNodes();
 			// The card lays out after mount; when the container first gets a real
 			// size, invalidate + fit so the map isn't stuck at the world view.
@@ -109,8 +113,8 @@
 		const light = isLight();
 		if (light === curLight) return;
 		curLight = light;
-		if (tiles) tiles.remove();
-		tiles = L.tileLayer(tileUrl(light), { subdomains: 'abcd', maxZoom: 19 }).addTo(map);
+		tiles?.setUrl(esriGrayBaseUrl(light));
+		labelTiles?.setUrl(esriGrayLabelsUrl(light));
 	});
 </script>
 

@@ -77,7 +77,14 @@ type Ingestor struct {
 	pens  map[string]*pen
 	// Connection-gap accounting. Packets published while disconnected are lost,
 	// so the time spent disconnected is the loss.
-	lostAt   atomic.Value // time.Time of the last connection loss
+	lostAt atomic.Value // time.Time of the last connection loss (paho DETECTED it)
+	// lastMsg is the UnixNano of the most recent message received from the
+	// broker. paho only notices a dead link after the keepalive + ping timeout
+	// (~60s here), so lostAt starts the clock long after packets actually
+	// stopped arriving. The last message received marks the true start of the
+	// silence. Int64 (not atomic.Value) to avoid boxing a time.Time per message
+	// on the hot path.
+	lastMsg  atomic.Int64
 	downtime atomic.Int64 // cumulative nanoseconds disconnected
 	// commitFn lets tests observe what the pen releases without standing up a
 	// store. nil in production, where commit() is called directly.
@@ -145,13 +152,21 @@ func (in *Ingestor) Start() error {
 	}
 	opts.SetOnConnectHandler(func(c mqtt.Client) {
 		// Report how long the gap was. A reconnect on its own says little; the
-		// downtime is the part that maps to lost packets.
+		// downtime is the part that maps to lost packets. Measured from the last
+		// message received, not from when paho detected the loss — the socket was
+		// silently dead for the keepalive+ping window before detection, and that
+		// window is exactly when publishes were dropped.
 		if v := in.lostAt.Load(); v != nil {
-			if t, ok := v.(time.Time); ok && !t.IsZero() {
-				d := time.Since(t)
+			if detectedAt, ok := v.(time.Time); ok && !detectedAt.IsZero() {
+				var lastMsgAt time.Time
+				if ns := in.lastMsg.Load(); ns > 0 {
+					lastMsgAt = time.Unix(0, ns)
+				}
+				d, lag := reconnectGap(time.Now(), detectedAt, lastMsgAt)
 				in.downtime.Add(int64(d))
 				in.log.Warn("mqtt reconnected after a gap",
 					"broker", in.cfg.Broker, "downtime", d.Round(time.Second),
+					"detectionLag", lag.Round(time.Second),
 					"cumulativeDowntime", time.Duration(in.downtime.Load()).Round(time.Second))
 				in.lostAt.Store(time.Time{})
 			}
@@ -199,7 +214,25 @@ func (in *Ingestor) Stop() {
 	}
 }
 
+// reconnectGap computes the outage to report on reconnect. The gap runs from
+// the last message actually received (the true start of silence) when that is
+// known and precedes detection, otherwise from when paho detected the loss.
+// detectionLag is how long the link was dead before paho noticed — the part
+// that was previously invisible and made every gap log as ~0s.
+func reconnectGap(now, detectedAt, lastMsgAt time.Time) (gap, detectionLag time.Duration) {
+	start := detectedAt
+	if !lastMsgAt.IsZero() && lastMsgAt.Before(detectedAt) {
+		start = lastMsgAt
+	}
+	return now.Sub(start), detectedAt.Sub(start)
+}
+
 func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
+	// Every message — even one we go on to drop — is proof the link was alive at
+	// this instant. On the next reconnect this marks the last moment before the
+	// silence began, which is how the gap is measured (see reconnectGap).
+	in.lastMsg.Store(time.Now().UnixNano())
+
 	// This callback runs in a paho goroutine on untrusted, attacker-influenceable
 	// payloads (raw packet hex, observer status). An unrecovered panic here would
 	// be fatal to the whole daemon, so contain it: log and drop the one message.

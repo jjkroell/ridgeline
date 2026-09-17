@@ -4,6 +4,20 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [Unreleased]
+
+### Fixed
+- **MQTT reconnect gaps are no longer reported as ~0s.** The gap was measured
+  from the moment paho *detected* the drop — but paho only notices a dead link
+  after the keepalive + ping timeout (~60s here), by which point the reconnect
+  itself takes milliseconds, so every gap logged `downtime=0s` while packets had
+  in fact been lost for a minute. One real incident: the broker severed the
+  connection at 04:04:21, the daemon noticed at 04:05:22 and reconnected in 3ms
+  — a 61s outage logged as zero. The gap is now measured from the last message
+  actually received (the true start of the silence, since 19 observers publish
+  continuously) and a `detectionLag` field surfaces the previously-invisible
+  pre-detection window.
+
 ## [v0.18.0] — 2026-09-16
 
 ### Added

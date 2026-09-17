@@ -4,6 +4,14 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.19.1] — 2026-09-16
+
+### Changed
+- **The observer setup modal states that the radio-preset rule is enforced.** It
+  asked operators not to feed data from another preset as if on the honor system;
+  the guard now refuses mismatched data automatically, so the copy says so and
+  points to the hold/checking behaviour described below it.
+
 ## [v0.19.0] — 2026-09-16
 
 ### Added

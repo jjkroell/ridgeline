@@ -24,6 +24,8 @@ export interface Node {
   advertTxCount: number;
   /** Path-hash length in bytes (1, 2, or 3), from the node's advert; 0 = unknown. */
   hashSize: number;
+  /** 'auto' (consensus vote) or 'manual' (pinned by the node's owner). */
+  hashSizeSource?: string;
   /** Set when the node's verified owner has withdrawn it from the map and node
    *  lists. Retired nodes are filtered out of /api/nodes, so this is normally
    *  only seen on a direct node fetch. */
@@ -1116,6 +1118,26 @@ export const privateLocation = {
   remove: (csrf: string, pubkey: string) =>
     mutate<{ ok: boolean }>(
       `/api/nodes/${encodeURIComponent(pubkey)}/private-location`,
+      "DELETE",
+      csrf,
+    ),
+};
+
+/** Owner-pinned hash-ID length. Overrides the auto consensus vote until the
+ *  auto vote catches up and agrees, at which point it reverts to 'auto'. */
+export const hashSize = {
+  /** Owner-only: pin the node's path-hash length to 1, 2, or 3 bytes. */
+  set: (csrf: string, pubkey: string, size: number) =>
+    mutate<{ hashSize: number; hashSizeSource: string }>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/hash-size`,
+      "PUT",
+      csrf,
+      { size },
+    ),
+  /** Owner-only: return the node to auto-detection. */
+  clear: (csrf: string, pubkey: string) =>
+    mutate<{ hashSizeSource: string }>(
+      `/api/nodes/${encodeURIComponent(pubkey)}/hash-size`,
       "DELETE",
       csrf,
     ),

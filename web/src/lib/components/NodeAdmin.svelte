@@ -4,7 +4,8 @@
   Notes. The buttons show a live summary; the modals host the existing panels.
 -->
 <script lang="ts">
-	import { claims, notes, privateLocation, type ClaimStatus } from '$lib/api';
+	import { claims, notes, privateLocation, hashSize as hashSizeApi, type ClaimStatus } from '$lib/api';
+	import { auth } from '$lib/auth.svelte';
 	import Modal from './Modal.svelte';
 	import ClaimPanel from './ClaimPanel.svelte';
 	import PrivateLocationPanel from './PrivateLocationPanel.svelte';
@@ -19,14 +20,56 @@
 		nodeName?: string;
 		/** Whether the node is currently owner-retired. */
 		retired?: boolean;
+		/** Current path-hash length (bytes) and whether it's 'manual' (owner-set) or 'auto'. */
+		hashSize?: number;
+		hashSizeSource?: string;
 	}
 	let {
 		pubkey,
 		seedLat = null,
 		seedLon = null,
 		nodeName = '',
-		retired = false
+		retired = false,
+		hashSize: hashSizeProp = 0,
+		hashSizeSource: hashSizeSourceProp = 'auto'
 	}: Props = $props();
+
+	// Local, optimistic copy of the hash-size pin (the parent refreshes the node on
+	// its own poll; until then this reflects the owner's just-made choice).
+	let hsSize = $state(0);
+	let hsSource = $state('auto');
+	let hsBusy = $state(false);
+	let hsErr = $state('');
+	$effect(() => {
+		hsSize = hashSizeProp;
+		hsSource = hashSizeSourceProp;
+	});
+
+	async function pinHash(size: number) {
+		hsBusy = true;
+		hsErr = '';
+		try {
+			const r = await hashSizeApi.set(auth.csrf, pubkey, size);
+			hsSize = r.hashSize;
+			hsSource = r.hashSizeSource;
+		} catch (e) {
+			hsErr = String((e as Error).message ?? e);
+		} finally {
+			hsBusy = false;
+		}
+	}
+	async function autoHash() {
+		hsBusy = true;
+		hsErr = '';
+		try {
+			const r = await hashSizeApi.clear(auth.csrf, pubkey);
+			hsSource = r.hashSizeSource;
+		} catch (e) {
+			hsErr = String((e as Error).message ?? e);
+		} finally {
+			hsBusy = false;
+		}
+	}
 
 	type Which = '' | 'claim' | 'location' | 'notes' | 'lifecycle';
 	let open = $state<Which>('');
@@ -246,6 +289,51 @@
 				stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg
 			>
 		</button>
+
+		<!-- Hash-ID length (owner-only). The auto consensus is deliberately slow to
+		     change an established width, so an owner who just reconfigured their
+		     radio can pin it here; it reverts to auto once detection agrees. -->
+		{#if claim?.ownedByMe}
+			<div class="border-line/60 rounded-[var(--radius)] border px-3.5 py-3">
+				<div class="flex items-center justify-between">
+					<span class="text-fg text-sm font-600">Hash-ID length</span>
+					<span
+						class="rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem] {hsSource === 'manual'
+							? 'text-signal bg-signal/10 font-600'
+							: 'text-fg-faint bg-panel-2/60'}"
+						>{hsSource === 'manual' ? 'Owner-set' : 'Auto-detected'}</span
+					>
+				</div>
+				<p class="text-fg-faint mt-1 text-xs">
+					{hsSource === 'manual'
+						? `Pinned to ${hsSize}-byte. Reverts to auto once detection agrees.`
+						: `Auto-detected as ${hsSize ? hsSize + '-byte' : 'unknown'} from adverts. Pin it if you just changed it.`}
+				</p>
+				<div class="mt-2 flex flex-wrap gap-1.5">
+					{#each [1, 2, 3] as b (b)}
+						<button
+							type="button"
+							disabled={hsBusy}
+							onclick={() => pinHash(b)}
+							class="rounded-[var(--radius)] border px-2.5 py-1 text-xs transition-colors disabled:opacity-50 {hsSource ===
+								'manual' && hsSize === b
+								? 'border-signal bg-signal/15 text-signal font-600'
+								: 'border-line/60 hover:border-line text-fg-dim'}">{b}-byte</button
+						>
+					{/each}
+					<button
+						type="button"
+						disabled={hsBusy}
+						onclick={autoHash}
+						class="rounded-[var(--radius)] border px-2.5 py-1 text-xs transition-colors disabled:opacity-50 {hsSource ===
+							'auto'
+							? 'border-signal bg-signal/15 text-signal font-600'
+							: 'border-line/60 hover:border-line text-fg-dim'}">Auto</button
+					>
+				</div>
+				{#if hsErr}<p class="text-coral mt-1.5 text-xs">{hsErr}</p>{/if}
+			</div>
+		{/if}
 	</div>
 </div>
 

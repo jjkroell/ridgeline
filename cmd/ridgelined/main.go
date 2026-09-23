@@ -347,25 +347,50 @@ func runHashSizeConsensus(ctx context.Context, st *store.Store, log *slog.Logger
 			return
 		}
 		current := make(map[string]int, len(nodes))
+		manual := make(map[string]bool, len(nodes))
 		for _, n := range nodes {
 			current[n.PublicKey] = n.HashSize
+			if n.HashSizeSource == "manual" {
+				manual[n.PublicKey] = true
+			}
 		}
 		// Only write where the verdict differs from what's stored (also fills an
 		// unknown 0). Keeps the update small and the log meaningful.
-		corrections := map[string]int{}
+		corrections := map[string]int{} // auto nodes whose stored value is wrong
+		unpin := []string{}             // manual nodes the auto vote now agrees with
 		for pk, size := range consensus {
-			if cur, ok := current[pk]; ok && cur != size {
+			cur, ok := current[pk]
+			if !ok {
+				continue
+			}
+			if manual[pk] {
+				// Owner pin: never overridden. But once auto-detection reaches a
+				// confident verdict that MATCHES the pinned value, the pin has
+				// served its purpose — drop it so the node reads as auto again.
+				if cur == size {
+					unpin = append(unpin, pk)
+				}
+				continue
+			}
+			if cur != size {
 				corrections[pk] = size
 			}
 		}
-		if len(corrections) == 0 {
-			return
+		if len(corrections) > 0 {
+			if err := st.SetHashSizes(corrections); err != nil {
+				log.Warn("hash-size consensus: update", "err", err)
+			} else {
+				log.Info("hash-size consensus: corrected node hash sizes", "nodes", len(corrections))
+			}
 		}
-		if err := st.SetHashSizes(corrections); err != nil {
-			log.Warn("hash-size consensus: update", "err", err)
-			return
+		for _, pk := range unpin {
+			if err := st.ClearHashSizeManual(pk); err != nil {
+				log.Warn("hash-size consensus: unpin", "node", pk, "err", err)
+			}
 		}
-		log.Info("hash-size consensus: corrected node hash sizes", "nodes", len(corrections))
+		if len(unpin) > 0 {
+			log.Info("hash-size consensus: auto caught up with owner pin, back to auto", "nodes", len(unpin))
+		}
 	}
 
 	// Let ingest settle so the window holds recent adverts before the first vote.

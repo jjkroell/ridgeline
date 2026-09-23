@@ -29,6 +29,9 @@ type Node struct {
 	// HashSize is the node's path-hash length in bytes (1, 2, or 3), learned
 	// from its advert. 0 means not yet known.
 	HashSize int `json:"hashSize"`
+	// HashSizeSource is "auto" (learned by the majority-vote consensus) or
+	// "manual" (pinned by the node's verified owner; the consensus won't override it).
+	HashSizeSource string `json:"hashSizeSource"`
 	// RetiredAt is set when the node's verified owner has withdrawn it from the
 	// map and node lists. Everything it sent is kept. ListNodes still RETURNS
 	// retired nodes — they remain subject to retention and still resolve as relay
@@ -167,7 +170,7 @@ func (s *Store) ListNodes() ([]Node, error) {
 		SELECT pubkey, COALESCE(name,''), COALESCE(role,''),
 		       latitude, longitude, has_location,
 		       first_seen, last_seen, COALESCE(last_advert,''), advert_count, advert_tx_count,
-		       COALESCE(hash_size, 0), COALESCE(radio,''), COALESCE(retired_at,''),
+		       COALESCE(hash_size, 0), COALESCE(hash_size_source,'auto'), COALESCE(radio,''), COALESCE(retired_at,''),
 		       COALESCE(via_bridge,''), COALESCE(via_bridge_conf,'')
 		FROM nodes
 		ORDER BY last_seen DESC`)
@@ -182,7 +185,7 @@ func (s *Store) ListNodes() ([]Node, error) {
 		var hasLoc int
 		if err := rows.Scan(&n.PublicKey, &n.Name, &n.Role,
 			&n.Latitude, &n.Longitude, &hasLoc,
-			&n.FirstSeen, &n.LastSeen, &n.LastAdvert, &n.AdvertCount, &n.AdvertTxCount, &n.HashSize, &n.Radio, &n.RetiredAt,
+			&n.FirstSeen, &n.LastSeen, &n.LastAdvert, &n.AdvertCount, &n.AdvertTxCount, &n.HashSize, &n.HashSizeSource, &n.Radio, &n.RetiredAt,
 			&n.ViaBridge, &n.ViaBridgeConfidence); err != nil {
 			return nil, err
 		}
@@ -723,7 +726,8 @@ func (s *Store) SetHashSizes(sizes map[string]int) error {
 		return err
 	}
 	defer tx.Rollback()
-	stmt, err := tx.Prepare(`UPDATE nodes SET hash_size = ? WHERE pubkey = ?`)
+	// Never override an owner's manual pin: the consensus only writes 'auto' rows.
+	stmt, err := tx.Prepare(`UPDATE nodes SET hash_size = ? WHERE pubkey = ? AND hash_size_source != 'manual'`)
 	if err != nil {
 		return err
 	}
@@ -734,6 +738,29 @@ func (s *Store) SetHashSizes(sizes map[string]int) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// SetHashSizeManual pins a node's hash size to an owner-chosen value and marks it
+// manual, so the consensus vote stops touching it. Caller must have verified the
+// requester owns the node.
+func (s *Store) SetHashSizeManual(pubkey string, size int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(
+		`UPDATE nodes SET hash_size = ?, hash_size_source = 'manual' WHERE UPPER(pubkey) = UPPER(?)`,
+		size, pubkey)
+	return err
+}
+
+// ClearHashSizeManual returns a node to auto-detection. The stored value is left
+// as-is until the next consensus pass produces a confident verdict.
+func (s *Store) ClearHashSizeManual(pubkey string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(
+		`UPDATE nodes SET hash_size_source = 'auto' WHERE UPPER(pubkey) = UPPER(?)`,
+		pubkey)
+	return err
 }
 
 // ObserverNames maps each observer's stable id (its public key) to the friendly

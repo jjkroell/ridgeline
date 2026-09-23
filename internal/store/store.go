@@ -345,6 +345,9 @@ func Open(path string) (*Store, error) {
 	// Errors are expected (and ignored) when the column is already present.
 	db.Exec(`ALTER TABLE observers ADD COLUMN pubkey TEXT`)
 	db.Exec(`ALTER TABLE nodes ADD COLUMN hash_size INTEGER NOT NULL DEFAULT 0`)
+	// hash_size_source is 'auto' (learned by the consensus vote) or 'manual' (pinned
+	// by the node's verified owner). The consensus pass never overrides a 'manual' row.
+	db.Exec(`ALTER TABLE nodes ADD COLUMN hash_size_source TEXT NOT NULL DEFAULT 'auto'`)
 	db.Exec(`ALTER TABLE observers ADD COLUMN status_json TEXT`)
 	db.Exec(`ALTER TABLE observers ADD COLUMN last_status_at TEXT`)
 	db.Exec(`ALTER TABLE observers ADD COLUMN radio TEXT`)

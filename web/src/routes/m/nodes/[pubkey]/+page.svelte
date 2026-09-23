@@ -212,12 +212,21 @@
 
 		<!-- Node Admin: claim, private location, notes — each in its own modal -->
 		<div class="mb-3">
-			<NodeAdmin {pubkey} seedLat={node?.latitude} seedLon={node?.longitude} />
+			<NodeAdmin
+				{pubkey}
+				seedLat={node?.latitude}
+				seedLon={node?.longitude}
+				hashSize={node?.hashSize ?? 0}
+				hashSizeSource={node?.hashSizeSource ?? 'auto'}
+			/>
 		</div>
 
 		<!-- hash id -->
 		<div class="border-line/60 bg-panel mb-3 rounded-2xl border px-4 py-3">
-			<div class="label mb-1.5">Hash ID {#if hashId}· {hashId.bytes}-byte{/if}</div>
+			<div class="label mb-1.5 flex items-center gap-1.5">
+				<span>Hash ID {#if hashId}· {hashId.bytes}-byte{/if}</span>
+				{#if hashId}<span class="rounded px-1.5 py-0.5 text-[0.6rem] normal-case {node?.hashSizeSource === 'manual' ? 'text-signal bg-signal/10 font-600' : 'text-fg-faint bg-panel-2/60'}">{node?.hashSizeSource === 'manual' ? 'Owner-set' : 'Auto'}</span>{/if}
+			</div>
 			{#if hashId}
 				<div class="flex items-baseline gap-2.5">
 					<span class="font-mono text-signal glow-signal text-2xl font-700 tracking-[0.12em]">{hashId.hex}</span>

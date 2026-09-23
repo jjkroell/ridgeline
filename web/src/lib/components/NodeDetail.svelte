@@ -466,6 +466,8 @@
 			seedLon={node?.longitude}
 			nodeName={node?.name ?? ''}
 			retired={!!node?.retiredAt}
+			hashSize={node?.hashSize ?? 0}
+			hashSizeSource={node?.hashSizeSource ?? 'auto'}
 		/>
 	</div>
 
@@ -476,7 +478,20 @@
 			<div class="panel px-5 py-4">
 				<div class="label mb-3 flex items-center justify-between">
 					Hash ID
-					{#if hashId}<span class="font-mono text-fg-faint normal-case">{hashId.bytes}-byte</span>{/if}
+					{#if hashId}
+						<span class="flex items-center gap-1.5 normal-case">
+							<span class="font-mono text-fg-faint">{hashId.bytes}-byte</span>
+							{#if node?.hashSizeSource === 'manual'}
+								<Tooltip text="The owner set this hash-ID length manually. It overrides auto-detection until the detected value agrees, then reverts to auto.">
+									<span class="text-signal bg-signal/10 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem] font-600">Owner-set</span>
+								</Tooltip>
+							{:else}
+								<Tooltip text="Learned from a majority vote of this node's flood adverts over the last 7 days.">
+									<span class="text-fg-faint bg-panel-2/60 rounded-[var(--radius)] px-1.5 py-0.5 text-[0.62rem]">Auto-detected</span>
+								</Tooltip>
+							{/if}
+						</span>
+					{/if}
 				</div>
 				{#if hashId}
 					<div class="flex items-baseline gap-3">

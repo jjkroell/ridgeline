@@ -4,6 +4,20 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.20.0] — 2026-09-22
+
+### Added
+- **Node owners can pin a node's hash-ID length.** Hash width is normally learned
+  by a majority vote of a node's flood adverts over a 7-day window, which is
+  deliberately slow to move an established value (so one corrupt path-length byte
+  can't flip it). That means when an owner actually reconfigures their radio's
+  hash width, the change can take days to show. A verified owner can now pin the
+  value (1, 2, or 3 bytes) from Node Admin; the consensus stops overriding a
+  pinned node. The pin is a temporary bridge: once auto-detection reaches a
+  confident verdict that **matches** the pinned value, the pin is dropped and the
+  node reads as auto again. The Hash ID panel shows an **Owner-set** or
+  **Auto-detected** flag. Owner-only (`PUT`/`DELETE /api/nodes/{pubkey}/hash-size`).
+
 ## [v0.19.2] — 2026-09-16
 
 ### Fixed

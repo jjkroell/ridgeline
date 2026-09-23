@@ -182,6 +182,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/nodes/{pubkey}/private-location", s.requireUser(s.privateLocationGet))
 	mux.HandleFunc("PUT /api/nodes/{pubkey}/private-location", s.requireUser(s.privateLocationSet))
 	mux.HandleFunc("DELETE /api/nodes/{pubkey}/private-location", s.requireUser(s.privateLocationDelete))
+	// Owner-pinned hash-ID length (overrides the auto consensus). Owner-only.
+	mux.HandleFunc("PUT /api/nodes/{pubkey}/hash-size", s.requireUser(s.hashSizeSet))
+	mux.HandleFunc("DELETE /api/nodes/{pubkey}/hash-size", s.requireUser(s.hashSizeClear))
 
 	// Sharing a node's private location with specific registered users (owner-only).
 	mux.HandleFunc("GET /api/nodes/{pubkey}/location-shares", s.requireUser(s.locationSharesList))

@@ -4,6 +4,17 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.21.3] — 2026-10-03
+
+### Changed
+- **The "What's new" modal re-opens once for every visitor, leading with the 909
+  move.** `CURRENT` in `announce.svelte.ts` goes from `2026-08-second-frequency` to
+  `2026-10-909-cutover`. Its first entry had described 909 as "a second frequency"
+  reached over the Mt Cokley link, which stopped being true on 1 October; it was
+  corrected in v0.21.1 but the modal was not re-shown, so nobody would have seen
+  it. The three entries carried over from the August announcement appear again
+  alongside it.
+
 ## [v0.21.2] — 2026-10-03
 
 ### Fixed

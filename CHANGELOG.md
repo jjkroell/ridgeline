@@ -4,6 +4,33 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.21.0] — 2026-10-03
+
+### Added
+- **An RF bridge can be blocked by its directed hop pair rather than by one end.**
+  The existing `bridge` block takes a single pubkey and drops any packet whose
+  relay path transits it. That is too blunt for the Mt Cokley link now that the
+  mesh has moved to 909.000: a path hop is a truncated hash whose width is chosen
+  by the packet's **originator** (1, 2, or 3 bytes), so a single-key prefix match
+  fires for every node sharing that prefix. Blocking `KOD - Cokley 425`
+  (`22563EB8…`) that way also drops traffic relayed by `MT BRENTON CVARS`
+  (`2235D8…`) and `VA7NEX` (`22A2E7…`) whenever a path carries 1-byte hops —
+  measured across 17h of live traffic as ~93% of all its matches. Blocking the far
+  end is not an option either: `KOD - Mt Cokley` is a working 909 repeater.
+
+  The new `link` kind stores the near end in `key` and the far end in `peer`, and
+  drops a packet only when those two appear **adjacent and in that order** in its
+  relay path. Requiring the pair resolves the ambiguity with no width floor: over
+  13 days of certain-identity (≥2-byte) hops, the colliding candidates were never
+  once adjacent to each other — only the real bridge pair ever was. Direction is
+  load-bearing, because the reverse pair is this mesh's own traffic on its way
+  *out* to 910.425, not foreign traffic on its way in.
+
+  Dropped at `ingest.go` before the store is touched, so a blocked crossing leaves
+  no packet row and creates no node. Neither end is hidden or origin-blocked — only
+  the hop sequence between them is refused. A `link` with no `peer` stays inert
+  rather than degrading into a loose single-key block.
+
 ## [v0.20.0] — 2026-09-22
 
 ### Added

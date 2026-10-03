@@ -43,7 +43,7 @@ func (s *Server) adminBlocklist(w http.ResponseWriter, _ *http.Request, _ store.
 
 // blockReq is the body for POST /api/admin/block (quarantine, reversible).
 type blockReq struct {
-	Kind   string `json:"kind"` // observer | bridge | node | allow | known
+	Kind   string `json:"kind"` // observer | bridge | node | allow | known | link
 	Key    string `json:"key"`
 	Name   string `json:"name"`
 	Reason string `json:"reason"`
@@ -70,14 +70,31 @@ func (s *Server) adminBlock(w http.ResponseWriter, r *http.Request, _ store.User
 		return
 	}
 	if !validKind(req.Kind) || req.Key == "" {
-		writeErr(w, http.StatusBadRequest, "kind must be observer|bridge|node|allow|known and key required")
+		writeErr(w, http.StatusBadRequest, "kind must be observer|bridge|node|allow|known|link and key required")
 		return
 	}
-	// A peer only means something for a sanctioned bridge — a link has two ends.
+	// A peer only means something where an entry describes a link between two
+	// identities: a sanctioned bridge ("known") or a blocked hop pair ("link").
 	// Reject it elsewhere rather than storing a value no screen will ever show.
-	if req.Peer != "" && req.Kind != store.BlockKnown {
-		writeErr(w, http.StatusBadRequest, "peer is only valid for kind=known")
+	if req.Peer != "" && req.Kind != store.BlockKnown && req.Kind != store.BlockLink {
+		writeErr(w, http.StatusBadRequest, "peer is only valid for kind=known or kind=link")
 		return
+	}
+	// A link IS the pair, so it cannot be created half-formed. Without a far end
+	// it would sit inert in the table while reading as an active block.
+	if req.Kind == store.BlockLink {
+		if req.Peer == "" {
+			writeErr(w, http.StatusBadRequest, "kind=link requires peer (the hop traffic is relayed TO)")
+			return
+		}
+		if req.ClearPeer {
+			writeErr(w, http.StatusBadRequest, "clearPeer would leave kind=link with no far end; remove the block instead")
+			return
+		}
+		if strings.EqualFold(req.Key, req.Peer) {
+			writeErr(w, http.StatusBadRequest, "a link cannot have the same node at both ends")
+			return
+		}
 	}
 	if err := s.store.AddBlockPeer(req.Kind, req.Key, req.Name, req.Reason, req.Peer); err != nil {
 		s.fail(w, err)
@@ -273,7 +290,8 @@ func (s *Server) setObserverStandby(w http.ResponseWriter, r *http.Request, stan
 }
 
 func validKind(k string) bool {
-	return k == "observer" || k == "bridge" || k == "node" || k == "allow" || k == store.BlockKnown
+	return k == "observer" || k == "bridge" || k == "node" || k == "allow" ||
+		k == store.BlockKnown || k == store.BlockLink
 }
 
 func writeErr(w http.ResponseWriter, code int, msg string) {

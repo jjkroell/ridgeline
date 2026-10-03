@@ -283,6 +283,7 @@ type Store struct {
 	blockedObservers map[string]bool // observer id (exact)
 	blockedNodes     map[string]bool // node/bridge pubkey (UPPER) — origin-advert block
 	blockedBridges   []string        // bridge pubkeys (UPPER) — path-prefix block
+	blockedLinks     []blockedLink   // directed hop pairs (UPPER) — path-adjacency block
 	allowedNodes     map[string]bool // node pubkey (UPPER) — dismissed detection candidates
 	knownBridges     map[string]bool // node pubkey (UPPER) — sanctioned bridges, labelled not hidden
 

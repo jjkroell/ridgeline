@@ -20,12 +20,36 @@ const (
 	// it is wanted. Detection still reports it, labelled, so it stops reading as
 	// a finding that needs acting on every single scan.
 	BlockKnown = "known"
+
+	// BlockLink blocks a DIRECTED relay hop PAIR rather than a node: key is the
+	// hop traffic arrived on, peer is the hop it was relayed to. A packet drops
+	// only when those two appear ADJACENT, in that order, in its relay path.
+	// That is what kills the traffic an RF bridge injects without touching
+	// either end's own traffic — and the far end is usually a legitimate
+	// repeater on this mesh, so blocking it outright is not an option.
+	//
+	// Why not BlockBridge for this: a path hop is a truncated hash whose width
+	// is chosen by the packet's ORIGINATOR (1, 2, or 3 bytes), so a single-key
+	// prefix block fires for every node sharing that prefix. Blocking Cokley 425
+	// (22563EB8…) that way also drops traffic relayed by MT BRENTON CVARS
+	// (2235D8…) and VA7NEX (22A2E7…) whenever a path carries 1-byte hops —
+	// measured over 17h of real traffic as ~93% of all its matches. Requiring
+	// the pair resolves the ambiguity without a width floor: across 13 days of
+	// certain-identity (>=2-byte) hops the colliding candidates were never once
+	// adjacent to each other, only the real bridge pair ever was.
+	BlockLink = "link"
 )
+
+// blockedLink is a directed relay hop pair held in the ingest cache. From and To
+// are full pubkeys; relay path hops are truncated hashes, so each end matches by
+// prefix at whatever width the originator used.
+type blockedLink struct{ From, To string }
 
 // pubkeyKind reports whether a block kind's key is a node pubkey (so it should be
 // stored/compared upper-cased) rather than a free-form observer id.
 func pubkeyKind(kind string) bool {
-	return kind == BlockNode || kind == BlockBridge || kind == BlockAllow || kind == BlockKnown
+	return kind == BlockNode || kind == BlockBridge || kind == BlockAllow ||
+		kind == BlockKnown || kind == BlockLink
 }
 
 // BlockEntry is one blocklist row.
@@ -47,7 +71,7 @@ type BlockEntry struct {
 
 // loadBlocklist refreshes the in-memory blocklist cache from the table.
 func (s *Store) loadBlocklist() error {
-	rows, err := s.db.Query(`SELECT kind, key FROM blocklist`)
+	rows, err := s.db.Query(`SELECT kind, key, COALESCE(peer,'') FROM blocklist`)
 	if err != nil {
 		return err
 	}
@@ -57,9 +81,10 @@ func (s *Store) loadBlocklist() error {
 	allow := map[string]bool{}
 	known := map[string]bool{}
 	var bridges []string
+	var links []blockedLink
 	for rows.Next() {
-		var kind, key string
-		if err := rows.Scan(&kind, &key); err != nil {
+		var kind, key, peer string
+		if err := rows.Scan(&kind, &key, &peer); err != nil {
 			return err
 		}
 		switch kind {
@@ -75,6 +100,15 @@ func (s *Store) loadBlocklist() error {
 			allow[strings.ToUpper(key)] = true
 		case BlockKnown:
 			known[strings.ToUpper(key)] = true
+		case BlockLink:
+			// A link with no far end names no pair and can only match loosely,
+			// so it stays inert rather than degrading to a single-key block.
+			if peer != "" {
+				links = append(links, blockedLink{
+					From: strings.ToUpper(key),
+					To:   strings.ToUpper(peer),
+				})
+			}
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -83,6 +117,7 @@ func (s *Store) loadBlocklist() error {
 	s.blockMu.Lock()
 	s.blockedObservers, s.blockedNodes, s.blockedBridges, s.allowedNodes = obs, nodes, bridges, allow
 	s.knownBridges = known
+	s.blockedLinks = links
 	s.blockMu.Unlock()
 	return nil
 }
@@ -92,14 +127,18 @@ func (s *Store) loadBlocklist() error {
 //   - anything published by a blocked observer,
 //   - an advert originated by a blocked node or bridge,
 //   - any packet whose flood path transits a blocked bridge (a hop prefix of the
-//     bridge's pubkey) — this is what kills the foreign traffic an RF bridge injects.
+//     bridge's pubkey) — this is what kills the foreign traffic an RF bridge injects,
+//   - any packet whose flood path relayed across a blocked LINK: two hops
+//     adjacent and in order. See BlockLink for why a pair is matched rather
+//     than one end.
 func (s *Store) ShouldDrop(p *meshcore.Packet, observerID string) bool {
 	if p == nil {
 		return false
 	}
 	s.blockMu.RLock()
 	defer s.blockMu.RUnlock()
-	if len(s.blockedObservers) == 0 && len(s.blockedNodes) == 0 && len(s.blockedBridges) == 0 {
+	if len(s.blockedObservers) == 0 && len(s.blockedNodes) == 0 &&
+		len(s.blockedBridges) == 0 && len(s.blockedLinks) == 0 {
 		return false
 	}
 	if observerID != "" && s.blockedObservers[observerID] {
@@ -108,13 +147,28 @@ func (s *Store) ShouldDrop(p *meshcore.Packet, observerID string) bool {
 	if p.Advert != nil && p.Advert.PublicKey != "" && s.blockedNodes[strings.ToUpper(p.Advert.PublicKey)] {
 		return true
 	}
-	for _, hop := range p.RelayPath() {
+	path := p.RelayPath()
+	for _, hop := range path {
 		if hop == "" {
 			continue
 		}
 		h := strings.ToUpper(hop)
 		for _, b := range s.blockedBridges {
 			if strings.HasPrefix(b, h) {
+				return true
+			}
+		}
+	}
+	// A blocked link matches only where its two ends are adjacent and in order:
+	// the direction is the whole point, since the reverse is this mesh's own
+	// traffic on its way out rather than foreign traffic on its way in.
+	for i := 0; i+1 < len(path); i++ {
+		from, to := strings.ToUpper(path[i]), strings.ToUpper(path[i+1])
+		if from == "" || to == "" {
+			continue
+		}
+		for _, l := range s.blockedLinks {
+			if strings.HasPrefix(l.From, from) && strings.HasPrefix(l.To, to) {
 				return true
 			}
 		}
@@ -255,9 +309,9 @@ type PurgeResult struct {
 	// included in Nodes as well.
 	OrphanNodes int64 `json:"orphanNodes"`
 	Claims      int64 `json:"claims"`
-	Notes     int64 `json:"notes"`
-	Locations int64 `json:"locations"`
-	Shares    int64 `json:"shares"`
+	Notes       int64 `json:"notes"`
+	Locations   int64 `json:"locations"`
+	Shares      int64 `json:"shares"`
 	// SkippedClaimed lists keys held back from the delete because a user has
 	// claimed them — set by the purge handler for the nodes IT was asked to
 	// remove, and by the store for orphans it found on its own.

@@ -323,9 +323,22 @@ func Open(path string) (*Store, error) {
 	// Pin to a single connection. SQLite pragmas (busy_timeout, WAL) are
 	// per-connection, so with database/sql's default pool the timeout never
 	// reaches the extra connections it opens for concurrent queries — which is
-	// what produced spurious SQLITE_BUSY errors. One connection serializes all
-	// access (writes are already single-writer via s.mu, and the workload is
-	// low-volume), and guarantees every statement runs with the pragmas below.
+	// what produced spurious SQLITE_BUSY errors. One connection also guarantees
+	// every statement runs with the pragmas below.
+	//
+	// ⚠ THIS VALUE IS LOAD-BEARING FOR CORRECTNESS, not just for the pragmas.
+	// It is the ONLY thing serializing writes: s.mu guards some write paths but
+	// around three dozen (users, sessions, claims, notes, shares, locations,
+	// verification, password resets, observer status) do not take it at all.
+	// Raising it without first putting every write behind one mutex turns those
+	// into concurrent writers colliding on SQLITE_BUSY. Moving the pragmas into
+	// the DSN (?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)) is verified
+	// to work on this driver and removes the pragma objection — but the
+	// write-serialization work has to come first.
+	//
+	// The cost is head-of-line blocking: one slow query holds the only
+	// connection and everything else queues. So any query here that can scan the
+	// observations table is a site-wide outage risk — see the warning on rawSince.
 	db.SetMaxOpenConns(1)
 	// WAL keeps reads fast; busy_timeout is belt-and-suspenders for any retry.
 	for _, pragma := range []string{

@@ -580,12 +580,28 @@ func (s *Store) RecentGroupText(sinceISO string, limit int) ([]RawObservation, e
 
 // rawSince runs the shared "raw observations since a timestamp, newest first"
 // query used by both RawWindow and RecentRaw.
+//
+// ⚠ ORDER BY received_at, NOT id — do not "simplify" this back.
+// The window is selected on received_at, which is indexed (idx_obs_received).
+// Ordering by id instead made SQLite abandon that index and plan a full
+// `SCAN observations` — every row in the table, raw_hex included, to return the
+// ~105k in the window. At 4.27M rows that scan took longer than the 90s analytics
+// interval it feeds, so the recompute ran essentially continuously, and because
+// the pool is pinned to one connection (see Open) it held that connection the
+// whole time: the site sat at 10-90s per request with a core pegged.
+//
+// Ordering by the same column the window filters on lets SQLite seek into the
+// index and read only the window: `SEARCH observations USING INDEX
+// idx_obs_received (received_at>?)`. Verified against a 3.7M-row copy as an
+// identical result set in an identical order (0 of 105,045 positions differed —
+// id and received_at agree because ingest only ever appends), for 105k rows read
+// instead of 3.7M.
 func (s *Store) rawSince(sinceISO string, limit int) ([]RawObservation, error) {
 	rows, err := s.db.Query(`
 		SELECT raw_hex, COALESCE(observer_id,''), COALESCE(region,''), snr, rssi, received_at
 		FROM observations
 		WHERE received_at >= ?
-		ORDER BY id DESC
+		ORDER BY received_at DESC
 		LIMIT ?`, sinceISO, limit)
 	if err != nil {
 		return nil, err

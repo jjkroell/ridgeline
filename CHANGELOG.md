@@ -4,6 +4,40 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.22.1] — 2026-10-03
+
+### Fixed
+- **The site no longer stalls for 10-25 seconds every 90 seconds.** The analytics
+  recompute reads every observation in the 24-hour window, and that query's
+  `ORDER BY id DESC` made SQLite plan a full table **SCAN** — 4.27M rows on prod.
+  Because the connection pool is pinned to a single connection, that scan held the
+  *only* connection for its whole duration, so every API read and every ingest
+  write queued behind it. Measured on prod before the fix: `/api/nodes` sat at a
+  0.126s median with 11% of samples over a second, peaking at 11s in one sample
+  window and 20-26s in another. MQTT also lost its keepalive during the stall
+  (`pingresp not received`), reconnecting and re-vetting every observer each time.
+
+  `rawSince` now reads the window in 10k-row pages, keyset on `id` and bounded
+  below by the window's lowest id. The floor matters: without it the final page
+  asks for rows older than the window and SQLite scans the rest of the table to
+  prove there are none. The plan changes from `SCAN observations` to `SEARCH
+  observations USING INTEGER PRIMARY KEY (rowid>? AND rowid<?)`, and the longest
+  the connection is held drops from the whole scan to a single page — measured at
+  **16ms** against a 3.7M-row copy, with a byte-identical result set.
+
+  Not fixed here, and worth knowing: the recompute still re-decodes every packet in
+  the window from hex on every tick. Paging stops it blocking other work; it does
+  not make it cheap.
+
+- **`SetMaxOpenConns(1)` is now documented as load-bearing for correctness.** Its
+  comment claimed writes were "already single-writer via `s.mu`". They are not —
+  roughly three dozen write paths (users, sessions, claims, notes, shares,
+  locations, verification, password resets, observer status) never take `s.mu`, so
+  the single connection is the only thing serializing them. Raising the pool would
+  silently turn those into colliding concurrent writers. Moving the pragmas into
+  the DSN is verified to work on this driver and removes the original objection to
+  a larger pool, but the write-serialization work has to come first.
+
 ## [v0.22.0] — 2026-10-03
 
 ### Added

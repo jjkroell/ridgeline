@@ -578,29 +578,82 @@ func (s *Store) RecentGroupText(sinceISO string, limit int) ([]RawObservation, e
 	return out, rows.Err()
 }
 
+// rawPageSize is how many observations rawSince reads per query. It trades a
+// few extra round trips for latency: see rawSince.
+const rawPageSize = 10000
+
 // rawSince runs the shared "raw observations since a timestamp, newest first"
 // query used by both RawWindow and RecentRaw.
+//
+// It reads the window in PAGES rather than one long query, and that is the whole
+// point of the function's shape. The connection pool is pinned to a single
+// connection (see Open), so one 100k-row scan holds the ONLY connection for its
+// entire duration and everything else — every API read and every ingest write —
+// queues behind it. On a 24h analytics window that was ~107k rows carrying
+// raw_hex, which stalled the site for 10-25s on every 90s recompute. Paging
+// releases the connection between pages so other queries interleave.
+//
+// The cursor is keyset on id (not OFFSET, which re-walks the skipped rows), and
+// it is bounded BELOW by the window's lowest id. Without that floor the final
+// page would ask for rows older than the window and SQLite would scan the rest
+// of the table — millions of rows — to prove there are none. received_at is kept
+// in the predicate so the result set stays exactly what it was: the id range
+// only bounds the scan, it does not define the window.
+//
+// Pages are separate reads, so a row inserted mid-scan can land in one page and
+// not another. For a snapshot rebuilt every 90 seconds that is a better trade
+// than holding a transaction (and therefore the connection) open for the lot.
 func (s *Store) rawSince(sinceISO string, limit int) ([]RawObservation, error) {
-	rows, err := s.db.Query(`
-		SELECT raw_hex, COALESCE(observer_id,''), COALESCE(region,''), snr, rssi, received_at
-		FROM observations
-		WHERE received_at >= ?
-		ORDER BY id DESC
-		LIMIT ?`, sinceISO, limit)
-	if err != nil {
+	// COALESCE rather than a NullInt64: id is AUTOINCREMENT so it is never 0,
+	// which makes 0 a safe "window is empty" sentinel and keeps this file free of
+	// a database/sql import.
+	var minID int64
+	if err := s.db.QueryRow(
+		`SELECT COALESCE(MIN(id), 0) FROM observations WHERE received_at >= ?`, sinceISO).Scan(&minID); err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
 	out := []RawObservation{}
-	for rows.Next() {
-		var o RawObservation
-		if err := rows.Scan(&o.RawHex, &o.ObserverID, &o.Region, &o.SNR, &o.RSSI, &o.ReceivedAt); err != nil {
+	if minID == 0 {
+		return out, nil // nothing in the window
+	}
+
+	cursor := int64(math.MaxInt64)
+	for len(out) < limit {
+		page := rawPageSize
+		if rem := limit - len(out); rem < page {
+			page = rem
+		}
+		rows, err := s.db.Query(`
+			SELECT id, raw_hex, COALESCE(observer_id,''), COALESCE(region,''), snr, rssi, received_at
+			FROM observations
+			WHERE received_at >= ? AND id >= ? AND id < ?
+			ORDER BY id DESC
+			LIMIT ?`, sinceISO, minID, cursor, page)
+		if err != nil {
 			return nil, err
 		}
-		out = append(out, o)
+		n := 0
+		for rows.Next() {
+			var id int64
+			var o RawObservation
+			if err := rows.Scan(&id, &o.RawHex, &o.ObserverID, &o.Region, &o.SNR, &o.RSSI, &o.ReceivedAt); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			out = append(out, o)
+			cursor = id
+			n++
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
+		if n < page {
+			break // window exhausted
+		}
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // RelayHopPrefixesSince returns the set of distinct relay-hop identifiers

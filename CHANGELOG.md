@@ -4,6 +4,19 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.21.4] — 2026-10-03
+
+### Changed
+- **The About page no longer uses hyphens in its prose.** v0.21.2 removed only
+  "coastal-BC" and kept five compound modifiers; all five are now gone too, reworded
+  rather than merely de-hyphenated so each still reads naturally: "cheap, low-power
+  LoRa radios" → "cheap LoRa radios that sip power"; "Receive-only stations we call
+  observers" → "Stations that only ever listen, which we call observers";
+  "narrow-band profile" → "narrowband profile"; "a solar-powered box bolted to a
+  ridge" → "a box bolted to a ridge and running on solar"; "an independent,
+  community-run project" → "an independent project, run by the community". The
+  rendered page now contains no hyphens at all.
+
 ## [v0.21.3] — 2026-10-03
 
 ### Changed

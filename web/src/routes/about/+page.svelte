@@ -37,16 +37,16 @@
 	<section class="text-fg-dim space-y-4">
 		<h2 class="text-fg text-xl font-700">What Ridgeline does</h2>
 		<p>
-			<strong>MeshCore</strong> is a protocol for cheap, low-power
-			<strong>LoRa</strong> radios that pass messages hop to hop — no towers, no
+			<strong>MeshCore</strong> is a protocol for cheap
+			<strong>LoRa</strong> radios that sip power and pass messages hop to hop — no towers, no
 			internet, no monthly bill. That suits a coastline like this one, where cell
 			coverage thins out the moment you leave the highway. The trouble is that a
 			mesh is mostly invisible while it runs: the traffic is in the air, not on
 			any screen.
 		</p>
 		<p>
-			Ridgeline gives it one. Receive-only stations we call <em>observers</em>
-			sit and listen, then pass what they hear back to be decoded. What comes out
+			Ridgeline gives it one. Stations that only ever listen, which we call
+			<em>observers</em>, sit and pass what they hear back to be decoded. What comes out
 			is a searchable
 			<a href="/nodes" class="text-signal hover:underline">node directory</a>, a
 			<a href="/live" class="text-signal hover:underline">live packet feed</a>,
@@ -90,7 +90,7 @@
 			{/each}
 		</dl>
 		<p>
-			It's a narrow-band profile. The 62.5&nbsp;kHz channel keeps the receiver
+			It's a narrowband profile. The 62.5&nbsp;kHz channel keeps the receiver
 			sensitive enough to pull weak signals off distant ridges, while SF7 keeps
 			each packet short on the air — and airtime is the scarce resource on a
 			shared frequency. Short packets are what let the mesh keep growing without
@@ -110,7 +110,7 @@
 		<p>
 			A few terms worth pinning down. A <strong>node</strong> is any MeshCore
 			device on the network — a handheld you carry, a base station sitting in a
-			window, a solar-powered box bolted to a ridge. A <strong>repeater</strong>
+			window, a box bolted to a ridge and running on solar. A <strong>repeater</strong>
 			is a node built to listen and rebroadcast, extending the mesh's reach with
 			every hop. An <strong>observer</strong> is the odd one out: it only
 			receives, and it reports what it hears to Ridgeline, which is why the maps
@@ -136,8 +136,8 @@
 
 	<footer class="border-line text-fg-faint mt-12 border-t pt-6 text-sm">
 		<p>
-			Ridgeline is an independent, community-run project for the coastal British
-			Columbia MeshCore mesh. <a href="/" class="text-signal hover:underline">Open the live dashboard →</a>
+			Ridgeline is an independent project, run by the community, for the coastal
+			British Columbia MeshCore mesh. <a href="/" class="text-signal hover:underline">Open the live dashboard →</a>
 		</p>
 	</footer>
 </article>

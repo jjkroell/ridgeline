@@ -98,7 +98,9 @@
 	function fmtRadio(s?: ObserverStatus): string {
 		if (!s) return '—';
 		const parts: string[] = [];
-		if (s.freqMhz != null) parts.push(`${(+s.freqMhz.toFixed(3)).toString()} MHz`);
+		// toFixed, NOT +toFixed: the unary + turns "909.000" back into 909 and
+		// strips the zeros, leaving a bare "909" that reads as a truncated value.
+		if (s.freqMhz != null) parts.push(`${s.freqMhz.toFixed(3)} MHz`);
 		if (s.bandwidthKhz != null) parts.push(`${s.bandwidthKhz}k`);
 		if (s.spreadingFactor != null) parts.push(`SF${s.spreadingFactor}`);
 		if (s.codingRate != null) parts.push(`CR${s.codingRate}`);

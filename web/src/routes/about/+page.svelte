@@ -23,7 +23,7 @@
 	<header class="mb-10">
 		<p class="label text-signal mb-2">MeshCore Observatory</p>
 		<h1 class="font-display text-fg text-3xl font-900 tracking-tight sm:text-4xl">
-			Ridgeline watches the coastal-BC MeshCore mesh
+			Ridgeline watches the coastal BC MeshCore mesh
 		</h1>
 		<p class="text-fg-dim mt-4 text-lg">
 			Ridgeline is a window onto the <strong>MeshCore</strong> radio mesh as it
@@ -96,6 +96,12 @@
 			shared frequency. Short packets are what let the mesh keep growing without
 			nodes talking over one another. The 4/5 coding rate adds just enough error
 			correction to survive a noisy channel.
+		</p>
+		<p>
+			The mesh moved here from 910.425&thinsp;MHz on <strong>1 October 2026</strong>.
+			<a href="/faq" class="text-signal font-600 hover:underline"
+				>Why we moved to 909.000&thinsp;MHz, and how to retune a node &rarr;</a
+			>
 		</p>
 	</section>
 

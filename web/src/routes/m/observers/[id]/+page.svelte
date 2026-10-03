@@ -60,7 +60,8 @@
 	function fmtRadio(s?: ObserverStatus): string {
 		if (!s) return '—';
 		const p: string[] = [];
-		if (s.freqMhz != null) p.push(`${+s.freqMhz.toFixed(3)} MHz`);
+		// toFixed, NOT +toFixed — see the desktop page: the + strips the zeros.
+		if (s.freqMhz != null) p.push(`${s.freqMhz.toFixed(3)} MHz`);
 		if (s.bandwidthKhz != null) p.push(`${s.bandwidthKhz}k`);
 		if (s.spreadingFactor != null) p.push(`SF${s.spreadingFactor}`);
 		if (s.codingRate != null) p.push(`CR${s.codingRate}`);

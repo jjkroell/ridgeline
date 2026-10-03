@@ -4,6 +4,24 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.21.2] — 2026-10-03
+
+### Fixed
+- **Observer pages showed a whole-MHz frequency as a bare "909".** The formatter
+  padded the value and then threw the padding away: `+s.freqMhz.toFixed(3)` parses
+  the `"909.000"` string straight back into the number `909`, so the trailing zeros
+  were stripped before rendering and the channel read as a truncated value next to
+  a neighbouring `909.250`. Affected the observer detail page, and the mobile
+  detail and list pages. Now `909.000 MHz`. The quarantine badge still shows the
+  observer's reported preset verbatim, which is the value you quote back to its
+  owner.
+
+### Changed
+- **About page:** "coastal-BC" is not a compound modifier — now "coastal BC". (The
+  page's other hyphens — low-power, receive-only, narrow-band, solar-powered,
+  community-run — are compound modifiers and stay.) Added a link under the radio
+  settings to the FAQ explaining the move to 909.000 MHz and how to retune a node.
+
 ## [v0.21.1] — 2026-10-03
 
 ### Changed

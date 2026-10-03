@@ -26,7 +26,8 @@
 		const s = o.status;
 		if (!s) return '';
 		const p: string[] = [];
-		if (s.freqMhz != null) p.push(`${+s.freqMhz.toFixed(3)}`);
+		// toFixed, NOT +toFixed — the + strips the zeros and leaves a bare "909".
+		if (s.freqMhz != null) p.push(`${s.freqMhz.toFixed(3)}`);
 		if (s.spreadingFactor != null) p.push(`SF${s.spreadingFactor}`);
 		return p.join(' · ');
 	}

@@ -4,6 +4,29 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.22.0] — 2026-10-03
+
+### Added
+- **An admin can take ownership of any node outright.** Both normal routes to
+  ownership prove possession of the node — the advert-name code shows you can
+  reconfigure it, the key challenge shows you hold its private key. Neither is
+  available to the operator of the deployment when a node's owner is unreachable or
+  its hardware is in a drawer, so `POST /api/admin/claims` grants a verified claim
+  with no code and no key. It is gated on an authenticated **admin** session
+  (`requireAdminUser`), and every grant is written to `audit_log` as `admin_claim`
+  — an ownership record that was granted rather than earned must never be
+  indistinguishable from one that was verified.
+
+  It deliberately **does not take a node off another user**: `CreateVerifiedClaim`
+  already returns `ErrNodeClaimed` in that case and it surfaces as a 409 rather
+  than silently overriding. Filling an ownership vacuum and seizing someone's node
+  are different acts, and the admin console has explicit tooling for the second.
+  Re-granting a node you already own is a no-op, not an error.
+
+  In the UI the shortcut appears in the node's **Ownership** panel for admins only,
+  on an unclaimed node and on one where your own claim is still pending (so there
+  is no need to wait out a verification you are about to bypass).
+
 ## [v0.21.4] — 2026-10-03
 
 ### Changed

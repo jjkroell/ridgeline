@@ -973,6 +973,10 @@ export const claims = {
   /** Open or refresh a pending claim; returns the code to embed in the advert name. */
   create: (csrf: string, pubkey: string) =>
     mutate<Claim>("/api/claims", "POST", csrf, { pubkey }),
+  /** Admin only: grant ownership outright, with no name change and no key proof.
+   *  Audit-logged server-side. Refuses (409) a node another user already owns. */
+  adminGrant: (csrf: string, pubkey: string) =>
+    mutate<Claim>("/api/admin/claims", "POST", csrf, { pubkey }),
   /** Cancel a pending claim or release ownership. */
   release: (csrf: string, pubkey: string) =>
     mutate<{ ok: boolean }>(

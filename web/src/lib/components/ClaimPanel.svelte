@@ -73,6 +73,22 @@
 		}
 	}
 
+	// Admin shortcut: take ownership with no proof of possession at all. Separate
+	// from claim() on purpose — it is a different act, and the copy says so.
+	async function adminGrant() {
+		busy = true;
+		error = '';
+		try {
+			await claims.adminGrant(auth.csrf, pubkey);
+			await load();
+			onchanged?.();
+		} catch (e) {
+			error = String((e as Error).message ?? e);
+		} finally {
+			busy = false;
+		}
+	}
+
 	// Prove ownership by signing a server challenge with the node's private key,
 	// entirely in-browser. Only the signature is sent — never the key itself.
 	async function proveWithKey() {
@@ -133,6 +149,24 @@
 		return m >= 1 ? `~${m} min` : '<1 min';
 	}
 </script>
+
+{#snippet adminShortcut()}
+	{#if auth.isAdmin}
+		<div class="border-line/60 mt-3 border-t pt-3">
+			<div class="flex flex-wrap items-center gap-3">
+				<p class="text-fg-faint text-[0.7rem]">
+					Admin: take ownership without renaming the node or using its key.
+				</p>
+				<button
+					onclick={adminGrant}
+					disabled={busy}
+					class="border-amber/40 text-amber hover:bg-amber/10 ml-auto rounded-[var(--radius)] border px-3 py-1.5 text-xs font-600 transition-colors disabled:opacity-50"
+					>{busy ? 'Claiming…' : 'Claim as admin'}</button
+				>
+			</div>
+		</div>
+	{/if}
+{/snippet}
 
 {#snippet keyProof()}
 	{#if showKey}
@@ -270,6 +304,7 @@
 				<p class="text-fg-faint text-[0.7rem]">Prefer not to rename the node?</p>
 				{@render keyProof()}
 			</div>
+			{@render adminShortcut()}
 		{:else if !status.loggedIn}
 			{#if status.previousOwner}
 				<p class="text-fg-faint mb-2 text-xs">Previously owned by {status.previousOwner}.</p>
@@ -291,6 +326,7 @@
 				>
 			</div>
 			{@render keyProof()}
+			{@render adminShortcut()}
 		{/if}
 
 		{#if error}

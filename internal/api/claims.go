@@ -127,6 +127,59 @@ func (s *Server) claimCreate(w http.ResponseWriter, r *http.Request, user store.
 	writeJSON(w, claim)
 }
 
+// adminClaim grants the calling admin verified ownership of a node outright,
+// with no advert-name code and no private-key challenge.
+//
+// The two normal routes to ownership both PROVE possession of the node: the
+// name-change code shows you can reconfigure it, and the key challenge shows you
+// hold its private key. This one proves nothing, which is the point — it exists
+// for the operator who runs the deployment and needs to administer a node whose
+// owner is unreachable, or whose hardware is in a drawer. So it is admin-gated,
+// and it is written to the audit log: an ownership record that was granted rather
+// than earned should never be indistinguishable from one that was verified.
+//
+// It deliberately does NOT take a node off another user. CreateVerifiedClaim
+// returns ErrNodeClaimed when someone else owns it, and that is surfaced as a
+// conflict rather than quietly overridden — seizing a node is a different, louder
+// action than filling an ownership vacuum, and the admin console already has
+// explicit tools for it.
+func (s *Server) adminClaim(w http.ResponseWriter, r *http.Request, user store.User) {
+	var req struct {
+		Pubkey string `json:"pubkey"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad request body")
+		return
+	}
+	pubkey := strings.ToUpper(strings.TrimSpace(req.Pubkey))
+	if !validPubkey(pubkey) {
+		writeErr(w, http.StatusBadRequest, "a full 64-character node public key is required")
+		return
+	}
+	if ok, err := s.store.NodeExists(pubkey); err != nil {
+		s.fail(w, err)
+		return
+	} else if !ok {
+		writeErr(w, http.StatusNotFound, "unknown node — Ridgeline hasn't heard this node yet")
+		return
+	}
+
+	claim, err := s.store.CreateVerifiedClaim(pubkey, user.ID)
+	if err == store.ErrNodeClaimed {
+		writeErr(w, http.StatusConflict, "this node is already claimed by another user")
+		return
+	}
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	s.audit(user, "admin_claim", pubkey,
+		"verified ownership granted by admin without node verification")
+	s.log.Warn("admin claimed a node without verification",
+		"node", pubkey, "user", user.ID, "email", user.Email)
+	writeJSON(w, claim)
+}
+
 // claimDelete cancels the caller's pending claim or releases their ownership.
 func (s *Server) claimDelete(w http.ResponseWriter, r *http.Request, user store.User) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))

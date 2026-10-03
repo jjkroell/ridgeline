@@ -170,6 +170,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/claims", s.requireUser(s.claimCreate))
 	mux.HandleFunc("GET /api/claims/mine", s.requireUser(s.claimsMine))
 	mux.HandleFunc("DELETE /api/claims/{pubkey}", s.requireUser(s.claimDelete))
+	// Admin shortcut: grant ownership with no proof of possession. Audit-logged.
+	mux.HandleFunc("POST /api/admin/claims", s.requireAdminUser(s.adminClaim))
 	// Alternative ownership proof: sign a server challenge with the node's private key.
 	mux.HandleFunc("POST /api/nodes/{pubkey}/retire", s.requireUser(s.nodeRetire))
 	mux.HandleFunc("POST /api/nodes/{pubkey}/unretire", s.requireUser(s.nodeUnretire))

@@ -32,11 +32,11 @@
 	const farCount = $derived(nodes.filter((n) => n.viaBridge).length);
 	const farFreq = $derived(farSegmentFreq(nodes));
 	const SEGMENTS = $derived([
-		{ key: 'all' as const, label: 'Both frequencies', count: nodes.length },
+		{ key: 'all' as const, label: 'All nodes', count: nodes.length },
 		{ key: 'main' as const, label: 'Main network', count: nodes.length - farCount },
 		{
 			key: 'far' as const,
-			label: farFreq ? `${farFreq} MHz` : 'Another frequency',
+			label: farFreq ? `${farFreq} MHz` : 'Another preset',
 			count: farCount
 		}
 	]);

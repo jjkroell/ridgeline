@@ -137,15 +137,15 @@ export function fmtCoord(lat?: number, lon?: number): string {
 	return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
 }
 
-/** Format a node's "freq,bw,sf,cr" radio config as "910.425 · 62.5k · SF7 · CR5"
+/** Format a node's "freq,bw,sf,cr" radio config as "909.000 · 62.5k · SF7 · CR5"
  *  (frequency rounded to 3 decimals). */
 export function fmtRadio(r?: string): string {
 	if (!r) return '—';
 	const [f, b, s, c] = r.split(',');
 	const parts: string[] = [];
 	// Keep the trailing zeros: a radio frequency is read to 3 decimals, and
-	// "915" for 915.000 looks like a different (or truncated) setting next to a
-	// neighbouring "915.250".
+	// "909" for 909.000 looks like a different (or truncated) setting next to a
+	// neighbouring "909.250".
 	if (f) parts.push((+f).toFixed(3));
 	if (b) parts.push(`${b}k`);
 	if (s) parts.push(`SF${s}`);

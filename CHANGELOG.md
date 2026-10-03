@@ -4,6 +4,37 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.21.1] — 2026-10-03
+
+### Changed
+- **The site now describes one frequency.** The mesh moved from 910.425 MHz to
+  **909.000 MHz** on 1 October 2026, and the copy had not caught up: every page
+  still called 909 "the alternate frequency", the About page carried two radio
+  tables and a notice announcing a move that had already happened, and the
+  observer setup modal handed out `set radio 910.425,62.5,7,5` — a command people
+  paste straight into real hardware.
+
+  About page: the cutover notice and the two "alternate frequency" / "second
+  network on 909 MHz" sections are gone, the two preset tables are collapsed into
+  one, and the single frequency is stated once under **Radio settings (909.000
+  MHz)**. SEO/JSON-LD descriptions across `app.html` and the overview, nodes, live
+  and map routes now name 909.000; the keywords list deliberately keeps 910.425 so
+  people searching the old number still arrive. The FAQ keeps its retune
+  instructions present-tense, because stations are still on the old channel, but
+  its framing is past tense and two claims that had become false — that the two
+  channels are "still deliberately bridged", and that only a handful of nodes sit
+  on 909 — are corrected.
+
+- **Far-side labels say "radio preset", not "frequency", and never show a bare
+  frequency.** A segment is defined by freq + bandwidth + spreading factor, so
+  `NodeDetail` showed a node's frequency alone — which after the move rendered
+  "On 909.000 MHz" to a reader who is also on 909.000. It now shows the full
+  preset via `fmtRadio`, and the fallback reads "On a different radio preset".
+  The node-list tooltip and the filter labels follow. `farSegmentFreq` pads to 3
+  decimals, so a frequency never renders as a bare "909" that reads like a
+  truncated value, and the FAQ's `get radio` confirmation line matches the command
+  above it rather than showing `909.0`.
+
 ## [v0.21.0] — 2026-10-03
 
 ### Added

@@ -420,7 +420,9 @@
 		<div class="border-violet/40 bg-violet/5 mb-5 rounded-[var(--radius)] border px-5 py-3.5">
 			<div class="text-violet flex items-center gap-2 text-sm font-600">
 				<span class="bg-violet inline-block h-2 w-2 rounded-full"></span>
-				{node.viaBridgeRadio ? `On ${node.viaBridgeRadio.split(',')[0]} MHz` : 'On another frequency'}
+				{node.viaBridgeRadio
+					? `On ${fmtRadio(node.viaBridgeRadio)}`
+					: 'On a different radio preset'}
 				{#if node.viaBridgeConfidence === 'probable'}
 					<span class="label !text-violet/70 normal-case">probable</span>
 				{:else if node.viaBridgeConfidence === 'observed'}
@@ -433,21 +435,21 @@
 			     the changelog for anyone who goes looking. -->
 			<div class="text-fg-dim mt-1.5 text-xs">
 				{#if node.viaBridgeConfidence === 'observed'}
-					This node runs on a different frequency from most of the network. We have a
-					receiver on that frequency and it hears this node directly, so this isn't a
+					This node runs on a different radio preset from most of the network. We have a
+					receiver on that preset and it hears this node directly, so this isn't a
 					guess. Its traffic reaches the rest of the network through the
 					<span class="text-fg">{node.viaBridgeName || 'bridge'}</span> link, which passes
-					traffic between the two frequencies.
+					traffic between the two presets.
 				{:else}
-					This node runs on a different frequency, so none of our receivers can hear it
-					directly. Everything we know about it arrives through the
+					This node runs on a different radio preset, so none of our receivers can hear
+					it directly. Everything we know about it arrives through the
 					<span class="text-fg">{node.viaBridgeName || 'bridge'}</span> link, which passes traffic
-					between the two frequencies.
+					between the two presets.
 					{#if node.viaBridgeRadio}
-						The frequency shown was typed in when that link was set up — there's no way to
+						The preset shown was typed in when that link was set up — there's no way to
 						check it from this side.
 					{:else}
-						Nobody has recorded which frequency that side uses yet.
+						Nobody has recorded which preset that side uses yet.
 					{/if}
 					{#if node.viaBridgeConfidence === 'probable'}
 						It's also a good guess rather than a certainty: the traces this node leaves behind

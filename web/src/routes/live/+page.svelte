@@ -172,7 +172,7 @@
 
 <Seo
 	title="Live MeshCore Packet Feed"
-	description="Watch MeshCore mesh packets stream in real time across coastal BC — adverts, messages and traces on the alternate frequency (currently 910.425 MHz)."
+	description="Watch MeshCore mesh packets stream in real time across coastal BC — adverts, messages and traces on 909.000 MHz."
 	path="/live"
 />
 

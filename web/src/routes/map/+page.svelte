@@ -415,7 +415,7 @@
 
 <Seo
 	title="MeshCore Coverage Map — Vancouver Island &amp; Lower Mainland"
-	description="Interactive coverage map of the MeshCore LoRa mesh across coastal British Columbia — node and repeater locations on the alternate frequency (currently 910.425 MHz)."
+	description="Interactive coverage map of the MeshCore LoRa mesh across coastal British Columbia — node and repeater locations on 909.000 MHz."
 	path="/map"
 />
 

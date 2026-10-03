@@ -3,7 +3,7 @@
 	//
 	// The settings here are specific to THIS deployment and must stay in step with
 	// the running system, so they are sourced rather than invented:
-	//   - radio params match /about (910.425 MHz, 62.5 kHz, SF7, CR5)
+	//   - radio params match /about (909.000 MHz, 62.5 kHz, SF7, CR5)
 	//   - the broker + audience match deploy/mosquitto-jwt.conf and the VM's
 	//     config.json mqttAuth.audience — the audience must equal the hostname
 	//     exactly or the token is refused as minted for another broker
@@ -44,7 +44,7 @@ set mqtt1.audience ${AUDIENCE}
 set mqtt2.preset none
 set mqtt.iata ${iataToken}`);
 
-	const radio = `set radio 910.425,62.5,7,5
+	const radio = `set radio 909.000,62.5,7,5
 set tx 22`;
 
 	const wifi = `set wifi.ssid YOUR_NETWORK
@@ -102,10 +102,8 @@ reboot`);
 			<p class="label text-amber mb-2">This mesh only &middot; one radio preset</p>
 			<p class="text-fg-dim text-sm leading-relaxed">
 				Ridgeline tracks the mesh running
-				<strong class="text-fg">910.425&thinsp;MHz &middot; 62.5&thinsp;kHz &middot; SF7 &middot; CR5</strong>,
-				which moves to <strong class="text-fg">909.000&thinsp;MHz</strong> on
-				<strong class="text-fg">1 October 2026</strong> — frequency only, the other
-				three values stay put.
+				<strong class="text-fg">909.000&thinsp;MHz &middot; 62.5&thinsp;kHz &middot; SF7 &middot; CR5</strong>.
+				That is the only preset this deployment accepts data from.
 			</p>
 			<p class="text-fg-dim mt-2 text-sm leading-relaxed">
 				<strong class="text-fg">Data from any other preset is refused automatically.</strong>
@@ -117,7 +115,7 @@ reboot`);
 			</p>
 			<p class="text-fg-dim mt-2 text-sm leading-relaxed">
 				<a href="/faq" class="text-signal font-600 hover:underline"
-					>About the 909 move &rarr;</a
+					>About the move to 909.000&thinsp;MHz &rarr;</a
 				>
 			</p>
 		</aside>

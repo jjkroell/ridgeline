@@ -2,18 +2,10 @@
 	import Seo from '$lib/components/Seo.svelte';
 
 	// The LoRa parameters every radio on this mesh must match — the MeshCore
-	// default North America preset, with the frequency moved to 910.425 MHz.
+	// default North America preset, with the frequency set to 909.000 MHz. The
+	// mesh moved here from 910.425 MHz on 1 October 2026; there is one preset
+	// now, so there is one table.
 	const radio: { k: string; v: string }[] = [
-		{ k: 'Frequency', v: '910.425 MHz' },
-		{ k: 'Bandwidth', v: '62.5 kHz' },
-		{ k: 'Spreading factor', v: 'SF 7' },
-		{ k: 'Coding rate', v: 'CR 5' }
-	];
-
-	// The second network, joined to the one above by the wired pair at Mt Cokley.
-	// Same settings as above apart from the frequency — the mesh is moving to
-	// 909.000 MHz on 1 October 2026 and stays on SF7.
-	const radio909: { k: string; v: string }[] = [
 		{ k: 'Frequency', v: '909.000 MHz' },
 		{ k: 'Bandwidth', v: '62.5 kHz' },
 		{ k: 'Spreading factor', v: 'SF 7' },
@@ -23,30 +15,11 @@
 
 <Seo
 	title="About Ridgeline — MeshCore mesh for Vancouver Island & the Lower Mainland"
-	description="Ridgeline is a live observatory for the MeshCore LoRa mesh network across coastal British Columbia — nodes, repeaters, coverage and packets on the alternate frequency (currently 910.425 MHz)."
+	description="Ridgeline is a live observatory for the MeshCore LoRa mesh network across coastal British Columbia — nodes, repeaters, coverage and packets on 909.000 MHz."
 	path="/about"
 />
 
 <article class="mx-auto max-w-3xl px-6 py-12 leading-relaxed">
-	<!-- Network change notice. First thing on the page until the cutover has
-	     happened, because it is the one thing on this site that asks the reader
-	     to go and do something to their own hardware, and it expires. -->
-	<aside
-		class="border-amber/50 bg-amber/5 not-prose mb-10 rounded-[var(--radius)] border border-l-4 px-5 py-4"
-	>
-		<p class="label text-amber mb-2">Network change &middot; 1 October 2026</p>
-		<p class="text-fg-dim">
-			On <strong class="text-fg">1 October 2026</strong> the whole mesh moves to
-			<strong class="text-fg">909.000&thinsp;MHz</strong>. Bandwidth, spreading
-			factor and coding rate do not change &mdash; only the frequency.
-		</p>
-		<p class="text-fg-dim mt-3">
-			<a href="/faq" class="text-signal font-600 hover:underline"
-				>Why we're moving, and how to change your node &rarr;</a
-			>
-		</p>
-	</aside>
-
 	<header class="mb-10">
 		<p class="label text-signal mb-2">MeshCore Observatory</p>
 		<h1 class="font-display text-fg text-3xl font-900 tracking-tight sm:text-4xl">
@@ -98,25 +71,13 @@
 	</section>
 
 	<section class="text-fg-dim mt-10 space-y-4">
-		<h2 class="text-fg text-xl font-700">The alternate frequency (currently 910.425 MHz)</h2>
+		<h2 class="text-fg text-xl font-700">Radio settings (909.000 MHz)</h2>
 		<p>
-			The mesh lives in the 900 MHz ISM band. Most of the regional linking
-			happens on what the network treats as its
-			<strong>alternate frequency</strong> — right now <strong>910.425 MHz</strong>,
-			though that may change. Ridgeline follows the alt frequency, so everything
-			you see here reflects it: who is transmitting, who is relaying, and how far
-			each signal carries.
-		</p>
-	</section>
-
-	<section class="text-fg-dim mt-10 space-y-4">
-		<h2 class="text-fg text-xl font-700">Radio settings (910.425 MHz)</h2>
-		<p>
-			Every radio on the mesh speaks the same LoRa dialect. Below are the exact
-			parameters — the MeshCore <strong>default North America</strong> preset, with
-			the frequency moved to <strong>910.425 MHz</strong>. A radio that doesn't
-			match all four won't hear a thing, so if you're setting one up, copy them
-			precisely.
+			The mesh lives in the 900&nbsp;MHz ISM band, and every radio on it speaks
+			the same LoRa dialect. Below are the exact parameters — the MeshCore
+			<strong>default North America</strong> preset, with the frequency set to
+			<strong>909.000&thinsp;MHz</strong>. A radio that doesn't match all four
+			won't hear a thing, so if you're setting one up, copy them precisely.
 		</p>
 		<dl
 			class="border-line/70 divide-line/60 not-prose my-2 divide-y overflow-hidden rounded-[var(--radius)] border"
@@ -136,38 +97,6 @@
 			nodes talking over one another. The 4/5 coding rate adds just enough error
 			correction to survive a noisy channel.
 		</p>
-	</section>
-
-	<section class="text-fg-dim mt-10 space-y-4">
-		<h2 class="text-fg text-xl font-700">The second network on 909 MHz</h2>
-		<p>
-			Not everything on the mesh is on the alternate frequency. A separate group
-			of nodes runs on <strong>909.000 MHz</strong>, and the two networks are
-			joined by a pair of repeaters wired together at
-			<strong>Mt Cokley</strong>, above Parksville. One listens on each frequency,
-			and whatever either of them hears is handed across to the other.
-		</p>
-		<p>
-			Every receiver feeding Ridgeline sits on the alternate frequency, so nothing
-			here can hear 909 directly. A node on that side shows up only once its
-			traffic has crossed the Mt Cokley link — and that crossing is exactly how we
-			work out which nodes live over there. They're marked in violet everywhere
-			they appear, with their frequency shown under the name.
-		</p>
-		<p>
-			Apart from the frequency, both sides run identical radio settings, so moving
-			a node across is a matter of changing the frequency and nothing else.
-		</p>
-		<dl
-			class="border-line/70 divide-line/60 not-prose my-2 divide-y overflow-hidden rounded-[var(--radius)] border"
-		>
-			{#each radio909 as row (row.k)}
-				<div class="flex items-center justify-between gap-4 px-4 py-3">
-					<dt class="text-fg-dim text-sm">{row.k}</dt>
-					<dd class="text-signal font-mono text-sm font-600 tabular-nums">{row.v}</dd>
-				</div>
-			{/each}
-		</dl>
 	</section>
 
 	<section class="text-fg-dim mt-10 space-y-4">

@@ -6,8 +6,8 @@
 	const items: { icon: string; title: string; body: string }[] = [
 		{
 			icon: 'M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M12 13a1 1 0 100-2 1 1 0 000 2z',
-			title: 'Nodes on the 909 MHz side are now marked',
-			body: 'Part of the mesh runs on a second frequency, joined to this one by the wired repeater pair at Mt Cokley above Parksville. Those nodes now show in violet with their frequency under the name, on the node list and every map. Ridgeline works out which ones they are from the traffic crossing that link — nothing here can hear 909 directly.'
+			title: 'The whole mesh is now on 909.000 MHz',
+			body: 'The move from 910.425 MHz completed on 1 October 2026. Bandwidth, spreading factor and coding rate are unchanged — 62.5 kHz, SF7, CR5 — so a radio only needed its frequency changed. Ridgeline now accepts observer data from that preset only, so a receiver left on the old frequency is refused rather than mixed in. The About page has the exact settings.'
 		},
 		{
 			icon: 'M12 21s-7-6.2-7-11a7 7 0 1114 0c0 4.8-7 11-7 11z M12 10a2 2 0 100-4 2 2 0 000 4z',
@@ -22,7 +22,7 @@
 		{
 			icon: 'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14',
 			title: 'More on the About page',
-			body: 'The About page now covers the 909 MHz side of the network, where the link between the two frequencies lives, and the radio settings for both.'
+			body: 'The About page now covers the single 909.000 MHz preset the whole mesh runs on, with the exact LoRa settings to copy into a new radio.'
 		}
 	];
 </script>

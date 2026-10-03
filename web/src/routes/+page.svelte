@@ -46,7 +46,7 @@
 
 <Seo
 	title="Ridgeline — Live MeshCore Mesh Observatory for coastal BC"
-	description="Live dashboard for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland — nodes, repeaters, coverage and packets on the alternate frequency (currently 910.425 MHz)."
+	description="Live dashboard for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland — nodes, repeaters, coverage and packets on 909.000 MHz."
 	path="/"
 />
 

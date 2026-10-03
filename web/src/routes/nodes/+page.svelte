@@ -41,7 +41,7 @@
 
 <Seo
 	title="MeshCore Node &amp; Repeater Directory"
-	description="Every node and repeater on the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland — status, location and last-heard on the alternate frequency (currently 910.425 MHz)."
+	description="Every node and repeater on the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland — status, location and last-heard on 909.000 MHz."
 	path="/nodes"
 />
 
@@ -167,11 +167,11 @@
 								<!-- Two channels on purpose. The rail groups the ROW; the name colour
 								     survives when a GPS-suspect row takes the rail amber, so a node that
 								     is both still reads as off-segment. Colour is the scanning cue, the
-								     frequency underneath is the readable one. -->
+								     preset underneath is the readable one. -->
 								<span
 									class="truncate font-medium {n.viaBridge ? 'text-violet' : 'text-fg'}"
 									title={n.viaBridge
-										? `On a different frequency — reached through the ${n.viaBridgeName || 'bridge'} link`
+										? `On a different radio preset — reached through the ${n.viaBridgeName || 'bridge'} link`
 										: undefined}
 									>{n.name || shortKey(n.publicKey)}</span
 								>

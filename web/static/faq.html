@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Why the coastal BC MeshCore network moves to 909.000 MHz on October 1st 2026, and how to retune repeaters and companions.">
+<meta name="description" content="Why the coastal BC MeshCore network moved to 909.000 MHz on October 1st 2026, and how to retune repeaters and companions.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://ridgeline.ve7kod.ca/faq">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A1%3C/text%3E%3C/svg%3E">
@@ -275,15 +275,15 @@ dialog.contact .count{float:right;font-weight:400;color:var(--ink-3)}
 <div class="wrap">
 
 <header class="top">
-  <p class="eyebrow">Network Change Notice &nbsp;·&nbsp; Coastal BC MeshCore &nbsp;·&nbsp; Cutover October 1st 2026</p>
-  <h1>Why we’re moving to <span class="hz">909.000&thinsp;MHz</span></h1>
-  <p class="standfirst">On <strong>October 1st 2026</strong> the mesh moves to 909.000 MHz. This page explains what changed, how we arrived at the new settings, and what you need to do to your node.</p>
+  <p class="eyebrow">Network Change &nbsp;·&nbsp; Coastal BC MeshCore &nbsp;·&nbsp; Completed October 1st 2026</p>
+  <h1>Why we moved to <span class="hz">909.000&thinsp;MHz</span></h1>
+  <p class="standfirst">On <strong>October 1st 2026</strong> the mesh moved to 909.000 MHz. This page explains what changed, how we arrived at the new settings, and &mdash; if your node is still on the old channel &mdash; what to do to it.</p>
 
 </header>
 
 <div class="cfgs">
   <div class="cfg new">
-    <p class="state">From October 1st 2026</p>
+    <p class="state">Current &mdash; since October 1st 2026</p>
     <p class="freq">909.000</p>
     <p class="note">Set this on your node.</p>
     <dl>
@@ -294,9 +294,9 @@ dialog.contact .count{float:right;font-weight:400;color:var(--ink-3)}
     </dl>
   </div>
   <div class="cfg old">
-    <p class="state">In use until October 1st 2026</p>
+    <p class="state">Retired &mdash; October 1st 2026</p>
     <p class="freq">910.425</p>
-    <p class="note">Where the mesh has lived for roughly four months.</p>
+    <p class="note">Where the mesh lived for roughly four months. No longer in use.</p>
     <dl>
       <dt>Frequency</dt><dd>910.425 MHz</dd>
       <dt>Bandwidth</dt><dd>62.5 kHz</dd>
@@ -333,14 +333,14 @@ dialog.contact .count{float:right;font-weight:400;color:var(--ink-3)}
   <p><strong>Regions scope routing, not radio.</strong> A region tag tells a repeater whether to rebroadcast a packet. It does nothing about the packet already on the air. Every radio in range still receives it, and it still occupies the channel for exactly as long as it otherwise would. Collisions happen at the receiver, caused by two transmissions overlapping in time, and the radio energy does not care what region the payload claims to belong to.</p>
   <p>Scoping therefore only reduces congestion where it stops a retransmission that would otherwise have happened inside your own coverage. For that you need the region boundary to also be a genuine radio boundary, with repeaters either side whose coverage does not cross the line.</p>
   <p>We cannot build that boundary, and we would not want to. Our best sites are hilltops chosen precisely because they reach as far as possible, and their coverage overlaps heavily by design. On this mesh a single packet is heard by around fifteen receivers on average. The overlap that makes the network resilient is exactly what makes a clean region boundary impossible. Without one, traffic scoped to the far side of the line is still in the air here, still using airtime and still colliding.</p>
-  <p>There is also a case scoping can never address. A station within radio range that is not part of our network is on our channel no matter what region it declares, and the busy areas south of the border are well within range of the Lower Mainland. Region settings cannot remove them from the air. A different frequency can.</p>
+  <p>There is also a case scoping can never address. A station within radio range that is not part of our network is on our channel no matter what region it declares, and the busy areas south of the border are well within range of the Lower Mainland. Region settings cannot remove them from the air. A different frequency can, which is what 909.000&nbsp;MHz gives us.</p>
   <p>Leaving scoping alone has a practical benefit as well. A new station joins by setting four radio values and nothing else. There is no region to add, no scope to pick, and no repeater configuration to coordinate with anyone. Its messages flood the mesh the same way everyone else's do, and they are carried from the moment it powers up. For a network that expects people to join quickly, sometimes under pressure, that simplicity is worth protecting.</p>
 </section>
 
 <section>
   <h2>Why 910.425 first, and why only temporarily?</h2>
   <p>910.425 MHz was chosen as a <em>test bed</em>, not a destination. The goal was narrow: find out whether the mesh itself was sound once the external traffic load was removed. If the network worked well on a quiet channel, the problem was congestion; if it still did not, the problem was our own topology and hardware.</p>
-  <p>That question was answered, and the mesh has run there for about four months while we looked for a permanent home.</p>
+  <p>That question was answered, and the mesh ran there for about four months while we looked for a permanent home. 909.000&nbsp;MHz is that permanent home.</p>
 </section>
 
 <section>
@@ -351,7 +351,7 @@ dialog.contact .count{float:right;font-weight:400;color:var(--ink-3)}
     <li><strong>Inside cavity filter specifications</strong>, so sites running filtered, high power or colocated equipment can operate without being detuned or desensitised.</li>
   </ul>
   <p>Alongside those two constraints we compared the background noise level at each candidate across the area the mesh covers.</p>
-  <p>909.000 MHz satisfies both requirements and tested well in operation. Nothing else about the radio configuration changes: bandwidth stays at 62.5 kHz, spreading factor at SF7 and coding rate at 5. Only the frequency moves.</p>
+  <p>909.000 MHz satisfies both requirements and tested well in operation. Nothing else about the radio configuration changes: bandwidth stayed at 62.5 kHz, spreading factor at SF7 and coding rate at 5. Only the frequency moved.</p>
 </section>
 
 <section>
@@ -360,8 +360,8 @@ dialog.contact .count{float:right;font-weight:400;color:var(--ink-3)}
   <p>That matters because the noise floor sets the level a signal has to rise above before a receiver can decode it. A quieter background gives weak and distant stations a better chance of being heard, which is exactly what a wide area mesh depends on.</p>
 
   <div class="callout warn">
-    <p class="ct">The full picture comes after the migration</p>
-    <p>Only a handful of nodes sit on 909.000 today, and the two channels are still deliberately bridged so nobody is cut off during the move. Traffic levels on the new channel will not mean very much until everyone is actually on it.</p>
+    <p class="ct">Written before the move</p>
+    <p>This section was written while 909.000 was still a candidate and only a handful of nodes sat on it. The mesh has since moved across and the Mt&nbsp;Cokley bridge between the two channels has been taken down, so traffic figures for the new channel now describe the whole network rather than a test group.</p>
   </div>
 
   <p>One limit is worth stating plainly. Our monitoring only started after the mesh had already left the default channel, so we have no recorded measurements of how bad things were beforehand. The failed messages and unreachable repeaters described above are what operators experienced at the time, not figures we can pull from a log.</p>
@@ -398,14 +398,14 @@ dialog.contact .count{float:right;font-weight:400;color:var(--ink-3)}
     <span class="line">&nbsp;</span>
     <span class="line"><span class="p">&gt; </span><span class="c">reboot</span></span>
   </div>
-  <p>The order is <code>freq,bw,sf,cr</code>, separated by commas with no spaces. The new settings are saved immediately but <strong>do not take effect until the node reboots</strong>. Run <code>get radio</code> again after it comes back to confirm it reads <span class="mono">909.0,62.5,7,5</span>.</p>
+  <p>The order is <code>freq,bw,sf,cr</code>, separated by commas with no spaces. The new settings are saved immediately but <strong>do not take effect until the node reboots</strong>. Run <code>get radio</code> again after it comes back to confirm it reads <span class="mono">909.000,62.5,7,5</span>.</p>
 
   <div class="callout warn">
     <p class="ct">Work from your farthest station inwards</p>
     <p>A repeater you change over remote administration reboots onto 909.000, and from 910.425 you can no longer reach it. The order you work in therefore matters more than anything else on this page.</p>
     <p>Remote administration reaches a distant repeater by relaying through the ones in between. Move a nearby repeater to 909.000 first and it leaves 910.425 taking that relay path with it, stranding every station further out.</p>
     <p>So start with the station that is hardest to reach, then the next one in, and leave <em>your own node until last</em>. Worked in that order the path to everything still on 910.425 stays intact at every step. A repeater you can no longer reach is one you have to go and visit.</p>
-    <p>While the bridge between the two channels is still up it gives you some margin here, but treat that as a fallback rather than the plan. For any site you cannot easily get to in person, use the temporary mode below.</p>
+    <p>The Mt Cokley bridge between the two channels used to give you some margin here. It no longer does &mdash; the two channels are not joined any more, so there is no fallback path to a station left behind. For any site you cannot easily get to in person, use the temporary mode below.</p>
   </div>
 
   <h3>Testing a remote site without stranding it</h3>

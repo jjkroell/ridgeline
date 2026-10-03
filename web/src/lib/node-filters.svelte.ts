@@ -32,7 +32,10 @@ export type SegmentKey = 'all' | 'main' | 'far';
  *  and self-hosted installs may have no bridge at all. */
 export function farSegmentFreq(nodes: Node[]): string {
 	const r = nodes.find((n) => n.viaBridgeRadio)?.viaBridgeRadio;
-	return r ? r.split(',')[0] : '';
+	const f = r ? r.split(',')[0] : '';
+	// To 3 decimals, like fmtRadio: a bare "909" reads as a different (or
+	// truncated) setting next to a neighbouring "909.250".
+	return f ? (+f).toFixed(3) : '';
 }
 
 /** Whether this deployment has any far-side node to filter on. */

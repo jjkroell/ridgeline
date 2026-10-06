@@ -4,6 +4,47 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.1] — 2026-10-06
+
+### Changed
+- **Sharing a browser-added channel to the discovery pool is an explicit choice**
+  — a "Share with the discovery list" checkbox on the add form, default on —
+  rather than an automatic silent submit.
+- **Migration FAQ:** added a note telling observer operators to restart
+  `meshcoretomqtt` after a retune. It reads `get radio` and the node name once at
+  startup, so without a restart it reports the old preset and the observer looks
+  mis-set even though the node is correctly on 909.
+
+## [v0.23.0] — 2026-10-06
+
+### Added
+- **Hashtag channel discovery.** Ridgeline works out which named group channels
+  are active on the mesh and lists them. A name is never transmitted (the packet
+  carries a 1-byte hash), so it is *confirmed*, not read: derive
+  `SHA256("#"+name)[:16]` and, if it decrypts observed traffic, the 2-byte HMAC
+  proves it. Candidates come from #tags harvested from readable messages, names
+  submitted from the browser (`POST /api/channels/candidates`, open but
+  IP-rate-limited), and a built-in wordlist brute-forced each sweep (cheap: a name
+  whose channel-hash byte is not live rejects in O(1)). A confirmed channel is
+  registered with the decoder, so its history decrypts on the next analytics
+  re-decode and its future messages live. The channels page gained a "Discovered
+  on the mesh" panel with one-click add; `GET /api/channels/discovered` lists the
+  set. Config: `hashtagChannels` seeds names, `channelBruteForce` (default true)
+  toggles the wordlist.
+
+## [v0.22.2] — 2026-10-03
+
+### Fixed
+- **The site no longer stalls for 10-25 s every 90 s.** The analytics recompute
+  reads every observation in the 24 h window, and that query's `ORDER BY id`
+  (while filtering on the indexed `received_at`) made SQLite plan a full
+  `SCAN observations` — 4.27M rows — which, on a single-connection pool, held the
+  only connection and blocked every other query and ingest. Ordering by
+  `received_at DESC` uses `idx_obs_received` and reads only the window; verified
+  byte-identical result and order. Supersedes a reverted paging attempt (v0.22.1)
+  whose `MIN(id)` probe walked rowids from 1 and made things worse. Also
+  documented that `SetMaxOpenConns(1)` is load-bearing for write serialization.
+
 ## [v0.22.0] — 2026-10-03
 
 ### Added

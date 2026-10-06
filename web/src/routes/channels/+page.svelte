@@ -160,14 +160,22 @@
 	});
 	let hashtagName = $state('');
 	let hashtagErr = $state<string | null>(null);
+	// Default on: adding a hashtag channel also offers it to the shared discovery
+	// list so the server tries it for everyone. Unticked keeps the add local.
+	let shareToPool = $state(true);
 	let privateName = $state('');
 	let privateKey = $state('');
 	let privateErr = $state<string | null>(null);
 
 	function addHashtag() {
-		hashtagErr = channels.addHashtag(hashtagName);
+		const name = hashtagName;
+		hashtagErr = channels.addHashtag(name);
 		if (!hashtagErr) {
 			const added = channels.list[channels.list.length - 1];
+			// Offer the name to the shared discovery pool only if the user left the
+			// box ticked. Best-effort: a failure never blocks the local add, and a
+			// name with no observable traffic simply never confirms.
+			if (shareToPool) api.submitChannelCandidate(name).catch(() => {});
 			hashtagName = '';
 			selectChannel(added.id);
 			adding = false;
@@ -281,6 +289,10 @@
 							<input bind:value={hashtagName} placeholder="name" class={inputCls} oninput={() => (hashtagErr = null)} />
 							<button type="submit" class={btnCls} disabled={!hashtagName.trim()}>Add</button>
 						</div>
+						<label class="text-fg-faint flex cursor-pointer items-center gap-1.5 text-xs">
+							<input type="checkbox" bind:checked={shareToPool} class="accent-signal" />
+							Share with the discovery list
+						</label>
 						{#if hashtagErr}<div class="text-coral text-xs">{hashtagErr}</div>{/if}
 					</form>
 					<form class="space-y-2" onsubmit={(e) => { e.preventDefault(); addPrivate(); }}>

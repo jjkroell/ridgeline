@@ -3,7 +3,6 @@
 // (see channel-crypto.ts). The well-known Public channel is added by default
 // but can be removed like any other.
 import { deriveHashtagKey, channelHashByte, decryptGroupText } from './channel-crypto';
-import { api } from './api';
 
 export type ChannelType = 'public' | 'hashtag' | 'private';
 
@@ -147,11 +146,6 @@ class Channels {
 			{ id: rid(), name: display, type: 'hashtag', keyHex, hashByte: channelHashByte(keyHex) }
 		];
 		this.#persist();
-		// Feed the shared discovery pool so the server tries this name against
-		// observed traffic and lists it for everyone if it is live. Best-effort:
-		// a private channel the server can't see simply never confirms, and a
-		// failed request must never block adding the channel locally.
-		api.submitChannelCandidate(clean).catch(() => {});
 		return null;
 	}
 

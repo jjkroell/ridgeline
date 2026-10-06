@@ -143,6 +143,25 @@ func run(log *slog.Logger, configPath string, configRequired bool) error {
 			"nodes", n)
 	}
 
+	// Hashtag channels: register the already-confirmed ones so their history
+	// decrypts immediately, and seed any configured names as candidates to try.
+	if n, err := st.LoadConfirmedChannels(); err != nil {
+		log.Warn("load confirmed channels", "err", err)
+	} else if n > 0 {
+		log.Info("registered confirmed hashtag channels", "count", n)
+	}
+	for _, name := range cfg.HashtagChannels {
+		if _, err := st.AddChannelCandidate(name, store.ChannelSourceConfig, nil); err != nil {
+			log.Warn("seed hashtag channel candidate", "name", name, "err", err)
+		}
+	}
+	// Brute-force wordlist pass (default on): try common names against observed
+	// traffic each discovery sweep. Harvest alone is sporadic — it only finds a
+	// channel when someone references it in a readable message during the window.
+	if cfg.ChannelBruteForce == nil || *cfg.ChannelBruteForce {
+		st.SetChannelWordlist(store.DefaultChannelWordlist())
+	}
+
 	apiServer := api.New(st, log, version, cfg.WebDir)
 	// Recording a bridge's far side should take effect at once, not at the next
 	// scheduled sweep. One slot: extra requests while a sweep is pending are
@@ -154,6 +173,16 @@ func run(log *slog.Logger, configPath string, configRequired bool) error {
 		default:
 		}
 	}
+	// A newly submitted hashtag-channel candidate should be tried promptly, not
+	// at the next scheduled sweep. One slot, same as the bridge trigger.
+	channelTrigger := make(chan struct{}, 1)
+	apiServer.OnChannelCandidate = func() {
+		select {
+		case channelTrigger <- struct{}{}:
+		default:
+		}
+	}
+
 	apiServer.SetEnvironment(cfg.Environment)
 
 	// Outbound transactional email (verification + note notifications). Disabled
@@ -263,6 +292,7 @@ func run(log *slog.Logger, configPath string, configRequired bool) error {
 	go runHashSizeConsensus(ctx, st, log)
 	go runRetention(ctx, st, log)
 	go runSegmentSweep(ctx, st, log, segmentTrigger)
+	go runChannelDiscovery(ctx, st, log, channelTrigger)
 	go runSessionPrune(ctx, st, log)
 	go runClaimPrune(ctx, st, log)
 	if cfg.NodeRetentionDays > 0 {
@@ -485,6 +515,50 @@ const (
 	segmentWindow        = 72 * time.Hour
 	segmentScanCap       = 250000
 )
+
+// channelDiscoveryInterval is how often hashtag-channel discovery runs, and
+// channelDiscoveryWindow / channelDiscoveryCap bound the group-text window each
+// pass reads. The window is wide because a quiet channel may only speak a few
+// times a day, and confirmation needs just one message; the cap keeps the single
+// DB connection free (the query is an indexed received_at range — see
+// [[ridgeline-database]]).
+const (
+	channelDiscoveryInterval = 10 * time.Minute
+	channelDiscoveryWindow   = 24 * time.Hour
+	channelDiscoveryCap      = 20000
+)
+
+// runChannelDiscovery confirms hashtag-channel names by decryption: it harvests
+// #tags from decryptable messages, tries every pending candidate against recent
+// group-text traffic, and registers any it confirms so their messages decrypt
+// from then on. Runs at startup, every channelDiscoveryInterval, and whenever a
+// user submits a candidate (trigger). See store.DiscoverChannels.
+func runChannelDiscovery(ctx context.Context, st *store.Store, log *slog.Logger, trigger <-chan struct{}) {
+	run := func() {
+		since := time.Now().Add(-channelDiscoveryWindow).UTC().Format(time.RFC3339Nano)
+		confirmed, err := st.DiscoverChannels(since, channelDiscoveryCap)
+		if err != nil {
+			log.Warn("channel discovery", "err", err)
+			return
+		}
+		if len(confirmed) > 0 {
+			log.Info("hashtag channels confirmed", "count", len(confirmed), "names", confirmed)
+		}
+	}
+	run()
+	t := time.NewTicker(channelDiscoveryInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			run()
+		case <-trigger:
+			run()
+		}
+	}
+}
 
 // runSegmentSweep keeps nodes.via_bridge in agreement with recent traffic:
 // which nodes are reachable only across a sanctioned bridge, and therefore live

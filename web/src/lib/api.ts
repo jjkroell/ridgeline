@@ -654,6 +654,20 @@ export interface FirmwareBuildResponse {
   cached: boolean;
 }
 
+export interface DiscoveredChannel {
+  name: string; // without leading '#'
+  source: string; // harvested | user | config
+  status: string;
+  keyHex?: string;
+  firstAdded: string;
+  confirmedAt?: string;
+}
+export interface DiscoveredChannels {
+  channels: DiscoveredChannel[];
+  pending: number;
+  confirmed: number;
+}
+
 export const api = {
   /** What can be built: vetted release tags, boards/environments, and the option allowlist. */
   firmwareCatalogue: () => get<FirmwareCatalogue>("/api/firmware/catalogue"),
@@ -720,6 +734,19 @@ export const api = {
    */
   channelHistory: (sinceSec = 86400) =>
     get<LiveEvent[]>(`/api/channels/recent?since=${sinceSec}`),
+  /** Hashtag channels confirmed on the mesh by decryption, plus candidate counts. */
+  discoveredChannels: () => get<DiscoveredChannels>(`/api/channels/discovered`),
+  /**
+   * Submit a hashtag name to the shared discovery pool (best-effort; open to
+   * anonymous callers, rate-limited). The name is only tried — it is listed only
+   * once it decrypts real traffic. Failures are swallowed by callers.
+   */
+  submitChannelCandidate: (name: string) =>
+    fetch("/api/channels/candidates", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    }),
   /** Mesh-wide analytics over the last sinceSec seconds (default 6h, max 24h). */
   meshAnalytics: (sinceSec = 21600, bucketMin = 10) =>
     get<MeshAnalytics>(

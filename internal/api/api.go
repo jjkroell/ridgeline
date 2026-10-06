@@ -52,6 +52,7 @@ type Server struct {
 	// firmwareLimiter throttles build submissions per ACCOUNT. A build costs
 	// minutes of a core, so this is far tighter than the read-path limiters.
 	firmwareLimiter *rateLimiter
+	channelLimiter  *rateLimiter
 	// Downstream read-only subscribers are tracked separately: mqttAuthSeen
 	// answers "which observers have migrated", and mixing consumers into it
 	// would corrupt the readout that decides when the anonymous broker retires.
@@ -75,6 +76,11 @@ type Server struct {
 	// tick — the operator does the right thing in the console and the app appears
 	// to ignore them. Must not block: the implementation coalesces.
 	OnBridgeChanged func()
+
+	// OnChannelCandidate asks for an immediate hashtag-channel discovery pass,
+	// so a name a user just submitted is tried now rather than at the next tick.
+	// Set by the daemon; nil in tests. Must not block: the implementation coalesces.
+	OnChannelCandidate func()
 }
 
 // maxRequestBody caps the size of a request body the API will read. Every
@@ -123,6 +129,10 @@ func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
 		authIPLimiter:        newRateLimiter(1.0/6, 10),
 		firmwareLimiter:      newRateLimiter(1.0/60, 3), // ~1/min sustained, burst 3
 		authAddrLimiter:      newRateLimiter(1.0/30, 5),
+		// Hashtag-channel candidate submissions: ~8/IP then 1 every 10s. A
+		// candidate is only a name to try and is confirmed only by real traffic,
+		// so this guards table growth, not a secret.
+		channelLimiter: newRateLimiter(1.0/10, 8),
 	}
 }
 
@@ -147,6 +157,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/recent", s.recent)
 	mux.HandleFunc("GET /api/packets/{hash}", s.packet)
 	mux.HandleFunc("GET /api/channels/recent", s.channelsRecent)
+	// Hashtag-channel discovery: the confirmed list (public), and candidate
+	// submissions. Submission is open (anonymous visitors add channels to their
+	// browser too) but IP-rate-limited; a candidate is only a name to try and is
+	// confirmed solely by decrypting real traffic, so the endpoint reveals and
+	// grants nothing — the limiter guards table growth, not a secret.
+	mux.HandleFunc("GET /api/channels/discovered", s.channelsDiscovered)
+	mux.HandleFunc("POST /api/channels/candidates", s.channelCandidateCreate)
 	mux.HandleFunc("GET /api/live", s.live)
 
 	// Accounts: registration, login/logout, current-user probe. Mutating auth

@@ -79,6 +79,16 @@ type Config struct {
 	// decodes any sender's rate whatever its own is set to. An observer on CR8
 	// hears this mesh perfectly and must not be quarantined for it.
 	ObserverRadios []string `json:"observerRadios"`
+	// HashtagChannels seeds the hashtag-channel discovery with names to try, in
+	// addition to those harvested from traffic and submitted by users. Each entry
+	// is a channel name with or without the leading '#'; the key is derived as
+	// SHA256("#"+name)[:16] and a name is only listed once it decrypts real
+	// traffic. Optional — discovery works without it.
+	HashtagChannels []string `json:"hashtagChannels"`
+	// ChannelBruteForce enables the built-in wordlist pass in hashtag-channel
+	// discovery, which tries common names against observed traffic each sweep
+	// (in addition to harvested #mentions and submitted names). Default true.
+	ChannelBruteForce *bool `json:"channelBruteForce"`
 	// Email configures outbound transactional mail (verification + notifications).
 	// When Host is empty, email is disabled and those features degrade gracefully.
 	Email Email `json:"email"`

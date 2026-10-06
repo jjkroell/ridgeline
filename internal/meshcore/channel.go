@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -25,6 +26,78 @@ type Channel struct {
 // well-known public channel is included by default.
 var knownChannels = []Channel{
 	{Name: "Public", Key: mustDecodeHex("8b3387e9c5cdea6ac9e5edbaa115cd72")},
+}
+
+// extraChannels holds channels discovered or configured at runtime, in addition
+// to the built-in Public channel. Decoding reads it on the hot path, so it is
+// guarded by its own RWMutex and treated as append-mostly.
+var (
+	extraMu       sync.RWMutex
+	extraChannels []Channel
+	extraSeen     = map[string]bool{} // by Name, to dedupe
+)
+
+// RegisterChannel adds a channel's name and 16-byte key to the decode set, so
+// its group-text messages (past, on the next re-decode, and future) decrypt.
+// Idempotent by name. The caller owns deriving the key — for a hashtag channel
+// that is DeriveHashtagKey(name).
+func RegisterChannel(name string, key []byte) {
+	if name == "" || len(key) != 16 {
+		return
+	}
+	extraMu.Lock()
+	defer extraMu.Unlock()
+	if extraSeen[name] {
+		return
+	}
+	extraSeen[name] = true
+	k := make([]byte, 16)
+	copy(k, key)
+	extraChannels = append(extraChannels, Channel{Name: name, Key: k})
+}
+
+// RegisteredChannelNames returns the names registered via RegisterChannel, for
+// diagnostics. The built-in Public channel is not included.
+func RegisteredChannelNames() []string {
+	extraMu.RLock()
+	defer extraMu.RUnlock()
+	out := make([]string, len(extraChannels))
+	for i, c := range extraChannels {
+		out[i] = c.Name
+	}
+	return out
+}
+
+// DeriveHashtagKey is MeshCore's hashtag-channel key derivation: the first 16
+// bytes of SHA-256 over the channel name WITH its leading '#'. `name` is passed
+// WITHOUT the '#'; it is added here. Verbatim and case-sensitive — "#Weather"
+// and "#weather" are different channels — matching the firmware and the other
+// clients (meshcore-cli / meshcore.js / RemoteTerm). Confirmed against live
+// traffic: SHA256("#"+name) decrypts, SHA256(name) does not.
+func DeriveHashtagKey(name string) []byte {
+	h := sha256.Sum256([]byte("#" + name))
+	return h[:16]
+}
+
+// ChannelHashByte is MeshCore's 1-byte channel identifier: the first byte of
+// SHA-256 over the channel's 16-byte key.
+func ChannelHashByte(key []byte) byte {
+	return channelHashByte(key)
+}
+
+// VerifyGroupText reports whether `key` decrypts a group-text `payload`
+// (channel_hash(1) | MAC(2) | ciphertext). It is the confirmation oracle the
+// discovery sweep uses: the 2-byte HMAC authenticates the payload against the
+// key, so a return of ok==true is proof the key (hence the channel name that
+// derived it) is correct, not a guess. Cheap-rejects on the hash byte first.
+func VerifyGroupText(payload, key []byte) (ts uint32, sender, message string, ok bool) {
+	if len(payload) < 3 || len(key) != 16 {
+		return 0, "", "", false
+	}
+	if payload[0] != channelHashByte(key) {
+		return 0, "", "", false
+	}
+	return decryptGroupText(payload[3:], payload[1:3], key)
 }
 
 func mustDecodeHex(s string) []byte {
@@ -53,9 +126,9 @@ func decodeGroupText(payload []byte) *GroupText {
 		MAC:         strings.ToUpper(hex.EncodeToString(payload[1:3])),
 	}
 	hashByte, mac, ciphertext := payload[0], payload[1:3], payload[3:]
-	for _, ch := range knownChannels {
+	try := func(ch Channel) bool {
 		if channelHashByte(ch.Key) != hashByte {
-			continue
+			return false
 		}
 		if ts, sender, msg, ok := decryptGroupText(ciphertext, mac, ch.Key); ok {
 			gt.Decrypted = true
@@ -63,7 +136,20 @@ func decodeGroupText(payload []byte) *GroupText {
 			gt.Sender = sender
 			gt.Message = msg
 			gt.Timestamp = ts
-			break
+			return true
+		}
+		return false
+	}
+	for _, ch := range knownChannels {
+		if try(ch) {
+			return gt
+		}
+	}
+	extraMu.RLock()
+	defer extraMu.RUnlock()
+	for _, ch := range extraChannels {
+		if try(ch) {
+			return gt
 		}
 	}
 	return gt

@@ -259,12 +259,33 @@ CREATE INDEX IF NOT EXISTS idx_fwjobs_state ON firmware_jobs(state);
 -- carries state and recency rather than cache_key alone.
 CREATE INDEX IF NOT EXISTS idx_fwjobs_cache ON firmware_jobs(cache_key, state, created_at);
 
+-- channel_candidates tracks hashtag channel names we are trying to confirm, and
+-- the ones we have. A name is tried by deriving SHA256("#"+name)[:16] and seeing
+-- if it decrypts observed group-text traffic (the 2-byte MAC is the oracle), so
+-- "confirmed" means proven against real packets, never guessed. Names are stored
+-- WITHOUT the leading '#', verbatim and case-sensitive (the firmware hashes them
+-- verbatim, so "Weather" and "weather" are different channels).
+CREATE TABLE IF NOT EXISTS channel_candidates (
+	name         TEXT PRIMARY KEY,         -- hashtag name without '#', case-sensitive
+	source       TEXT NOT NULL,            -- harvested | user | config
+	status       TEXT NOT NULL,            -- pending | confirmed
+	key_hex      TEXT,                     -- derived 16-byte key, set when confirmed
+	added_by     INTEGER,                  -- users.id for source=user; not a foreign key
+	first_added  TEXT NOT NULL,
+	confirmed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_chancand_status ON channel_candidates(status);
+
 `
 
 // Store wraps a SQLite database.
 type Store struct {
 	db *sql.DB
 	mu sync.Mutex // serializes writes (single-writer model)
+
+	// channelWordlist holds brute-force hashtag-channel candidate names tried
+	// transiently each discovery sweep. Set once at startup; read-only after.
+	channelWordlist []string
 
 	// needAdvertTxBackfill is set on open when the advert_tx_count column was
 	// just added, so a caller can seed it once from history.

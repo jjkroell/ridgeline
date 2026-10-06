@@ -130,6 +130,34 @@
 
 	// --- Add-channel forms (collapsible) ---
 	let adding = $state(false);
+	// Hashtag channels the server has confirmed on the mesh by decryption — a
+	// one-click way to add a real channel without knowing its name in advance.
+	let discovered = $state<import('$lib/api').DiscoveredChannel[]>([]);
+	let discoveredLoaded = $state(false);
+	async function loadDiscovered() {
+		try {
+			const d = await api.discoveredChannels();
+			discovered = d.channels ?? [];
+		} catch {
+			/* leave empty — the forms above still work */
+		} finally {
+			discoveredLoaded = true;
+		}
+	}
+	// Names the user hasn't already added locally (compare on the '#'+name form).
+	const discoverableNew = $derived(
+		discovered.filter(
+			(d) => !channels.list.some((c) => c.name.toLowerCase() === ('#' + d.name).toLowerCase())
+		)
+	);
+	function addDiscovered(name: string) {
+		const err = channels.addHashtag(name);
+		if (!err) selectChannel(channels.list[channels.list.length - 1].id);
+	}
+	// Load the discovered list the first time the Add panel opens.
+	$effect(() => {
+		if (adding && !discoveredLoaded) loadDiscovered();
+	});
 	let hashtagName = $state('');
 	let hashtagErr = $state<string | null>(null);
 	let privateName = $state('');
@@ -264,6 +292,28 @@
 						</div>
 						{#if privateErr}<div class="text-coral text-xs">{privateErr}</div>{/if}
 					</form>
+
+					<div class="space-y-2">
+						<div class="label">Discovered on the mesh</div>
+						{#if !discoveredLoaded}
+							<div class="text-fg-faint text-xs">Looking…</div>
+						{:else if discoverableNew.length === 0}
+							<div class="text-fg-faint text-xs">
+								{discovered.length ? 'All discovered channels are already added.' : 'None confirmed yet.'}
+							</div>
+						{:else}
+							<div class="flex flex-wrap gap-1.5">
+								{#each discoverableNew as d (d.name)}
+									<button
+										type="button"
+										onclick={() => addDiscovered(d.name)}
+										title="Add #{d.name} to your channels"
+										class="text-fg-dim hover:border-signal/50 hover:text-signal border-line rounded-[var(--radius)] border px-2 py-1 font-mono text-xs transition-colors"
+									>+ #{d.name}</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
 				</div>
 			{/if}
 

@@ -418,6 +418,9 @@ dialog.contact .count{float:right;font-weight:400;color:var(--ink-3)}
 
   <h3>If your node goes quiet afterwards</h3>
   <p>Check the four values with <code>get radio</code> before assuming a hardware fault. The most common outcomes of a partial change are a node that transmits but is never heard, or one that hears nothing at all. Both are what a mismatched bandwidth or spreading factor looks like from the outside. The firmware accepts any spreading factor from 5 to 12 and any coding rate from 5 to 8, so an incorrect value will be stored without complaint.</p>
+
+  <h3>Running an observer? Restart the bridge after you retune</h3>
+  <p>If your node feeds Ridgeline through <span class="mono">meshcoretomqtt</span>, restart that bridge after you change the radio. The bridge reads <code>get radio</code> and your node name from the device <em>once, when it starts</em>, and reports those cached values from then on. Change the frequency without restarting it and Ridgeline keeps hearing the old preset &mdash; the node is actually on 909.000 while its status still says 910.425 &mdash; which makes the observer look mis-set and gets its traffic set aside. Restart it with <span class="mono">sudo systemctl restart mctomqtt</span> (or reboot the host it runs on); the observer re-reads the live settings and corrects itself within a status cycle.</p>
 </section>
 
 

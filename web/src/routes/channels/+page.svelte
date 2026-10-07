@@ -130,6 +130,12 @@
 
 	// --- Add-channel forms (collapsible) ---
 	let adding = $state(false);
+	// Which add form shows — one channel type at a time.
+	let addKind = $state<'hashtag' | 'private'>('hashtag');
+	const addKinds = [
+		{ id: 'hashtag', label: '# Hashtag' },
+		{ id: 'private', label: 'Private' }
+	] as const;
 	// Hashtag channels the server has confirmed on the mesh by decryption — a
 	// one-click way to add a real channel without knowing its name in advance.
 	let discovered = $state<import('$lib/api').DiscoveredChannel[]>([]);
@@ -284,50 +290,65 @@
 
 			{#if adding}
 				<div class="border-line/70 space-y-4 border-b px-4 py-4">
-					<form class="space-y-2" onsubmit={(e) => { e.preventDefault(); addHashtag(); }}>
-						<div class="label">Hashtag channel</div>
-						<div class="flex items-center gap-1.5">
-							<span class="text-fg-faint font-mono text-sm">#</span>
-							<input bind:value={hashtagName} placeholder="name" class={inputCls} oninput={() => (hashtagErr = null)} />
-							<button type="submit" class={btnCls} disabled={!hashtagName.trim()}>Add</button>
-						</div>
-						<label class="text-fg-faint flex cursor-pointer items-center gap-1.5 text-xs">
-							<input type="checkbox" bind:checked={shareToPool} class="accent-signal" />
-							Share with the discovery list
-						</label>
-						{#if hashtagErr}<div class="text-coral text-xs">{hashtagErr}</div>{/if}
-					</form>
-					<form class="space-y-2" onsubmit={(e) => { e.preventDefault(); addPrivate(); }}>
-						<div class="label">Private channel</div>
-						<input bind:value={privateName} placeholder="name" class={inputCls} oninput={() => (privateErr = null)} />
-						<div class="flex items-center gap-1.5">
-							<input bind:value={privateKey} placeholder="32 hex key" spellcheck="false" autocomplete="off" class={inputCls} oninput={() => (privateErr = null)} />
-							<button type="submit" class={btnCls} disabled={!privateName.trim() || !privateKey.trim()}>Add</button>
-						</div>
-						{#if privateErr}<div class="text-coral text-xs">{privateErr}</div>{/if}
-					</form>
-
-					<div class="space-y-2">
-						<div class="label">Discovered on the mesh</div>
-						{#if !discoveredLoaded}
-							<div class="text-fg-faint text-xs">Looking…</div>
-						{:else if discoverableNew.length === 0}
-							<div class="text-fg-faint text-xs">
-								{discovered.length ? 'All discovered channels are already added.' : 'None confirmed yet.'}
-							</div>
-						{:else}
-							<div class="flex flex-wrap gap-1.5">
-								{#each discoverableNew as d (d.name)}
-									<button
-										type="button"
-										onclick={() => addDiscovered(d.name)}
-										title="Add #{d.name} to your channels"
-										class="text-fg-dim hover:border-signal/50 hover:text-signal border-line rounded-[var(--radius)] border px-2 py-1 font-mono text-xs transition-colors"
-									>+ #{d.name}</button>
-								{/each}
-							</div>
-						{/if}
+					<div class="bg-panel border-line flex overflow-hidden rounded-[var(--radius)] border text-xs" role="tablist" aria-label="Channel type">
+						{#each addKinds as k (k.id)}
+							<button
+								type="button"
+								role="tab"
+								aria-selected={addKind === k.id}
+								onclick={() => (addKind = k.id)}
+								class="flex-1 px-3 py-1.5 font-mono transition-colors {addKind === k.id
+									? 'bg-signal/15 text-signal'
+									: 'text-fg-dim hover:text-fg'}">{k.label}</button
+							>
+						{/each}
 					</div>
+
+					{#if addKind === 'hashtag'}
+						<form class="space-y-2" onsubmit={(e) => { e.preventDefault(); addHashtag(); }}>
+							<div class="flex items-center gap-1.5">
+								<span class="text-fg-faint font-mono text-sm">#</span>
+								<input bind:value={hashtagName} placeholder="name" class={inputCls} oninput={() => (hashtagErr = null)} />
+								<button type="submit" class={btnCls} disabled={!hashtagName.trim()}>Add</button>
+							</div>
+							<label class="text-fg-faint flex cursor-pointer items-center gap-1.5 text-xs">
+								<input type="checkbox" bind:checked={shareToPool} class="accent-signal" />
+								Share with the discovery list
+							</label>
+							{#if hashtagErr}<div class="text-coral text-xs">{hashtagErr}</div>{/if}
+						</form>
+
+						<div class="space-y-2">
+							<div class="label">Discovered on the mesh</div>
+							{#if !discoveredLoaded}
+								<div class="text-fg-faint text-xs">Looking…</div>
+							{:else if discoverableNew.length === 0}
+								<div class="text-fg-faint text-xs">
+									{discovered.length ? 'All discovered channels are already added.' : 'None confirmed yet.'}
+								</div>
+							{:else}
+								<div class="flex flex-wrap gap-1.5">
+									{#each discoverableNew as d (d.name)}
+										<button
+											type="button"
+											onclick={() => addDiscovered(d.name)}
+											title="Add #{d.name} to your channels"
+											class="text-fg-dim hover:border-signal/50 hover:text-signal border-line rounded-[var(--radius)] border px-2 py-1 font-mono text-xs transition-colors"
+										>+ #{d.name}</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{:else}
+						<form class="space-y-2" onsubmit={(e) => { e.preventDefault(); addPrivate(); }}>
+							<input bind:value={privateName} placeholder="name" class={inputCls} oninput={() => (privateErr = null)} />
+							<div class="flex items-center gap-1.5">
+								<input bind:value={privateKey} placeholder="32 hex key" spellcheck="false" autocomplete="off" class={inputCls} oninput={() => (privateErr = null)} />
+								<button type="submit" class={btnCls} disabled={!privateName.trim() || !privateKey.trim()}>Add</button>
+							</div>
+							{#if privateErr}<div class="text-coral text-xs">{privateErr}</div>{/if}
+						</form>
+					{/if}
 				</div>
 			{/if}
 

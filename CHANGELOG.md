@@ -4,6 +4,13 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.4] — 2026-10-06
+
+### Changed
+- **The add-channel panel shows one form at a time.** A Hashtag / Private switch
+  (desktop and mobile) replaces the two stacked forms; "Discovered on the mesh"
+  sits with the hashtag form. Typed values survive switching.
+
 ## [v0.23.3] — 2026-10-06
 
 ### Fixed

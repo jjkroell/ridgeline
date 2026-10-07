@@ -9,6 +9,14 @@ name: ridgeline
 # The anonymous broker that used to sit on 9101 (mqtt1/mqtt-dev.ve7kod.ca) was
 # removed on 2026-09-14: every observer now authenticates with a JWT, so there
 # is no unauthenticated path into the mesh data any more.
+# Docker's default json-file log has no size limit; the broker alone wrote
+# ~0.35 GB in three weeks. Every service rotates at 20 MB x 5.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   # The observer broker. Observers present an Ed25519 token signed by their own
   # node key; every decision is delegated to ridgelined (/api/mqtt-auth/*).
@@ -20,6 +28,7 @@ services:
       context: ./mosquitto-jwt
     image: ridgeline-mosquitto-jwt:latest
     container_name: ridgeline-mosquitto-jwt
+    logging: *default-logging
     restart: unless-stopped
     ports:
       # Bind BOTH loopbacks: on this VM `localhost` resolves to ::1 (IPv6) only,
@@ -40,6 +49,7 @@ services:
         VERSION: ${RIDGELINE_VERSION:-dev}
     image: ridgeline:latest
     container_name: ridgeline-app
+    logging: *default-logging
     restart: unless-stopped
     # Run as the host user that owns ./data so the bind-mounted DB dir + migrated
     # ridgeline.db are writable without a chown. Defaults to 1000 (jesse locally);
@@ -69,6 +79,7 @@ services:
   caddy:
     image: caddy:2-alpine
     container_name: ridgeline-caddy
+    logging: *default-logging
     restart: unless-stopped
     depends_on:
       - ridgelined
@@ -88,6 +99,7 @@ services:
       dockerfile: deploy/fwagent.Dockerfile
     image: ridgeline-fwagent:latest
     container_name: ridgeline-fwagent
+    logging: *default-logging
     restart: unless-stopped
     profiles: ["firmware"]
     depends_on:

@@ -20,6 +20,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
 	import ThemePicker from '$lib/components/ThemePicker.svelte';
+	import MeshRadio from '$lib/components/MeshRadio.svelte';
 	import { hasWebGL } from '$lib/webgl';
 
 	let { children } = $props();
@@ -228,6 +229,7 @@
 					</a>
 				{/if}
 			</div>
+			<MeshRadio class="mb-3" />
 			<ThemePicker />
 			<div class="border-line mt-3 flex items-center gap-2 border-t pt-3">
 				{#if live.connected}
@@ -280,6 +282,7 @@
 								: 'text-fg-dim hover:text-fg'}">{item.label}</a
 						>
 					{/each}
+					<MeshRadio class="col-span-2 px-3 pt-2" />
 				</nav>
 			{/if}
 		</header>

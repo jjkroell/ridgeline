@@ -203,13 +203,17 @@
 		// proved the segment. That outranks the declared stand-in and must not
 		// be described as unknown, so node.radio is consulted before the
 		// far-side fallback rather than only after it.
+		// On a single-band mesh the API omits a node's own radio and the site
+		// shows the mesh's settings once instead, so the row appears only when
+		// there is something node-specific to say.
 		const radio = node.viaBridgeRadio
 			? { k: 'Radio', v: fmtRadio(node.viaBridgeRadio), declared: true }
 			: node.radio
 				? { k: 'Radio', v: fmtRadio(node.radio) }
 				: node.viaBridge
 					? { k: 'Radio', v: 'unknown — far side of a bridge' }
-					: { k: 'Radio', v: fmtRadio(node.radio) };
+					: null;
+		const present = <T,>(r: T | null): r is T => r !== null;
 		// Clock health from the timestamp the node stamps into its adverts.
 		const driftColor = { ok: 'var(--color-fg)', warn: 'var(--color-amber)', bad: 'var(--color-coral)' };
 		const clock = detail?.clockUnset
@@ -230,7 +234,7 @@
 				lastRelay,
 				packets6h,
 				avgSnr
-			];
+			].filter(present);
 		}
 		return [
 			{ k: 'Status', v: status.label, c: status.color },
@@ -251,7 +255,7 @@
 			},
 			avgSnr,
 			{ k: 'Avg hops', v: detail?.avgHops != null ? detail.avgHops.toFixed(1) : '—' }
-		];
+		].filter(present);
 	});
 
 	// Format "freq,bw,sf,cr" → "910.425 MHz · 62.5k · SF7 · CR5".

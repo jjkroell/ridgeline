@@ -389,6 +389,11 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	if s.env != "" {
 		h["environment"] = s.env
 	}
+	// The mesh's one radio preset, shown site-wide in place of per-node labels
+	// (see store.MeshRadio). In memory, like the rest of health: no DB access.
+	if r := s.store.MeshRadio(); r != "" {
+		h["meshRadio"] = r
+	}
 	writeJSON(w, h)
 }
 

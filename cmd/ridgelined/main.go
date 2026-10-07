@@ -576,10 +576,20 @@ func runSegmentSweep(ctx context.Context, st *store.Store, log *slog.Logger, tri
 			return
 		}
 		if len(links) == 0 {
+			// No bridge, no far side: clear any membership left from when one
+			// was recorded. Returning without this left far-side marks stuck
+			// for good once the last known bridge was removed (prod kept 12
+			// nodes "On another frequency" after the 909 cutover), since only
+			// this sweep ever replaces them. An empty replace is one UPDATE on
+			// the small nodes table.
+			if _, err := st.ApplySegments(nil); err != nil {
+				log.Warn("segment sweep: clear far-side marks", "err", err)
+				return
+			}
 			// Say so. Returning silently made "working, nothing to do" and "not
 			// running at all" look identical in the logs, which cost real time
 			// diagnosing a deployment that was in fact fine.
-			log.Debug("segment sweep: no sanctioned bridge names a far side, nothing to compute")
+			log.Debug("segment sweep: no sanctioned bridge names a far side; far-side marks cleared")
 			return
 		}
 		nodes, err := st.ListNodes()

@@ -8,6 +8,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import DevBanner from '$lib/components/DevBanner.svelte';
 	import ThemePicker from '$lib/components/ThemePicker.svelte';
+	import MeshRadio from '$lib/components/MeshRadio.svelte';
 
 	let { children } = $props();
 
@@ -196,6 +197,7 @@
 			{/each}
 		</div>
 		<div class="border-line/70 mt-2 border-t px-3 pt-3">
+			<MeshRadio class="mb-3" />
 			<ThemePicker compact />
 		</div>
 	</div>

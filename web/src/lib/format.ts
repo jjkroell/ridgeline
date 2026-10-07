@@ -153,6 +153,19 @@ export function fmtRadio(r?: string): string {
 	return parts.join(' · ') || '—';
 }
 
+/** The mesh's one radio preset, spelled out with units for the site-wide line:
+ *  "909.0,62.5,7,5" → "909.000 MHz · 62.5 kHz · SF7 · CR5". Empty in → empty out. */
+export function fmtMeshRadio(r?: string): string {
+	if (!r) return '';
+	const [f, b, s, c] = r.split(',');
+	const parts: string[] = [];
+	if (f) parts.push(`${(+f).toFixed(3)} MHz`);
+	if (b) parts.push(`${b} kHz`);
+	if (s) parts.push(`SF${s}`);
+	if (c) parts.push(`CR${c}`);
+	return parts.join(' · ');
+}
+
 /** True when a timestamp is within the last 5 minutes (an observer "reporting"). */
 export function isFresh(iso?: string): boolean {
 	return !!iso && Date.now() - new Date(iso).getTime() < 5 * 60 * 1000;

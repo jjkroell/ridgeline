@@ -86,6 +86,19 @@ func (s *Store) backfillRadioOK() {
 	}
 }
 
+// MeshRadio returns the mesh's radio preset ("freq,bw,sf,cr") when exactly one
+// is configured, and "" otherwise. One preset means every accepted observer, and
+// so every node Ridgeline can hear, is on the same settings: the UI then shows
+// them once for the whole site instead of a per-node label.
+func (s *Store) MeshRadio() string {
+	s.radioMu.RLock()
+	defer s.radioMu.RUnlock()
+	if len(s.allowedRadios) != 1 {
+		return ""
+	}
+	return s.allowedRadios[0].String()
+}
+
 // AllowedRadioCount reports how many presets are configured; 0 means the guard
 // is inactive.
 func (s *Store) AllowedRadioCount() int {

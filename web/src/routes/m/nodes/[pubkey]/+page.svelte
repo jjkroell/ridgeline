@@ -101,7 +101,7 @@
 							? { k: 'Radio', v: fmtRadio(node.radio) }
 							: node.viaBridge
 								? { k: 'Radio', v: 'unknown — far side of a bridge' }
-								: { k: 'Radio', v: fmtRadio(node.radio) },
+								: null, // single-band mesh: shown site-wide instead
 					{ k: 'Location', v: fmtCoord(node.latitude, node.longitude) },
 					{ k: 'Last advert', v: ago(node.lastAdvert || node.lastSeen) + ' ago' },
 					{ k: 'Last relay', v: detail?.relay.lastRelayed ? ago(detail.relay.lastRelayed) + ' ago' : '—' },
@@ -121,7 +121,7 @@
 									]
 								}
 							: { k: 'Clock', v: '—' }
-				]
+				].filter((f): f is NonNullable<typeof f> => f !== null)
 			: []
 	);
 	const activityMax = $derived(Math.max(1, ...(detail?.activity ?? [])));

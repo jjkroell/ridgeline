@@ -6,6 +6,9 @@
 class Env {
 	/** Raw environment string from the server; '' means a normal/production box. */
 	environment = $state('');
+	/** The mesh's single radio preset ("freq,bw,sf,cr"), or '' when the server
+	 *  has none or several configured. Shown site-wide by MeshRadio. */
+	meshRadio = $state('');
 	#started = false;
 
 	async init() {
@@ -16,6 +19,7 @@ class Env {
 			if (r.ok) {
 				const j = await r.json();
 				this.environment = typeof j.environment === 'string' ? j.environment : '';
+				this.meshRadio = typeof j.meshRadio === 'string' ? j.meshRadio : '';
 			}
 		} catch {
 			// Health unreachable — assume a normal instance; never show the banner

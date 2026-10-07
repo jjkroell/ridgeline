@@ -4,6 +4,19 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.5] — 2026-10-06
+
+### Changed
+- **The mesh's radio settings are shown once, site-wide, instead of on every
+  node.** With a single configured observer preset (`observerRadios`), the
+  sidebar (and the mobile More sheet) shows "Mesh radio: 909.000 MHz · 62.5 kHz
+  · SF7 · CR5", and node pages drop their per-node Radio row. That label was
+  inherited only from zero-hop receptions, so nodes no observer hears directly
+  kept their pre-cutover band (82 nodes still read 910.425 after moving to 909).
+  The API stops returning a node's radio in that case; `/api/health` reports the
+  preset as `meshRadio`. Nodes beyond a bridge keep their Radio row, and
+  instances with several presets (or none) are unchanged.
+
 ## [v0.23.4] — 2026-10-06
 
 ### Changed

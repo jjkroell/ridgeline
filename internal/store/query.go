@@ -199,7 +199,29 @@ func (s *Store) ListNodes() ([]Node, error) {
 	if err := s.annotateBridgeSegments(nodes); err != nil {
 		return nil, err
 	}
+	s.hideSingleBandRadios(nodes)
 	return nodes, nil
+}
+
+// hideSingleBandRadios drops the per-node radio label on a single-band mesh
+// (exactly one configured preset — see MeshRadio). There it carries no
+// information, and it is the one value that goes stale: it is inherited only
+// from a zero-hop reception, so a node no observer hears directly keeps
+// whatever band it was last heard on directly — after the 909 cutover, 910.425
+// on 82 nodes that had moved. The site shows the mesh's settings once instead.
+//
+// Nodes beyond a bridge keep theirs: a far segment is by definition another
+// band, and annotateBridgeSegments has already left only a measured or declared
+// value there. With several presets (or none) configured, nothing changes.
+func (s *Store) hideSingleBandRadios(nodes []Node) {
+	if s.MeshRadio() == "" {
+		return
+	}
+	for i := range nodes {
+		if nodes[i].ViaBridge == "" && nodes[i].ViaBridgeRadio == "" {
+			nodes[i].Radio = ""
+		}
+	}
 }
 
 // annotateBridgeSegments fills in the display fields for nodes beyond a bridge

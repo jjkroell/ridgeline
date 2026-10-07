@@ -34,9 +34,13 @@ type ObserverAnalytics struct {
 // aggregates.
 func ObserverSummary(st *store.Store, nodes []store.Node, id, sinceISO string, scanCap int) (*ObserverAnalytics, error) {
 	if scanCap <= 0 || scanCap > 300000 {
-		scanCap = 120000
+		scanCap = 200000
 	}
-	raws, err := st.RawWindow(sinceISO, scanCap)
+	// Only this observer's receptions are decoded. The old version decoded
+	// every observer's packets in the window (~72k a day on prod, ~1.8 s per
+	// observer page) to keep one observer's ~8k. Its cap also applied to the
+	// whole mesh's traffic, so the 7-day view really covered about a day.
+	raws, err := st.RawWindowForObserver(sinceISO, id, scanCap)
 	if err != nil {
 		return nil, err
 	}
@@ -53,8 +57,6 @@ func ObserverSummary(st *store.Store, nodes []store.Node, id, sinceISO string, s
 	buckets := int(windowSec/3600) + 1
 	now := time.Now()
 
-	// Neighbours starts as an empty (non-nil) slice so it serialises as [] not null
-	// when the observer heard nothing zero-hop — the UI indexes .length on it.
 	out := &ObserverAnalytics{ID: id, WindowHours: windowSec / 3600.0, Activity: make([]int, buckets), Neighbors: []DirectLink{}}
 	payload := map[string]int{}
 	advHeard := map[string]bool{}
@@ -62,7 +64,6 @@ func ObserverSummary(st *store.Store, nodes []store.Node, id, sinceISO string, s
 	snr := newSNRHist()
 	var snrSum float64
 	var snrN int
-	txObs := map[string][]obsTime{} // messageHash → (observer, time) across ALL observers, for skew
 
 	for _, ro := range raws {
 		pkt, err := meshcore.DecodeHex(ro.RawHex)
@@ -70,16 +71,8 @@ func ObserverSummary(st *store.Store, nodes []store.Node, id, sinceISO string, s
 			continue
 		}
 		recv := parseTime(ro.ReceivedAt)
-		if ro.ObserverID != "" && !recv.IsZero() {
-			txObs[pkt.MessageHash] = append(txObs[pkt.MessageHash], obsTime{obs: ro.ObserverID, t: recv})
-		}
-		if ro.ObserverID != id {
-			continue
-		}
-
 		out.TotalPackets++
 		if !recv.IsZero() {
-			// bucket 0 = oldest hour, last = current hour
 			b := buckets - 1 - int(now.Sub(recv).Hours())
 			if b >= 0 && b < buckets {
 				out.Activity[b]++
@@ -113,15 +106,27 @@ func ObserverSummary(st *store.Store, nodes []store.Node, id, sinceISO string, s
 	out.PayloadTypes = sortedCounts(payload)
 	out.SNRHist = snr.result()
 
-	// Zero-hop RF neighbours, by hear count.
 	for nk, c := range directCount {
 		n := byKey[nk]
 		out.Neighbors = append(out.Neighbors, DirectLink{Observer: id, NodeKey: nk, NodeName: displayName(n, nk), Role: n.Role, Count: c})
 	}
 	sort.Slice(out.Neighbors, func(i, j int) bool { return out.Neighbors[i].Count > out.Neighbors[j].Count })
 
-	// Clock skew vs consensus on shared packets (same method as the mesh-wide
-	// analytics; we only surface this observer's value).
+	// Clock skew compares arrival times WITHIN each transmission, so only the
+	// transmissions this observer heard matter — fetched by hash (indexed), with
+	// no packet decoding.
+	recs, err := st.ReceptionsOfObserverPackets(sinceISO, id)
+	if err != nil {
+		return nil, err
+	}
+	txObs := map[string][]obsTime{}
+	for _, r := range recs {
+		t := parseTime(r.ReceivedAt)
+		if r.ObserverID == "" || t.IsZero() {
+			continue
+		}
+		txObs[r.MessageHash] = append(txObs[r.MessageHash], obsTime{obs: r.ObserverID, t: t})
+	}
 	if v, ok := clockSkew(txObs, 5)[id]; ok {
 		out.ClockSkewMs = &v
 	}

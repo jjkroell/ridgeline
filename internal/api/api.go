@@ -41,7 +41,7 @@ type Server struct {
 	nodeCache *respCache
 	// activity serves node heatmaps from memory (see analytics.ActivityIndex);
 	// nil, or not yet backfilled, falls back to scanning.
-	activity *analytics.ActivityIndex
+	activity  *analytics.ActivityIndex
 	up        websocket.Upgrader
 	analytics *analytics.Engine
 	keyChal   *keyChallengeStore // pending private-key ownership challenges
@@ -562,8 +562,20 @@ func (s *Server) nodeHistory(w http.ResponseWriter, r *http.Request) {
 func (s *Server) nodeObservers(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
 	sinceSec := queryInt(r, "since", 3*86400, 1, 7*86400)
-	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
+	now := time.Now()
 
+	// Answered from memory when the activity index covers the window (it holds
+	// 7 days); the scan below remains for anything it can't answer.
+	if s.activity != nil {
+		if names, err := s.store.ObserverNames(); err == nil {
+			if obs, ok := s.activity.HeardBy(pubkey, now.Add(-time.Duration(sinceSec)*time.Second), now, names); ok {
+				writeJSON(w, obs)
+				return
+			}
+		}
+	}
+
+	cutoff := now.Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 	body, err := s.nodeCache.get(fmt.Sprintf("observers|%s|%d", pubkey, sinceSec), nodeObserversTTL, func() (any, error) {
 		nodes, err := s.store.ListNodes()
 		if err != nil {
@@ -612,6 +624,8 @@ const (
 	nodeHistoryTTL   = time.Minute
 	// Matches the pages' own 30s poll: one scan per window for everyone.
 	meshAnalyticsTTL = 30 * time.Second
+	// The observer page polls every 15 s.
+	observerAnalyticsTTL = 30 * time.Second
 )
 
 // meshAnalytics returns a mesh-wide aggregate (traffic mix, link/RF health,
@@ -654,17 +668,19 @@ func (s *Server) observerAnalytics(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	sinceSec := queryInt(r, "since", 24*3600, 1, 7*86400)
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
-	nodes, err := s.store.ListNodes()
+	// The observer page polls this every 15 s; share one computation per 30 s.
+	body, err := s.nodeCache.get(fmt.Sprintf("observer|%s|%d", id, sinceSec), observerAnalyticsTTL, func() (any, error) {
+		nodes, err := s.store.ListNodes()
+		if err != nil {
+			return nil, err
+		}
+		return analytics.ObserverSummary(s.store, nodes, id, cutoff, 0)
+	})
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	summary, err := analytics.ObserverSummary(s.store, nodes, id, cutoff, 0)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	writeJSON(w, summary)
+	writeCachedJSON(w, body)
 }
 
 // observerTelemetry returns an observer's device-telemetry time series (battery,

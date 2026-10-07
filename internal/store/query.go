@@ -904,14 +904,18 @@ type RawRow struct {
 	ID         int64
 	RawHex     string
 	ReceivedAt string
+	ObserverID string
+	Region     string
+	SNR        *float64
+	RSSI       *float64
 }
 
 // RawAfterID returns up to limit observations with id > afterID, in id order.
 // A rowid range — cheap at any table size — so callers can page forward a
 // batch at a time and release the connection between batches.
 func (s *Store) RawAfterID(afterID int64, limit int) ([]RawRow, error) {
-	rows, err := s.db.Query(`SELECT id, raw_hex, received_at FROM observations
-		WHERE id > ? ORDER BY id LIMIT ?`, afterID, limit)
+	rows, err := s.db.Query(`SELECT id, raw_hex, received_at, COALESCE(observer_id,''), COALESCE(region,''), snr, rssi
+		FROM observations WHERE id > ? ORDER BY id LIMIT ?`, afterID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -919,7 +923,7 @@ func (s *Store) RawAfterID(afterID int64, limit int) ([]RawRow, error) {
 	var out []RawRow
 	for rows.Next() {
 		var r RawRow
-		if err := rows.Scan(&r.ID, &r.RawHex, &r.ReceivedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.RawHex, &r.ReceivedAt, &r.ObserverID, &r.Region, &r.SNR, &r.RSSI); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -942,8 +946,8 @@ func (s *Store) MaxObservationID() (int64, error) {
 // assuming ids follow reception time (the holding pen stores packets late,
 // with their original times).
 func (s *Store) RawBetween(from, to string, maxID int64) ([]RawRow, error) {
-	rows, err := s.db.Query(`SELECT id, raw_hex, received_at FROM observations
-		WHERE received_at >= ? AND received_at < ? AND id <= ?`, from, to, maxID)
+	rows, err := s.db.Query(`SELECT id, raw_hex, received_at, COALESCE(observer_id,''), COALESCE(region,''), snr, rssi
+		FROM observations WHERE received_at >= ? AND received_at < ? AND id <= ?`, from, to, maxID)
 	if err != nil {
 		return nil, err
 	}
@@ -951,7 +955,66 @@ func (s *Store) RawBetween(from, to string, maxID int64) ([]RawRow, error) {
 	var out []RawRow
 	for rows.Next() {
 		var r RawRow
-		if err := rows.Scan(&r.ID, &r.RawHex, &r.ReceivedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.RawHex, &r.ReceivedAt, &r.ObserverID, &r.Region, &r.SNR, &r.RSSI); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// RawWindowForObserver is RawWindow restricted to one observer's receptions —
+// the received_at index range filtered by observer_id, so only that observer's
+// packets come back to be decoded (the window itself reads in ~65 ms on prod;
+// decoding every observer's packets was what cost ~1.8 s per observer page).
+func (s *Store) RawWindowForObserver(sinceISO, observerID string, max int) ([]RawObservation, error) {
+	rows, err := s.db.Query(`
+		SELECT raw_hex, COALESCE(observer_id,''), COALESCE(region,''), snr, rssi, received_at
+		FROM observations
+		WHERE received_at >= ? AND observer_id = ?
+		ORDER BY received_at DESC
+		LIMIT ?`, sinceISO, observerID, max)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []RawObservation{}
+	for rows.Next() {
+		var o RawObservation
+		if err := rows.Scan(&o.RawHex, &o.ObserverID, &o.Region, &o.SNR, &o.RSSI, &o.ReceivedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// Reception is one observer's arrival time for one transmission.
+type Reception struct {
+	MessageHash string
+	ObserverID  string
+	ReceivedAt  string
+}
+
+// ReceptionsOfObserverPackets returns every reception, by any observer and
+// within the window, of the transmissions observerID heard in the window — the
+// input to that observer's clock-skew estimate. Hash, observer and time only:
+// nothing to decode. Uses idx_obs_hash per heard transmission.
+func (s *Store) ReceptionsOfObserverPackets(sinceISO, observerID string) ([]Reception, error) {
+	rows, err := s.db.Query(`
+		SELECT o.message_hash, COALESCE(o.observer_id,''), o.received_at
+		FROM observations o
+		WHERE o.received_at >= ? AND o.message_hash IN (
+			SELECT message_hash FROM observations WHERE received_at >= ? AND observer_id = ?)`,
+		sinceISO, sinceISO, observerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Reception
+	for rows.Next() {
+		var r Reception
+		if err := rows.Scan(&r.MessageHash, &r.ObserverID, &r.ReceivedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

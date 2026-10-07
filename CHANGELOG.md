@@ -4,6 +4,22 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.10] — 2026-10-07
+
+### Fixed
+- **Observer pages load in a fraction of a second.** An observer's analytics
+  decoded every observer's packets in the window (~72k/day on prod) to keep one
+  observer's — ~1.8 s on every load and every 15 s refresh, uncached. It now
+  fetches only that observer's rows (`received_at` index filtered by
+  observer) and computes clock skew from hash/observer/time for the
+  transmissions it heard (`idx_obs_hash`, nothing decoded); results are shared
+  and cached 30 s. Its row cap also used to apply to the whole mesh's traffic,
+  so the 7-day view really covered about a day; it now covers 7 days.
+- **A node's "Heard by" list is instant and covers its full window.** It now
+  comes from the in-memory activity index (per-node, per-observer hourly advert
+  counts with SNR/RSSI sums), not a scan of the newest 80k rows — which at
+  current traffic covered ~18 hours of the "last 3 days".
+
 ## [v0.23.9] — 2026-10-07
 
 ### Fixed

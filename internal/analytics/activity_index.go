@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -28,13 +29,29 @@ type ActivityIndex struct {
 
 	mu      sync.RWMutex
 	buckets map[string]map[int64]int // UPPER pubkey -> unix hour -> count
-	lastID  int64
-	ready   bool
+	// heard backs the node page's "Heard by" list (NodeObservers): receptions
+	// of the node's OWN adverts, per observer per hour, with SNR/RSSI sums.
+	heard  map[string]map[string]map[int64]*heardAgg // node -> observer -> hour
+	region map[string]map[string]regionAt            // node -> observer -> newest region
+	lastID int64
+	ready  bool
+}
+
+type heardAgg struct {
+	count           int
+	snrSum, rssiSum float64
+	snrN, rssiN     int
+}
+
+type regionAt struct {
+	region string
+	at     int64 // unix nanos of the row it came from
 }
 
 // NewActivityIndex returns an empty index covering window.
 func NewActivityIndex(window time.Duration) *ActivityIndex {
-	return &ActivityIndex{window: window, buckets: map[string]map[int64]int{}}
+	return &ActivityIndex{window: window, buckets: map[string]map[int64]int{},
+		heard: map[string]map[string]map[int64]*heardAgg{}, region: map[string]map[string]regionAt{}}
 }
 
 // Window is how far back the index answers.
@@ -116,6 +133,23 @@ func (a *ActivityIndex) Update(ctx context.Context, st *store.Store, nodes []sto
 			delete(a.buckets, k)
 		}
 	}
+	for node, byObs := range a.heard {
+		for obs, hours := range byObs {
+			for h := range hours {
+				if h < cutoff {
+					delete(hours, h)
+				}
+			}
+			if len(hours) == 0 {
+				delete(byObs, obs)
+				delete(a.region[node], obs)
+			}
+		}
+		if len(byObs) == 0 {
+			delete(a.heard, node)
+			delete(a.region, node)
+		}
+	}
 	a.ready = true
 	a.mu.Unlock()
 	return nil
@@ -124,6 +158,12 @@ func (a *ActivityIndex) Update(ctx context.Context, st *store.Store, nodes []sto
 // addRows decodes a batch (outside the lock) and adds it to the buckets.
 func (a *ActivityIndex) addRows(rows []store.RawRow, resolve func(string) string, cutoff int64) {
 	add := map[string]map[int64]int{}
+	type heardRow struct {
+		node, obs, region string
+		hour, at          int64
+		snr, rssi         *float64
+	}
+	var heardRows []heardRow
 	for _, r := range rows {
 		t := parseTime(r.ReceivedAt)
 		if t.IsZero() {
@@ -143,11 +183,47 @@ func (a *ActivityIndex) addRows(rows []store.RawRow, resolve func(string) string
 			}
 			add[k][hour]++
 		}
+		if pkt.Advert != nil && pkt.Advert.PublicKey != "" {
+			heardRows = append(heardRows, heardRow{node: strings.ToUpper(pkt.Advert.PublicKey), obs: r.ObserverID,
+				region: r.Region, hour: hour, at: t.UnixNano(), snr: r.SNR, rssi: r.RSSI})
+		}
 	}
-	if len(add) == 0 {
+	if len(add) == 0 && len(heardRows) == 0 {
 		return
 	}
 	a.mu.Lock()
+	for _, hr := range heardRows {
+		byObs := a.heard[hr.node]
+		if byObs == nil {
+			byObs = map[string]map[int64]*heardAgg{}
+			a.heard[hr.node] = byObs
+		}
+		hours := byObs[hr.obs]
+		if hours == nil {
+			hours = map[int64]*heardAgg{}
+			byObs[hr.obs] = hours
+		}
+		g := hours[hr.hour]
+		if g == nil {
+			g = &heardAgg{}
+			hours[hr.hour] = g
+		}
+		g.count++
+		if hr.snr != nil {
+			g.snrSum += *hr.snr
+			g.snrN++
+		}
+		if hr.rssi != nil {
+			g.rssiSum += *hr.rssi
+			g.rssiN++
+		}
+		if a.region[hr.node] == nil {
+			a.region[hr.node] = map[string]regionAt{}
+		}
+		if cur, ok := a.region[hr.node][hr.obs]; !ok || hr.at >= cur.at {
+			a.region[hr.node][hr.obs] = regionAt{region: hr.region, at: hr.at}
+		}
+	}
 	for k, hours := range add {
 		if a.buckets[k] == nil {
 			a.buckets[k] = map[int64]int{}
@@ -208,5 +284,57 @@ func (a *ActivityIndex) Heatmap(pubkey string, days int, now time.Time) (*NodeAc
 			}
 		}
 	}
+	return out, true
+}
+
+// HeardBy returns, per observer, how often it received pubkey's own adverts
+// since `since` (to the hour), with average SNR/RSSI — what NodeObservers
+// computes by scanning, in the same shape and order. names maps observer id to
+// display name. ok is false until the first Update, or when since is older
+// than the window — the caller falls back to scanning.
+func (a *ActivityIndex) HeardBy(pubkey string, since time.Time, now time.Time, names map[string]string) ([]ObserverStat, bool) {
+	if now.Sub(since) > a.window {
+		return nil, false
+	}
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if !a.ready {
+		return nil, false
+	}
+	node := strings.ToUpper(pubkey)
+	from := since.Unix() / 3600
+	out := []ObserverStat{}
+	for obs, hours := range a.heard[node] {
+		var sum heardAgg
+		for h, g := range hours {
+			if h < from {
+				continue
+			}
+			sum.count += g.count
+			sum.snrSum += g.snrSum
+			sum.snrN += g.snrN
+			sum.rssiSum += g.rssiSum
+			sum.rssiN += g.rssiN
+		}
+		if sum.count == 0 {
+			continue
+		}
+		os := ObserverStat{ID: obs, Name: names[obs], Region: a.region[node][obs].region, Count: sum.count}
+		if sum.snrN > 0 {
+			v := sum.snrSum / float64(sum.snrN)
+			os.AvgSNR = &v
+		}
+		if sum.rssiN > 0 {
+			v := sum.rssiSum / float64(sum.rssiN)
+			os.AvgRSSI = &v
+		}
+		out = append(out, os)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].ID < out[j].ID
+	})
 	return out, true
 }

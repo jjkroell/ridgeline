@@ -197,7 +197,7 @@
 			{/each}
 		</div>
 		<div class="border-line/70 mt-2 border-t px-3 pt-3">
-			<MeshRadio class="mb-3" />
+			<MeshRadio variant="inline" class="mb-3" />
 			<ThemePicker compact />
 		</div>
 	</div>

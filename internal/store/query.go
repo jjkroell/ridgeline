@@ -897,3 +897,64 @@ func (s *Store) PruneObservationsBefore(ctx context.Context, cutoff string) (int
 		}
 	}
 }
+
+// RawRow is a stored observation's id, raw packet and reception time, for
+// passes that walk the table forward by id (see RawAfterID).
+type RawRow struct {
+	ID         int64
+	RawHex     string
+	ReceivedAt string
+}
+
+// RawAfterID returns up to limit observations with id > afterID, in id order.
+// A rowid range — cheap at any table size — so callers can page forward a
+// batch at a time and release the connection between batches.
+func (s *Store) RawAfterID(afterID int64, limit int) ([]RawRow, error) {
+	rows, err := s.db.Query(`SELECT id, raw_hex, received_at FROM observations
+		WHERE id > ? ORDER BY id LIMIT ?`, afterID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RawRow
+	for rows.Next() {
+		var r RawRow
+		if err := rows.Scan(&r.ID, &r.RawHex, &r.ReceivedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// MaxObservationID returns the highest observation id (0 when empty) — the end
+// of the rowid b-tree, so O(1).
+func (s *Store) MaxObservationID() (int64, error) {
+	var id sql.NullInt64
+	if err := s.db.QueryRow(`SELECT MAX(id) FROM observations`).Scan(&id); err != nil {
+		return 0, err
+	}
+	return id.Int64, nil
+}
+
+// RawBetween returns observations received in [from, to) with id <= maxID —
+// an index range on received_at. Used to backfill a time window without
+// assuming ids follow reception time (the holding pen stores packets late,
+// with their original times).
+func (s *Store) RawBetween(from, to string, maxID int64) ([]RawRow, error) {
+	rows, err := s.db.Query(`SELECT id, raw_hex, received_at FROM observations
+		WHERE received_at >= ? AND received_at < ? AND id <= ?`, from, to, maxID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RawRow
+	for rows.Next() {
+		var r RawRow
+		if err := rows.Scan(&r.ID, &r.RawHex, &r.ReceivedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

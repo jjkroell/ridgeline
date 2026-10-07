@@ -296,6 +296,9 @@ func run(log *slog.Logger, configPath string, configRequired bool) error {
 	go runSessionPrune(ctx, st, log)
 	go runClaimPrune(ctx, st, log)
 	go runObservationRecount(ctx, st, log)
+	activity := analytics.NewActivityIndex(7 * 24 * time.Hour)
+	apiServer.SetActivityIndex(activity)
+	go runActivityIndex(ctx, st, activity, log)
 	if cfg.ObservationRetentionDays > 0 {
 		go runObservationRetention(ctx, st, cfg.ObservationRetentionDays, log)
 	}
@@ -902,6 +905,37 @@ func runObservationRecount(ctx context.Context, st *store.Store, log *slog.Logge
 			if err := st.RecountObservations(); err != nil {
 				log.Warn("observation recount", "err", err)
 			}
+		}
+	}
+}
+
+// runActivityIndex keeps the node-heatmap index current: a batched 7-day
+// backfill at start, then every 60 s just the observations stored since.
+func runActivityIndex(ctx context.Context, st *store.Store, idx *analytics.ActivityIndex, log *slog.Logger) {
+	update := func() {
+		nodes, err := st.ListNodes()
+		if err != nil {
+			log.Warn("activity index: list nodes", "err", err)
+			return
+		}
+		t0 := time.Now()
+		if err := idx.Update(ctx, st, nodes, time.Now()); err != nil && ctx.Err() == nil {
+			log.Warn("activity index: update", "err", err)
+			return
+		}
+		if d := time.Since(t0); d > 5*time.Second {
+			log.Info("activity index: caught up", "took", d.Round(time.Millisecond))
+		}
+	}
+	update()
+	t := time.NewTicker(time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			update()
 		}
 	}
 }

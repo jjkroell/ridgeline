@@ -4,6 +4,26 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.9] — 2026-10-07
+
+### Fixed
+- **Node heatmaps load instantly and cover the full 7 days.** Each node page's
+  weekday×hour heatmap decoded days of observations on every first view (~5 s
+  on prod, on the single DB connection). It also read only the NEWEST 200k
+  rows, so at ~100k observations/day the "last 7d" grid really covered ~2 days.
+  An in-memory `analytics.ActivityIndex` now keeps per-node hourly counts (own
+  adverts + relays, the same attribution as before): a 7-day backfill at start
+  (one-hour `received_at` ranges up to the id that was newest when it began,
+  so ids that don't follow reception time are still counted once), then every
+  60 s only the rows stored since. A heatmap is a sum over ≤168 cells (~0.4 ms).
+  Requests over 7 days fall back to the cached scan.
+
+### Changed
+- **"Mesh radio" moved into the receiver status.** Instead of a separate block
+  above the theme picker, the frequency and settings sit under the sidebar's
+  LIVE indicator ("909.000 MHz / 62.5 kHz · SF7 · CR5"), and as one compact
+  line with a radio icon in the mobile More sheet and narrow-screen menu.
+
 ## [v0.23.8] — 2026-10-07
 
 ### Added

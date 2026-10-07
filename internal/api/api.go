@@ -39,6 +39,9 @@ type Server struct {
 	// nodeCache shares and briefly reuses the expensive per-node scans
 	// (heatmap, observers, history). See respcache.go.
 	nodeCache *respCache
+	// activity serves node heatmaps from memory (see analytics.ActivityIndex);
+	// nil, or not yet backfilled, falls back to scanning.
+	activity *analytics.ActivityIndex
 	up        websocket.Upgrader
 	analytics *analytics.Engine
 	keyChal   *keyChallengeStore // pending private-key ownership challenges
@@ -579,6 +582,12 @@ func (s *Server) nodeObservers(w http.ResponseWriter, r *http.Request) {
 func (s *Server) nodeHeatmap(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
 	days := queryInt(r, "days", 7, 1, 30)
+	if s.activity != nil {
+		if grid, ok := s.activity.Heatmap(pubkey, days, time.Now()); ok {
+			writeJSON(w, grid)
+			return
+		}
+	}
 	cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
 	body, err := s.nodeCache.get(fmt.Sprintf("heatmap|%s|%d", pubkey, days), nodeHeatmapTTL, func() (any, error) {
 		nodes, err := s.store.ListNodes()
@@ -830,3 +839,6 @@ func queryInt(r *http.Request, key string, def, min, max int) int {
 	}
 	return v
 }
+
+// SetActivityIndex lets node heatmaps be answered from memory.
+func (s *Server) SetActivityIndex(a *analytics.ActivityIndex) { s.activity = a }

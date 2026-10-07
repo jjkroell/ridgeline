@@ -229,17 +229,20 @@
 					</a>
 				{/if}
 			</div>
-			<MeshRadio class="mb-3" />
 			<ThemePicker />
-			<div class="border-line mt-3 flex items-center gap-2 border-t pt-3">
-				{#if live.connected}
-					<span class="live-dot"></span>
-					<span class="label !text-signal">Live</span>
-				{:else}
-					<span class="bg-coral/70 inline-block h-2 w-2 rounded-full"></span>
-					<span class="label !text-coral">Offline</span>
-				{/if}
-				<span class="label ml-auto tnum">{live.total}</span>
+			<!-- Receiver status: live/offline, and what it is listening on. -->
+			<div class="border-line mt-3 border-t pt-3">
+				<div class="flex items-center gap-2">
+					{#if live.connected}
+						<span class="live-dot"></span>
+						<span class="label !text-signal">Live</span>
+					{:else}
+						<span class="bg-coral/70 inline-block h-2 w-2 rounded-full"></span>
+						<span class="label !text-coral">Offline</span>
+					{/if}
+					<span class="label ml-auto tnum">{live.total}</span>
+				</div>
+				<MeshRadio class="mt-1.5 pl-4" />
 			</div>
 			<a href="/privacy" class="label !text-fg-faint hover:!text-fg-dim mt-2 block transition-colors">Privacy &amp; cookies</a>
 		</div>
@@ -282,7 +285,7 @@
 								: 'text-fg-dim hover:text-fg'}">{item.label}</a
 						>
 					{/each}
-					<MeshRadio class="col-span-2 px-3 pt-2" />
+					<MeshRadio variant="inline" class="col-span-2 px-3 pt-2" />
 				</nav>
 			{/if}
 		</header>

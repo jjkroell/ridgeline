@@ -295,6 +295,10 @@ func run(log *slog.Logger, configPath string, configRequired bool) error {
 	go runChannelDiscovery(ctx, st, log, channelTrigger)
 	go runSessionPrune(ctx, st, log)
 	go runClaimPrune(ctx, st, log)
+	go runObservationRecount(ctx, st, log)
+	if cfg.ObservationRetentionDays > 0 {
+		go runObservationRetention(ctx, st, cfg.ObservationRetentionDays, log)
+	}
 	if cfg.NodeRetentionDays > 0 {
 		go runNodeRetention(ctx, st, engine, cfg.NodeRetentionDays, cfg.NodeRetentionMinHopBytes, log)
 	}
@@ -843,6 +847,61 @@ func runArtifactScrub(ctx context.Context, st *store.Store, log *slog.Logger) {
 			return
 		case <-t.C:
 			scrub()
+		}
+	}
+}
+
+// runObservationRetention deletes raw observations older than retentionDays,
+// daily (see config.ObservationRetentionDays). It waits 10 minutes after start
+// so it never stacks on the startup recompute and the other sweeps, and deletes
+// in small batches so the site stays responsive while it runs.
+func runObservationRetention(ctx context.Context, st *store.Store, retentionDays int, log *slog.Logger) {
+	prune := func() {
+		cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
+		t0 := time.Now()
+		n, err := st.PruneObservationsBefore(ctx, cutoff)
+		if err != nil {
+			log.Warn("observation retention: prune", "err", err, "deleted", n)
+			return
+		}
+		if n > 0 {
+			log.Info("observation retention: pruned old observations",
+				"retentionDays", retentionDays, "deleted", n, "took", time.Since(t0).Round(time.Millisecond))
+		}
+	}
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(10 * time.Minute):
+	}
+	prune()
+	t := time.NewTicker(24 * time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			prune()
+		}
+	}
+}
+
+// runObservationRecount re-syncs the in-memory observation count (served by
+// /api/stats) with the table once a day. In-process inserts and deletes keep
+// it exact; this absorbs anything an external tool (cmd/scrub,
+// cmd/purgenodes) changed behind the daemon's back. One COUNT(*) a day.
+func runObservationRecount(ctx context.Context, st *store.Store, log *slog.Logger) {
+	t := time.NewTicker(24 * time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if err := st.RecountObservations(); err != nil {
+				log.Warn("observation recount", "err", err)
+			}
 		}
 	}
 }

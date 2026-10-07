@@ -1,6 +1,8 @@
 package store
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -317,15 +319,16 @@ func (s *Store) Stats() (Stats, error) {
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM observers`).Scan(&st.Observers); err != nil {
 		return st, err
 	}
-	var last *string
-	if err := s.db.QueryRow(
-		`SELECT COUNT(*), MAX(received_at) FROM observations`,
-	).Scan(&st.Observations, &last); err != nil {
+	// The total comes from the in-memory counter: COUNT(*) over the whole
+	// table took 1.1 s on prod and the Overview polls this every 5 s per tab.
+	// The newest packet time is one step down the received_at index.
+	st.Observations = int(s.obsCount.Load())
+	var last string
+	err := s.db.QueryRow(`SELECT received_at FROM observations ORDER BY received_at DESC LIMIT 1`).Scan(&last)
+	if err != nil && err != sql.ErrNoRows {
 		return st, err
 	}
-	if last != nil {
-		st.LastPacketAt = *last
-	}
+	st.LastPacketAt = last
 	return st, nil
 }
 
@@ -852,4 +855,45 @@ func (s *Store) ObserverNames() (map[string]string, error) {
 		out[id] = name
 	}
 	return out, rows.Err()
+}
+
+// pruneBatchSize and prunePause bound PruneObservationsBefore: each batch is
+// one short write transaction, and the pause lets ingest and page requests use
+// the single connection between batches.
+const (
+	pruneBatchSize = 5000
+	prunePause     = 50 * time.Millisecond
+)
+
+// PruneObservationsBefore deletes observations received before cutoff, oldest
+// first, pruneBatchSize at a time, releasing the lock and connection between
+// batches. A single DELETE over millions of rows would hold the only DB
+// connection for minutes and freeze the site (see purgeTargets). Returns the
+// number of rows deleted; stops early (keeping what it did) if ctx is cancelled.
+func (s *Store) PruneObservationsBefore(ctx context.Context, cutoff string) (int64, error) {
+	var total int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return total, nil
+		}
+		s.mu.Lock()
+		res, err := s.db.Exec(`DELETE FROM observations WHERE id IN (
+			SELECT id FROM observations WHERE received_at < ? ORDER BY received_at LIMIT ?)`,
+			cutoff, pruneBatchSize)
+		s.mu.Unlock()
+		if err != nil {
+			return total, err
+		}
+		n, _ := res.RowsAffected()
+		total += n
+		s.obsCount.Add(-n)
+		if n < pruneBatchSize {
+			return total, nil
+		}
+		select {
+		case <-ctx.Done():
+			return total, nil
+		case <-time.After(prunePause):
+		}
+	}
 }

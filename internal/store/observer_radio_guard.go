@@ -559,7 +559,11 @@ func (s *Store) RetractObserverSince(observerID, since string) (RetractResult, e
 		res.Nodes += n
 	}
 
-	return res, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return res, err
+	}
+	s.obsCount.Add(-res.Observations)
+	return res, nil
 }
 
 // advertKeyOf returns the uppercase advert pubkey a stored packet carries, or

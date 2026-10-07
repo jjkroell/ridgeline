@@ -63,6 +63,13 @@ type Config struct {
 	// reappears the moment it publishes again, so this just tidies observers that
 	// have gone silent. Defaults to 60; set 0 to disable.
 	ObserverRetentionMinutes int `json:"observerRetentionMinutes"`
+	// ObservationRetentionDays deletes stored observations (raw packets) older
+	// than this many days, daily, in small batches. 0 (the default) keeps them
+	// forever. Nothing in the UI looks back further than 30 days (the node
+	// heatmap's widest window), and node identity/counters live on the nodes
+	// table, so 45 loses nothing visible while bounding the database: at
+	// ~100k observations/day an uncapped table grows ~1.5 GB/month.
+	ObservationRetentionDays int `json:"observationRetentionDays"`
 
 	// ObserverRadios lists the radio presets an observer may report and still
 	// have what it hears kept: "freq,bw,sf,cr" entries, e.g.

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jjkroell/ridgeline/internal/meshcore"
@@ -280,6 +281,13 @@ CREATE INDEX IF NOT EXISTS idx_chancand_status ON channel_candidates(status);
 
 // Store wraps a SQLite database.
 type Store struct {
+	// obsCount is the number of rows in observations, kept in memory so the
+	// Overview's /api/stats (polled every 5 s per open tab) need not run
+	// COUNT(*) over millions of rows — 1.1 s on the single connection each time.
+	// Seeded at Open, adjusted by every insert/delete in this process, and
+	// re-synced daily (RecountObservations) to absorb external tools.
+	obsCount atomic.Int64
+
 	db *sql.DB
 	mu sync.Mutex // serializes writes (single-writer model)
 
@@ -541,6 +549,9 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("store: clear misattributed radio: %w", err)
 	}
 	s.misattributedRadioCleared = cleared
+	if err := s.RecountObservations(); err != nil {
+		return nil, fmt.Errorf("store: count observations: %w", err)
+	}
 	return s, nil
 }
 
@@ -871,7 +882,11 @@ func (s *Store) Record(o Observation) error {
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.obsCount.Add(1)
+	return nil
 }
 
 // advertTxGap is how far apart two adverts must land to count as separate
@@ -934,4 +949,15 @@ func boolInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// RecountObservations resets the in-memory observation count from the table.
+// One full COUNT(*) (~1 s on prod): run at Open and once a day, never per request.
+func (s *Store) RecountObservations() error {
+	var n int64
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM observations`).Scan(&n); err != nil {
+		return err
+	}
+	s.obsCount.Store(n)
+	return nil
 }

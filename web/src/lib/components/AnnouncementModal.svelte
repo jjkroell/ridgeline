@@ -5,24 +5,24 @@
 	// Each entry is one new capability, in user-facing terms.
 	const items: { icon: string; title: string; body: string }[] = [
 		{
+			icon: 'M4 9h16M4 15h16M10 3 8 21M16 3l-2 18',
+			title: 'Find the hashtag channels people are using',
+			body: 'The Channels page now lists the named #hashtag channels active on the mesh under "Discovered on the mesh", on desktop and mobile. Add one with a click to read along. A channel\'s name never goes over the air, so Ridgeline only lists a name once it has proved it matches real traffic. When you add a hashtag channel yourself you choose whether to share it with the list, and the Add panel now has a Hashtag / Private switch.'
+		},
+		{
 			icon: 'M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M12 13a1 1 0 100-2 1 1 0 000 2z',
-			title: 'The whole mesh is now on 909.000 MHz',
-			body: 'The move from 910.425 MHz completed on 1 October 2026. Bandwidth, spreading factor and coding rate are unchanged — 62.5 kHz, SF7, CR5 — so a radio only needed its frequency changed. Ridgeline now accepts observer data from that preset only, so a receiver left on the old frequency is refused rather than mixed in. The About page has the exact settings.'
+			title: 'Radio settings are shown once for the whole mesh',
+			body: 'Every node is on the same settings now, so they appear once, in the sidebar (in the More menu on mobile), instead of on each node\'s page, where some nodes were still showing their old 910.425 MHz frequency.'
 		},
 		{
-			icon: 'M12 21s-7-6.2-7-11a7 7 0 1114 0c0 4.8-7 11-7 11z M12 10a2 2 0 100-4 2 2 0 000 4z',
-			title: 'Missing nodes are back on the maps',
-			body: 'Nodes in a distant part of the mesh could be dropped from every map by the check that filters out broken GPS. A tight cluster of nodes elsewhere made anything far away look like an error. Remote nodes now stay on the map, and genuinely bad coordinates are still caught.'
+			icon: 'M13 2 3 14h9l-1 8 10-12h-9l1-8z',
+			title: 'Faster, steadier pages',
+			body: 'Fixed several slowdowns that could leave pages, maps and the node list on "Loading…" for seconds at a time, most noticeably for a few minutes after an update. Node pages, the Overview and the analytics views now share their heavy work between everyone viewing them.'
 		},
 		{
-			icon: 'M3 20h18L14 7l-4 6-2-2z',
-			title: 'Node maps show the terrain',
-			body: 'The small location map on a node\'s page now uses the same shaded-relief basemap as the full maps, so you can see at a glance whether a node is sitting on a ridge or down in a valley.'
-		},
-		{
-			icon: 'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14',
-			title: 'More on the About page',
-			body: 'The About page now covers the single 909.000 MHz preset the whole mesh runs on, with the exact LoRa settings to copy into a new radio.'
+			icon: 'M12 8v4l3 2M12 21a9 9 0 100-18 9 9 0 000 18z',
+			title: 'Individual packets are kept for 45 days',
+			body: 'That covers everything the site shows; the longest view, a node\'s activity heatmap, goes back 30 days. Node details, first-seen dates and all-time counts are kept as before.'
 		}
 	];
 </script>

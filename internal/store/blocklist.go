@@ -369,8 +369,10 @@ func (s *Store) purgeTargets(observers, bridges, nodes []string, cascadeUserData
 
 	// Removing an observer is meant to read as if it had never connected, so the
 	// nodes that exist ONLY because it heard them go too. A node row is created
-	// by a signature-valid advert and nothing else, and observations are never
-	// pruned, so "which observers evidenced this node" is answerable exactly:
+	// by a signature-valid advert and nothing else, and observations are kept
+	// far longer than a live node can go without advertising (age-based pruning,
+	// when configured, is weeks; node retention is days), so "which observers
+	// evidenced this node" is answerable exactly:
 	// collect the advert keys carried by the rows being deleted, and the keys
 	// carried by the rows that survive. Anything in the first set and not the
 	// second lost its last witness.
@@ -622,6 +624,7 @@ func (s *Store) purgeObservationBatch(afterID int64, obsSet map[string]bool, bri
 	}
 
 	if len(delIDs) > 0 {
+		before := res.Observations
 		tx, err := s.db.Begin()
 		if err != nil {
 			return 0, afterID, err
@@ -638,6 +641,7 @@ func (s *Store) purgeObservationBatch(afterID int64, obsSet map[string]bool, bri
 		if err := tx.Commit(); err != nil {
 			return 0, afterID, err
 		}
+		s.obsCount.Add(-(res.Observations - before))
 	}
 	return len(batch), last, nil
 }

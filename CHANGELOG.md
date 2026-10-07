@@ -4,6 +4,34 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.8] — 2026-10-07
+
+### Added
+- **Observation retention.** New `observationRetentionDays` (default 0 = keep
+  forever) deletes raw observations older than that many days, daily, in
+  5,000-row batches via the `received_at` index with a short pause between
+  batches, starting 10 minutes after boot. Nothing in the UI looks back more
+  than 30 days (the node heatmap's widest window) and node identity/counters
+  live on `nodes`, so prod and dev run with 45. At ~100k observations/day the
+  table otherwise grows ~1.5 GB/month. SQLite does not shrink the file on
+  delete (`auto_vacuum` is off): freed pages are reused, and a one-time
+  `VACUUM` returns the space.
+
+### Fixed
+- **The Overview no longer stalls the site once a second per open tab.**
+  `/api/stats` (polled every 5 s by the Overview, desktop and mobile — the
+  landing page) ran `COUNT(*)` over every observation: 1.1 s on prod each time
+  on the single connection, so each open Overview tab blocked everything ~22%
+  of the time (seen as steady ~0.9 s responses every 5 s). The total is now an
+  in-memory counter — seeded at start, kept exact by every insert, purge and
+  prune, and re-synced daily for changes made by external tools — and the
+  newest-packet time comes from the `received_at` index.
+
+### Changed
+- **"What's new" re-opens once for every visitor** with hashtag channel
+  discovery, the site-wide radio settings, the speed fixes and the 45-day
+  packet retention (`CURRENT` = `2026-10-channels-and-speed`).
+
 ## [v0.23.7] — 2026-10-07
 
 ### Fixed

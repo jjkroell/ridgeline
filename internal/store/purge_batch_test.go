@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -93,5 +94,95 @@ func TestRelayHopScanCoversWholeWindow(t *testing.T) {
 		if got[h] {
 			t.Errorf("hop %s is from before the window", h)
 		}
+	}
+}
+
+// Age-based retention removes only rows older than the cutoff, across several
+// batches, and leaves newer ones untouched.
+func TestPruneObservationsBefore(t *testing.T) {
+	st := testStore(t)
+	now := time.Now().UTC()
+	old := pruneBatchSize*2 + 321
+	for i := 0; i < old; i++ {
+		insertObs(t, st, "00", "GroupText", 1, now.Add(-60*24*time.Hour).Add(time.Duration(i)*time.Millisecond))
+	}
+	for i := 0; i < 50; i++ {
+		insertObs(t, st, "00", "GroupText", 1, now.Add(-time.Duration(i)*time.Minute))
+	}
+	cutoff := now.Add(-45 * 24 * time.Hour).Format(time.RFC3339Nano)
+	n, err := st.PruneObservationsBefore(context.Background(), cutoff)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if n != int64(old) {
+		t.Errorf("deleted %d, want %d (every row older than the cutoff)", n, old)
+	}
+	if left := countObs(t, st, "1=1"); left != 50 {
+		t.Errorf("%d rows left, want the 50 recent ones", left)
+	}
+	if again, _ := st.PruneObservationsBefore(context.Background(), cutoff); again != 0 {
+		t.Errorf("second run deleted %d, want 0", again)
+	}
+}
+
+// A cancelled prune stops between batches and keeps what it already deleted.
+func TestPruneObservationsStopsOnCancel(t *testing.T) {
+	st := testStore(t)
+	now := time.Now().UTC()
+	for i := 0; i < pruneBatchSize*3; i++ {
+		insertObs(t, st, "00", "GroupText", 1, now.Add(-60*24*time.Hour).Add(time.Duration(i)*time.Millisecond))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	n, err := st.PruneObservationsBefore(ctx, now.Add(-45*24*time.Hour).Format(time.RFC3339Nano))
+	if err != nil || n != 0 {
+		t.Errorf("cancelled before starting: deleted %d err %v, want 0 and no error", n, err)
+	}
+}
+
+// The observation total served by /api/stats is a counter, not a COUNT(*); it
+// must track inserts, purges and prunes exactly.
+func TestStatsObservationCountTracksChanges(t *testing.T) {
+	st := testStore(t)
+	statObs := func() int {
+		t.Helper()
+		s, err := st.Stats()
+		if err != nil {
+			t.Fatalf("stats: %v", err)
+		}
+		return s.Observations
+	}
+	node := heardBy(t, st, "obs-A") // Record: +1
+	heardBy(t, st, "obs-B")         // +1 (same advert, second observer)
+	if got := statObs(); got != 2 {
+		t.Fatalf("after 2 records: %d, want 2", got)
+	}
+	// Rows written behind the daemon's back are picked up by a recount.
+	now := time.Now().UTC()
+	for i := 0; i < 10; i++ {
+		insertObs(t, st, "00", "GroupText", 1, now.Add(-60*24*time.Hour).Add(time.Duration(i)*time.Second))
+	}
+	if err := st.RecountObservations(); err != nil {
+		t.Fatalf("recount: %v", err)
+	}
+	if got := statObs(); got != 12 {
+		t.Fatalf("after recount: %d, want 12", got)
+	}
+	if _, err := st.PruneObservationsBefore(context.Background(), now.Add(-45*24*time.Hour).Format(time.RFC3339Nano)); err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if got := statObs(); got != 2 {
+		t.Errorf("after pruning 10: %d, want 2", got)
+	}
+	if _, err := st.PurgeTargets(nil, nil, []string{node}); err != nil {
+		t.Fatalf("purge: %v", err)
+	}
+	if got := statObs(); got != 0 {
+		t.Errorf("after purging the node's 2 adverts: %d, want 0", got)
+	}
+	var real int
+	st.db.QueryRow(`SELECT COUNT(*) FROM observations`).Scan(&real)
+	if real != statObs() {
+		t.Errorf("counter %d disagrees with COUNT(*) %d", statObs(), real)
 	}
 }

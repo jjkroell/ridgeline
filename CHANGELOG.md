@@ -4,6 +4,13 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.2] — 2026-10-06
+
+### Added
+- **Hashtag channel discovery on the mobile layout** — `/m/channels` now has the
+  "Discovered on the mesh" list and the "Share with the discovery list" opt-in
+  that the desktop Add panel gained in v0.23.
+
 ## [v0.23.1] — 2026-10-06
 
 ### Changed

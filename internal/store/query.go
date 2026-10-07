@@ -2,9 +2,11 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jjkroell/ridgeline/internal/meshcore"
 	"github.com/jjkroell/ridgeline/internal/radio"
@@ -650,28 +652,59 @@ func (s *Store) rawSince(sinceISO string, limit int) ([]RawObservation, error) {
 // carry no relay hops and are skipped (path_hops = 0), which also keeps the scan
 // cheap since most adverts are zero-hop.
 func (s *Store) RelayHopPrefixesSince(sinceISO string) (map[string]bool, error) {
-	rows, err := s.db.Query(`SELECT raw_hex FROM observations WHERE received_at >= ? AND path_hops > 0`, sinceISO)
+	// ⚠ The retention window is days of traffic (~800k rows on prod). Reading
+	// and decoding it in ONE query held the single DB connection for the whole
+	// pass and froze the site. Walk it an hour at a time instead — each window
+	// is an index range on received_at — copy the rows out, release the
+	// connection, then decode.
+	since, err := time.Parse(time.RFC3339Nano, sinceISO)
+	if err != nil {
+		return nil, fmt.Errorf("store: relay hop scan: bad since %q: %w", sinceISO, err)
+	}
+	set := make(map[string]bool)
+	end := time.Now().UTC().Add(time.Minute) // include rows stamped a little ahead
+	for from := since.UTC(); from.Before(end); from = from.Add(relayScanWindow) {
+		to := from.Add(relayScanWindow)
+		raws, err := s.relayRawsBetween(from.Format(time.RFC3339Nano), to.Format(time.RFC3339Nano))
+		if err != nil {
+			return nil, err
+		}
+		for _, raw := range raws {
+			pkt, err := meshcore.DecodeHex(raw)
+			if err != nil || pkt == nil {
+				continue
+			}
+			for _, hop := range pkt.RelayPath() {
+				if hop != "" {
+					set[strings.ToUpper(hop)] = true
+				}
+			}
+		}
+	}
+	return set, nil
+}
+
+// relayScanWindow is the slice of time RelayHopPrefixesSince reads per query.
+const relayScanWindow = time.Hour
+
+// relayRawsBetween returns the raw packets of relayed observations received in
+// [from, to). Rows are copied out so the connection is free before decoding.
+func (s *Store) relayRawsBetween(from, to string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT raw_hex FROM observations
+		WHERE received_at >= ? AND received_at < ? AND path_hops > 0`, from, to)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	set := make(map[string]bool)
+	var out []string
 	for rows.Next() {
 		var raw string
 		if err := rows.Scan(&raw); err != nil {
 			return nil, err
 		}
-		pkt, err := meshcore.DecodeHex(raw)
-		if err != nil || pkt == nil {
-			continue
-		}
-		for _, hop := range pkt.RelayPath() {
-			if hop != "" {
-				set[strings.ToUpper(hop)] = true
-			}
-		}
+		out = append(out, raw)
 	}
-	return set, rows.Err()
+	return out, rows.Err()
 }
 
 // NeedsAdvertTxBackfill reports whether the advert_tx_count column was just added

@@ -4,6 +4,21 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.6] — 2026-10-07
+
+### Fixed
+- **The site no longer freezes for ~2 minutes when silent nodes are pruned.**
+  Node retention (3 minutes after every restart, then daily) checked a 7-day
+  window of relay hops in one query (~800k rows) and then found the node's
+  adverts by decoding all ~4.3M stored observations inside a single write
+  transaction — holding the only database connection the whole time, so pages,
+  maps and ingest all waited (`/api/nodes` timed out; MQTT dropped its
+  keepalive). Both passes now work in small pieces (5,000-row batches by row
+  id; one-hour windows of the relay scan) and release the connection in
+  between. The same purge backs the daily artifact scrub and admin purges; an
+  admin purge that fails part-way now leaves earlier batches applied, and
+  re-running it completes it.
+
 ## [v0.23.5] — 2026-10-06
 
 ### Changed

@@ -350,9 +350,6 @@ func (s *Store) ScrubNodes(observers, bridges, nodes []string) (PurgeResult, err
 }
 
 func (s *Store) purgeTargets(observers, bridges, nodes []string, cascadeUserData bool) (PurgeResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	var res PurgeResult
 	obsSet := map[string]bool{}
 	for _, o := range observers {
@@ -370,12 +367,6 @@ func (s *Store) purgeTargets(observers, bridges, nodes []string, cascadeUserData
 		nodeSet[b] = true // a purged bridge's own node row goes too
 	}
 
-	tx, err := s.db.Begin()
-	if err != nil {
-		return res, err
-	}
-	defer tx.Rollback()
-
 	// Removing an observer is meant to read as if it had never connected, so the
 	// nodes that exist ONLY because it heard them go too. A node row is created
 	// by a signature-valid advert and nothing else, and observations are never
@@ -390,61 +381,36 @@ func (s *Store) purgeTargets(observers, bridges, nodes []string, cascadeUserData
 	condemned := map[string]bool{} // advert keys losing observations here
 	witnessed := map[string]bool{} // advert keys still evidenced afterwards
 
-	// Scan observations once; collect ids to delete by re-decoding raw_hex.
-	rows, err := tx.Query(`SELECT id, raw_hex, COALESCE(observer_id,'') FROM observations`)
-	if err != nil {
-		return res, err
-	}
-	var delIDs []int64
-	for rows.Next() {
-		var id int64
-		var raw, obsID string
-		if err := rows.Scan(&id, &raw, &obsID); err != nil {
-			rows.Close()
-			return res, err
-		}
-		byTarget := obsID != "" && obsSet[obsID]
-		if byTarget && !orphanScan {
-			delIDs = append(delIDs, id)
-			continue
-		}
-		pkt, err := meshcore.DecodeHex(raw)
-		if err != nil || pkt == nil {
-			// Undecodable: it can still be deleted for its observer, but it
-			// names no node either way.
-			if byTarget {
-				delIDs = append(delIDs, id)
-			}
-			continue
-		}
-		var advertKey string
-		if pkt.Advert != nil {
-			advertKey = strings.ToUpper(pkt.Advert.PublicKey)
-		}
-		del := byTarget ||
-			(advertKey != "" && nodeSet[advertKey]) ||
-			(len(bridgeSet) > 0 && pathHitsBridge(pkt.RelayPath(), bridgeSet))
-		if del {
-			delIDs = append(delIDs, id)
-			if advertKey != "" {
-				condemned[advertKey] = true
-			}
-			continue
-		}
-		if advertKey != "" {
-			witnessed[advertKey] = true
-		}
-	}
-	rows.Close()
-
-	for _, id := range delIDs {
-		r, err := tx.Exec(`DELETE FROM observations WHERE id = ?`, id)
+	// ⚠ The observations table has no node column, so finding a node's rows
+	// means decoding every stored packet (millions). Doing that in ONE
+	// transaction held s.mu and the single DB connection for ~2 minutes and
+	// froze the whole site, ingest included — every daily retention sweep and
+	// ~3 minutes after every restart. So walk it in short batches by rowid (an
+	// index range, never a scan from a computed floor), each in its own
+	// transaction, releasing the lock and the connection in between so ingest
+	// and page requests interleave. Deletes commit per batch: a purge that
+	// fails part-way leaves earlier batches applied, and re-running it finishes
+	// the job (it is idempotent).
+	var lastID int64
+	for {
+		n, last, err := s.purgeObservationBatch(lastID, obsSet, bridgeSet, nodeSet, orphanScan, condemned, witnessed, &res)
 		if err != nil {
 			return res, err
 		}
-		n, _ := r.RowsAffected()
-		res.Observations += n
+		if n < purgeBatchSize {
+			break
+		}
+		lastID = last
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return res, err
+	}
+	defer tx.Rollback()
 
 	// Delete node rows for explicitly targeted nodes/bridges, along with the
 	// user-authored data keyed to them (see the doc comment).
@@ -572,4 +538,106 @@ func (s *Store) KnownBridges() map[string]bool {
 		out[k] = true
 	}
 	return out
+}
+
+// purgeBatchSize is how many observations one purge transaction examines. Small
+// enough that a batch (read + decode + delete) holds the lock for tens of
+// milliseconds on a Pi-class VM, large enough that the per-batch overhead is
+// noise across a few million rows.
+const purgeBatchSize = 5000
+
+// purgeObservationBatch examines the next purgeBatchSize observations after
+// afterID (rowid order), deletes those that match the purge targets, and
+// records the advert keys it saw for the orphan pass. It returns how many rows
+// it examined and the last id, so the caller can continue from there.
+func (s *Store) purgeObservationBatch(afterID int64, obsSet map[string]bool, bridgeSet []string,
+	nodeSet map[string]bool, orphanScan bool, condemned, witnessed map[string]bool, res *PurgeResult) (int, int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Read OUTSIDE the delete transaction. A transaction that reads and then
+	// writes cannot upgrade if another connection committed in between —
+	// SQLite fails it at once with SQLITE_BUSY_SNAPSHOT (517), busy_timeout
+	// notwithstanding. That never happens inside the daemon (one connection),
+	// but does when a separate process (cmd/purgenodes) purges beside a live
+	// daemon. A write-only transaction simply waits for the lock instead.
+	rows, err := s.db.Query(`SELECT id, raw_hex, COALESCE(observer_id,'') FROM observations
+		WHERE id > ? ORDER BY id LIMIT ?`, afterID, purgeBatchSize)
+	if err != nil {
+		return 0, afterID, err
+	}
+	type obsRow struct {
+		id         int64
+		raw, obsID string
+	}
+	batch := make([]obsRow, 0, purgeBatchSize)
+	for rows.Next() {
+		var r obsRow
+		if err := rows.Scan(&r.id, &r.raw, &r.obsID); err != nil {
+			rows.Close()
+			return 0, afterID, err
+		}
+		batch = append(batch, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, afterID, err
+	}
+
+	last := afterID
+	var delIDs []int64
+	for _, r := range batch {
+		last = r.id
+		byTarget := r.obsID != "" && obsSet[r.obsID]
+		if byTarget && !orphanScan {
+			delIDs = append(delIDs, r.id)
+			continue
+		}
+		pkt, err := meshcore.DecodeHex(r.raw)
+		if err != nil || pkt == nil {
+			// Undecodable: it can still be deleted for its observer, but it
+			// names no node either way.
+			if byTarget {
+				delIDs = append(delIDs, r.id)
+			}
+			continue
+		}
+		var advertKey string
+		if pkt.Advert != nil {
+			advertKey = strings.ToUpper(pkt.Advert.PublicKey)
+		}
+		del := byTarget ||
+			(advertKey != "" && nodeSet[advertKey]) ||
+			(len(bridgeSet) > 0 && pathHitsBridge(pkt.RelayPath(), bridgeSet))
+		if del {
+			delIDs = append(delIDs, r.id)
+			if advertKey != "" {
+				condemned[advertKey] = true
+			}
+			continue
+		}
+		if advertKey != "" {
+			witnessed[advertKey] = true
+		}
+	}
+
+	if len(delIDs) > 0 {
+		tx, err := s.db.Begin()
+		if err != nil {
+			return 0, afterID, err
+		}
+		defer tx.Rollback()
+		for _, id := range delIDs {
+			r, err := tx.Exec(`DELETE FROM observations WHERE id = ?`, id)
+			if err != nil {
+				return 0, afterID, err
+			}
+			n, _ := r.RowsAffected()
+			res.Observations += n
+		}
+		if err := tx.Commit(); err != nil {
+			return 0, afterID, err
+		}
+	}
+	return len(batch), last, nil
 }

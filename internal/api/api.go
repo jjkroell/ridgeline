@@ -4,6 +4,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -29,12 +30,15 @@ type mailSender interface {
 
 // Server holds API dependencies and serves HTTP.
 type Server struct {
-	store     *store.Store
-	log       *slog.Logger
-	version   string
-	env       string // instance role ("dev"/"staging"/…); surfaced on /api/health
-	webDir    string
-	hub       *hub
+	store   *store.Store
+	log     *slog.Logger
+	version string
+	env     string // instance role ("dev"/"staging"/…); surfaced on /api/health
+	webDir  string
+	hub     *hub
+	// nodeCache shares and briefly reuses the expensive per-node scans
+	// (heatmap, observers, history). See respcache.go.
+	nodeCache *respCache
 	up        websocket.Upgrader
 	analytics *analytics.Engine
 	keyChal   *keyChallengeStore // pending private-key ownership challenges
@@ -109,11 +113,12 @@ func (s *Server) mailEnabled() bool { return s.mail != nil && s.mail.Enabled() }
 // console is gated by the is_admin account flag (session auth), not a token.
 func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
 	return &Server{
-		store:   st,
-		log:     log,
-		version: version,
-		webDir:  webDir,
-		hub:     newHub(),
+		store:     st,
+		log:       log,
+		version:   version,
+		webDir:    webDir,
+		hub:       newHub(),
+		nodeCache: newRespCache(2000),
 		// Only allow the live WebSocket from the site's own origin (or non-browser
 		// clients that send no Origin); blocks cross-site WebSocket hijacking.
 		up:           websocket.Upgrader{CheckOrigin: sameOriginWS},
@@ -533,17 +538,18 @@ func (s *Server) nodeHistory(w http.ResponseWriter, r *http.Request) {
 	limit := queryInt(r, "limit", 200, 1, 1000)
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 
-	nodes, err := s.store.ListNodes()
+	body, err := s.nodeCache.get(fmt.Sprintf("history|%s|%d|%d", pubkey, sinceSec, limit), nodeHistoryTTL, func() (any, error) {
+		nodes, err := s.store.ListNodes()
+		if err != nil {
+			return nil, err
+		}
+		return analytics.NodeHistory(s.store, nodes, pubkey, cutoff, 0, limit)
+	})
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	entries, err := analytics.NodeHistory(s.store, nodes, pubkey, cutoff, 0, limit)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	writeJSON(w, entries)
+	writeCachedJSON(w, body)
 }
 
 // nodeObservers returns, per observer, the reception of a node's adverts over a
@@ -555,17 +561,18 @@ func (s *Server) nodeObservers(w http.ResponseWriter, r *http.Request) {
 	sinceSec := queryInt(r, "since", 3*86400, 1, 7*86400)
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 
-	nodes, err := s.store.ListNodes()
+	body, err := s.nodeCache.get(fmt.Sprintf("observers|%s|%d", pubkey, sinceSec), nodeObserversTTL, func() (any, error) {
+		nodes, err := s.store.ListNodes()
+		if err != nil {
+			return nil, err
+		}
+		return analytics.NodeObservers(s.store, nodes, pubkey, cutoff, 0)
+	})
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	obs, err := analytics.NodeObservers(s.store, nodes, pubkey, cutoff, 0)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	writeJSON(w, obs)
+	writeCachedJSON(w, body)
 }
 
 // nodeHeatmap returns a node's weekday×hour activity grid over the last `days`.
@@ -573,18 +580,30 @@ func (s *Server) nodeHeatmap(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
 	days := queryInt(r, "days", 7, 1, 30)
 	cutoff := time.Now().Add(-time.Duration(days) * 24 * time.Hour).UTC().Format(time.RFC3339Nano)
-	nodes, err := s.store.ListNodes()
+	body, err := s.nodeCache.get(fmt.Sprintf("heatmap|%s|%d", pubkey, days), nodeHeatmapTTL, func() (any, error) {
+		nodes, err := s.store.ListNodes()
+		if err != nil {
+			return nil, err
+		}
+		return analytics.NodeHeatmap(s.store, nodes, pubkey, cutoff, 0, days)
+	})
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	grid, err := analytics.NodeHeatmap(s.store, nodes, pubkey, cutoff, 0, days)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	writeJSON(w, grid)
+	writeCachedJSON(w, body)
 }
+
+// How long the expensive per-node responses are reused. The heatmap is a 7-day
+// weekday×hour grid, so minutes of staleness change nothing visible; observers
+// and history are the "last N hours" lists, kept fresher.
+const (
+	nodeHeatmapTTL   = 5 * time.Minute
+	nodeObserversTTL = time.Minute
+	nodeHistoryTTL   = time.Minute
+	// Matches the pages' own 30s poll: one scan per window for everyone.
+	meshAnalyticsTTL = 30 * time.Second
+)
 
 // meshAnalytics returns a mesh-wide aggregate (traffic mix, link/RF health,
 // channel utilisation, busiest relays) over a selectable window. Computed on
@@ -594,17 +613,21 @@ func (s *Server) meshAnalytics(w http.ResponseWriter, r *http.Request) {
 	bucketMin := queryInt(r, "bucket", 10, 1, 1440)
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 
-	nodes, err := s.store.ListNodes()
+	// Polled every 30s by every open Overview (the landing page's activity
+	// widget), Topology and Analytics tab — 0.6s of scanning each at the
+	// default 6h window, 2.2s at 24h. Shared, so all viewers cost one scan.
+	body, err := s.nodeCache.get(fmt.Sprintf("mesh|%d|%d", sinceSec, bucketMin), meshAnalyticsTTL, func() (any, error) {
+		nodes, err := s.store.ListNodes()
+		if err != nil {
+			return nil, err
+		}
+		return analytics.MeshSummary(s.store, nodes, cutoff, 0, analytics.DefaultRadio(), bucketMin)
+	})
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	summary, err := analytics.MeshSummary(s.store, nodes, cutoff, 0, analytics.DefaultRadio(), bucketMin)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	writeJSON(w, summary)
+	writeCachedJSON(w, body)
 }
 
 func (s *Server) observers(w http.ResponseWriter, _ *http.Request) {

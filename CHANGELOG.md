@@ -4,6 +4,19 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.7] — 2026-10-07
+
+### Fixed
+- **Node pages and the Overview no longer stall the site for everyone.** A node
+  page's heatmap (5.0s), "heard by" observers (3.2s) and history (2.2s) each
+  scanned days of observations on the single database connection on every
+  view — ~11s per page — and the Overview's activity widget (also Topology and
+  Analytics) re-scanned 6h of traffic (0.6s; 2.2s at 24h) every 30s per open
+  tab. Measured on prod, a few people browsing caused 6–12s stalls. These
+  responses are now shared and briefly reused: concurrent requests for the
+  same node or window run one scan, and the result is kept 5 min (heatmap),
+  1 min (observers, history) or 30 s (mesh analytics). Errors are never cached.
+
 ## [v0.23.6] — 2026-10-07
 
 ### Fixed

@@ -114,6 +114,25 @@ func TestDiscoverChannelsConfirmsAndHarvests(t *testing.T) {
 		t.Error("confirmed channels were not registered with the decoder")
 	}
 
+	// The in-memory list the endpoint serves matches the database, with no
+	// reload, and pending excludes what just confirmed.
+	cached, pending, nConf := st.CachedConfirmedChannels()
+	if nConf != len(chans) || len(cached) != len(chans) {
+		t.Errorf("cached %d confirmed, database has %d", nConf, len(chans))
+	}
+	if dbPending, _, _ := st.CountChannelCandidates(); pending != dbPending {
+		t.Errorf("cached pending = %d, database has %d", pending, dbPending)
+	}
+
+	// A fresh process seeds the same list from the database at startup.
+	st.confirmedChans = nil
+	if _, err := st.LoadConfirmedChannels(); err != nil {
+		t.Fatalf("LoadConfirmedChannels: %v", err)
+	}
+	if reloaded, _, _ := st.CachedConfirmedChannels(); len(reloaded) != len(chans) {
+		t.Errorf("startup load cached %d, want %d", len(reloaded), len(chans))
+	}
+
 	// Idempotent: a second pass confirms nothing new.
 	again, err := st.DiscoverChannels(now.Add(-time.Hour).Format(time.RFC3339Nano), 0)
 	if err != nil {

@@ -287,6 +287,14 @@ type Store struct {
 	// transiently each discovery sweep. Set once at startup; read-only after.
 	channelWordlist []string
 
+	// confirmedChans mirrors the confirmed rows of channel_candidates (and
+	// pendingChans the pending count) so the public discovery endpoint never
+	// queues behind the single DB connection — see [[ridgeline-database]].
+	// Filled by LoadConfirmedChannels at startup, appended by confirmChannel.
+	chanMu         sync.RWMutex
+	confirmedChans []ChannelCandidate
+	pendingChans   int
+
 	// needAdvertTxBackfill is set on open when the advert_tx_count column was
 	// just added, so a caller can seed it once from history.
 	needAdvertTxBackfill bool

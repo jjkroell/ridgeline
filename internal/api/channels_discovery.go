@@ -9,18 +9,10 @@ import (
 
 // channelsDiscovered returns the confirmed hashtag channels and the candidate
 // counts. Public: a confirmed name is already decrypting on the live feed, so
-// the list reveals nothing the /channels reader doesn't.
+// the list reveals nothing the /channels reader doesn't. Served from memory so
+// it stays instant while a long query holds the single DB connection.
 func (s *Server) channelsDiscovered(w http.ResponseWriter, _ *http.Request) {
-	channels, err := s.store.ConfirmedChannels()
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	pending, confirmed, err := s.store.CountChannelCandidates()
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
+	channels, pending, confirmed := s.store.CachedConfirmedChannels()
 	if channels == nil {
 		channels = []store.ChannelCandidate{}
 	}

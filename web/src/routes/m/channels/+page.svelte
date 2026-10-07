@@ -106,9 +106,11 @@
 	function addDiscovered(name: string) {
 		if (!channels.addHashtag(name)) { adding = false; open(channels.list[channels.list.length - 1].id); }
 	}
-	// Load the discovered list the first time the Add panel opens.
+	// Refresh the discovered list each time the Add panel opens, so a channel
+	// confirmed while the page is open shows up (the endpoint is served from
+	// memory, so this is free).
 	$effect(() => {
-		if (adding && !discoveredLoaded) loadDiscovered();
+		if (adding) loadDiscovered();
 	});
 	let hashtagName = $state('');
 	let hashtagErr = $state<string | null>(null);

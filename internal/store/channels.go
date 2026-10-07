@@ -64,13 +64,18 @@ func (s *Store) AddChannelCandidate(name, source string, addedBy *int64) (string
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.db.Exec(`
+	r, err := s.db.Exec(`
 		INSERT INTO channel_candidates (name, source, status, added_by, first_added)
 		VALUES (?,?,?,?,?)
 		ON CONFLICT(name) DO NOTHING`,
 		n, source, ChannelPending, addedBy, time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return "", err
+	}
+	if added, _ := r.RowsAffected(); added > 0 {
+		s.chanMu.Lock()
+		s.pendingChans++
+		s.chanMu.Unlock()
 	}
 	return n, nil
 }
@@ -90,6 +95,8 @@ func (s *Store) confirmChannel(name, keyHex, source string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var wasPending bool
+	_ = s.db.QueryRow(`SELECT status = 'pending' FROM channel_candidates WHERE name = ?`, name).Scan(&wasPending)
 	_, err := s.db.Exec(`
 		INSERT INTO channel_candidates (name, source, status, key_hex, first_added, confirmed_at)
 		VALUES (?,?,?,?,?,?)
@@ -98,7 +105,47 @@ func (s *Store) confirmChannel(name, keyHex, source string) error {
 			key_hex = excluded.key_hex,
 			confirmed_at = COALESCE(channel_candidates.confirmed_at, excluded.confirmed_at)`,
 		name, source, ChannelConfirmed, keyHex, now, now)
-	return err
+	if err != nil {
+		return err
+	}
+	// Mirror the stored row (an existing candidate keeps its source and
+	// first_added) into the in-memory list the discovery endpoint serves.
+	c := ChannelCandidate{Status: ChannelConfirmed}
+	if err := s.db.QueryRow(`
+		SELECT name, source, COALESCE(key_hex,''), first_added, COALESCE(confirmed_at,'')
+		FROM channel_candidates WHERE name = ?`, name).
+		Scan(&c.Name, &c.Source, &c.KeyHex, &c.FirstAdded, &c.ConfirmedAt); err != nil {
+		return err
+	}
+	s.chanMu.Lock()
+	defer s.chanMu.Unlock()
+	if wasPending && s.pendingChans > 0 {
+		s.pendingChans--
+	}
+	for i := range s.confirmedChans {
+		if s.confirmedChans[i].Name == c.Name {
+			s.confirmedChans[i] = c
+			return nil
+		}
+	}
+	s.confirmedChans = append(s.confirmedChans, c)
+	return nil
+}
+
+// CachedConfirmedChannels returns the confirmed channels and candidate counts
+// from memory, without touching the database. Current as of the last
+// confirmation; the pending count is refreshed each discovery pass.
+func (s *Store) CachedConfirmedChannels() (chans []ChannelCandidate, pending, confirmed int) {
+	s.chanMu.RLock()
+	defer s.chanMu.RUnlock()
+	chans = append([]ChannelCandidate{}, s.confirmedChans...)
+	return chans, s.pendingChans, len(chans)
+}
+
+func (s *Store) setPendingChans(n int) {
+	s.chanMu.Lock()
+	s.pendingChans = n
+	s.chanMu.Unlock()
 }
 
 // PendingChannelNames returns the names still awaiting confirmation.
@@ -252,6 +299,9 @@ func (s *Store) DiscoverChannels(since string, limit int) ([]string, error) {
 		}
 		confirmed = append(confirmed, got...)
 	}
+	if p, _, err := s.CountChannelCandidates(); err == nil {
+		s.setPendingChans(p)
+	}
 	return confirmed, nil
 }
 
@@ -304,12 +354,21 @@ func DefaultChannelWordlist() []string {
 }
 
 // LoadConfirmedChannels registers every already-confirmed channel with the
-// decoder. Called once at startup so historical messages decrypt immediately.
+// decoder and seeds the in-memory list the discovery endpoint serves. Called
+// once at startup so historical messages decrypt immediately.
 func (s *Store) LoadConfirmedChannels() (int, error) {
 	chans, err := s.ConfirmedChannels()
 	if err != nil {
 		return 0, err
 	}
+	pending, _, err := s.CountChannelCandidates()
+	if err != nil {
+		return 0, err
+	}
+	s.chanMu.Lock()
+	s.confirmedChans = append([]ChannelCandidate{}, chans...)
+	s.pendingChans = pending
+	s.chanMu.Unlock()
 	n := 0
 	for _, c := range chans {
 		key, err := hex.DecodeString(c.KeyHex)

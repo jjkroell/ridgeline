@@ -53,8 +53,8 @@ func TestChannelCandidateEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, disc = member.do("GET", "/api/channels/discovered", nil, false)
-	if disc["confirmed"].(float64) != 1 {
-		t.Fatalf("after confirm want confirmed=1, got %v", disc)
+	if disc["confirmed"].(float64) != 1 || disc["pending"].(float64) != 1 {
+		t.Fatalf("after confirm want confirmed=1 pending=1, got %v", disc)
 	}
 	chs, _ := disc["channels"].([]any)
 	if len(chs) != 1 {

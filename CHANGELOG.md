@@ -4,6 +4,15 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.3] — 2026-10-06
+
+### Fixed
+- **"Discovered on the mesh" no longer stalls.** `/api/channels/discovered` is
+  served from memory instead of the single DB connection, where it could queue
+  for up to ~108s behind other work after a restart. A newly confirmed channel
+  is listed the moment it is stored, and the Add panel (desktop and mobile)
+  refetches the list each time it opens.
+
 ## [v0.23.2] — 2026-10-06
 
 ### Added

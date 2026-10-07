@@ -57,6 +57,8 @@ export interface Node {
   clockUnset?: boolean;
   /** Unscoped flood transmissions this node forwarded in the relay window. */
   unscopedRelayCount?: number;
+  /** Set when this node also runs an observer — that observer's id. */
+  observerId?: string;
 }
 
 export interface ObserverStatus {
@@ -245,6 +247,8 @@ export interface NodeDetailResponse {
   node: Node | null;
   detail: NodeAnalytics | null;
   generatedAt?: string;
+  /** Set when this node also runs an observer — that observer's id. */
+  observerId?: string;
   /** Set when the node is quarantined as suspected injected traffic. */
   quarantined?: boolean;
   block?: BlockEntry;

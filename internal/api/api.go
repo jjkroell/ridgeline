@@ -429,6 +429,24 @@ type nodeWithLiveness struct {
 	// Unscoped flood relays — a repeater base-config problem. See
 	// analytics.NodeDetail.UnscopedRelayCount.
 	UnscopedRelayCount int `json:"unscopedRelayCount,omitempty"`
+	// ObserverID is set when this node also runs an observer, so the list can
+	// badge it and the node page can link to the observer's page.
+	ObserverID string `json:"observerId,omitempty"`
+}
+
+// observersByNode maps a node's upper-cased public key to the id of the observer
+// running on it. An observer's id IS its node's public key, so this is a key
+// match; the map exists only to normalise case. Small (one row per observer).
+func (s *Server) observersByNode() (map[string]string, error) {
+	names, err := s.store.ObserverNames()
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(names))
+	for id := range names {
+		out[strings.ToUpper(id)] = id
+	}
+	return out, nil
 }
 
 // activeNodes drops owner-retired nodes from a listing.
@@ -461,6 +479,11 @@ func (s *Server) nodes(w http.ResponseWriter, _ *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	observers, err := s.observersByNode()
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
 	out := make([]nodeWithLiveness, 0, len(nodes))
 	for _, n := range nodes {
 		if s.store.IsNodeBlocked(n.PublicKey) {
@@ -475,6 +498,7 @@ func (s *Server) nodes(w http.ResponseWriter, _ *http.Request) {
 			nw.UnscopedRelayCount = sig.UnscopedRelayCount
 		}
 		nw.Claimed = claimed[strings.ToUpper(n.PublicKey)]
+		nw.ObserverID = observers[strings.ToUpper(n.PublicKey)]
 		out = append(out, nw)
 	}
 	writeJSON(w, out)
@@ -508,7 +532,14 @@ func (s *Server) nodeDetail(w http.ResponseWriter, r *http.Request) {
 		Node        *store.Node           `json:"node"`
 		Detail      *analytics.NodeDetail `json:"detail"`
 		GeneratedAt string                `json:"generatedAt,omitempty"`
+		// ObserverID: this node also runs an observer (see nodeWithLiveness).
+		ObserverID string `json:"observerId,omitempty"`
 	}{Node: node}
+	if node != nil {
+		if obs, err := s.observersByNode(); err == nil {
+			resp.ObserverID = obs[strings.ToUpper(node.PublicKey)]
+		}
+	}
 	if s.analytics != nil && node != nil {
 		d, gen := s.analytics.Get(node.PublicKey)
 		resp.Detail = d

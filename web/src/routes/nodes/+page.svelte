@@ -8,6 +8,7 @@
 	import Tooltip from '$lib/components/Tooltip.svelte';
 	import FavoriteStar from '$lib/components/FavoriteStar.svelte';
 	import ClaimedBadge from '$lib/components/ClaimedBadge.svelte';
+	import ObserverBadge from '$lib/components/ObserverBadge.svelte';
 	import NodeFilterModal from '$lib/components/NodeFilterModal.svelte';
 	import { favorites } from '$lib/favorites.svelte';
 	import { NodeFilters } from '$lib/node-filters.svelte';
@@ -175,6 +176,7 @@
 										: undefined}
 									>{n.name || shortKey(n.publicKey)}</span
 								>
+								{#if n.observerId}<ObserverBadge id={n.observerId} size="md" />{/if}
 								{#if n.claimed}<ClaimedBadge pubkey={n.publicKey} size="md" />{/if}
 							</div>
 							<div class="font-mono text-fg-faint mt-0.5 text-[0.68rem]">

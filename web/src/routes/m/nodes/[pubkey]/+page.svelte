@@ -15,6 +15,7 @@
 	import { hasWebGL } from '$lib/webgl';
 	import LeafletInset from '$lib/components/LeafletInset.svelte';
 	import NodeAdmin from '$lib/components/NodeAdmin.svelte';
+	import ObserverBadge from '$lib/components/ObserverBadge.svelte';
 
 	const pubkey = $derived((page.params.pubkey ?? '').toUpperCase());
 
@@ -30,7 +31,8 @@
 	async function refresh() {
 		try {
 			const [resp, list] = await Promise.all([api.nodeDetail(pubkey), api.nodes()]);
-			node = resp.node;
+			// The detail endpoint reports observerId beside the node, not on it.
+			node = resp.node ? { ...resp.node, observerId: resp.observerId } : null;
 			detail = resp.detail;
 			quarantined = !!resp.quarantined;
 			block = resp.block ?? null;
@@ -199,6 +201,7 @@
 		<div class="mb-4 flex items-center gap-2">
 			<span class="h-2 w-2 rounded-full" style="background:{status.color}"></span>
 			<span class="font-mono text-xs" style="color:{status.color}">{status.label}</span>
+			{#if node.observerId}<span class="ml-auto"><ObserverBadge id={node.observerId} variant="link" mobile /></span>{/if}
 		</div>
 
 		<!-- pubkey -->

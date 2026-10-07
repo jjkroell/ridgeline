@@ -15,6 +15,7 @@
 	import { nodeHashId } from '$lib/hash-ids';
 	import PayloadTag from './PayloadTag.svelte';
 	import RoleBadge from './RoleBadge.svelte';
+	import ObserverBadge from './ObserverBadge.svelte';
 	import FavoriteStar from './FavoriteStar.svelte';
 	import Tooltip from './Tooltip.svelte';
 	import NodeAdmin from './NodeAdmin.svelte';
@@ -115,7 +116,8 @@
 				api.nodeDetail(pubkey),
 				nodesProp ? Promise.resolve(nodesProp) : api.nodes()
 			]);
-			node = resp.node;
+			// The detail endpoint reports observerId beside the node, not on it.
+			node = resp.node ? { ...resp.node, observerId: resp.observerId } : null;
 			detail = resp.detail;
 			quarantined = !!resp.quarantined;
 			block = resp.block ?? null;
@@ -399,6 +401,7 @@
 				{node.name || shortKey(pubkey, 8, 4)}
 			</h2>
 			<RoleBadge role={node.role} />
+			{#if node.observerId}<ObserverBadge id={node.observerId} variant="link" />{/if}
 			<span class="label rounded-full border px-2 py-0.5" style="color:{status.color};border-color:{status.color}55">{status.label}</span>
 		</div>
 	{/if}

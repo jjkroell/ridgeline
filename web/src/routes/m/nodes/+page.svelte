@@ -5,6 +5,7 @@
 	import { ago, shortKey, nodeStatus, roleColor, roleLabel, lastHeard } from '$lib/format';
 	import { favorites } from '$lib/favorites.svelte';
 	import ClaimedBadge from '$lib/components/ClaimedBadge.svelte';
+	import ObserverBadge from '$lib/components/ObserverBadge.svelte';
 	import NodeFilterModal from '$lib/components/NodeFilterModal.svelte';
 	import { NodeFilters } from '$lib/node-filters.svelte';
 
@@ -77,6 +78,7 @@
 					<div class="min-w-0 flex-1">
 						<div class="flex items-center gap-1.5">
 							<span class="text-fg truncate text-sm font-medium">{n.name || shortKey(n.publicKey)}</span>
+							{#if n.observerId}<ObserverBadge id={n.observerId} />{/if}
 							{#if n.claimed}<ClaimedBadge pubkey={n.publicKey} />{/if}
 						</div>
 						<div class="mt-0.5 flex items-center gap-1.5 font-mono text-[0.62rem]">

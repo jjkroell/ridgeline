@@ -696,7 +696,7 @@
 				{/if}
 			</section>
 
-			<!-- Heard By (observers that received this node's adverts, over a
+			<!-- Heard By (observers that received this node's adverts or direct discover replies, over a
 			     selectable range — adverts are ~30h apart, so 6h often shows none) -->
 			<section class="panel">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
@@ -715,14 +715,23 @@
 				{#if obsLoading && observers.length === 0}
 					<div class="text-fg-faint px-5 py-8 text-center text-sm">Loading…</div>
 				{:else if observers.length === 0}
-					<div class="text-fg-faint px-5 py-8 text-center text-sm">No adverts heard in this range.</div>
+					<div class="text-fg-faint px-5 py-8 text-center text-sm">Not heard in this range.</div>
 				{:else}
 					<div class="divide-line/40 divide-y">
 						{#each observers as o (o.id)}
 							<div class="flex items-center gap-3 px-5 py-2 text-sm">
 								<span class="text-fg min-w-0 flex-1 truncate text-xs">{o.name ?? o.id}</span>
 								{#if o.region}<span class="label !text-[0.58rem]">{o.region}</span>{/if}
-								<span class="font-mono text-fg-faint w-14 text-right text-xs tnum">{o.count} advert{o.count === 1 ? '' : 's'}</span>
+								<span class="font-mono text-fg-faint w-32 shrink-0 whitespace-nowrap text-right text-xs tnum">
+									{#if o.discover}
+										{@const adv = o.count - o.discover}
+										<Tooltip text="{adv} advert{adv === 1 ? '' : 's'} + {o.discover} node-discover repl{o.discover === 1 ? 'y' : 'ies'} heard directly">
+											<span>{adv} adv · <span class="text-lime">{o.discover} disc</span></span>
+										</Tooltip>
+									{:else}
+										{o.count} advert{o.count === 1 ? '' : 's'}
+									{/if}
+								</span>
 								<span class="font-mono w-14 text-right text-xs tnum" style="color:{snrColor(o.avgSnr)}">{o.avgSnr != null ? o.avgSnr.toFixed(1) + ' dB' : '—'}</span>
 								<span class="font-mono text-fg-faint w-16 text-right text-xs tnum">{o.avgRssi != null ? o.avgRssi.toFixed(0) + ' dBm' : '—'}</span>
 							</div>

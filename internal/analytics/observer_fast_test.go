@@ -55,6 +55,15 @@ func seedReceptions(t *testing.T, st *store.Store, now time.Time) (advertKey str
 				t.Fatal(err)
 			}
 			rec(rp, reply, "obs-C", "YXX", at.Add(2*time.Second), 4, -104)
+			relayed := discoverReply("01AB", discoverKey) // a relayed copy proves no link
+			rl, err := meshcore.DecodeHex(relayed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec(rl, relayed, "obs-B", "YVR", at.Add(3*time.Second), 1, -112)
+		}
+		if i == 0 { // the node is also an observer, publishing its own advert
+			rec(adv, advertFixture, advertKey, "YVR", at.Add(time.Second), 12, -40)
 		}
 		if i%3 == 0 { // the node's own advert, heard by two observers
 			rec(adv, advertFixture, "obs-A", "YVR", at.Add(time.Second), 7, -95)
@@ -115,14 +124,6 @@ func TestHeardByMatchesNodeObservers(t *testing.T) {
 		t.Fatal(err)
 	}
 	since := now.Truncate(time.Hour).Add(-72 * time.Hour) // the index answers to the hour
-	got, ok := idx.HeardBy(key, since, now, names)
-	if !ok {
-		t.Fatal("index not ready")
-	}
-	want, err := NodeObservers(st, nodes, key, since.Format(time.RFC3339Nano), 0)
-	if err != nil {
-		t.Fatal(err)
-	}
 	byID := func(l []ObserverStat) map[string]ObserverStat {
 		m := map[string]ObserverStat{}
 		for _, o := range l {
@@ -130,15 +131,40 @@ func TestHeardByMatchesNodeObservers(t *testing.T) {
 		}
 		return m
 	}
-	g, w := byID(got), byID(want)
-	if len(g) != len(w) || len(g) == 0 {
-		t.Fatalf("observers: got %d, want %d (non-zero)", len(g), len(w))
+	heard := map[string]map[string]ObserverStat{}
+	for _, k := range []string{key, discoverKey} {
+		got, ok := idx.HeardBy(k, since, now, names)
+		if !ok {
+			t.Fatal("index not ready")
+		}
+		want, err := NodeObservers(st, nodes, k, since.Format(time.RFC3339Nano), 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g, w := byID(got), byID(want)
+		if len(g) != len(w) || len(g) == 0 {
+			t.Fatalf("%s observers: got %d, want %d (non-zero)", k[:8], len(g), len(w))
+		}
+		for id, wo := range w {
+			go_ := g[id]
+			if go_.Count != wo.Count || go_.Discover != wo.Discover || go_.Region != wo.Region || go_.Name != wo.Name ||
+				!sameFloat(go_.AvgSNR, wo.AvgSNR) || !sameFloat(go_.AvgRSSI, wo.AvgRSSI) {
+				t.Errorf("%s %s: got %+v, want %+v", k[:8], id, go_, wo)
+			}
+		}
+		heard[k] = g
 	}
-	for id, wo := range w {
-		go_ := g[id]
-		if go_.Count != wo.Count || go_.Region != wo.Region || go_.Name != wo.Name ||
-			!sameFloat(go_.AvgSNR, wo.AvgSNR) || !sameFloat(go_.AvgRSSI, wo.AvgRSSI) {
-			t.Errorf("%s: got %+v, want %+v", id, go_, wo)
+	// The repeater is heard by obs-C through its 6 direct discover replies; the
+	// relayed copies at obs-B don't count, and adverts carry no discover count.
+	if d := heard[discoverKey]; len(d) != 1 || d["obs-C"].Count != 6 || d["obs-C"].Discover != 6 {
+		t.Errorf("discover repeater heard by: %+v", d)
+	}
+	if _, ok := heard[key][key]; ok {
+		t.Error("a node must not be listed as heard by its own observer")
+	}
+	for id, o := range heard[key] {
+		if o.Discover != 0 {
+			t.Errorf("advert node at %s: discover %d, want 0", id, o.Discover)
 		}
 	}
 	if _, ok := idx.HeardBy(key, now.Add(-8*24*time.Hour), now, names); ok {

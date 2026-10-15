@@ -80,7 +80,7 @@ func NodeHistory(st *store.Store, nodes []store.Node, pubkey, sinceISO string, s
 }
 
 // NodeObservers aggregates, per observer, the reception of a node's own adverts
-// over an arbitrary time range (received at or after sinceISO). Unlike the
+// and of its zero-hop node-discover replies (see heardDirectly) over an arbitrary time range (received at or after sinceISO). Unlike the
 // analytics snapshot's fixed advert window, this queries the store on demand so
 // the UI can widen the range to span a node's advert cadence (often ~30h),
 // which the short snapshot window rarely captures. Returned newest-heard-first
@@ -98,17 +98,25 @@ func NodeObservers(st *store.Store, nodes []store.Node, pubkey, sinceISO string,
 
 	type acc struct {
 		region          string
-		count           int
+		count, discover int
 		snrSum, rssiSum float64
 		snrN, rssiN     int
 	}
 	byObs := map[string]*acc{}
 	for _, ro := range raws {
 		pkt, err := meshcore.DecodeHex(ro.RawHex)
-		if err != nil || pkt == nil || pkt.Advert == nil {
+		if err != nil || pkt == nil {
 			continue
 		}
-		if strings.ToUpper(pkt.Advert.PublicKey) != pubkey {
+		discover := false
+		switch {
+		case pkt.Advert != nil:
+			if strings.ToUpper(pkt.Advert.PublicKey) != pubkey || strings.EqualFold(ro.ObserverID, pubkey) {
+				continue // not this node, or its own observer publishing what it sent
+			}
+		case pkt.Control != nil && heardDirectly(pkt, ro.ObserverID) == pubkey:
+			discover = true
+		default:
 			continue
 		}
 		a := byObs[ro.ObserverID]
@@ -117,6 +125,9 @@ func NodeObservers(st *store.Store, nodes []store.Node, pubkey, sinceISO string,
 			byObs[ro.ObserverID] = a
 		}
 		a.count++
+		if discover {
+			a.discover++
+		}
 		if ro.SNR != nil {
 			a.snrSum += *ro.SNR
 			a.snrN++
@@ -133,7 +144,7 @@ func NodeObservers(st *store.Store, nodes []store.Node, pubkey, sinceISO string,
 	}
 	out := make([]ObserverStat, 0, len(byObs))
 	for id, a := range byObs {
-		os := ObserverStat{ID: id, Name: names[id], Region: a.region, Count: a.count}
+		os := ObserverStat{ID: id, Name: names[id], Region: a.region, Count: a.count, Discover: a.discover}
 		if a.snrN > 0 {
 			v := a.snrSum / float64(a.snrN)
 			os.AvgSNR = &v

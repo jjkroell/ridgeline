@@ -4,6 +4,20 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.14] — 2026-10-14
+
+### Added
+- **"Heard by" includes node-discover replies.** A repeater's node page now
+  also lists the observers that heard it answer node-discover directly, with
+  the split shown per observer ("17 adv · 68 disc"; desktop tooltip spells it
+  out). Served from the in-memory activity index, with the on-demand scan
+  matching it. Averages SNR/RSSI over both kinds of reception.
+
+### Fixed
+- **A node is no longer "heard by" its own observer.** Observers that publish
+  their own transmissions listed themselves under their node's "Heard by".
+- The desktop "Heard by" count column no longer wraps ("10 / adverts").
+
 ## [v0.23.13] — 2026-10-14
 
 ### Changed

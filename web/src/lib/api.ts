@@ -167,6 +167,8 @@ export interface NodeObserverStat {
   name?: string;
   region?: string;
   count: number;
+  /** Of `count`, node-discover replies heard zero-hop (the rest are adverts). */
+  discover?: number;
   avgSnr?: number;
   avgRssi?: number;
 }

@@ -324,7 +324,7 @@
 			</div>
 		{/if}
 
-		<!-- heard by (adverts received, over a selectable range — ~30h cadence
+		<!-- heard by (adverts + direct discover replies, over a selectable range — ~30h cadence
 		     means a short window often shows none) -->
 		<div class="mt-5 mb-2 flex items-center gap-2 px-1">
 			<h2 class="font-display text-fg text-xs font-700 tracking-wide">HEARD BY · {observers.length}</h2>
@@ -342,7 +342,7 @@
 			<div class="text-fg-faint px-1 py-3 text-xs">Loading…</div>
 		{:else if observers.length === 0}
 			<div class="border-line/60 bg-panel text-fg-faint rounded-2xl border px-4 py-4 text-center text-xs">
-				No adverts heard in this range.
+				Not heard in this range.
 			</div>
 		{:else}
 			<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
@@ -350,7 +350,11 @@
 					<a href="/m/observers/{encodeURIComponent(o.id)}" class="active:bg-line/40 flex items-center gap-3 px-4 py-2.5">
 						<span class="text-fg min-w-0 flex-1 truncate text-sm">{o.name ?? o.id}</span>
 						<span class="font-mono text-xs tnum" style="color:{snrColor(o.avgSnr)}">{fmtSnr(o.avgSnr)} dB</span>
-						<span class="text-fg-faint font-mono text-xs tnum">×{o.count}</span>
+						{#if o.discover}
+							<span class="text-fg-faint font-mono text-xs tnum">{o.count - o.discover} adv · <span class="text-lime">{o.discover} disc</span></span>
+						{:else}
+							<span class="text-fg-faint font-mono text-xs tnum">×{o.count}</span>
+						{/if}
 					</a>
 				{/each}
 			</div>

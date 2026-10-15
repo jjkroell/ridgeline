@@ -30,7 +30,8 @@ type ActivityIndex struct {
 	mu      sync.RWMutex
 	buckets map[string]map[int64]int // UPPER pubkey -> unix hour -> count
 	// heard backs the node page's "Heard by" list (NodeObservers): receptions
-	// of the node's OWN adverts, per observer per hour, with SNR/RSSI sums.
+	// of the node's OWN adverts and of its zero-hop node-discover replies, per
+	// observer per hour, with SNR/RSSI sums.
 	heard  map[string]map[string]map[int64]*heardAgg // node -> observer -> hour
 	region map[string]map[string]regionAt            // node -> observer -> newest region
 	lastID int64
@@ -39,6 +40,7 @@ type ActivityIndex struct {
 
 type heardAgg struct {
 	count           int
+	discover        int // of count, node-discover replies
 	snrSum, rssiSum float64
 	snrN, rssiN     int
 }
@@ -162,6 +164,7 @@ func (a *ActivityIndex) addRows(rows []store.RawRow, resolve func(string) string
 		node, obs, region string
 		hour, at          int64
 		snr, rssi         *float64
+		discover          bool
 	}
 	var heardRows []heardRow
 	for _, r := range rows {
@@ -184,8 +187,16 @@ func (a *ActivityIndex) addRows(rows []store.RawRow, resolve func(string) string
 			add[k][hour]++
 		}
 		if pkt.Advert != nil && pkt.Advert.PublicKey != "" {
+			if strings.EqualFold(pkt.Advert.PublicKey, r.ObserverID) {
+				continue // an observer publishing its own advert didn't "hear" itself
+			}
 			heardRows = append(heardRows, heardRow{node: strings.ToUpper(pkt.Advert.PublicKey), obs: r.ObserverID,
 				region: r.Region, hour: hour, at: t.UnixNano(), snr: r.SNR, rssi: r.RSSI})
+		} else if pkt.Control != nil {
+			if nk := heardDirectly(pkt, r.ObserverID); nk != "" {
+				heardRows = append(heardRows, heardRow{node: nk, obs: r.ObserverID,
+					region: r.Region, hour: hour, at: t.UnixNano(), snr: r.SNR, rssi: r.RSSI, discover: true})
+			}
 		}
 	}
 	if len(add) == 0 && len(heardRows) == 0 {
@@ -209,6 +220,9 @@ func (a *ActivityIndex) addRows(rows []store.RawRow, resolve func(string) string
 			hours[hr.hour] = g
 		}
 		g.count++
+		if hr.discover {
+			g.discover++
+		}
 		if hr.snr != nil {
 			g.snrSum += *hr.snr
 			g.snrN++
@@ -288,7 +302,7 @@ func (a *ActivityIndex) Heatmap(pubkey string, days int, now time.Time) (*NodeAc
 }
 
 // HeardBy returns, per observer, how often it received pubkey's own adverts
-// since `since` (to the hour), with average SNR/RSSI — what NodeObservers
+// and zero-hop discover replies since `since` (to the hour), with average SNR/RSSI — what NodeObservers
 // computes by scanning, in the same shape and order. names maps observer id to
 // display name. ok is false until the first Update, or when since is older
 // than the window — the caller falls back to scanning.
@@ -311,6 +325,7 @@ func (a *ActivityIndex) HeardBy(pubkey string, since time.Time, now time.Time, n
 				continue
 			}
 			sum.count += g.count
+			sum.discover += g.discover
 			sum.snrSum += g.snrSum
 			sum.snrN += g.snrN
 			sum.rssiSum += g.rssiSum
@@ -319,7 +334,7 @@ func (a *ActivityIndex) HeardBy(pubkey string, since time.Time, now time.Time, n
 		if sum.count == 0 {
 			continue
 		}
-		os := ObserverStat{ID: obs, Name: names[obs], Region: a.region[node][obs].region, Count: sum.count}
+		os := ObserverStat{ID: obs, Name: names[obs], Region: a.region[node][obs].region, Count: sum.count, Discover: sum.discover}
 		if sum.snrN > 0 {
 			v := sum.snrSum / float64(sum.snrN)
 			os.AvgSNR = &v

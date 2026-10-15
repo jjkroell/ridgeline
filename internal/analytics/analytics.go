@@ -18,12 +18,15 @@ import (
 type ObserverStat struct {
 	// ID is the observer's stable identity (its public key); Name is the label to
 	// show. Name is empty when no observer row resolves the id.
-	ID      string   `json:"id"`
-	Name    string   `json:"name,omitempty"`
-	Region  string   `json:"region,omitempty"`
-	Count   int      `json:"count"`
-	AvgSNR  *float64 `json:"avgSnr,omitempty"`
-	AvgRSSI *float64 `json:"avgRssi,omitempty"`
+	ID     string `json:"id"`
+	Name   string `json:"name,omitempty"`
+	Region string `json:"region,omitempty"`
+	Count  int    `json:"count"`
+	// Discover is how many of Count were the node's node-discover replies,
+	// heard zero-hop (the rest are its adverts). Only "Heard by" sets it.
+	Discover int      `json:"discover,omitempty"`
+	AvgSNR   *float64 `json:"avgSnr,omitempty"`
+	AvgRSSI  *float64 `json:"avgRssi,omitempty"`
 }
 
 // NeighborStat is a node adjacent to this one in observed packet paths.

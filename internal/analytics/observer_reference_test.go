@@ -77,9 +77,10 @@ func observerSummaryScan(st *store.Store, nodes []store.Node, id, sinceISO strin
 		if pkt.Advert != nil && pkt.Advert.PublicKey != "" {
 			origin := strings.ToUpper(pkt.Advert.PublicKey)
 			advHeard[origin] = true
-			if len(pkt.RelayPath()) == 0 {
-				directCount[origin]++
-			}
+		}
+		if nk := heardDirectly(pkt, id); nk != "" {
+			advHeard[nk] = true
+			directCount[nk]++
 		}
 	}
 

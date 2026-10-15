@@ -135,8 +135,8 @@
 	const kpis = $derived([
 		{ label: 'Packets', value: data ? fmtNum(data.totalPackets) : '—', accent: true },
 		{ label: 'Packets / hr', value: data ? data.packetsPerHour.toFixed(1) : '—', accent: true },
-		{ label: 'Distinct nodes', value: data ? fmtNum(data.distinctNodes) : '—', hint: 'distinct nodes whose adverts reached this observer' },
-		{ label: 'Direct (0-hop)', value: data ? fmtNum(data.directNodes) : '—', color: 'var(--color-lime)', hint: 'nodes heard directly — RF neighbours' },
+		{ label: 'Distinct nodes', value: data ? fmtNum(data.distinctNodes) : '—', hint: 'distinct nodes heard: adverts, plus repeaters answering node-discover' },
+		{ label: 'Direct (0-hop)', value: data ? fmtNum(data.directNodes) : '—', color: 'var(--color-lime)', hint: 'nodes heard directly (zero-hop advert or discover reply) — RF neighbours' },
 		{ label: 'Avg SNR', value: data?.avgSnr != null ? data.avgSnr.toFixed(1) + ' dB' : '—', color: snrColor(data?.avgSnr) },
 		{ label: 'Clock skew', value: fmtSkew(data?.clockSkewMs), color: skewColor(data?.clockSkewMs), hint: 'median receive-time deviation from consensus on shared packets — large = drifting clock' }
 	]);

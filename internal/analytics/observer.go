@@ -22,7 +22,7 @@ type ObserverAnalytics struct {
 	PayloadTypes   []NameCount    `json:"payloadTypes"`   // its feed's payload mix
 	SNRHist        []HistogramBin `json:"snrHist"`        // SNR distribution of its receptions
 	AvgSNR         *float64       `json:"avgSnr,omitempty"`
-	DistinctNodes  int            `json:"distinctNodes"` // distinct advert origins it heard
+	DistinctNodes  int            `json:"distinctNodes"` // distinct nodes it heard from (adverts, discover replies)
 	DirectNodes    int            `json:"directNodes"`   // distinct zero-hop (RF neighbour) nodes
 	ClockSkewMs    *float64       `json:"clockSkewMs,omitempty"`
 	Neighbors      []DirectLink   `json:"neighbors"` // zero-hop nodes heard, by count
@@ -90,9 +90,10 @@ func ObserverSummary(st *store.Store, nodes []store.Node, id, sinceISO string, s
 		if pkt.Advert != nil && pkt.Advert.PublicKey != "" {
 			origin := strings.ToUpper(pkt.Advert.PublicKey)
 			advHeard[origin] = true
-			if len(pkt.RelayPath()) == 0 {
-				directCount[origin]++
-			}
+		}
+		if nk := heardDirectly(pkt, id); nk != "" {
+			advHeard[nk] = true
+			directCount[nk]++
 		}
 	}
 

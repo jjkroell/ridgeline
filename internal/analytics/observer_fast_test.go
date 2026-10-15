@@ -48,6 +48,14 @@ func seedReceptions(t *testing.T, st *store.Store, now time.Time) (advertKey str
 			}
 			rec(pkt, raw, o.id, o.region, at.Add(o.skew), float64(-5+j*3+i%5), float64(-110+j*4))
 		}
+		if i%5 == 0 { // a repeater answering node-discover, heard directly by obs-C
+			reply := discoverReply("00", discoverKey)
+			rp, err := meshcore.DecodeHex(reply)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec(rp, reply, "obs-C", "YXX", at.Add(2*time.Second), 4, -104)
+		}
 		if i%3 == 0 { // the node's own advert, heard by two observers
 			rec(adv, advertFixture, "obs-A", "YVR", at.Add(time.Second), 7, -95)
 			rec(adv, advertFixture, "obs-B", "YVR", at.Add(time.Second+300*time.Millisecond), 2, -101)
@@ -80,6 +88,9 @@ func TestObserverSummaryMatchesFullScan(t *testing.T) {
 		got.PacketsPerHour, want.PacketsPerHour = 0, 0
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("%s: fast summary differs from the full scan\n got  %+v\n want %+v", id, *got, *want)
+		}
+		if id == "obs-C" && (len(got.Neighbors) != 1 || got.Neighbors[0].NodeKey != discoverKey || got.Neighbors[0].Count != 6) {
+			t.Errorf("obs-C: expected the discover-reply repeater as its one neighbour (6 replies), got %+v", got.Neighbors)
 		}
 		if id == "obs-B" && got.ClockSkewMs == nil {
 			t.Errorf("obs-B: expected a clock-skew estimate from shared transmissions")

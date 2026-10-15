@@ -67,8 +67,8 @@ type TopologyEdge struct {
 }
 
 // ObserverCoverage summarises one observer's RF reach: how much it heard, how many
-// distinct nodes' adverts reached it, and how many of those it heard directly
-// (zero-hop) — i.e. its true RF neighbours.
+// distinct nodes it heard from (adverts at any hop, discover replies), and how
+// many of those it heard directly (zero-hop) — i.e. its true RF neighbours.
 type ObserverCoverage struct {
 	// ID is the observer's stable identity (its public key); Name is the label.
 	ID            string `json:"id"`
@@ -83,8 +83,9 @@ type ObserverCoverage struct {
 	ClockSkewMs *float64 `json:"clockSkewMs,omitempty"`
 }
 
-// DirectLink is a true RF edge: an observer that heard a node's advert at zero
-// hops, so the two are within direct radio range. Count is how many times.
+// DirectLink is a true RF edge: an observer that heard a node's advert or
+// node-discover reply at zero hops, so the two are within direct radio range.
+// Count is how many times.
 type DirectLink struct {
 	// Observer is the observer's stable identity; ObserverName is the label.
 	Observer     string `json:"observer"`
@@ -201,8 +202,8 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 	// Per-observer RF coverage + direct (zero-hop) adjacency.
 	obsCount := map[string]int{}              // observer → total receptions
 	obsRegion := map[string]string{}          // observer → region
-	advHeard := map[string]map[string]bool{}  // observer → distinct advert nodes heard
-	directLink := map[string]map[string]int{} // observer → node → zero-hop hear count
+	advHeard := map[string]map[string]bool{}  // observer → distinct nodes heard (adverts, discover replies)
+	directLink := map[string]map[string]int{} // observer → node → direct (zero-hop) hear count
 	txObs := map[string][]obsTime{}           // messageHash → (observer, time) for clock skew
 
 	for _, ro := range raws {
@@ -268,14 +269,19 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 					advHeard[ro.ObserverID] = map[string]bool{}
 				}
 				advHeard[ro.ObserverID][origin] = true
-				// Zero-hop = direct RF range between observer and node.
-				if len(pkt.RelayPath()) == 0 {
-					if directLink[ro.ObserverID] == nil {
-						directLink[ro.ObserverID] = map[string]int{}
-					}
-					directLink[ro.ObserverID][origin]++
-				}
 			}
+		}
+		// Direct RF range between observer and node: a zero-hop advert or
+		// node-discover reply.
+		if nk := heardDirectly(pkt, ro.ObserverID); nk != "" {
+			if advHeard[ro.ObserverID] == nil {
+				advHeard[ro.ObserverID] = map[string]bool{}
+			}
+			advHeard[ro.ObserverID][nk] = true
+			if directLink[ro.ObserverID] == nil {
+				directLink[ro.ObserverID] = map[string]int{}
+			}
+			directLink[ro.ObserverID][nk]++
 		}
 		var seq []string
 		var seqWide []bool // was this hop resolved from >=2 bytes?

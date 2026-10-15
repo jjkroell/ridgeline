@@ -4,6 +4,24 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.12] — 2026-10-14
+
+### Added
+- **Node-discover replies count as direct RF links.** A repeater answers a
+  node-discover request zero-hop with its full public key, so any observer
+  that hears the reply heard that repeater directly — the same proof as a
+  zero-hop advert. Direct links, observers' direct-node counts and neighbour
+  lists, and the RF adjacency graph now include them, using the observer's
+  own SNR/RSSI (the SNR byte inside the reply describes the unattributable
+  request, so it is ignored). Prefix-only and relayed replies don't count.
+  On dev this took the 6-hour direct-link count from 91 to 191 and the
+  24-hour from 174 to 266.
+
+### Fixed
+- **An observer is no longer listed as its own neighbour.** Some observers
+  publish the packets they transmit, so their own adverts and discover
+  replies showed up as zero-hop receptions of themselves.
+
 ## [v0.23.10] — 2026-10-07
 
 ### Fixed

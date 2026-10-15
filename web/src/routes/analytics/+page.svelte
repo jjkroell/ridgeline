@@ -475,11 +475,11 @@
 		<section class="panel rise mt-6" style="animation-delay:380ms">
 			<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
 				<h2 class="font-display text-fg text-sm font-700 tracking-wide">RF ADJACENCY — DIRECT LINKS</h2>
-				<span class="font-mono text-fg-faint text-[0.68rem]">zero-hop adverts · observer ↔ node</span>
+				<span class="font-mono text-fg-faint text-[0.68rem]">zero-hop adverts + discover replies · observer ↔ node</span>
 			</div>
 			<div class="px-3 py-3">
 				{#if !graph}
-					<div class="text-fg-faint py-10 text-center text-sm">No direct (zero-hop) adverts in window.</div>
+					<div class="text-fg-faint py-10 text-center text-sm">No direct (zero-hop) receptions in window.</div>
 				{:else}
 					<svg viewBox="0 0 1000 430" class="h-[430px] w-full">
 						{#each graph.edges as e, i (i)}

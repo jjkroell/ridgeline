@@ -5,24 +5,9 @@
 	// Each entry is one new capability, in user-facing terms.
 	const items: { icon: string; title: string; body: string }[] = [
 		{
-			icon: 'M4 9h16M4 15h16M10 3 8 21M16 3l-2 18',
-			title: 'Find the hashtag channels people are using',
-			body: 'The Channels page now lists the named #hashtag channels active on the mesh under "Discovered on the mesh", on desktop and mobile. Add one with a click to read along. A channel\'s name never goes over the air, so Ridgeline only lists a name once it has proved it matches real traffic. When you add a hashtag channel yourself you choose whether to share it with the list, and the Add panel now has a Hashtag / Private switch.'
-		},
-		{
 			icon: 'M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M12 13a1 1 0 100-2 1 1 0 000 2z',
-			title: 'Radio settings are shown once for the whole mesh',
-			body: 'Every node is on the same settings now, so they appear once, in the sidebar (in the More menu on mobile), instead of on each node\'s page, where some nodes were still showing their old 910.425 MHz frequency.'
-		},
-		{
-			icon: 'M13 2 3 14h9l-1 8 10-12h-9l1-8z',
-			title: 'Faster, steadier pages',
-			body: 'Fixed several slowdowns that could leave pages, maps and the node list on "Loading…" for seconds at a time, most noticeably for a few minutes after an update. Node pages, the Overview and the analytics views now share their heavy work between everyone viewing them.'
-		},
-		{
-			icon: 'M12 8v4l3 2M12 21a9 9 0 100-18 9 9 0 000 18z',
-			title: 'Individual packets are kept for 45 days',
-			body: 'That covers everything the site shows; the longest view, a node\'s activity heatmap, goes back 30 days. Node details, first-seen dates and all-time counts are kept as before.'
+			title: 'More direct radio links, from node-discover replies',
+			body: 'When someone runs a node discover, every repeater in range answers directly and names itself by its full key, so any observer that hears the answer is within radio range of that repeater. Ridgeline now counts those answers as direct links alongside zero-hop adverts, which roughly doubles the links known for the last few hours. You\'ll see more neighbours on observer pages and more connections in the RF adjacency graph on the Analytics page. Observers also no longer list themselves as their own neighbour.'
 		}
 	];
 </script>

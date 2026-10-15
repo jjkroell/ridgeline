@@ -4,6 +4,12 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.13] — 2026-10-14
+
+### Changed
+- **New "What's new" announcement** for discover-reply direct links
+  (`2026-10-discover-links`), so every visitor sees it once.
+
 ## [v0.23.12] — 2026-10-14
 
 ### Added

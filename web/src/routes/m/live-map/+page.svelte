@@ -16,7 +16,8 @@
 	import { ROLE_HEX, SEGMENT_COLOR, locatedNodes } from '$lib/map-util';
 	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
 	import CopyMapLink from '$lib/components/CopyMapLink.svelte';
-	import { parseMapView, hasMapView, shareUrl } from '$lib/map-share';
+	import { addressBarUrl } from '$lib/address-bar';
+	import { parseMapView, hasMapView, shareUrl, withSavedCamera, saveCamera } from '$lib/map-share';
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
 	import { hasWebGL } from '$lib/webgl';
 
@@ -30,18 +31,19 @@
 
 	// Shareable view state. A link frames the map (suppressing the auto-fit)
 	// and previews its basemap without persisting it over the viewer's own.
-	const incoming = parseMapView(page.url);
+	const incoming = withSavedCamera(parseMapView(addressBarUrl(page.url)), 'm-live-map');
 	const fromLink = hasMapView(incoming);
 	function currentView() {
 		const c = map?.getCenter();
 		return { lat: c?.lat, lon: c?.lng, zoom: map?.getZoom(), basemap: basemap.id };
 	}
 	function linkUrl() {
-		return shareUrl(page.url, currentView());
+		return shareUrl(addressBarUrl(page.url), currentView());
 	}
 	function syncUrl() {
 		if (!map) return;
-		replaceState(shareUrl(page.url, currentView()), {});
+		replaceState(shareUrl(addressBarUrl(page.url), currentView()), {});
+		saveCamera('m-live-map', currentView());
 	}
 	let pulseCount = $state(0);
 

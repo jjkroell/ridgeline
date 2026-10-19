@@ -24,7 +24,8 @@
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
 	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
 	import CopyMapLink from '$lib/components/CopyMapLink.svelte';
-	import { parseMapView, shareUrl } from '$lib/map-share';
+	import { addressBarUrl } from '$lib/address-bar';
+	import { parseMapView, shareUrl, withSavedCamera, saveCamera } from '$lib/map-share';
 	import NodeModal from '$lib/components/NodeModal.svelte';
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
 	import ChimeControls from '$lib/components/ChimeControls.svelte';
@@ -44,7 +45,7 @@
 	// A link frames the map and applies its basemap/role filter for this visit
 	// only; basemap.preview() deliberately does not persist, so the recipient's
 	// own saved choice is untouched.
-	const incoming = parseMapView(page.url);
+	const incoming = withSavedCamera(parseMapView(addressBarUrl(page.url)), 'live-map');
 
 	function currentView() {
 		const c = map?.getCenter();
@@ -57,11 +58,12 @@
 		};
 	}
 	function linkUrl() {
-		return shareUrl(page.url, currentView());
+		return shareUrl(addressBarUrl(page.url), currentView());
 	}
 	function syncUrl() {
 		if (!map) return;
-		replaceState(shareUrl(page.url, currentView()), {});
+		replaceState(shareUrl(addressBarUrl(page.url), currentView()), {});
+		saveCamera('live-map', currentView());
 	}
 
 	// ── Low-key audio: a mellow wind-chime as each pulse reaches a node ─────

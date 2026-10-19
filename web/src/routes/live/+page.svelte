@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { page } from '$app/state';
+	import { addressBarUrl } from '$lib/address-bar';
 	import { replaceState } from '$app/navigation';
 	import { live, groupLive, type LiveGroup } from '$lib/live.svelte';
 	import { channels } from '$lib/channels.svelte';
@@ -63,7 +64,7 @@
 	let deepAt = $state<string | null>(null);
 
 	function setParams(hash: string | null) {
-		const url = new URL(page.url);
+		const url = addressBarUrl(page.url);
 		if (hash) url.searchParams.set('p', hash);
 		else url.searchParams.delete('p');
 		// obs/at only ever ride along on an incoming deep link; drop them once the
@@ -95,9 +96,10 @@
 		}
 	}
 	onMount(() => {
-		const h = page.url.searchParams.get('p');
-		deepObs = page.url.searchParams.get('obs');
-		deepAt = page.url.searchParams.get('at');
+		const sp = addressBarUrl(page.url).searchParams;
+		const h = sp.get('p');
+		deepObs = sp.get('obs');
+		deepAt = sp.get('at');
 		if (h) openPacketByHash(h);
 	});
 

@@ -4,6 +4,22 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.15] — 2026-10-18
+
+### Added
+- **Maps remember where you left them.** Each map (static and live, desktop
+  and mobile) saves its centre and zoom on this device and reopens there on a
+  plain visit, e.g. from the Map tab, instead of re-fitting the whole mesh.
+  A shared link's view still wins; only the camera is remembered.
+
+### Fixed
+- **Back to the map keeps your zoom.** Zooming in, opening a node and pressing
+  back returned the map to the view it first loaded with. The maps mirror the
+  camera with SvelteKit's shallow `replaceState`, which leaves `page.url` (and
+  the copy saved in the history entry) stale; view state is now read from the
+  address bar (`$lib/address-bar.ts`). The Live packets page had the same bug
+  with its open packet (`?p=`).
+
 ## [v0.23.14] — 2026-10-14
 
 ### Added

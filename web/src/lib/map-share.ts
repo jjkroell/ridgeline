@@ -127,3 +127,38 @@ export async function copyText(text: string): Promise<boolean> {
 		return false;
 	}
 }
+
+// ── Last view, per device ───────────────────────────────────────────────────
+// Each map remembers where this device last looked (centre + zoom only) and
+// opens there on a plain visit, e.g. from the Map tab, instead of re-fitting
+// the whole mesh. A link's own camera always wins. This is a per-browser
+// convenience, so storage can be missing or throw (private windows,
+// blocked site data); the map then falls back to its usual framing.
+
+const VIEW_KEY = 'ridgeline-mapview-';
+
+/** Fill in the saved camera when the URL doesn't carry one. */
+export function withSavedCamera(v: MapView, page: string): MapView {
+	if (v.lat != null || v.zoom != null) return v;
+	try {
+		const raw = localStorage.getItem(VIEW_KEY + page);
+		if (!raw) return v;
+		const s = JSON.parse(raw);
+		const ok = (n: unknown, lo: number, hi: number) =>
+			typeof n === 'number' && Number.isFinite(n) && n >= lo && n <= hi;
+		if (!ok(s.lat, -90, 90) || !ok(s.lon, -180, 180) || !ok(s.zoom, 0, 24)) return v;
+		return { ...v, lat: s.lat, lon: s.lon, zoom: s.zoom };
+	} catch {
+		return v;
+	}
+}
+
+/** Remember the camera for this device's next plain visit. */
+export function saveCamera(page: string, v: MapView) {
+	if (v.lat == null || v.lon == null || v.zoom == null) return;
+	try {
+		localStorage.setItem(VIEW_KEY + page, JSON.stringify({ lat: v.lat, lon: v.lon, zoom: v.zoom }));
+	} catch {
+		/* storage unavailable — nothing to remember */
+	}
+}

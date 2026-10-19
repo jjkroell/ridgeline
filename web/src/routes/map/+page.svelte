@@ -23,7 +23,8 @@
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
 	import CopyMapLink from '$lib/components/CopyMapLink.svelte';
 	import { hasWebGL } from '$lib/webgl';
-	import { parseMapView, hasMapView, shareUrl } from '$lib/map-share';
+	import { addressBarUrl } from '$lib/address-bar';
+	import { parseMapView, hasMapView, shareUrl, withSavedCamera, saveCamera } from '$lib/map-share';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -42,7 +43,7 @@
 	// suppresses that auto-fit so it can't yank the recipient off the view they
 	// were sent. The camera is mirrored back into the URL as they pan, so a
 	// reload or a copied address bar keeps the same place.
-	const incoming = parseMapView(page.url);
+	const incoming = withSavedCamera(parseMapView(addressBarUrl(page.url)), 'map');
 	const fromLink = hasMapView(incoming);
 
 	function currentView() {
@@ -56,11 +57,12 @@
 		};
 	}
 	function linkUrl() {
-		return shareUrl(page.url, currentView());
+		return shareUrl(addressBarUrl(page.url), currentView());
 	}
 	function syncUrl() {
 		if (!map) return;
-		replaceState(shareUrl(page.url, currentView()), {});
+		replaceState(shareUrl(addressBarUrl(page.url), currentView()), {});
+		saveCamera('map', currentView());
 	}
 
 	// ── RF coverage prediction (terrain line-of-sight from a planned repeater) ──

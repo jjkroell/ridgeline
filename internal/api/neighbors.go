@@ -18,7 +18,7 @@ type RFNeighbor struct {
 	Name      string   `json:"name,omitempty"`
 	Role      string   `json:"role,omitempty"`
 	SNR       *float64 `json:"snr,omitempty"` // as heard by the reporter
-	HeardAt   string   `json:"heardAt"`       // reportedAt − heard_secs_ago
+	HeardAt   string   `json:"heardAt,omitempty"` // reportedAt − heard_secs_ago; empty = unknown
 	Scopes    string   `json:"scopes,omitempty"`
 	Status    string   `json:"status,omitempty"`
 }
@@ -45,9 +45,9 @@ func (s *Server) rfNeighbors(pubkey string, nodes []store.Node) *RFNeighbors {
 		return t, err == nil && t.After(cutoff)
 	}
 	row := func(pk string, e store.NeighborEntry, reportedAt time.Time) RFNeighbor {
-		n := RFNeighbor{
-			PublicKey: pk, SNR: e.SNR, Scopes: e.Scopes, Status: e.Status,
-			HeardAt: reportedAt.Add(-time.Duration(e.HeardSecsAgo) * time.Second).UTC().Format(time.RFC3339),
+		n := RFNeighbor{PublicKey: pk, SNR: e.SNR, Scopes: e.Scopes, Status: e.Status}
+		if e.HeardSecsAgo >= 0 {
+			n.HeardAt = reportedAt.Add(-time.Duration(e.HeardSecsAgo) * time.Second).UTC().Format(time.RFC3339)
 		}
 		if nd := byKey[pk]; nd != nil {
 			n.Name, n.Role = nd.Name, nd.Role

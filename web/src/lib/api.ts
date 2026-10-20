@@ -252,7 +252,8 @@ export interface RFNeighbor {
   role?: string;
   /** SNR as heard by the REPORTER (for heardBy: how well that reporter hears this node). */
   snr?: number;
-  heardAt: string;
+  /** Absent when the reporter didn't know (its clock was unset). */
+  heardAt?: string;
   scopes?: string;
   /** responded | timeout | send_failed — whether it answered the scope query. */
   status?: string;

@@ -11,8 +11,8 @@
 		},
 		{
 			icon: 'M4 12h4l2-5 4 10 2-5h4',
-			title: 'Turning it on for your repeater',
-			body: 'If you run openHop and feed Ridgeline, set neighbors: true on your Ridgeline broker entry; the table publishes on its own schedule (daily by default), or right away from the neighbour publish option in the web UI. Coverage grows with every repeater that opts in. Nodes outside their range keep the existing list, now called Path neighbours: links inferred from which nodes relay packets one after another, a useful guess rather than a measurement.'
+			title: 'Turning it on for your station',
+			body: 'It is off by default everywhere. OpenHop (set neighbors: true on your Ridgeline broker entry), the observer firmware (set mqtt.neighbors on), meshcore-packet-capture and MeshCore Bot can all publish it; meshcoretomqtt, RemoteTerm, the Home Assistant integration and MeshMonitor cannot yet. Exact settings for each are in the Add an observer guide on the Observers page. Coverage grows with every station that opts in. Nodes outside their range keep the existing list, now called Path neighbours: links inferred from which nodes relay packets one after another, a useful guess rather than a measurement.'
 		}
 	];
 </script>

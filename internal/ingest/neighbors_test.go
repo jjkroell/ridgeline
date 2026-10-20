@@ -27,6 +27,8 @@ var (
 	nbReporter = strings.Repeat("99", 32)
 	nbA        = strings.Repeat("ec", 32)
 	nbB        = strings.Repeat("85", 32)
+	nbC        = strings.Repeat("c0", 32)
+	nbD        = strings.Repeat("d0", 32)
 )
 
 // Shape of a real openHop publish (captured 2026-10-20), trimmed to two rows,
@@ -38,6 +40,8 @@ func nbPayload() string {
 	 {"pubkey":"` + nbA + `","snr":7.2,"heard_secs_ago":79,"scopes":"*,bc,swbc","status":"responded"},
 	 {"pubkey":"` + nbB + `","snr":-8.0,"heard_secs_ago":18981,"scopes":"","status":"timeout"},
 	 {"pubkey":"` + nbA + `","snr":1,"heard_secs_ago":5,"status":"responded"},
+	 {"pubkey":"` + nbC + `","snr":2,"heard_secs_ago":null,"status":"responded"},
+	 {"pubkey":"` + nbD + `","snr":2,"heard_secs_ago":99999999},
 	 {"pubkey":"` + nbReporter + `","snr":1,"heard_secs_ago":5},
 	 {"pubkey":"abcd","snr":1,"heard_secs_ago":5}
 	]}`
@@ -65,8 +69,11 @@ func TestNeighborsStoredUnderTopicKey(t *testing.T) {
 	if _, ok := st.NeighborReportOf(strings.Repeat("11", 32)); ok {
 		t.Error("payload origin_id must not be trusted as the reporter")
 	}
-	if len(r.Neighbors) != 2 {
-		t.Fatalf("want 2 rows (duplicate, self and short key dropped), got %d: %+v", len(r.Neighbors), r.Neighbors)
+	if len(r.Neighbors) != 3 {
+		t.Fatalf("want 3 rows (duplicate, self, short key, absurd age dropped), got %d: %+v", len(r.Neighbors), r.Neighbors)
+	}
+	if got := r.Neighbors[2]; got.PublicKey != strings.ToUpper(nbC) || got.HeardSecsAgo != -1 {
+		t.Errorf("null heard_secs_ago should be kept as unknown (-1), got %+v", got)
 	}
 	if got := r.Neighbors[0]; got.PublicKey != strings.ToUpper(nbA) || got.SNR == nil || *got.SNR != 7.2 || got.HeardSecsAgo != 79 {
 		t.Errorf("row 0 = %+v", got)
@@ -125,7 +132,7 @@ func TestNeighborsReloadedOnOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st2.Close()
-	if r, ok := st2.NeighborReportOf(nbReporter); !ok || len(r.Neighbors) != 2 {
+	if r, ok := st2.NeighborReportOf(nbReporter); !ok || len(r.Neighbors) != 3 {
 		t.Fatalf("after reopen: ok=%v %+v", ok, r)
 	}
 }

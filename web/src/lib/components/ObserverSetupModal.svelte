@@ -11,6 +11,7 @@
 	//     older compile-time build (see observer.gessaman.com/docs)
 	import Modal from './Modal.svelte';
 	import IataPickerModal from './IataPickerModal.svelte';
+	import { announce } from '$lib/announce.svelte';
 
 	let { onclose }: { onclose: () => void } = $props();
 
@@ -75,6 +76,30 @@ audience = "${AUDIENCE}"`;
 	const verify = `get mqtt.status
 get mqtt1.preset
 get wifi.status`;
+
+	// Neighbour tables (meshcore/{IATA}/{key}/neighbors). Every implementation is
+	// off by default and opted in per broker; syntax checked against each
+	// project's own docs (2026-10-20): observer-firmware MQTT_IMPLEMENTATION.md,
+	// openHop config.yaml.example, meshcore-packet-capture README, meshcore-bot
+	// docs/packet-capture.md.
+	const nbFirmware = `set mqtt.neighbors on
+set mqtt.neighbors.interval 24
+discover.scopes`;
+	const nbOpenhop = `mqtt_brokers:
+  brokers:
+    - name: Ridgeline
+      # …your existing Ridgeline broker settings…
+      neighbors: true`;
+	const nbCapture = `[[broker]]
+name = "ridgeline"
+# …your existing Ridgeline broker settings…
+neighbors = true
+
+[capture]
+neighbors_interval_hours = 24`;
+	const nbBot = `[PacketCapture]
+neighbors_enabled = true
+neighbors_interval_hours = 24`;
 
 	const everything = $derived(`${radio}
 set name YOUR_OBSERVER_NAME
@@ -314,6 +339,83 @@ reboot`);
 					nobody to ask.
 				</p>
 			</div>
+		</section>
+
+		<!-- Optional, so after the setup steps. Explains where the RF neighbours on
+		     node pages come from and which observer software can contribute. -->
+		<section class="space-y-2">
+			<div class="label">6 · Optional: share your neighbour table</div>
+			<p class="text-fg-dim text-sm leading-relaxed">
+				Some observer software can also send the list of repeaters it hears
+				<strong class="text-fg">directly</strong>. About once a day it runs a zero-hop
+				node discover, notes who answers and at what SNR, asks each one which regions
+				it serves, and publishes the table to
+				<code class="text-fg-dim font-mono">meshcore/{iataToken}/YOUR_KEY/neighbors</code>.
+				Ridgeline shows it as <strong class="text-fg">RF neighbours</strong> on node
+				pages — measured links, where the rest of the map has to infer them from packet
+				paths. It's off everywhere by default and costs a minute or two of airtime a day.
+			</p>
+			<div class="flex flex-wrap gap-2">
+				<!-- Swaps this guide for the What's new modal rather than stacking: both
+				     are z-50 overlays, and two at once would need a second Escape. -->
+				<button
+					onclick={() => {
+						onclose();
+						announce.show();
+					}}
+					class="border-line text-fg-dim hover:border-line-bright hover:text-fg rounded-[var(--radius)] border px-3 py-1.5 text-sm transition-colors"
+					>Read the RF neighbours announcement</button
+				>
+			</div>
+
+			<div class="text-fg-faint pt-1 text-xs">
+				Observer firmware, over serial — PSRAM boards and Heltec V3-class ESP32-S3
+				builds (check with <code class="text-fg-dim font-mono">get mqtt.neighbors</code>);
+				the last line publishes one straight away:
+			</div>
+			<div class="border-line bg-ink flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2">
+				<pre class="text-fg flex-1 overflow-x-auto font-mono text-xs leading-relaxed">{nbFirmware}</pre>
+				<button onclick={() => copy('nbFirmware', nbFirmware)} class="text-fg-faint hover:text-fg shrink-0 text-xs"
+					>{copied === 'nbFirmware' ? '✓' : 'copy'}</button
+				>
+			</div>
+
+			<div class="text-fg-faint pt-1 text-xs">
+				OpenHop 1.1.4 or newer, on the Ridgeline entry in
+				<span class="text-fg-dim font-mono">/etc/openhop_repeater/config.yaml</span>, then
+				restart. The neighbour publish option in its web UI sends one immediately:
+			</div>
+			<div class="border-line bg-ink flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2">
+				<pre class="text-fg flex-1 overflow-x-auto font-mono text-xs leading-relaxed">{nbOpenhop}</pre>
+				<button onclick={() => copy('nbOpenhop', nbOpenhop)} class="text-fg-faint hover:text-fg shrink-0 text-xs"
+					>{copied === 'nbOpenhop' ? '✓' : 'copy'}</button
+				>
+			</div>
+
+			<div class="text-fg-faint pt-1 text-xs">
+				<span class="text-fg-dim font-mono">meshcore-packet-capture</span>, in its config
+				(<span class="text-fg-dim font-mono">--neighbors-now</span> publishes once):
+			</div>
+			<div class="border-line bg-ink flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2">
+				<pre class="text-fg flex-1 overflow-x-auto font-mono text-xs leading-relaxed">{nbCapture}</pre>
+				<button onclick={() => copy('nbCapture', nbCapture)} class="text-fg-faint hover:text-fg shrink-0 text-xs"
+					>{copied === 'nbCapture' ? '✓' : 'copy'}</button
+				>
+			</div>
+
+			<div class="text-fg-faint pt-1 text-xs">MeshCore Bot's packet-capture service, in <span class="text-fg-dim font-mono">config.ini</span>:</div>
+			<div class="border-line bg-ink flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2">
+				<pre class="text-fg flex-1 overflow-x-auto font-mono text-xs leading-relaxed">{nbBot}</pre>
+				<button onclick={() => copy('nbBot', nbBot)} class="text-fg-faint hover:text-fg shrink-0 text-xs"
+					>{copied === 'nbBot' ? '✓' : 'copy'}</button
+				>
+			</div>
+
+			<p class="text-fg-faint text-xs leading-relaxed">
+				Not available yet in <span class="text-fg-dim font-mono">meshcoretomqtt</span>,
+				RemoteTerm, the Home Assistant integration or MeshMonitor — they publish packets
+				and status only. Their neighbour views stay on your own device.
+			</p>
 		</section>
 
 		<section class="space-y-2 border-t border-line/70 pt-4">

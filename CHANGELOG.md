@@ -4,6 +4,27 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.17] — 2026-10-20
+
+### Added
+- **"Share your neighbour table" in the Add an observer guide.** New optional
+  step 6 explains what the `/neighbors` table is and how it is built, links to
+  the RF neighbours announcement, and gives copyable settings for each
+  platform that can publish it: observer firmware (`set mqtt.neighbors on`),
+  openHop (`neighbors: true`), meshcore-packet-capture and MeshCore Bot.
+  It also lists the ones that cannot yet (meshcoretomqtt, RemoteTerm, Home
+  Assistant, MeshMonitor).
+
+### Changed
+- **What's new re-shown** (`2026-10-rf-neighbours-2`): "Turning it on"
+  now covers every publishing platform and points to the guide.
+
+### Fixed
+- **Neighbour rows with an unknown age are kept.** The firmware sends
+  `heard_secs_ago: null` when the neighbour was heard before its clock was
+  set; v0.23.16 dropped those rows. They are now stored with the age shown as
+  unknown.
+
 ## [v0.23.16] — 2026-10-20
 
 ### Added

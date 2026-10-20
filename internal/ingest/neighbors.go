@@ -102,10 +102,15 @@ func (in *Ingestor) handleNeighbors(msg mqtt.Message) {
 			v := math.Round(*n.SNR*10) / 10
 			e.SNR = &v
 		}
-		if n.HeardSecsAgo != nil && *n.HeardSecsAgo >= 0 && *n.HeardSecsAgo <= maxHeardSecsAgo {
+		// null is the firmware's "unknown" (heard before its clock was set), not
+		// zero: keep the row, mark the age unknown. An out-of-range age is garbage.
+		switch {
+		case n.HeardSecsAgo == nil:
+			e.HeardSecsAgo = -1
+		case *n.HeardSecsAgo >= 0 && *n.HeardSecsAgo <= maxHeardSecsAgo:
 			e.HeardSecsAgo = int64(*n.HeardSecsAgo)
-		} else {
-			continue // no usable age: we cannot say when it was heard
+		default:
+			continue
 		}
 		r.Neighbors = append(r.Neighbors, e)
 	}

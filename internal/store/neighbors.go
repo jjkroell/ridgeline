@@ -21,7 +21,7 @@ type NeighborEntry struct {
 	PublicKey string `json:"publicKey"`
 	// SNR is how well the REPORTER hears this neighbour, not the reverse.
 	SNR          *float64 `json:"snr,omitempty"`
-	HeardSecsAgo int64    `json:"heardSecsAgo"` // relative to the report's ReportedAt
+	HeardSecsAgo int64    `json:"heardSecsAgo"` // relative to ReportedAt; -1 = unknown (firmware sent null)
 	Scopes       string   `json:"scopes,omitempty"`
 	Status       string   `json:"status,omitempty"` // responded | timeout | send_failed
 }

@@ -6,7 +6,7 @@
     "clientID": "ridgelined",
     "username": "",
     "password": "",
-    "topics": ["meshcore/+/+/packets", "meshcore/+/+/status"]
+    "topics": ["meshcore/+/+/packets", "meshcore/+/+/status", "meshcore/+/+/neighbors"]
   },
   "extraBrokers": [
     {

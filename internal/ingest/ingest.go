@@ -246,6 +246,10 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 		in.handleStatus(msg)
 		return
 	}
+	if isTopicNeighbors(msg.Topic()) {
+		in.handleNeighbors(msg)
+		return
+	}
 	var env envelope
 	if err := json.Unmarshal(msg.Payload(), &env); err != nil {
 		in.log.Debug("bad envelope", "topic", msg.Topic(), "err", err)

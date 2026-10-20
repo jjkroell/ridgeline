@@ -4,6 +4,29 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.16] — 2026-10-20
+
+### Added
+- **RF neighbours from published neighbour tables.** Ridgeline now subscribes
+  to `meshcore/+/+/neighbors`, the zero-hop neighbour table openHop repeaters
+  (and firmware built `WITH_MQTT_NEIGHBORS`) publish when a broker opts in with
+  `neighbors: true`: node discover → each neighbour's region scopes → one
+  table, daily by default. The latest table per repeater is stored
+  (`neighbor_reports`, cached in memory) and shown on node pages as RF
+  neighbours: who the repeater hears, the SNR, when last heard; and on each
+  listed node, "Hears this node directly". The reporter is the authenticated
+  key in the TOPIC, never the payload's `origin_id`; retained copies and lists
+  from blocked, stood-down, quarantined or unconfirmed-radio observers are
+  refused; rows are validated (full keys only, no self, no duplicates, bounded
+  sizes). Tables older than 15 days are hidden.
+- **What's new announcement** for RF neighbours.
+
+### Changed
+- The path-adjacency list on node pages is now labelled **Path neighbours**
+  to keep it apart from measured RF neighbours.
+- **Config:** add `"meshcore/+/+/neighbors"` to `mqtt.topics` to collect the
+  tables (both example configs now include it).
+
 ## [v0.23.15] — 2026-10-18
 
 ### Added

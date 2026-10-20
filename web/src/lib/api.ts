@@ -245,12 +245,38 @@ export interface NodeAnalytics {
   /** Distinct adverts backing the clock verdict. */
   clockDriftSamples?: number;
 }
+/** One directly-heard neighbour from a published /neighbors table. */
+export interface RFNeighbor {
+  publicKey: string;
+  name?: string;
+  role?: string;
+  /** SNR as heard by the REPORTER (for heardBy: how well that reporter hears this node). */
+  snr?: number;
+  heardAt: string;
+  scopes?: string;
+  /** responded | timeout | send_failed — whether it answered the scope query. */
+  status?: string;
+}
+/**
+ * Zero-hop neighbour tables repeaters publish over MQTT (openHop, firmware
+ * WITH_MQTT_NEIGHBORS): measured RF links, unlike the path-adjacent `neighbors`.
+ */
+export interface RFNeighbors {
+  /** When this node's own table was last received; absent if it publishes none. */
+  reportedAt?: string;
+  selfScopes?: string;
+  defaultScope?: string;
+  reported: RFNeighbor[];
+  /** Other reporters whose tables list this node. */
+  heardBy: RFNeighbor[];
+}
 export interface NodeDetailResponse {
   node: Node | null;
   detail: NodeAnalytics | null;
   generatedAt?: string;
   /** Set when this node also runs an observer — that observer's id. */
   observerId?: string;
+  rfNeighbors?: RFNeighbors;
   /** Set when the node is quarantined as suspected injected traffic. */
   quarantined?: boolean;
   block?: BlockEntry;

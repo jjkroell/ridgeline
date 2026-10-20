@@ -5,7 +5,7 @@
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import QRCode from 'qrcode';
-	import { api, type Node, type NodeAnalytics, type NodeObserverStat, type BlockEntry } from '$lib/api';
+	import { api, type Node, type NodeAnalytics, type NodeObserverStat, type BlockEntry, type RFNeighbors } from '$lib/api';
 	import { ago, shortKey, fmtNum, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, fmtRadio, fmtCoord, fmtAirtime, fmtClockDrift, clockDriftLevel } from '$lib/format';
 	import { nodeHashId } from '$lib/hash-ids';
 	import { favorites } from '$lib/favorites.svelte';
@@ -24,6 +24,7 @@
 	let nodesList = $state<Node[]>([]);
 	let quarantined = $state(false);
 	let block = $state<BlockEntry | null>(null);
+	let rf = $state<RFNeighbors | null>(null);
 	let loaded = $state(false);
 	let qrSvg = $state('');
 	let copied = $state(false);
@@ -34,6 +35,7 @@
 			// The detail endpoint reports observerId beside the node, not on it.
 			node = resp.node ? { ...resp.node, observerId: resp.observerId } : null;
 			detail = resp.detail;
+			rf = resp.rfNeighbors ?? null;
 			quarantined = !!resp.quarantined;
 			block = resp.block ?? null;
 			nodesList = list;
@@ -360,9 +362,41 @@
 			</div>
 		{/if}
 
+		<!-- RF neighbours: published zero-hop tables (measured, not inferred) -->
+		{#if rf}
+			{#if rf.reportedAt}
+				<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">HEARD DIRECTLY · {rf.reported.length} <span class="text-fg-faint font-400">· table {ago(rf.reportedAt)} ago</span></h2>
+				{#if rf.reported.length}
+					<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
+						{#each rf.reported as n (n.publicKey)}
+							<a href="/m/nodes/{n.publicKey}" class="active:bg-line/40 flex items-center gap-3 px-4 py-2.5">
+								<span class="h-2 w-2 shrink-0 rounded-full" style="background:{roleColor(n.role ?? '')}"></span>
+								<span class="text-fg min-w-0 flex-1 truncate text-sm">{n.name || shortKey(n.publicKey)}</span>
+								<span class="text-fg-faint font-mono text-xs tnum">{ago(n.heardAt)}</span>
+								<span class="font-mono w-16 shrink-0 whitespace-nowrap text-right text-xs tnum" style="color:{snrColor(n.snr)}">{fmtSnr(n.snr)} dB</span>
+							</a>
+						{/each}
+					</div>
+				{/if}
+			{/if}
+			{#if rf.heardBy.length}
+				<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">HEARS THIS NODE DIRECTLY · {rf.heardBy.length}</h2>
+				<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
+					{#each rf.heardBy as n (n.publicKey)}
+						<a href="/m/nodes/{n.publicKey}" class="active:bg-line/40 flex items-center gap-3 px-4 py-2.5">
+							<span class="h-2 w-2 shrink-0 rounded-full" style="background:{roleColor(n.role ?? '')}"></span>
+							<span class="text-fg min-w-0 flex-1 truncate text-sm">{n.name || shortKey(n.publicKey)}</span>
+							<span class="text-fg-faint font-mono text-xs tnum">{ago(n.heardAt)}</span>
+							<span class="font-mono w-16 shrink-0 whitespace-nowrap text-right text-xs tnum" style="color:{snrColor(n.snr)}">{fmtSnr(n.snr)} dB</span>
+						</a>
+					{/each}
+				</div>
+			{/if}
+		{/if}
+
 		<!-- neighbours -->
 		{#if detail?.neighbors?.length}
-			<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">NEIGHBOURS · {detail.neighbors.length}</h2>
+			<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">PATH NEIGHBOURS · {detail.neighbors.length}</h2>
 			<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
 				{#each detail.neighbors as n (n.publicKey)}
 					<a href="/m/nodes/{n.publicKey}" class="active:bg-line/40 flex items-center gap-3 px-4 py-2.5">

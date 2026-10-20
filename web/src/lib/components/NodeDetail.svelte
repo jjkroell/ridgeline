@@ -5,7 +5,7 @@
 	// (e.g. /nodes/[pubkey]) without having visited a full map route first.
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import QRCode from 'qrcode';
-	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry, type NodeObserverStat, type NodeActivity, type BlockEntry } from '$lib/api';
+	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry, type NodeObserverStat, type NodeActivity, type BlockEntry, type RFNeighbors } from '$lib/api';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { isLight } from '$lib/map-util';
@@ -35,6 +35,7 @@
 
 	let node = $state<Node | null>(null);
 	let detail = $state<NodeAnalytics | null>(null);
+	let rf = $state<RFNeighbors | null>(null);
 	let nodesList = $state<Node[]>(nodesProp ?? []);
 	let loaded = $state(false);
 	let quarantined = $state(false);
@@ -119,6 +120,7 @@
 			// The detail endpoint reports observerId beside the node, not on it.
 			node = resp.node ? { ...resp.node, observerId: resp.observerId } : null;
 			detail = resp.detail;
+			rf = resp.rfNeighbors ?? null;
 			quarantined = !!resp.quarantined;
 			block = resp.block ?? null;
 			nodesList = list;
@@ -777,10 +779,55 @@
 				{/if}
 			</section>
 
+			<!-- RF neighbours: zero-hop tables repeaters publish over MQTT (measured, not inferred) -->
+			{#if rf}
+				<section class="panel">
+					<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
+						<h3 class="font-display text-fg text-sm font-700 tracking-wide">RF NEIGHBORS</h3>
+						<Tooltip text="Nodes heard directly over the air, from the neighbour table a repeater publishes over MQTT (openHop and some firmware builds). Measured links — unlike Neighbors below, which are inferred from packet paths. SNR is how well the reporting repeater hears the other node.">
+							<span class="text-fg-faint cursor-help text-xs">ⓘ</span>
+						</Tooltip>
+						<span class="label ml-auto tnum">{rf.reported.length + rf.heardBy.length}</span>
+					</div>
+					{#if rf.reportedAt}
+						<div class="text-fg-faint px-5 pt-2.5 pb-1 text-[0.62rem] tracking-wide">
+							HEARD BY THIS NODE · table {ago(rf.reportedAt)} ago{rf.selfScopes ? ` · scopes ${rf.selfScopes}` : ''}
+						</div>
+						{#if rf.reported.length === 0}
+							<div class="text-fg-faint px-5 py-3 text-sm">Its last table listed no neighbours.</div>
+						{:else}
+							<div class="divide-line/40 divide-y">
+								{#each rf.reported as nb (nb.publicKey)}
+									<a href="/nodes/{nb.publicKey}" class="panel-hover flex items-center gap-3 px-5 py-2 text-sm" title={nb.scopes ? `scopes: ${nb.scopes}` : nb.status === 'timeout' ? 'did not answer the scope query' : ''}>
+										<span class="h-2 w-2 shrink-0 rounded-full" style="background:{roleColor(nb.role ?? '')}"></span>
+										<span class="text-fg min-w-0 flex-1 truncate">{nb.name || shortKey(nb.publicKey)}</span>
+										<span class="text-fg-faint font-mono text-xs tnum">{ago(nb.heardAt)}</span>
+										<span class="font-mono w-16 shrink-0 whitespace-nowrap text-right text-xs tnum" style="color:{snrColor(nb.snr)}">{fmtSnr(nb.snr)} dB</span>
+									</a>
+								{/each}
+							</div>
+						{/if}
+					{/if}
+					{#if rf.heardBy.length}
+						<div class="text-fg-faint px-5 pt-2.5 pb-1 text-[0.62rem] tracking-wide">HEARS THIS NODE DIRECTLY</div>
+						<div class="divide-line/40 divide-y">
+							{#each rf.heardBy as nb (nb.publicKey)}
+								<a href="/nodes/{nb.publicKey}" class="panel-hover flex items-center gap-3 px-5 py-2 text-sm">
+									<span class="h-2 w-2 shrink-0 rounded-full" style="background:{roleColor(nb.role ?? '')}"></span>
+									<span class="text-fg min-w-0 flex-1 truncate">{nb.name || shortKey(nb.publicKey)}</span>
+									<span class="text-fg-faint font-mono text-xs tnum">{ago(nb.heardAt)}</span>
+									<span class="font-mono w-16 shrink-0 whitespace-nowrap text-right text-xs tnum" style="color:{snrColor(nb.snr)}">{fmtSnr(nb.snr)} dB</span>
+								</a>
+							{/each}
+						</div>
+					{/if}
+				</section>
+			{/if}
+
 			<!-- Neighbors -->
 			<section class="panel">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
-					<h3 class="font-display text-fg text-sm font-700 tracking-wide">NEIGHBORS</h3>
+					<h3 class="font-display text-fg text-sm font-700 tracking-wide">PATH NEIGHBORS</h3>
 					<span class="label ml-auto tnum">{detail?.neighbors.length ?? 0}</span>
 				</div>
 				{#if !detail || detail.neighbors.length === 0}

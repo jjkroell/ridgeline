@@ -277,6 +277,18 @@ CREATE TABLE IF NOT EXISTS channel_candidates (
 );
 CREATE INDEX IF NOT EXISTS idx_chancand_status ON channel_candidates(status);
 
+-- The latest neighbour table each repeater published on its MQTT /neighbors
+-- topic (openHop, firmware WITH_MQTT_NEIGHBORS). One row per reporter, replaced
+-- on every publish. See neighbors.go.
+CREATE TABLE IF NOT EXISTS neighbor_reports (
+	reporter      TEXT PRIMARY KEY,        -- reporting node pubkey (UPPER), from the topic
+	observer_id   TEXT NOT NULL,
+	reported_at   TEXT NOT NULL,           -- server receive time (RFC3339)
+	self_scopes   TEXT NOT NULL DEFAULT '',
+	default_scope TEXT NOT NULL DEFAULT '',
+	rows_json     TEXT NOT NULL            -- []NeighborEntry
+);
+
 `
 
 // Store wraps a SQLite database.
@@ -348,6 +360,12 @@ type Store struct {
 	// that actually have a claim awaiting a code. Refreshed on claim mutations.
 	claimMu           sync.RWMutex
 	pendingClaimNodes map[string]bool
+
+	// Latest /neighbors report per reporter (pubkey UPPER). Tiny, read on every
+	// node page, so it lives in memory rather than queueing on the single DB
+	// connection. See neighbors.go.
+	neighborMu      sync.RWMutex
+	neighborReports map[string]NeighborReport
 }
 
 // Open opens (creating if needed) the SQLite database at path, enables WAL
@@ -539,6 +557,10 @@ func Open(path string) (*Store, error) {
 	if err := s.loadPendingClaims(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("store: load pending claims: %w", err)
+	}
+	if err := s.loadNeighborReports(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: load neighbor reports: %w", err)
 	}
 	// One-time repair of radio values a far-side receiver wrote onto near-side
 	// nodes back when any hop count could set one. Needs the blocklist loaded

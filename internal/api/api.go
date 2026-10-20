@@ -534,11 +534,14 @@ func (s *Server) nodeDetail(w http.ResponseWriter, r *http.Request) {
 		GeneratedAt string                `json:"generatedAt,omitempty"`
 		// ObserverID: this node also runs an observer (see nodeWithLiveness).
 		ObserverID string `json:"observerId,omitempty"`
+		// RFNeighbors: published zero-hop neighbour tables (see neighbors.go).
+		RFNeighbors *RFNeighbors `json:"rfNeighbors,omitempty"`
 	}{Node: node}
 	if node != nil {
 		if obs, err := s.observersByNode(); err == nil {
 			resp.ObserverID = obs[strings.ToUpper(node.PublicKey)]
 		}
+		resp.RFNeighbors = s.rfNeighbors(node.PublicKey, nodes)
 	}
 	if s.analytics != nil && node != nil {
 		d, gen := s.analytics.Get(node.PublicKey)

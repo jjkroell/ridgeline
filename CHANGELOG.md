@@ -4,6 +4,27 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.18] — 2026-10-22
+
+### Fixed
+- **Direct-routed packets no longer count as relays.** A direct packet's path
+  is the route the sender chose, still to go: each repeater removes itself
+  before forwarding, so the hops listed have not carried it yet. A sender with
+  a stale route kept naming a dead repeater on every retry, which kept that
+  repeater "relaying" in node retention (one survived 17 days without an
+  advert) and inflated relay counts, topology, relay history and heatmaps.
+  Only flood paths, which each repeater appends itself to, are counted now.
+
+### Changed
+- **A node running an active observer counts as alive.** Its observer's last
+  packet or live status now counts towards the node's Online/Idle/Offline
+  status and "last heard" (nodes list, node pages, favourites), and node
+  retention keeps it. `/api/nodes` and the node detail endpoint gain
+  `lastObserved`.
+- **Add an observer guide:** meshcoretomqtt goes in `99-user.toml`; the
+  neighbour-table setting is added to the step-4 broker entry rather than a
+  second one; meshcoretomqtt's neighbour-table support is listed as in testing.
+
 ## [v0.23.17] — 2026-10-20
 
 ### Added

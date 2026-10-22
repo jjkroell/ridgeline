@@ -136,3 +136,19 @@ func TestRetention_SaturatedOneByteHopNoLongerShieldsADeadNode(t *testing.T) {
 		t.Fatalf("the 1-byte-only node must remain stale and the 2-byte one spared; still-stale = %v", kept)
 	}
 }
+
+// An advert-silent node that runs an observer still reporting is online and
+// kept; one whose observer has also gone quiet is not.
+func TestFilterObserving(t *testing.T) {
+	cutoff := "2026-10-15T00:00:00Z"
+	stale := []string{"AA11", "BB22", "CC33"}
+	observers := map[string]string{
+		"aa11": "2026-10-22T19:00:00Z", // reporting now (case differs on purpose)
+		"BB22": "2026-10-10T00:00:00Z", // observer silent since before the cutoff
+	}
+	got := FilterObserving(stale, observers, cutoff)
+	want := []string{"BB22", "CC33"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("FilterObserving = %v, want %v", got, want)
+	}
+}

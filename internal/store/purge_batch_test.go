@@ -80,6 +80,8 @@ func TestRelayHopScanCoversWholeWindow(t *testing.T) {
 	insertObs(t, st, pkt("EF", "10"), "GroupText", 2, now.Add(-7*time.Hour-30*time.Minute))
 	insertObs(t, st, pkt("11", "12"), "GroupText", 2, now.Add(-time.Minute))
 	insertObs(t, st, "1500", "GroupText", 0, now.Add(-time.Minute)) // zero-hop: no relays
+	// Direct-routed: the path is the route still to go, not relays that carried it.
+	insertObs(t, st, "1602"+"0304"+"11223344556677889900AABBCCDDEEFF", "GroupText", 2, now.Add(-time.Minute))
 
 	got, err := st.RelayHopPrefixesSince(now.Add(-24 * time.Hour).Format(time.RFC3339Nano))
 	if err != nil {
@@ -93,6 +95,11 @@ func TestRelayHopScanCoversWholeWindow(t *testing.T) {
 	for _, h := range []string{"01", "02"} {
 		if got[h] {
 			t.Errorf("hop %s is from before the window", h)
+		}
+	}
+	for _, h := range []string{"03", "04"} {
+		if got[h] {
+			t.Errorf("hop %s is from a direct-routed packet's planned route", h)
 		}
 	}
 }

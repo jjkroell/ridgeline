@@ -8,23 +8,26 @@ export interface NodeStatus {
 }
 
 // True "alive in the mesh" status. A node is alive if it's done ANYTHING
-// recently — broadcast its own advert OR relayed someone else's traffic — so we
-// score on the most recent of the two. With a ~30h recommended advert interval,
+// recently — broadcast its own advert, relayed someone else's traffic, or (when
+// it runs an observer) reported to us — so we score on the most recent of them. With a ~30h recommended advert interval,
 // advert recency alone is a weak signal; relay activity is the strong proof a
 // node is up and working. Thresholds: Online <6h, Idle <33h (one advert cycle +
 // grace), Offline beyond that.
 const HOUR = 3_600_000;
-/** The most recent time a node was heard — its latest advert or relay. */
-export function lastHeard(n: { lastSeen?: string; lastRelayed?: string }): string | undefined {
-	return n.lastRelayed && (!n.lastSeen || n.lastRelayed > n.lastSeen) ? n.lastRelayed : n.lastSeen;
+type Activity = { lastSeen?: string; lastRelayed?: string; lastObserved?: string };
+
+/** The most recent time a node was heard — its latest advert, relay or observer report. */
+export function lastHeard(n: Activity): string | undefined {
+	let best: string | undefined;
+	for (const t of [n.lastSeen, n.lastRelayed, n.lastObserved]) {
+		if (t && (!best || new Date(t).getTime() > new Date(best).getTime())) best = t;
+	}
+	return best;
 }
 
-export function nodeStatus(n: {
-	lastSeen?: string;
-	lastRelayed?: string;
-}): NodeStatus {
+export function nodeStatus(n: Activity): NodeStatus {
 	const times: number[] = [];
-	for (const t of [n.lastSeen, n.lastRelayed]) {
+	for (const t of [n.lastSeen, n.lastRelayed, n.lastObserved]) {
 		if (t) {
 			const ms = new Date(t).getTime();
 			if (!Number.isNaN(ms)) times.push(ms);

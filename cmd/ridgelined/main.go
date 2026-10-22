@@ -689,8 +689,8 @@ func runRetention(ctx context.Context, st *store.Store, log *slog.Logger) {
 }
 
 // runNodeRetention removes nodes that have gone silent past the retention
-// threshold — no advert for retentionDays, and not currently relaying (the
-// analytics liveness snapshot guards still-active relays whose advert is stale).
+// threshold — no advert for retentionDays, no flood relay in that window, and
+// not running an observer that has reported in it.
 // A pruned node's row and stored adverts go; it reappears the moment it
 // transmits again, so this only clears genuinely-departed nodes. Like the
 // artifact sweep it waits for ingest/analytics to settle, then runs daily.
@@ -715,6 +715,13 @@ func runNodeRetention(ctx context.Context, st *store.Store, engine *analytics.En
 			return
 		}
 		keys = analytics.FilterRelayedWithin(keys, nodes, relayHops, minHopBytes)
+		// A node that runs an observer still reporting is online, adverts or not.
+		observers, err := st.ObserverLastSeen()
+		if err != nil {
+			log.Warn("node retention: observers", "err", err)
+			return
+		}
+		keys = analytics.FilterObserving(keys, observers, cutoff)
 		if len(keys) == 0 {
 			return
 		}

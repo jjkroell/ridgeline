@@ -214,10 +214,20 @@ type Packet struct {
 // deliberately NOT returned here, because it describes the route being probed
 // rather than the hops this copy travelled.
 //
+// A DIRECT-routed packet's header path is not a record of relays either. It is
+// the route still TO GO, chosen by the sender, and each repeater strips its own
+// hash off the front before forwarding (Mesh::removeSelfFromPath), so the hops
+// that already carried the copy are gone and the ones left have not carried it
+// yet. A sender holding a stale route keeps naming a dead repeater on every
+// retry, which kept a repeater that had been off the air for 17 days looking
+// alive. Only a FLOOD path, which each repeater appends itself to, says who
+// relayed. (A zero-hop advert is sent direct with an empty path, so callers that
+// test len(RelayPath()) == 0 on adverts are unaffected.)
+//
 // Callers that want the raw header bytes whatever the payload type (the packet
 // inspector, which renders trace SNR from them) should read Path directly.
 func (p *Packet) RelayPath() []string {
-	if p.PayloadType == PayloadTrace {
+	if p.PayloadType == PayloadTrace || !p.RouteType.IsFlood() {
 		return nil
 	}
 	return p.Path

@@ -32,8 +32,8 @@
 	async function refresh() {
 		try {
 			const [resp, list] = await Promise.all([api.nodeDetail(pubkey), api.nodes()]);
-			// The detail endpoint reports observerId beside the node, not on it.
-			node = resp.node ? { ...resp.node, observerId: resp.observerId } : null;
+			// The detail endpoint reports observerId/lastObserved beside the node, not on it.
+			node = resp.node ? { ...resp.node, observerId: resp.observerId, lastObserved: resp.lastObserved } : null;
 			detail = resp.detail;
 			rf = resp.rfNeighbors ?? null;
 			quarantined = !!resp.quarantined;
@@ -77,7 +77,7 @@
 		return () => clearInterval(t);
 	});
 
-	const status = $derived(nodeStatus({ lastSeen: node?.lastSeen, lastRelayed: detail?.relay.lastRelayed }));
+	const status = $derived(nodeStatus({ lastSeen: node?.lastSeen, lastRelayed: detail?.relay.lastRelayed, lastObserved: node?.lastObserved }));
 	const isRelay = $derived(node?.role === 'Repeater' || node?.role === 'RoomServer');
 	const hasLoc = $derived(!!node && node.latitude != null && node.longitude != null);
 

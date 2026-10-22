@@ -25,6 +25,24 @@ func TestRelayPathExcludesTrace(t *testing.T) {
 	}
 }
 
+// TestRelayPathExcludesDirect: a direct packet's path is the route still to go,
+// not the relays that carried it, so it must not credit anyone.
+func TestRelayPathExcludesDirect(t *testing.T) {
+	hops := []string{"A3F1", "0C22"}
+	for _, rt := range []RouteType{RouteDirect, RouteTransportDirect} {
+		p := &Packet{PayloadType: PayloadRequest, RouteType: rt, Path: hops}
+		if got := p.RelayPath(); got != nil {
+			t.Errorf("RelayPath on %v = %v, want nil — that is the route still to go", rt, got)
+		}
+	}
+	for _, rt := range []RouteType{RouteFlood, RouteTransportFlood} {
+		p := &Packet{PayloadType: PayloadRequest, RouteType: rt, Path: hops}
+		if got := p.RelayPath(); len(got) != 2 {
+			t.Errorf("RelayPath on %v = %v, want the header path", rt, got)
+		}
+	}
+}
+
 // TestTracePayloadCarriesTheRealRoute documents where a trace's actual route
 // lives, and that it is sized independently of the header path.
 func TestTracePayloadCarriesTheRealRoute(t *testing.T) {

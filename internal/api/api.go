@@ -432,19 +432,28 @@ type nodeWithLiveness struct {
 	// ObserverID is set when this node also runs an observer, so the list can
 	// badge it and the node page can link to the observer's page.
 	ObserverID string `json:"observerId,omitempty"`
+	// LastObserved is that observer's last packet or live status. An observer
+	// feeding the system is on the air, so status counts it like an advert.
+	LastObserved string `json:"lastObserved,omitempty"`
 }
 
-// observersByNode maps a node's upper-cased public key to the id of the observer
-// running on it. An observer's id IS its node's public key, so this is a key
-// match; the map exists only to normalise case. Small (one row per observer).
-func (s *Server) observersByNode() (map[string]string, error) {
-	names, err := s.store.ObserverNames()
+// nodeObserver is the observer running on a node: its id and last report.
+type nodeObserver struct {
+	ID       string
+	LastSeen string
+}
+
+// observersByNode maps a node's upper-cased public key to the observer running
+// on it. An observer's id IS its node's public key, so this is a key match; the
+// map exists only to normalise case. Small (one row per observer).
+func (s *Server) observersByNode() (map[string]nodeObserver, error) {
+	seen, err := s.store.ObserverLastSeen()
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[string]string, len(names))
-	for id := range names {
-		out[strings.ToUpper(id)] = id
+	out := make(map[string]nodeObserver, len(seen))
+	for id, at := range seen {
+		out[strings.ToUpper(id)] = nodeObserver{ID: id, LastSeen: at}
 	}
 	return out, nil
 }
@@ -498,7 +507,9 @@ func (s *Server) nodes(w http.ResponseWriter, _ *http.Request) {
 			nw.UnscopedRelayCount = sig.UnscopedRelayCount
 		}
 		nw.Claimed = claimed[strings.ToUpper(n.PublicKey)]
-		nw.ObserverID = observers[strings.ToUpper(n.PublicKey)]
+		if o, ok := observers[strings.ToUpper(n.PublicKey)]; ok {
+			nw.ObserverID, nw.LastObserved = o.ID, o.LastSeen
+		}
 		out = append(out, nw)
 	}
 	writeJSON(w, out)
@@ -532,14 +543,18 @@ func (s *Server) nodeDetail(w http.ResponseWriter, r *http.Request) {
 		Node        *store.Node           `json:"node"`
 		Detail      *analytics.NodeDetail `json:"detail"`
 		GeneratedAt string                `json:"generatedAt,omitempty"`
-		// ObserverID: this node also runs an observer (see nodeWithLiveness).
-		ObserverID string `json:"observerId,omitempty"`
+		// ObserverID / LastObserved: this node also runs an observer (see
+		// nodeWithLiveness).
+		ObserverID   string `json:"observerId,omitempty"`
+		LastObserved string `json:"lastObserved,omitempty"`
 		// RFNeighbors: published zero-hop neighbour tables (see neighbors.go).
 		RFNeighbors *RFNeighbors `json:"rfNeighbors,omitempty"`
 	}{Node: node}
 	if node != nil {
 		if obs, err := s.observersByNode(); err == nil {
-			resp.ObserverID = obs[strings.ToUpper(node.PublicKey)]
+			if o, ok := obs[strings.ToUpper(node.PublicKey)]; ok {
+				resp.ObserverID, resp.LastObserved = o.ID, o.LastSeen
+			}
 		}
 		resp.RFNeighbors = s.rfNeighbors(node.PublicKey, nodes)
 	}

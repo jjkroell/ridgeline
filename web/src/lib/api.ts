@@ -59,6 +59,8 @@ export interface Node {
   unscopedRelayCount?: number;
   /** Set when this node also runs an observer — that observer's id. */
   observerId?: string;
+  /** That observer's last packet or live status (counts towards status). */
+  lastObserved?: string;
 }
 
 export interface ObserverStatus {
@@ -277,6 +279,8 @@ export interface NodeDetailResponse {
   generatedAt?: string;
   /** Set when this node also runs an observer — that observer's id. */
   observerId?: string;
+  /** That observer's last packet or live status. */
+  lastObserved?: string;
   rfNeighbors?: RFNeighbors;
   /** Set when the node is quarantined as suspected injected traffic. */
   quarantined?: boolean;

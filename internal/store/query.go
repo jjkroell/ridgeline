@@ -654,6 +654,9 @@ func (s *Store) rawSince(sinceISO string, limit int) ([]RawObservation, error) {
 // whose pubkey starts with one of these prefixes was relaying. Zero-hop packets
 // carry no relay hops and are skipped (path_hops = 0), which also keeps the scan
 // cheap since most adverts are zero-hop.
+//
+// Only FLOOD paths count: RelayPath returns nothing for a direct packet, whose
+// path is the route still to go rather than the relays that carried it.
 func (s *Store) RelayHopPrefixesSince(sinceISO string) (map[string]bool, error) {
 	// ⚠ The retention window is days of traffic (~800k rows on prod). Reading
 	// and decoding it in ONE query held the single DB connection for the whole
@@ -853,6 +856,27 @@ func (s *Store) ObserverNames() (map[string]string, error) {
 			return nil, err
 		}
 		out[id] = name
+	}
+	return out, rows.Err()
+}
+
+// ObserverLastSeen maps each observer's id (its node's public key) to the last
+// time it reported a packet or a live status. A retained status replayed by the
+// broker does not move it (see UpdateObserverStatusIfPresent), so it is a real
+// sign the device is up. Small (one row per observer).
+func (s *Store) ObserverLastSeen() (map[string]string, error) {
+	rows, err := s.db.Query(`SELECT id, COALESCE(last_seen,'') FROM observers`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var id, seen string
+		if err := rows.Scan(&id, &seen); err != nil {
+			return nil, err
+		}
+		out[id] = seen
 	}
 	return out, rows.Err()
 }

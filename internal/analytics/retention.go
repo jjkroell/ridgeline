@@ -96,3 +96,27 @@ func FilterRelayedWithin(stale []string, allNodes []store.Node, relayHops map[st
 	}
 	return kept
 }
+
+// FilterObserving removes from stale any node that is itself an observer which
+// has reported since cutoffISO. An observer's id is its node's public key, and an
+// observer feeding the system is plainly on the air even when none of its own
+// adverts reach another observer. observerLastSeen is store.ObserverLastSeen.
+func FilterObserving(stale []string, observerLastSeen map[string]string, cutoffISO string) []string {
+	if len(observerLastSeen) == 0 || len(stale) == 0 {
+		return stale
+	}
+	live := make(map[string]bool, len(observerLastSeen))
+	for id, seen := range observerLastSeen {
+		if seen >= cutoffISO {
+			live[strings.ToUpper(id)] = true
+		}
+	}
+	kept := make([]string, 0, len(stale))
+	for _, pk := range stale {
+		if live[strings.ToUpper(pk)] {
+			continue // reporting as an observer → online, keep the node
+		}
+		kept = append(kept, pk)
+	}
+	return kept
+}

@@ -117,8 +117,8 @@
 				api.nodeDetail(pubkey),
 				nodesProp ? Promise.resolve(nodesProp) : api.nodes()
 			]);
-			// The detail endpoint reports observerId beside the node, not on it.
-			node = resp.node ? { ...resp.node, observerId: resp.observerId } : null;
+			// The detail endpoint reports observerId/lastObserved beside the node, not on it.
+			node = resp.node ? { ...resp.node, observerId: resp.observerId, lastObserved: resp.lastObserved } : null;
 			detail = resp.detail;
 			rf = resp.rfNeighbors ?? null;
 			quarantined = !!resp.quarantined;
@@ -148,7 +148,7 @@
 
 	// Liveness from the most recent of advert or relay activity (see nodeStatus).
 	const status = $derived(
-		nodeStatus({ lastSeen: node?.lastSeen, lastRelayed: detail?.relay.lastRelayed })
+		nodeStatus({ lastSeen: node?.lastSeen, lastRelayed: detail?.relay.lastRelayed, lastObserved: node?.lastObserved })
 	);
 	const isRelay = $derived(node?.role === 'Repeater' || node?.role === 'RoomServer');
 

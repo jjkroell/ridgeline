@@ -106,3 +106,35 @@ func TestTrafficShareCountsANodeOncePerTransmission(t *testing.T) {
 		t.Errorf("TrafficShare = %.4f, want exactly 1.0 (sole relay of the sole transmission)", d.TrafficShare)
 	}
 }
+
+// TestLastRelayedNeedsWideEvidence: a 1-byte hop still counts towards relay
+// totals but does not set LastRelayed / Active, which drive Online status — the
+// 1-byte space is saturated, so it can't say THIS node relayed. A 2-byte hop can.
+func TestLastRelayedNeedsWideEvidence(t *testing.T) {
+	nodes := []store.Node{
+		{PublicKey: "AA" + strings.Repeat("11", 31), Name: "narrow", Role: "Repeater"},
+		{PublicKey: "BB22" + strings.Repeat("33", 30), Name: "wide", Role: "Repeater"},
+	}
+	now := time.Now().UTC()
+	at := now.Add(-5 * time.Minute).Format(time.RFC3339Nano)
+	raws := []store.RawObservation{
+		// Flood TextMessage: path-len 0x01 = one 1-byte hop; 0x41 = one 2-byte hop.
+		{RawHex: "0901aa" + "AABBCCDD", ObserverID: "obs-A", ReceivedAt: at},
+		{RawHex: "0941bb22" + "EEFF0011", ObserverID: "obs-A", ReceivedAt: at},
+	}
+	details := build(raws, nodes, 6, now.Add(-6*time.Hour).Format(time.RFC3339Nano), DefaultRadio())
+
+	narrow, wide := details[nodes[0].PublicKey], details[nodes[1].PublicKey]
+	if narrow == nil || wide == nil {
+		t.Fatalf("both relays should have details; got narrow=%v wide=%v", narrow, wide)
+	}
+	if narrow.Relay.Count1h != 1 || wide.Relay.Count1h != 1 {
+		t.Errorf("Count1h = %d / %d, want 1 / 1 — counts take every width", narrow.Relay.Count1h, wide.Relay.Count1h)
+	}
+	if narrow.Relay.LastRelayed != "" || narrow.Relay.Active {
+		t.Errorf("1-byte hop set LastRelayed=%q Active=%v, want neither", narrow.Relay.LastRelayed, narrow.Relay.Active)
+	}
+	if wide.Relay.LastRelayed != at || !wide.Relay.Active {
+		t.Errorf("2-byte hop: LastRelayed=%q Active=%v, want %q / true", wide.Relay.LastRelayed, wide.Relay.Active, at)
+	}
+}

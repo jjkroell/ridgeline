@@ -4,6 +4,17 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.19] — 2026-10-22
+
+### Changed
+- **"Last relayed" needs a 2-byte hop.** A node's last-relayed time, and the
+  "active" mark beside it, now come only from path hops 2 bytes or wider,
+  like node retention. The 1-byte space is about 97% used within a week, so a
+  1-byte hop that matches one known node may have come from a node Ridgeline
+  has never seen, and kept a dead repeater showing Online off other nodes'
+  traffic. Relay counts, traffic share, topology and heatmaps still count
+  1-byte hops.
+
 ## [v0.23.18] — 2026-10-22
 
 ### Fixed

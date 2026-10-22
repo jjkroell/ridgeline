@@ -272,7 +272,10 @@ func build(raws []store.RawObservation, nodes []store.Node, windowHours int, adv
 
 	// Representative path per transmission (first/newest observation wins).
 	type txPath struct {
-		hops       []string // resolved pubkeys (unique matches only)
+		hops []string // resolved pubkeys (unique matches only)
+		// wide[i] reports that hops[i] was resolved from a hop ≥2 bytes wide —
+		// strong enough to say THIS node relayed (see newPrefixResolver).
+		wide       []bool
 		receivedAt string
 		advert     bool
 		// lengthBytes is the on-air PHY payload length, used to weight traffic
@@ -295,13 +298,15 @@ func build(raws []store.RawObservation, nodes []store.Node, windowHours int, adv
 		// Per-transmission representative path (newest seen, since rows are DESC).
 		if _, ok := txPaths[hash]; !ok {
 			resolved := make([]string, 0, len(pkt.RelayPath()))
+			var wide []bool
 			for _, hop := range pkt.RelayPath() {
 				if pk := resolve(hop); pk != "" {
 					resolved = append(resolved, pk)
+					wide = append(wide, len(hop)/2 >= 2)
 				}
 			}
 			txPaths[hash] = &txPath{
-				hops: resolved, receivedAt: ro.ReceivedAt, advert: pkt.Advert != nil,
+				hops: resolved, wide: wide, receivedAt: ro.ReceivedAt, advert: pkt.Advert != nil,
 				lengthBytes:   len(ro.RawHex) / 2,
 				unscopedFlood: pkt.RouteType == meshcore.RouteFlood,
 			}
@@ -363,6 +368,7 @@ func build(raws []store.RawObservation, nodes []store.Node, windowHours int, adv
 	relay1h := map[string]int{}
 	relay24h := map[string]int{}
 	relayLast := map[string]string{}
+	wideRelay1h := map[string]bool{} // relayed in the last hour on ≥2-byte evidence
 	// relayAirMs accumulates, per relay node, the time-on-air of every
 	// transmission that transited it; totalRelayAirMs is the same sum over all
 	// relayed transmissions (counted once each). Their ratio is TrafficShare.
@@ -411,8 +417,19 @@ func build(raws []store.RawObservation, nodes []store.Node, windowHours int, adv
 		t := parseTime(tp.receivedAt)
 		for i, pk := range tp.hops {
 			relayCount[pk]++
-			if relayLast[pk] == "" || tp.receivedAt > relayLast[pk] {
-				relayLast[pk] = tp.receivedAt
+			// lastRelayed drives the node's Online/Idle status, so it takes only
+			// ≥2-byte evidence: a 1-byte hop that matches one KNOWN node may
+			// still have been written by a node we have never seen (the 1-byte
+			// space is ~97% saturated), and would keep a dead repeater "online"
+			// off other nodes' traffic. The counts below stay at every width —
+			// there a wrong credit is a small smear, not a false verdict.
+			if tp.wide[i] {
+				if relayLast[pk] == "" || tp.receivedAt > relayLast[pk] {
+					relayLast[pk] = tp.receivedAt
+				}
+				if !t.IsZero() && now.Sub(t) <= time.Hour {
+					wideRelay1h[pk] = true
+				}
 			}
 			if !t.IsZero() {
 				if now.Sub(t) <= time.Hour {
@@ -483,7 +500,7 @@ func build(raws []store.RawObservation, nodes []store.Node, windowHours int, adv
 			LastRelayed: relayLast[pk],
 			Count1h:     relay1h[pk],
 			Count24h:    relay24h[pk],
-			Active:      relay1h[pk] > 0,
+			Active:      wideRelay1h[pk], // same evidence bar as LastRelayed
 		}
 		d.RelayAirtimeMs = relayAirMs[pk]
 		d.UnscopedRelayCount = unscopedRelay[pk]

@@ -88,15 +88,27 @@ discover.scopes`;
 	const nbOpenhop = `mqtt_brokers:
   brokers:
     - name: Ridgeline
-      # …your existing Ridgeline broker settings…
-      neighbors: true`;
+      # …your existing settings for this broker, unchanged…
+      neighbors: true    # <- add this line`;
 	const nbCapture = `[[broker]]
 name = "ridgeline"
-# …your existing Ridgeline broker settings…
-neighbors = true
+# …your existing settings for this broker, unchanged…
+neighbors = true    # <- add this line
 
 [capture]
 neighbors_interval_hours = 24`;
+	// meshcoretomqtt: in testing on a fork branch, not in an upstream release.
+	// neighbors = true goes INSIDE the [[broker]] block from step 4: drop-in
+	// files merge [[broker]] by name, so a second block with another name would
+	// add a new, broken broker instead of marking this one.
+	const nbMc2mqtt = `[neighbors]
+enabled = true
+interval_hours = 24
+
+[[broker]]
+name = "ridgeline"
+# …the rest of the block from step 4, unchanged…
+neighbors = true    # <- add this line`;
 	const nbBot = `[PacketCapture]
 neighbors_enabled = true
 neighbors_interval_hours = 24`;
@@ -259,7 +271,7 @@ reboot`);
 			<div class="text-fg-faint pt-1 text-xs">
 				Or, if you're running the <span class="text-fg-dim font-mono">meshcoretomqtt</span>
 				script, in
-				<span class="text-fg-dim font-mono">/etc/mctomqtt/config.d/00-user.toml</span>:
+				<span class="text-fg-dim font-mono">/etc/mctomqtt/config.d/99-user.toml</span>:
 			</div>
 			<div class="border-line bg-ink flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2">
 				<pre class="text-fg flex-1 overflow-x-auto font-mono text-xs leading-relaxed">{mc2mqtt}</pre>
@@ -368,6 +380,14 @@ reboot`);
 				>
 			</div>
 
+			<p class="text-fg-faint text-xs leading-relaxed">
+				Each project turns it on per broker, so it goes only where you send it.
+				<strong class="text-fg-dim">Add the setting to the Ridgeline broker entry you set
+				up in step 4. Don't create a second Ridgeline entry:</strong> most of these tools
+				match broker entries by name, so a new entry adds a second, half-configured
+				connection instead of changing the one that works.
+			</p>
+
 			<div class="text-fg-faint pt-1 text-xs">
 				Observer firmware, over serial — PSRAM boards and Heltec V3-class ESP32-S3
 				builds (check with <code class="text-fg-dim font-mono">get mqtt.neighbors</code>);
@@ -411,10 +431,37 @@ reboot`);
 				>
 			</div>
 
+			<div class="text-fg-faint pt-1 text-xs">
+				<span class="text-fg-dim font-mono">meshcoretomqtt</span>
+				<span class="border-amber/50 text-amber ml-1 rounded border px-1 py-px text-[0.6rem] font-600 tracking-wide">IN TESTING</span>
+				— a development build, not in a release yet. In
+				<span class="text-fg-dim font-mono">/etc/mctomqtt/config.d/99-user.toml</span>, add
+				the line inside the <span class="text-fg-dim font-mono">[[broker]]</span> block from
+				step 4 (same <span class="text-fg-dim font-mono">name</span>), restart, and
+				<span class="text-fg-dim font-mono">sudo systemctl kill -s USR1 mctomqtt</span>
+				publishes one now:
+			</div>
+			<div class="border-line bg-ink flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2">
+				<pre class="text-fg flex-1 overflow-x-auto font-mono text-xs leading-relaxed">{nbMc2mqtt}</pre>
+				<button onclick={() => copy('nbMc2mqtt', nbMc2mqtt)} class="text-fg-faint hover:text-fg shrink-0 text-xs"
+					>{copied === 'nbMc2mqtt' ? '✓' : 'copy'}</button
+				>
+			</div>
 			<p class="text-fg-faint text-xs leading-relaxed">
-				Not available yet in <span class="text-fg-dim font-mono">meshcoretomqtt</span>,
-				RemoteTerm, the Home Assistant integration or MeshMonitor — they publish packets
-				and status only. Their neighbour views stay on your own device.
+				If your Ridgeline broker came from a preset file
+				(<span class="text-fg-dim font-mono">config.d/10-*.toml</span>) rather than step 4,
+				don't edit the preset. Add just <span class="text-fg-dim font-mono">[[broker]]</span>,
+				that preset's exact <span class="text-fg-dim font-mono">name</span> and
+				<span class="text-fg-dim font-mono">neighbors = true</span> to
+				<span class="text-fg-dim font-mono">99-user.toml</span>. The matching name is what
+				merges it into the existing broker. The startup log line
+				<span class="text-fg-dim font-mono">[NEIGHBORS] Enabled … N broker(s) opted in</span>
+				shows 0 if nothing matched.
+			</p>
+
+			<p class="text-fg-faint text-xs leading-relaxed">
+				Not available yet in RemoteTerm, the Home Assistant integration or MeshMonitor —
+				they publish packets and status only. Their neighbour views stay on your own device.
 			</p>
 		</section>
 

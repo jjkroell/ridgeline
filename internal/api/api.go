@@ -81,6 +81,9 @@ type Server struct {
 	// so without these one account could flood an owner's inbox.
 	noteLimiter     *rateLimiter
 	noteMailLimiter *rateLimiter
+	// shareLimiter bounds share grants per owner: sharing by email answers
+	// "is this address registered?", so it must not be a free oracle.
+	shareLimiter *rateLimiter
 	// OnBridgeChanged asks for an immediate far-side segment sweep. Set by the
 	// daemon; nil in tests and when the sweep isn't running.
 	//
@@ -150,6 +153,7 @@ func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
 		// 10 min per owner; past that the note still posts, it just isn't mailed.
 		noteLimiter:     newRateLimiter(1.0/30, 10),
 		noteMailLimiter: newRateLimiter(1.0/600, 3),
+		shareLimiter:    newRateLimiter(1.0/60, 10), // ~10 then 1/min per owner
 	}
 }
 

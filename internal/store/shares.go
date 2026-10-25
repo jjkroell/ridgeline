@@ -10,8 +10,10 @@ import (
 type LocationShare struct {
 	NodePubkey    string `json:"nodePubkey"`
 	GranteeUserID int64  `json:"granteeUserId"`
-	DisplayName   string `json:"displayName"`
-	Email         string `json:"email"`
+	// DisplayName never falls back to the grantee's email: an owner can share
+	// with any registered user id, so an email here would let them read every
+	// account's address.
+	DisplayName string `json:"displayName"`
 	CreatedAt     string `json:"createdAt"`
 }
 
@@ -125,7 +127,7 @@ func (s *Store) ListLocationShares(nodePubkey string) ([]LocationShare, error) {
 	nodePubkey = strings.ToUpper(nodePubkey)
 	rows, err := s.db.Query(`
 		SELECT ls.node_pubkey, ls.grantee_user_id,
-		       COALESCE(NULLIF(u.display_name,''), u.email), u.email, ls.created_at
+		       COALESCE(NULLIF(u.display_name,''), 'User #' || u.id), ls.created_at
 		FROM location_shares ls JOIN users u ON u.id = ls.grantee_user_id
 		WHERE ls.node_pubkey = ?
 		ORDER BY ls.created_at DESC`, nodePubkey)
@@ -136,7 +138,7 @@ func (s *Store) ListLocationShares(nodePubkey string) ([]LocationShare, error) {
 	var out []LocationShare
 	for rows.Next() {
 		var sh LocationShare
-		if err := rows.Scan(&sh.NodePubkey, &sh.GranteeUserID, &sh.DisplayName, &sh.Email, &sh.CreatedAt); err != nil {
+		if err := rows.Scan(&sh.NodePubkey, &sh.GranteeUserID, &sh.DisplayName, &sh.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, sh)

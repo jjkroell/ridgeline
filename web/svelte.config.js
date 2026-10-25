@@ -51,7 +51,9 @@ const config = {
 				'style-src': ['self', 'unsafe-inline', 'https://fonts.googleapis.com'],
 				'font-src': ['self', 'data:', 'https://fonts.gstatic.com'],
 				'img-src': ['self', 'data:', 'blob:', ...TILE_HOSTS],
-				'connect-src': ['self', ...TILE_HOSTS, UMAMI],
+				// data:: MapLibre fetch()es inline placeholder images (e.g. a 1x1
+				// PNG on /map). Reading a data: URL never leaves the browser.
+				'connect-src': ['self', 'data:', ...TILE_HOSTS, UMAMI],
 				'worker-src': ['self', 'blob:'],
 				'child-src': ['self', 'blob:'],
 				'manifest-src': ['self'],

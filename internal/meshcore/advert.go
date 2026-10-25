@@ -39,6 +39,13 @@ func decodeAdvert(payload []byte) *Advert {
 		Flags:          payload[100],
 		SignatureValid: verifyAdvertSignature(payload),
 	}
+	// Parse app_data only within the signed span. Bytes past
+	// maxAdvertDataSize aren't covered by the signature, so anyone relaying the
+	// packet could append them — and a name built from them could, e.g., carry
+	// someone else's claim code under the node's genuine signature.
+	if signedEnd := advertSigPrefix + 64 + maxAdvertDataSize; len(payload) > signedEnd {
+		payload = payload[:signedEnd]
+	}
 	a.DeviceRole = parseDeviceRole(a.Flags)
 	a.HasLocation = a.Flags&advertFlagHasLocation != 0
 	a.HasName = a.Flags&advertFlagHasName != 0

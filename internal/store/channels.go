@@ -282,7 +282,7 @@ func (s *Store) DiscoverChannels(since string, limit int) ([]string, error) {
 	}
 
 	var confirmed []string
-	got, err := s.matchNames(buckets, pending, "")
+	got, err := s.matchNames(buckets, pending, "", 1)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +293,7 @@ func (s *Store) DiscoverChannels(since string, limit int) ([]string, error) {
 	// rows); only a hit is persisted. A wordlist name whose channel-hash byte
 	// is not among the live buckets costs nothing, so a large list stays cheap.
 	if len(s.channelWordlist) > 0 {
-		got, err := s.matchNames(buckets, s.channelWordlist, ChannelSourceWordlist)
+		got, err := s.matchNames(buckets, s.channelWordlist, ChannelSourceWordlist, bruteForceMinPayloads)
 		if err != nil {
 			return nil, err
 		}
@@ -310,26 +310,62 @@ func (s *Store) DiscoverChannels(since string, limit int) ([]string, error) {
 // source labels a newly-stored confirmation ("" lets ConfirmChannel keep its
 // default). Skips names already registered with the decoder, so repeated passes
 // and wordlist/pending overlap do no redundant work.
-func (s *Store) matchNames(buckets map[byte][][]byte, names []string, source string) ([]string, error) {
+func (s *Store) matchNames(buckets map[byte][][]byte, names []string, source string, minPayloads int) ([]string, error) {
+	if minPayloads < 1 {
+		minPayloads = 1
+	}
 	var confirmed []string
 	for _, name := range names {
 		key := meshcore.DeriveHashtagKey(name)
 		bucket := buckets[meshcore.ChannelHashByte(key)]
-		if len(bucket) == 0 {
+		if len(bucket) < minPayloads {
 			continue
 		}
+		// Count DISTINCT payloads that both authenticate (2-byte HMAC) and carry
+		// a plausible timestamp. A reflooded copy of one message is the same
+		// bytes, so it is counted once. One MAC match is ~1-in-2^16 for a wrong
+		// key; across a large brute-force name set that alone yields frequent
+		// false hits, so the wordlist pass demands minPayloads>=2 — two
+		// independent authenticated payloads for one wrong key is negligibly
+		// unlikely. Harvested/user names (a tiny set) pass minPayloads=1.
+		seen := make(map[string]struct{}, len(bucket))
+		hits := 0
 		for _, payload := range bucket {
-			if _, _, _, ok := meshcore.VerifyGroupText(payload, key); ok {
-				if err := s.confirmChannel(name, hex.EncodeToString(key), source); err != nil {
-					return nil, err
+			if _, dup := seen[string(payload)]; dup {
+				continue
+			}
+			seen[string(payload)] = struct{}{}
+			if ts, _, _, ok := meshcore.VerifyGroupText(payload, key); ok && plausibleChannelTS(ts) {
+				if hits++; hits >= minPayloads {
+					break
 				}
-				meshcore.RegisterChannel(name, key)
-				confirmed = append(confirmed, name)
-				break
 			}
 		}
+		if hits < minPayloads {
+			continue
+		}
+		if err := s.confirmChannel(name, hex.EncodeToString(key), source); err != nil {
+			return nil, err
+		}
+		meshcore.RegisterChannel(name, key)
+		confirmed = append(confirmed, name)
 	}
 	return confirmed, nil
+}
+
+// bruteForceMinPayloads is how many distinct authenticated payloads the
+// wordlist/brute-force pass needs before confirming a name. Two makes a false
+// confirmation across a large candidate set negligible (see matchNames).
+const bruteForceMinPayloads = 2
+
+// plausibleChannelTS reports whether a decrypted group-text timestamp is near
+// enough to now to be a real message rather than the arbitrary value a wrong
+// key yields. The window is wide (observer clock skew, retained traffic) yet
+// still rejects almost all of the 1970-2106 range a random uint32 lands in.
+func plausibleChannelTS(ts uint32) bool {
+	t := time.Unix(int64(ts), 0)
+	now := time.Now()
+	return t.After(now.Add(-180*24*time.Hour)) && t.Before(now.Add(48*time.Hour))
 }
 
 // SetChannelWordlist loads brute-force candidate names (one per line, '#'

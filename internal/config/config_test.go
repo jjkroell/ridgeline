@@ -141,3 +141,24 @@ func TestPlaceholderBrokerSecretsRefused(t *testing.T) {
 		}
 	}
 }
+
+// "tag@sha" pins a firmware tag to its vetted commit; bare tags still load.
+func TestFirmwareTagPins(t *testing.T) {
+	sha := strings.Repeat("ab", 20)
+	path := filepath.Join(t.TempDir(), "config.json")
+	os.WriteFile(path, []byte(`{"firmware": {"tags": ["companion-v1.2@`+strings.ToUpper(sha)+`", "repeater-v1.2"]}}`), 0o600)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Firmware.Tags; len(got) != 2 || got[0] != "companion-v1.2" || got[1] != "repeater-v1.2" {
+		t.Errorf("Tags = %v, want bare names", got)
+	}
+	if cfg.Firmware.TagCommits["companion-v1.2"] != sha || cfg.Firmware.TagCommits["repeater-v1.2"] != "" {
+		t.Errorf("TagCommits = %v", cfg.Firmware.TagCommits)
+	}
+	os.WriteFile(path, []byte(`{"firmware": {"tags": ["v1@abc123"]}}`), 0o600)
+	if _, err := Load(path); err == nil {
+		t.Error("a short commit id was accepted as a pin")
+	}
+}

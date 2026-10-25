@@ -39,6 +39,8 @@ type FirmwareConfig struct {
 	MaxQueued int
 	// Tags are the release tags offered, newest first.
 	Tags []string
+	// TagCommits pins tags to their vetted commits (see config.Firmware).
+	TagCommits map[string]string
 }
 
 // Enabled reports whether the build service is configured.
@@ -80,6 +82,9 @@ type agentJob struct {
 	// always <artifactDir>/<job id>; the agent does not get to choose, so a
 	// compromised or buggy agent cannot be told to write elsewhere.
 	OutDir string `json:"outDir"`
+	// Commit is the vetted commit the tag must resolve to, when pinned; the
+	// build refuses to run if upstream's tag now points elsewhere.
+	Commit string `json:"commit,omitempty"`
 }
 
 // firmwareAgentClaim hands the agent the next queued job, or 204 when idle.
@@ -101,6 +106,7 @@ func (s *Server) firmwareAgentClaim(w http.ResponseWriter, r *http.Request) {
 		Env:    job.Env,
 		Flags:  strings.Fields(job.Flags),
 		OutDir: filepath.Join(s.firmware.ArtifactDir, strconv.FormatInt(job.ID, 10)),
+		Commit: s.firmware.TagCommits[job.Tag],
 	}
 	writeJSON(w, out)
 }

@@ -188,12 +188,21 @@ export function sharedPrefixBytes(a: string, b: string): number {
 	return n;
 }
 
-// Canonical ordering of a colliding set: most adverts wins (the true node is
-// heard most), then a located record, then most-recently seen, then by key for
-// stability. "Best" (most canonical) sorts first.
+// How often a node actually transmitted. advertTxCount collapses re-floods and
+// replays of one advert (advertCount counts every stored copy, so one replayed
+// advert could buy a high count); falls back for rows predating the counter.
+function heard(n: Node): number {
+	return n.advertTxCount || n.advertCount || 0;
+}
+
+// Canonical ordering of a colliding set — the server's twin in
+// internal/analytics/artifacts.go: most transmissions wins, then the record seen
+// first (the original predates any look-alike), then a located record, then
+// most-recently seen, then by key for stability. "Best" sorts first.
 function canonicalCmp(a: Node, b: Node): number {
 	return (
-		(b.advertCount ?? 0) - (a.advertCount ?? 0) ||
+		heard(b) - heard(a) ||
+		(a.firstSeen && b.firstSeen ? a.firstSeen.localeCompare(b.firstSeen) : 0) ||
 		(b.hasLocation ? 1 : 0) - (a.hasLocation ? 1 : 0) ||
 		(b.lastSeen ?? '').localeCompare(a.lastSeen ?? '') ||
 		a.publicKey.localeCompare(b.publicKey)
@@ -244,8 +253,8 @@ function classifyGroup(
 function classifyMember(m: Node, a: Node, byteLen: HashByteLen): ArtifactFinding | null {
 	if (m.publicKey === a.publicKey) return null;
 	const shared = sharedPrefixBytes(m.publicKey, a.publicKey);
-	const mAdv = m.advertCount ?? 0;
-	const aAdv = a.advertCount ?? 0;
+	const mAdv = heard(m);
+	const aAdv = heard(a);
 	const base = { node: m, canonical: a, sharedBytes: shared };
 
 	// 1. Structural near-identity. Two independent 32-byte keys virtually never
@@ -262,17 +271,22 @@ function classifyMember(m: Node, a: Node, byteLen: HashByteLen): ArtifactFinding
 		};
 	}
 
-	// 2. Same name → same node with a corrupted key (high confidence).
+	// Rules 2-4 are medium. A node row only exists behind a valid advert
+	// signature, which a key corrupted in transit can't carry — so a same-name or
+	// junk-name record sharing a short prefix is a real keyholder, and anyone can
+	// grind a key to a 1-3 byte prefix in seconds.
+
+	// 2. Same name as a busier node.
 	if (normName(m.name) && normName(m.name) === normName(a.name) && !isGarbageName(m.name)) {
-		return { ...base, confidence: 'high', reason: `identical name to ${a.name}` };
+		return { ...base, confidence: 'medium', reason: `identical name to ${a.name}` };
 	}
 
 	// 3. Unreadable name on a record the mesh barely heard, next to a real node it
-	//    was heard far less than → a corrupted advert (high confidence).
+	//    was heard far less than.
 	if (isGarbageName(m.name) && aAdv >= 5 && aAdv >= mAdv * 4) {
 		return {
 			...base,
-			confidence: 'high',
+			confidence: 'medium',
 			reason: `unreadable name, heard ${mAdv}× vs ${a.name || 'anchor'}'s ${aAdv}×`
 		};
 	}

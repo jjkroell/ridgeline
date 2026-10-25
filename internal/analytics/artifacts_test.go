@@ -29,10 +29,11 @@ func TestFindArtifacts(t *testing.T) {
 		// 1-byte cohort: genuine distinct collision (share 1 byte, real names) → NOT flagged.
 		nd("AA", "Node Alpha", 50, 1),
 		nd("AABB", "Node Beta", 40, 1),
-		// 1-byte cohort: identical name, corrupted key (shares <4) → HIGH.
+		// 1-byte cohort: identical name, short shared prefix → MEDIUM (could be a
+		// ground look-alike key; never auto-scrubbed).
 		nd("CC", "Repeater One", 100, 1), // canonical
-		nd("CC22", "Repeater One", 1, 1), // identical name → high
-		// 1-byte cohort: garbage name next to a dominant node → HIGH.
+		nd("CC22", "Repeater One", 1, 1), // identical name → medium
+		// 1-byte cohort: garbage name next to a dominant node → MEDIUM.
 		nd("DD", "Real Repeater", 50, 1),
 		nd("DD22", "=", 1, 1),
 		// 1-byte cohort: rarely-heard, shares 2 bytes with dominant → MEDIUM (not auto-scrubbed).
@@ -45,7 +46,7 @@ func TestFindArtifacts(t *testing.T) {
 
 	arts := FindArtifacts(nodes)
 	if len(arts) != 4 {
-		t.Fatalf("expected 4 artifacts (3 high + 1 medium), got %d: %+v", len(arts), arts)
+		t.Fatalf("expected 4 artifacts (1 high + 3 medium), got %d: %+v", len(arts), arts)
 	}
 
 	got := map[string]string{} // key prefix → confidence
@@ -54,8 +55,8 @@ func TestFindArtifacts(t *testing.T) {
 	}
 	want := map[string]string{
 		key("ABCDEF1299")[:10]: "high",
-		key("CC22")[:10]:       "high",
-		key("DD22")[:10]:       "high",
+		key("CC22")[:10]:       "medium",
+		key("DD22")[:10]:       "medium",
 		key("FFAA99")[:10]:     "medium",
 	}
 	for k, conf := range want {
@@ -72,14 +73,31 @@ func TestFindArtifacts(t *testing.T) {
 		}
 	}
 
-	// Auto-scrub keys = high confidence only (3), never the medium one.
+	// Auto-scrub keys = high confidence only: just the 4-byte structural match.
 	scrub := HighConfidenceArtifactKeys(nodes)
-	if len(scrub) != 3 {
-		t.Fatalf("expected 3 high-confidence scrub keys, got %d: %v", len(scrub), scrub)
+	if len(scrub) != 1 || scrub[0] != key("ABCDEF1299") {
+		t.Fatalf("expected only the 4-byte match in the scrub set, got %v", scrub)
 	}
-	for _, k := range scrub {
-		if k == key("FFAA99") {
-			t.Error("medium-confidence artifact must not be in the auto-scrub set")
+}
+
+// A look-alike key ground to a genuine node's prefix, copying its name and
+// replaying one advert to inflate the raw count, must neither outrank the
+// genuine node nor get it auto-scrubbed.
+func TestGroundLookalikeCannotScrubGenuineNode(t *testing.T) {
+	genuine := nd("F916", "Hilltop Rptr", 6, 1)
+	genuine.AdvertTxCount = 6
+	genuine.FirstSeen = "2026-01-01T00:00:00Z"
+	attacker := nd("F94A", "Hilltop Rptr", 40, 1) // one advert replayed 40×
+	attacker.AdvertTxCount = 1
+	attacker.FirstSeen = "2026-06-22T00:00:00Z"
+
+	for _, k := range HighConfidenceArtifactKeys([]store.Node{genuine, attacker}) {
+		if k == genuine.PublicKey {
+			t.Fatal("genuine node was put in the auto-scrub set")
 		}
+	}
+	arts := FindArtifacts([]store.Node{genuine, attacker})
+	if len(arts) != 1 || arts[0].Key != attacker.PublicKey || arts[0].Confidence != "medium" {
+		t.Fatalf("want the newer look-alike flagged medium for review, got %+v", arts)
 	}
 }

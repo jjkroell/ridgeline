@@ -86,23 +86,48 @@ func (s *Server) emailRateOK(r *http.Request, email string) bool {
 	return true
 }
 
-// clientIP extracts the requester's IP, honouring the X-Forwarded-For set by the
-// trusted reverse proxy / Cloudflare tunnel the daemon always sits behind (the
-// origin is not directly reachable, so the header can't be spoofed by clients).
-// Falls back to RemoteAddr for direct/localhost access.
+// clientIP returns the address rate limits are keyed on.
+//
+// Forwarding headers are believed only from a proxy hop: a loopback or private
+// peer, which is what the deployments put in front of the daemon (cloudflared
+// on the same host for dev; cloudflared and Caddy on the compose network for
+// prod). From such a peer, Cloudflare's CF-Connecting-IP names the visitor.
+// Failing that, the right-most PUBLIC entry of X-Forwarded-For is the one the
+// nearest proxy appended; everything to its left was supplied by the client
+// and is ignored. The left-most entry this used to take is whatever the
+// client typed, which let anyone bypass the limits, or (behind a proxy that
+// replaces the header) put every visitor in one shared bucket.
 func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if i := strings.IndexByte(xff, ','); i >= 0 {
-			xff = xff[:i]
-		}
-		if ip := strings.TrimSpace(xff); ip != "" {
-			return ip
-		}
-	}
+	peer := r.RemoteAddr
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		return host
+		peer = host
 	}
-	return r.RemoteAddr
+	if !proxyHop(peer) {
+		return peer
+	}
+	if cf := net.ParseIP(strings.TrimSpace(r.Header.Get("CF-Connecting-IP"))); cf != nil {
+		return cf.String()
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		for i := len(parts) - 1; i >= 0; i-- {
+			ip := net.ParseIP(strings.TrimSpace(parts[i]))
+			if ip == nil {
+				break // malformed: stop rather than read further into client input
+			}
+			if !proxyHop(ip.String()) {
+				return ip.String()
+			}
+		}
+	}
+	return peer
+}
+
+// proxyHop reports whether addr is a loopback or private address, i.e. one of
+// our own proxies rather than a visitor.
+func proxyHop(addr string) bool {
+	ip := net.ParseIP(addr)
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate())
 }
 
 // sameOriginWS is the WebSocket upgrade origin check: allow non-browser clients

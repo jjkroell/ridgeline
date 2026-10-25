@@ -29,15 +29,31 @@ func TestRateLimiterBurstThenDenyThenRefill(t *testing.T) {
 	}
 }
 
+// The rate-limit key trusts forwarding headers only from a proxy hop, and
+// never takes a client-supplied (left-most) X-Forwarded-For entry.
 func TestClientIP(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.RemoteAddr = "10.0.0.5:1234"
-	if got := clientIP(r); got != "10.0.0.5" {
-		t.Errorf("RemoteAddr fallback = %q, want 10.0.0.5", got)
+	cases := []struct {
+		name, remote, cf, xff, want string
+	}{
+		{"proxy peer, no headers", "10.0.0.5:1234", "", "", "10.0.0.5"},
+		{"tunnel names the visitor", "127.0.0.1:5555", "198.51.100.7", "1.2.3.4", "198.51.100.7"},
+		{"spoofed left-most XFF ignored", "172.18.0.3:80", "", "203.0.113.9, 70.1.2.3", "70.1.2.3"},
+		{"private hops skipped from the right", "172.18.0.3:80", "", "203.0.113.9, 70.1.2.3, 172.18.0.2", "70.1.2.3"},
+		{"direct visitor cannot set headers", "70.1.2.3:4444", "198.51.100.7", "203.0.113.9", "70.1.2.3"},
+		{"bad CF header falls back to XFF", "127.0.0.1:1", "not-an-ip", "70.1.2.3", "70.1.2.3"},
 	}
-	r.Header.Set("X-Forwarded-For", "203.0.113.9, 70.1.2.3")
-	if got := clientIP(r); got != "203.0.113.9" {
-		t.Errorf("XFF leftmost = %q, want 203.0.113.9", got)
+	for _, c := range cases {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.RemoteAddr = c.remote
+		if c.cf != "" {
+			r.Header.Set("CF-Connecting-IP", c.cf)
+		}
+		if c.xff != "" {
+			r.Header.Set("X-Forwarded-For", c.xff)
+		}
+		if got := clientIP(r); got != c.want {
+			t.Errorf("%s: clientIP = %q, want %q", c.name, got, c.want)
+		}
 	}
 }
 

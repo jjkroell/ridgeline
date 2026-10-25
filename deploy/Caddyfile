@@ -8,6 +8,10 @@
 	header {
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
+		# The SPA's main policy is a <meta> tag emitted by SvelteKit (see
+		# web/svelte.config.js); a meta CSP can't carry frame-ancestors, so that
+		# lives here. Browsers enforce both policies.
+		Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
 		-Server

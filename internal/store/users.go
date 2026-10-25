@@ -321,6 +321,13 @@ func (s *Store) DeleteUserSessions(userID int64) error {
 	return err
 }
 
+// DeleteOtherSessions signs a user out everywhere except the session whose
+// token hash is keepHash (the caller's own).
+func (s *Store) DeleteOtherSessions(userID int64, keepHash string) error {
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id = ? AND token_hash != ?`, userID, keepHash)
+	return err
+}
+
 // --- Sessions ---
 
 // CreateSession stores a session row. tokenHash is the SHA-256 of the cookie

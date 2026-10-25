@@ -10,10 +10,37 @@ import (
 type hub struct {
 	mu      sync.RWMutex
 	clients map[*websocket.Conn]chan []byte
+	// slots counts admitted connections (reserved before the upgrade, released
+	// when the handler returns), in total and per client IP.
+	slots int
+	perIP map[string]int
 }
 
 func newHub() *hub {
-	return &hub{clients: make(map[*websocket.Conn]chan []byte)}
+	return &hub{clients: make(map[*websocket.Conn]chan []byte), perIP: make(map[string]int)}
+}
+
+// reserve admits one more connection from ip if neither the global cap nor
+// that IP's cap is reached. Check and claim happen under one lock, so a burst
+// of concurrent upgrades cannot overshoot either cap. Pair with release.
+func (h *hub) reserve(ip string, maxTotal, maxPerIP int) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.slots >= maxTotal || h.perIP[ip] >= maxPerIP {
+		return false
+	}
+	h.slots++
+	h.perIP[ip]++
+	return true
+}
+
+func (h *hub) release(ip string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.slots--
+	if h.perIP[ip]--; h.perIP[ip] <= 0 {
+		delete(h.perIP, ip)
+	}
 }
 
 // add registers a connection and returns its outbound buffer channel.
@@ -23,13 +50,6 @@ func (h *hub) add(c *websocket.Conn) chan []byte {
 	h.clients[c] = ch
 	h.mu.Unlock()
 	return ch
-}
-
-// count reports how many clients are connected.
-func (h *hub) count() int {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return len(h.clients)
 }
 
 func (h *hub) remove(c *websocket.Conn) {

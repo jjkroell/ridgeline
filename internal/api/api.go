@@ -947,20 +947,26 @@ func (s *Server) channelsRecent(w http.ResponseWriter, r *http.Request) {
 
 // Live-feed WebSocket limits. Clients never send anything meaningful (the
 // reader only detects close), so inbound messages are capped tiny; pings with
-// a pong deadline drop dead or stalled peers; maxLiveClients bounds the hub.
+// a pong deadline drop dead or stalled peers; maxLiveClients and
+// maxLiveClientsPerIP bound the hub, per visitor as clientIP sees them.
 const (
 	liveReadLimit  = 512
 	livePongWait   = 60 * time.Second
 	livePingEvery  = 25 * time.Second
 	liveWriteWait  = 10 * time.Second
 	maxLiveClients = 1000
+	// maxLiveClientsPerIP leaves room for a household or office behind one
+	// address with many tabs, while keeping one client from taking the pool.
+	maxLiveClientsPerIP = 20
 )
 
 func (s *Server) live(w http.ResponseWriter, r *http.Request) {
-	if s.hub.count() >= maxLiveClients {
+	ip := clientIP(r)
+	if !s.hub.reserve(ip, maxLiveClients, maxLiveClientsPerIP) {
 		writeErr(w, http.StatusServiceUnavailable, "too many live connections")
 		return
 	}
+	defer s.hub.release(ip)
 	conn, err := s.up.Upgrade(w, r, nil)
 	if err != nil {
 		return
@@ -974,8 +980,11 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	defer s.hub.remove(conn)
 
 	// Reader pump: discard input, detect close (or an oversized message, or a
-	// missed pong, which ends the read with an error).
+	// missed pong, which ends the read with an error). gone ends the writer at
+	// once, so a departed client's slot is freed without waiting for a write.
+	gone := make(chan struct{})
 	go func() {
+		defer close(gone)
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
 				conn.Close()
@@ -996,6 +1005,8 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 				return
 			}
+		case <-gone:
+			return
 		case <-ping.C:
 			if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(liveWriteWait)); err != nil {
 				return

@@ -1,6 +1,12 @@
 package api
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/jjkroell/ridgeline/internal/store"
+)
 
 // The download handler takes a filename straight from the URL. It is checked
 // against a fixed set of names rather than cleaned, so traversal has nothing to
@@ -78,5 +84,37 @@ func TestDownloadNameFallsBackWhenTagHasNoVersion(t *testing.T) {
 	got := downloadName("some_env", "nightly", "", "firmware.uf2")
 	if got != "some_env-nightly.uf2" {
 		t.Errorf("downloadName = %q, want some_env-nightly.uf2", got)
+	}
+}
+
+// A symlink the builder leaves in a job directory is neither listed nor
+// served; a regular artifact still is.
+func TestArtifactSymlinkNotServed(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "7")
+	os.MkdirAll(dir, 0o755)
+	secret := filepath.Join(t.TempDir(), "secret.txt")
+	os.WriteFile(secret, []byte("private"), 0o600)
+	os.Symlink(secret, filepath.Join(dir, "firmware.uf2"))
+	os.WriteFile(filepath.Join(dir, "firmware.zip"), []byte("zip"), 0o644)
+
+	if _, _, err := openArtifact(root, dir, "firmware.uf2"); err == nil {
+		t.Error("symlinked artifact was opened")
+	}
+	f, _, err := openArtifact(root, dir, "firmware.zip")
+	if err != nil {
+		t.Fatalf("regular artifact refused: %v", err)
+	}
+	f.Close()
+	arts := listArtifacts(&store.FirmwareJob{ArtifactDir: dir})
+	if len(arts) != 1 || arts[0].Name != "firmware.zip" {
+		t.Errorf("listing should hold only the regular file, got %+v", arts)
+	}
+	// A job directory that is itself a link out of the root is refused too.
+	outside := t.TempDir()
+	os.WriteFile(filepath.Join(outside, "firmware.zip"), []byte("x"), 0o644)
+	os.Symlink(outside, filepath.Join(root, "8"))
+	if _, _, err := openArtifact(root, filepath.Join(root, "8"), "firmware.zip"); err == nil {
+		t.Error("artifact outside the root was opened")
 	}
 }

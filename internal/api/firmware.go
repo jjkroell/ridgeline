@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -265,19 +266,13 @@ func (s *Server) firmwareDownload(w http.ResponseWriter, r *http.Request, _ stor
 		writeErr(w, http.StatusNotFound, "no such artifact")
 		return
 	}
-	path := filepath.Join(job.ArtifactDir, name)
-	f, err := os.Open(path)
+	f, st, err := openArtifact(s.firmware.ArtifactDir, job.ArtifactDir, name)
 	if err != nil {
 		// Expired and swept between the status call and this one is the common case.
 		writeErr(w, http.StatusNotFound, "that artifact is no longer available")
 		return
 	}
 	defer f.Close()
-	st, err := f.Stat()
-	if err != nil {
-		writeErr(w, http.StatusNotFound, "that artifact is no longer available")
-		return
-	}
 	filename := downloadName(job.Env, job.Tag, job.Flags, name)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
@@ -368,7 +363,9 @@ func listArtifacts(job *store.FirmwareJob) []firmwareArtifact {
 	}
 	var out []firmwareArtifact
 	for _, e := range entries {
-		if e.IsDir() || !artifactNames[e.Name()] {
+		// Regular files only: the build container writes this directory, and a
+		// symlink there must not be listed (or served) as an artifact.
+		if !e.Type().IsRegular() || !artifactNames[e.Name()] {
 			continue
 		}
 		info, err := e.Info()
@@ -382,6 +379,46 @@ func listArtifacts(job *store.FirmwareJob) []firmwareArtifact {
 		})
 	}
 	return out
+}
+
+// openArtifact opens dir/name for download only if it is a regular file (not
+// a symlink) that resolves inside root. The builder writes the artifact
+// directory, so code running in the build could otherwise plant a link that
+// makes ridgelined serve its own files. An empty root skips the containment
+// check (the build service is not configured).
+func openArtifact(root, dir, name string) (*os.File, os.FileInfo, error) {
+	path := filepath.Join(dir, name)
+	li, err := os.Lstat(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !li.Mode().IsRegular() {
+		return nil, nil, fmt.Errorf("artifact %s is not a regular file", name)
+	}
+	if root != "" {
+		realRoot, err := filepath.EvalSymlinks(root)
+		if err != nil {
+			return nil, nil, err
+		}
+		real, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return nil, nil, err
+		}
+		if rel, err := filepath.Rel(realRoot, real); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return nil, nil, fmt.Errorf("artifact %s is outside the artifact directory", name)
+		}
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	st, err := f.Stat()
+	// The file opened must be the one checked, not one swapped in since.
+	if err != nil || !os.SameFile(li, st) {
+		f.Close()
+		return nil, nil, fmt.Errorf("artifact %s changed while opening", name)
+	}
+	return f, st, nil
 }
 
 func contains(list []string, want string) bool {

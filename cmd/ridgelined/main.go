@@ -229,9 +229,15 @@ func run(log *slog.Logger, configPath string, configRequired bool) error {
 		ArtifactTTLHours: cfg.Firmware.ArtifactTTLHours,
 		MaxQueued:        cfg.Firmware.MaxQueued,
 		Tags:             cfg.Firmware.Tags,
+		TagCommits:       cfg.Firmware.TagCommits,
 	})
 	if cfg.Firmware.AgentToken != "" {
 		log.Info("firmware build service enabled", "artifactDir", cfg.Firmware.ArtifactDir)
+		for _, t := range cfg.Firmware.Tags {
+			if cfg.Firmware.TagCommits[t] == "" {
+				log.Warn("firmware tag not pinned to a commit; builds follow wherever upstream's tag points", "tag", t, "pin", t+"@<commit>")
+			}
+		}
 	}
 
 	// Radio-preset guard. Installed before ingest starts so an observer on a

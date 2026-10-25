@@ -1157,7 +1157,6 @@ export interface LocationShare {
   nodePubkey: string;
   granteeUserId: number;
   displayName: string;
-  email: string;
   createdAt: string;
 }
 

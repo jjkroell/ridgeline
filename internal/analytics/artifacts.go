@@ -72,11 +72,26 @@ func sharedPrefixBytes(a, b string) int {
 	return n
 }
 
+// heard is how often a node actually transmitted: AdvertTxCount collapses
+// re-floods and replays of one advert, where AdvertCount goes up for every
+// stored copy — so a single replayed advert can't buy a high count. Falls back
+// to AdvertCount for rows that predate the transmission counter.
+func heard(n store.Node) int {
+	if n.AdvertTxCount > 0 {
+		return n.AdvertTxCount
+	}
+	return n.AdvertCount
+}
+
 // moreCanonical reports whether a is the more plausible "true" node than b:
-// most adverts wins, then a located record, then most-recently seen, then key.
+// most transmissions wins, then the record seen first (the original predates
+// any look-alike), then a located record, then most-recently seen, then key.
 func moreCanonical(a, b store.Node) bool {
-	if a.AdvertCount != b.AdvertCount {
-		return a.AdvertCount > b.AdvertCount
+	if heard(a) != heard(b) {
+		return heard(a) > heard(b)
+	}
+	if a.FirstSeen != b.FirstSeen && a.FirstSeen != "" && b.FirstSeen != "" {
+		return a.FirstSeen < b.FirstSeen
 	}
 	if a.HasLocation != b.HasLocation {
 		return a.HasLocation
@@ -140,18 +155,24 @@ func classifyMember(m, a store.Node, byteLen int) *Artifact {
 	if shared >= sharedDefinite {
 		return mk("high", fmt.Sprintf("key matches %s in %d of 32 bytes — corrupted copy", nameOr(a.Name), shared))
 	}
-	// 2. Same name → same node with a corrupted key.
+	// Rules 2-4 are medium — shown for admin review, never auto-scrubbed. A node
+	// row only exists behind a valid advert signature, and a key corrupted in
+	// transit can't carry one, so a same-name or junk-name record sharing a short
+	// prefix is a real keyholder. Anyone can grind a key to a 1-3 byte prefix
+	// in seconds, so these signals must not delete the node they resemble.
+	ma, aa := heard(m), heard(a)
+	// 2. Same name as a busier node.
 	if normName(m.Name) != "" && normName(m.Name) == normName(a.Name) && !isGarbageName(m.Name) {
-		return mk("high", "identical name to "+a.Name)
+		return mk("medium", "identical name to "+a.Name)
 	}
 	// 3. Unreadable name on a barely-heard record next to a dominant real node.
-	if isGarbageName(m.Name) && a.AdvertCount >= 5 && a.AdvertCount >= m.AdvertCount*4 {
-		return mk("high", fmt.Sprintf("unreadable name, heard %d× vs %s's %d×", m.AdvertCount, nameOr(a.Name), a.AdvertCount))
+	if isGarbageName(m.Name) && aa >= 5 && aa >= ma*4 {
+		return mk("medium", fmt.Sprintf("unreadable name, heard %d× vs %s's %d×", ma, nameOr(a.Name), aa))
 	}
 	// 4. Residual: rarely heard, shares more than the hash length with a strongly
-	//    dominant node. Medium — never auto-scrubbed.
-	if m.AdvertCount <= 2 && shared > byteLen && a.AdvertCount >= 10 && a.AdvertCount >= m.AdvertCount*8 {
-		return mk("medium", fmt.Sprintf("rarely heard (%d×), shares %d bytes with %s", m.AdvertCount, shared, nameOr(a.Name)))
+	//    dominant node.
+	if ma <= 2 && shared > byteLen && aa >= 10 && aa >= ma*8 {
+		return mk("medium", fmt.Sprintf("rarely heard (%d×), shares %d bytes with %s", ma, shared, nameOr(a.Name)))
 	}
 	return nil
 }

@@ -34,6 +34,13 @@ fi
 # safe because the patches below are idempotent and assert their own anchors, so
 # a tree already patched is left exactly as it should be.
 WANT=$(git -C "$SRC_DIR" rev-parse -q --verify "tags/${TAG}^{commit}")
+# A tag is only a name, and the fetch above accepts it wherever upstream has
+# moved it. When ridgelined pins the commit this tag was vetted at, build
+# nothing else.
+if [[ -n "${EXPECT_COMMIT:-}" && "$WANT" != "$EXPECT_COMMIT" ]]; then
+  echo "[build] tag $TAG resolves to $WANT, not the vetted commit $EXPECT_COMMIT; refusing to build" >&2
+  exit 1
+fi
 HAVE=$(git -C "$SRC_DIR" rev-parse -q --verify HEAD || true)
 if [[ "$WANT" != "$HAVE" ]]; then
   log "switching to $TAG"

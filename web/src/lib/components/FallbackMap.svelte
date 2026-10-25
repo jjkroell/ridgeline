@@ -193,6 +193,15 @@
 		return Math.max(repeater ? 3 : 2.6, Math.min(repeater ? 5 : 4, r));
 	}
 
+	// Node names come straight off the air, so the tooltip is a text node —
+	// Leaflet treats a string as HTML (the MapLibre path uses setText for the
+	// same reason).
+	function nodeTooltip(n: Node): HTMLElement {
+		const el = document.createElement('span');
+		el.textContent = `${n.name || n.publicKey.slice(0, 10)} · ${roleLabel(n.role)}`;
+		return el;
+	}
+
 	function renderMarkers() {
 		if (!map || !L) return;
 		markers.clearLayers();
@@ -204,7 +213,7 @@
 			// Cluster mode: divIcon markers so markercluster can cluster/decluster them.
 			if (cluster) {
 				const m = L.marker([lat, lon], { icon: nodeIcon(n, stroke, zoom) });
-				m.bindTooltip(`${n.name || n.publicKey.slice(0, 10)} · ${roleLabel(n.role)}`, {
+				m.bindTooltip(nodeTooltip(n), {
 					direction: 'top'
 				});
 				m.on('click', () => {
@@ -236,7 +245,7 @@
 				fillColor: color,
 				fillOpacity: 0.9
 			});
-			m.bindTooltip(`${n.name || n.publicKey.slice(0, 10)} · ${roleLabel(n.role)}`, {
+			m.bindTooltip(nodeTooltip(n), {
 				direction: 'top'
 			});
 			m.on('click', () => onselect?.(n.publicKey));

@@ -28,6 +28,13 @@ const (
 	// reaches it; a flooder reaches it immediately and is capped there.
 	holdPerObserver = 500
 
+	// holdTotal caps all pens together. The per-observer cap alone is no bound:
+	// observer keys are self-minted, so a flooder opens as many pens as it likes.
+	// With frames capped at the radio MTU this keeps the pens to tens of MB, and
+	// it is still far above what a handful of legitimate new observers hold in
+	// the minutes before their first status.
+	holdTotal = 10000
+
 	// holdTTL is how long packets wait for a status that may never come, after
 	// which the publisher is quarantined outright. Status arrives every ~5
 	// minutes on this mesh, so twenty is four missed cycles: long enough that a
@@ -72,7 +79,7 @@ func (in *Ingestor) holdObservation(observerID string, obs store.Observation) bo
 	if obs.ObserverName != "" {
 		p.name = obs.ObserverName
 	}
-	if len(p.items) >= holdPerObserver {
+	if len(p.items) >= holdPerObserver || in.held >= holdTotal {
 		p.dropped++
 		return false
 	}
@@ -81,6 +88,7 @@ func (in *Ingestor) holdObservation(observerID string, obs store.Observation) bo
 	// observer, which is not when it was heard, and would reorder it against
 	// everything that arrived while it waited.
 	p.items = append(p.items, heldObs{obs: obs})
+	in.held++
 	return true
 }
 
@@ -90,6 +98,9 @@ func (in *Ingestor) releaseHeld(observerID string) {
 	in.penMu.Lock()
 	p := in.pens[observerID]
 	delete(in.pens, observerID)
+	if p != nil {
+		in.held -= len(p.items)
+	}
 	in.penMu.Unlock()
 	if p == nil || len(p.items) == 0 {
 		return
@@ -111,6 +122,9 @@ func (in *Ingestor) discardHeld(observerID, reason string) {
 	in.penMu.Lock()
 	p := in.pens[observerID]
 	delete(in.pens, observerID)
+	if p != nil {
+		in.held -= len(p.items)
+	}
 	in.penMu.Unlock()
 	if p == nil || len(p.items) == 0 {
 		return

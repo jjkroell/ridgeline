@@ -42,7 +42,7 @@ func (s *Store) GetNote(id int64) (Note, bool, error) {
 	var n Note
 	err := s.db.QueryRow(`
 		SELECT nt.id, nt.node_pubkey, nt.user_id,
-		       COALESCE(NULLIF(u.display_name,''), u.email), nt.visibility, nt.body,
+		       COALESCE(NULLIF(u.display_name,''), 'User #' || u.id), nt.visibility, nt.body,
 		       nt.created_at, nt.updated_at
 		FROM node_notes nt JOIN users u ON u.id = nt.user_id
 		WHERE nt.id = ?`, id).
@@ -65,7 +65,7 @@ func (s *Store) NotesForNode(nodePubkey string, viewerUserID int64, inCircle boo
 	nodePubkey = strings.ToUpper(nodePubkey)
 	rows, err := s.db.Query(`
 		SELECT nt.id, nt.node_pubkey, nt.user_id,
-		       COALESCE(NULLIF(u.display_name,''), u.email), nt.visibility, nt.body,
+		       COALESCE(NULLIF(u.display_name,''), 'User #' || u.id), nt.visibility, nt.body,
 		       nt.created_at, nt.updated_at
 		FROM node_notes nt JOIN users u ON u.id = nt.user_id
 		WHERE nt.node_pubkey = ?

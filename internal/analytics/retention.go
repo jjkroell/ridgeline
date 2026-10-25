@@ -54,6 +54,9 @@ func StaleNodeKeys(nodes []store.Node, cutoffISO string) []string {
 // match some hop and nothing could ever be pruned. Requiring a unique owner means
 // an ambiguous short hop credits no one (correct: it isn't evidence THIS node
 // relayed), while a node with a distinctive multi-byte presence is reliably kept.
+// A fresh, unestablished row sharing the prefix does not count against an
+// established one (see soleOwner), so a ground look-alike key cannot get a
+// relaying repeater purged.
 func FilterRelayedWithin(stale []string, allNodes []store.Node, relayHops map[string]bool, minHopBytes int) []string {
 	if minHopBytes < 1 {
 		minHopBytes = 1
@@ -65,6 +68,7 @@ func FilterRelayedWithin(stale []string, allNodes []store.Node, relayHops map[st
 	for _, n := range allNodes {
 		pubkeys = append(pubkeys, strings.ToUpper(n.PublicKey))
 	}
+	var cands []int
 	relayed := make(map[string]bool)
 	for hop := range relayHops {
 		// Width gate. A hop narrower than minHopBytes is not attribution: the
@@ -74,17 +78,16 @@ func FilterRelayedWithin(stale []string, allNodes []store.Node, relayHops map[st
 		if len(hop)/2 < minHopBytes {
 			continue
 		}
-		owner, count := "", 0
-		for _, pk := range pubkeys {
+		// Unique owner, setting aside unestablished rows when several match
+		// (see soleOwner); still ambiguous → this hop credits no single node.
+		cands = cands[:0]
+		for i, pk := range pubkeys {
 			if strings.HasPrefix(pk, hop) {
-				owner, count = pk, count+1
-				if count > 1 {
-					break // ambiguous — this hop credits no single node
-				}
+				cands = append(cands, i)
 			}
 		}
-		if count == 1 {
-			relayed[owner] = true
+		if i, ok := soleOwner(allNodes, cands); ok {
+			relayed[pubkeys[i]] = true
 		}
 	}
 	kept := make([]string, 0, len(stale))

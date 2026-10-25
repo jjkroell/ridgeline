@@ -1,7 +1,9 @@
 package api
 
 import (
+	"io"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,6 +70,17 @@ func TestLocationSharingFlow(t *testing.T) {
 	}
 	if shares, _ := st.ListLocationShares(node); len(shares) != 1 || shares[0].GranteeUserID != friendID {
 		t.Fatalf("store should record friend's share, got %v", shares)
+	}
+	// The owner's share list never carries grantee emails: shares can be made by
+	// any user id, so an email there would expose every account's address.
+	if resp, err := member.http.Get(base + "/api/nodes/" + node + "/location-shares"); err != nil {
+		t.Fatalf("list shares: %v", err)
+	} else {
+		raw, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if strings.Contains(string(raw), "@") {
+			t.Errorf("share list leaks an email address: %s", raw)
+		}
 	}
 
 	// Friend can now read it, read-only (canEdit=false, sharedBy names the owner).

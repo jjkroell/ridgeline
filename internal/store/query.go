@@ -577,17 +577,25 @@ func (s *Store) RawByHash(hash string) ([]RawObservation, error) {
 // or after sinceISO. Collapsing the ~N observer copies of each transmission
 // keeps a long (24h) channel-history window compact — the channel reader dedups
 // by message hash anyway, so it only needs one copy of each.
+const recentGroupTextSQL = `
+		SELECT raw_hex, COALESCE(observer_id,''), COALESCE(region,''), snr, rssi, received_at, MAX(id)
+		FROM observations
+		WHERE payload_type = 'GroupText' AND received_at >= ?
+		GROUP BY +message_hash
+		ORDER BY MAX(id) DESC
+		LIMIT ?`
+
 func (s *Store) RecentGroupText(sinceISO string, limit int) ([]RawObservation, error) {
 	if limit <= 0 || limit > 20000 {
 		limit = 10000
 	}
-	rows, err := s.db.Query(`
-		SELECT raw_hex, COALESCE(observer_id,''), COALESCE(region,''), snr, rssi, received_at, MAX(id)
-		FROM observations
-		WHERE payload_type = 'GroupText' AND received_at >= ?
-		GROUP BY message_hash
-		ORDER BY MAX(id) DESC
-		LIMIT ?`, sinceISO, limit)
+	// ⚠ GROUP BY +message_hash — the unary + is load-bearing. Plain
+	// `GROUP BY message_hash` lets SQLite satisfy the grouping by walking
+	// idx_obs_hash, i.e. `SCAN observations` — every row in the table, on the
+	// single connection, for an anonymous request. The + hides that index from
+	// the grouping, so the window is read via idx_obs_received and grouped in a
+	// temp b-tree. Pinned by TestRecentGroupTextUsesWindowIndex.
+	rows, err := s.db.Query(recentGroupTextSQL, sinceISO, limit)
 	if err != nil {
 		return nil, err
 	}

@@ -24,6 +24,10 @@ type respCache struct {
 	mu      sync.Mutex
 	entries map[string]*respEntry
 	max     int
+	// sem bounds how many computations run at once. Sharing only merges
+	// requests for the SAME key, so without this a caller cycling keys could
+	// queue unlimited scans onto the single DB connection.
+	sem chan struct{}
 }
 
 type respEntry struct {
@@ -33,8 +37,12 @@ type respEntry struct {
 	at   time.Time
 }
 
+// maxConcurrentScans: two lets a slow 24h scan and a quick one overlap without
+// letting a burst of distinct keys monopolise the connection.
+const maxConcurrentScans = 2
+
 func newRespCache(max int) *respCache {
-	return &respCache{entries: map[string]*respEntry{}, max: max}
+	return &respCache{entries: map[string]*respEntry{}, max: max, sem: make(chan struct{}, maxConcurrentScans)}
 }
 
 // get returns the cached encoding for key if it is younger than ttl; otherwise
@@ -62,7 +70,9 @@ func (c *respCache) get(key string, ttl time.Duration, compute func() (any, erro
 	c.evictLocked(ttl)
 	c.mu.Unlock()
 
+	c.sem <- struct{}{}
 	v, err := compute()
+	<-c.sem
 	var body []byte
 	if err == nil {
 		var buf bytes.Buffer

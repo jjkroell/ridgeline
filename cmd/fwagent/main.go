@@ -35,6 +35,7 @@ type job struct {
 	Env    string   `json:"env"`
 	Flags  []string `json:"flags"`
 	OutDir string   `json:"outDir"`
+	Commit string   `json:"commit,omitempty"` // vetted commit the tag must resolve to
 }
 
 type result struct {
@@ -199,6 +200,8 @@ func (a *agent) build(ctx context.Context, j *job) (string, error) {
 		// build.sh writes to OUT_DIR; ridgelined dictates the path so a build can
 		// never be steered at a directory of the agent's choosing.
 		"-e", "OUT_DIR=" + containerOut(j),
+		// build.sh fails unless the fetched tag resolves to this commit.
+		"-e", "EXPECT_COMMIT=" + j.Commit,
 		a.image, j.Tag, j.Env,
 	}
 	args = append(args, j.Flags...)

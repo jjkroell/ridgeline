@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -31,7 +32,7 @@ func TestLocationShares(t *testing.T) {
 		t.Error("bob should have a share")
 	}
 
-	// List shows both, with display name falling back to email.
+	// List shows both; a missing display name never falls back to the email.
 	shares, err := st.ListLocationShares(locNode)
 	if err != nil || len(shares) != 2 {
 		t.Fatalf("expected 2 shares, got %d err=%v", len(shares), err)
@@ -43,8 +44,8 @@ func TestLocationShares(t *testing.T) {
 	if byID[alice.ID].DisplayName != "Alice" {
 		t.Errorf("alice display name = %q", byID[alice.ID].DisplayName)
 	}
-	if byID[bob.ID].DisplayName != "bob@example.com" {
-		t.Errorf("bob (no display name) should fall back to email, got %q", byID[bob.ID].DisplayName)
+	if got, want := byID[bob.ID].DisplayName, fmt.Sprintf("User #%d", bob.ID); got != want {
+		t.Errorf("bob (no display name) = %q, want %q (never the email)", got, want)
 	}
 
 	// Re-granting is idempotent (no duplicate row).

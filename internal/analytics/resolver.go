@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"strings"
+	"time"
 
 	"github.com/jjkroell/ridgeline/internal/store"
 )
@@ -35,12 +36,12 @@ func newPrefixResolverMin(nodes []store.Node, minBytes int) func(hop string) str
 	if minBytes < 1 {
 		minBytes = 1
 	}
-	index := map[int]map[string][]string{2: {}, 4: {}, 6: {}}
-	for _, n := range nodes {
+	index := map[int]map[string][]int{2: {}, 4: {}, 6: {}}
+	for i, n := range nodes {
 		pk := strings.ToUpper(n.PublicKey)
 		for _, l := range []int{2, 4, 6} {
 			if len(pk) >= l {
-				index[l][pk[:l]] = append(index[l][pk[:l]], n.PublicKey)
+				index[l][pk[:l]] = append(index[l][pk[:l]], i)
 			}
 		}
 	}
@@ -53,11 +54,42 @@ func newPrefixResolverMin(nodes []store.Node, minBytes int) func(hop string) str
 		if !ok {
 			return ""
 		}
-		if matches := m[h]; len(matches) == 1 {
-			return matches[0]
+		if i, ok := soleOwner(nodes, m[h]); ok {
+			return nodes[i].PublicKey
 		}
 		return ""
 	}
+}
+
+// soleOwner picks the one node a hop belongs to among the candidate indices
+// whose key carries it. A single candidate owns it outright. Among several,
+// rows that are not established are set aside: any signature-valid advert
+// creates a row, so one advert from a key ground to a genuine node's prefix
+// would otherwise make every hop of that node ambiguous — erasing its relay
+// credit, getting it purged by retention, and hiding a bridge from injection
+// detection. Two established rows sharing the prefix stay ambiguous.
+func soleOwner(nodes []store.Node, cands []int) (int, bool) {
+	if len(cands) == 1 {
+		return cands[0], true
+	}
+	owner, n := -1, 0
+	for _, i := range cands {
+		if established(nodes[i]) {
+			owner, n = i, n+1
+		}
+	}
+	return owner, n == 1
+}
+
+// established reports whether a node row has a history a single injected
+// advert cannot fake: several separate transmissions over at least a day.
+func established(n store.Node) bool {
+	if heard(n) < 3 {
+		return false
+	}
+	first, err1 := time.Parse(time.RFC3339Nano, n.FirstSeen)
+	last, err2 := time.Parse(time.RFC3339Nano, n.LastSeen)
+	return err1 == nil && err2 == nil && last.Sub(first) >= 24*time.Hour
 }
 
 // displayName returns a node's name, falling back to its key when unnamed.

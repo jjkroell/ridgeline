@@ -66,6 +66,8 @@ func (s *Server) accountChangePassword(w http.ResponseWriter, r *http.Request, u
 		s.fail(w, err)
 		return
 	}
+	// A session stolen before the change must not outlive it.
+	s.revokeOtherSessions(r, user.ID)
 	s.log.Info("account password changed", "user", user.ID)
 	writeJSON(w, map[string]bool{"ok": true})
 }
@@ -104,6 +106,7 @@ func (s *Server) accountChangeEmail(w http.ResponseWriter, r *http.Request, user
 		s.fail(w, err)
 		return
 	}
+	s.revokeOtherSessions(r, user.ID)
 	s.log.Info("account email changed", "user", user.ID)
 
 	updated, _, err := s.store.GetUserByID(user.ID)
@@ -172,4 +175,15 @@ func (s *Server) returnUpdatedUser(w http.ResponseWriter, id int64) {
 		return
 	}
 	writeJSON(w, u)
+}
+
+// revokeOtherSessions ends every session of userID except the one making r.
+func (s *Server) revokeOtherSessions(r *http.Request, userID int64) {
+	keep := ""
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		keep = auth.HashToken(c.Value)
+	}
+	if err := s.store.DeleteOtherSessions(userID, keep); err != nil {
+		s.log.Warn("revoke other sessions failed", "user", userID, "err", err)
+	}
 }

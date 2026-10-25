@@ -503,10 +503,9 @@
 						<li class="flex items-center gap-2">
 							<span
 								class="bg-signal/15 text-signal grid h-6 w-6 place-items-center rounded-full text-[0.6rem] font-700"
-								>{(sh.displayName || sh.email).slice(0, 2).toUpperCase()}</span
+								>{sh.displayName.slice(0, 2).toUpperCase()}</span
 							>
-							<span class="text-fg min-w-0 truncate text-sm font-600">{sh.displayName}</span>
-							<span class="text-fg-faint min-w-0 flex-1 truncate text-xs">{sh.email}</span>
+							<span class="text-fg min-w-0 flex-1 truncate text-sm font-600">{sh.displayName}</span>
 							<button onclick={() => revoke(sh)} class="text-fg-faint hover:text-coral shrink-0 text-xs"
 								>Revoke</button
 							>

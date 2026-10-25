@@ -193,7 +193,14 @@ type Firmware struct {
 	// An allowlist rather than a live query of GitHub: it keeps ridgelined off the
 	// network, means the catalogue cannot change under users mid-migration, and
 	// lets the operator vet a release before anyone can build it.
+	//
+	// An entry may pin the commit it was vetted at as "tag@<40-hex sha>". A tag
+	// is only a name upstream can move; with a pin, a build whose fetched tag
+	// resolves anywhere else fails instead of compiling unreviewed code. Load
+	// splits pins out into TagCommits and leaves bare names in Tags.
 	Tags []string `json:"tags"`
+	// TagCommits maps a pinned tag to its vetted commit (filled by Load).
+	TagCommits map[string]string `json:"-"`
 }
 
 // MQTTSubscriber is one read-only downstream consumer of the authenticated
@@ -276,6 +283,29 @@ func Load(path string) (Config, error) {
 		}
 	}
 
+	// The ingest consumer is a broker superuser on username alone, so its
+	// password is the whole of its protection. Refuse the examples' placeholder
+	// (and an empty one) rather than run with a published credential.
+	if cfg.MQTTAuth.Audience != "" && cfg.MQTTAuth.ConsumerUsername != "" && placeholderSecret(cfg.MQTTAuth.ConsumerPassword) {
+		return cfg, fmt.Errorf("config: mqttAuth.consumerPassword is empty or still a CHANGE_ME placeholder")
+	}
+
+	for i, t := range cfg.Firmware.Tags {
+		name, sha, pinned := strings.Cut(strings.TrimSpace(t), "@")
+		if !pinned {
+			continue
+		}
+		sha = strings.ToLower(sha)
+		if name == "" || !isCommitSHA(sha) {
+			return cfg, fmt.Errorf("config: firmware.tags[%d] %q: want tag@<40-hex commit>", i, t)
+		}
+		if cfg.Firmware.TagCommits == nil {
+			cfg.Firmware.TagCommits = map[string]string{}
+		}
+		cfg.Firmware.Tags[i] = name
+		cfg.Firmware.TagCommits[name] = sha
+	}
+
 	// Downstream subscriber accounts are checked BEFORE observer tokens, so a
 	// misconfigured one could shadow a real identity or the ingest consumer.
 	// Refuse to start rather than serve a broker with an ambiguous account.
@@ -285,9 +315,10 @@ func Load(path string) (Config, error) {
 		switch {
 		case sub.Username == "":
 			return cfg, fmt.Errorf("config: mqttAuth.subscribers[%d] has no username", i)
-		case sub.Password == "":
-			// An empty password would authenticate anyone naming the account.
-			return cfg, fmt.Errorf("config: mqttAuth.subscribers[%d] (%s) has no password", i, sub.Username)
+		case placeholderSecret(sub.Password):
+			// An empty password would authenticate anyone naming the account,
+			// and a CHANGE_ME one is published in the example configs.
+			return cfg, fmt.Errorf("config: mqttAuth.subscribers[%d] (%s) has no password or a CHANGE_ME placeholder", i, sub.Username)
 		case strings.HasPrefix(strings.ToLower(sub.Username), "v1_"):
 			return cfg, fmt.Errorf("config: mqttAuth.subscribers[%d] (%s) uses the v1_ observer prefix", i, sub.Username)
 		case sub.Username == cfg.MQTTAuth.ConsumerUsername:
@@ -301,4 +332,24 @@ func Load(path string) (Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+// placeholderSecret reports whether a configured secret is empty or still the
+// CHANGE_ME placeholder from the example configs.
+func placeholderSecret(v string) bool {
+	v = strings.TrimSpace(v)
+	return v == "" || strings.HasPrefix(strings.ToUpper(v), "CHANGE_ME")
+}
+
+// isCommitSHA reports whether v is a full 40-hex-digit git commit id.
+func isCommitSHA(v string) bool {
+	if len(v) != 40 {
+		return false
+	}
+	for _, c := range v {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
 }

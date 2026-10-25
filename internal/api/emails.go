@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/jjkroell/ridgeline/internal/store"
@@ -103,6 +104,9 @@ func (s *Server) notifyOwnerOfNote(pubkey string, author store.User, note store.
 	}
 	owner, ok, err := s.store.NodeOwner(pubkey)
 	if err != nil || !ok || owner.UserID == author.ID {
+		return
+	}
+	if !s.noteMailLimiter.Allow(strconv.FormatInt(owner.UserID, 10)) {
 		return
 	}
 	ownerUser, ok, err := s.store.GetUserByID(owner.UserID)

@@ -766,6 +766,10 @@ type Observation struct {
 	SNR            *float64
 	RSSI           *float64
 	ReceivedAt     time.Time // server ingest time — authoritative for ordering
+	// NoNewNode stores an advert without creating a node row for an unknown
+	// key; an existing node is still updated. Set by ingest once the reporting
+	// observer has spent its new-node ration.
+	NoNewNode bool
 }
 
 // Record persists an observation: it inserts the observation row, updates the
@@ -825,7 +829,7 @@ func (s *Store) Record(o Observation) error {
 	// feed — it just can't deface a node's identity. Without this guard a single
 	// RF-garbled copy (e.g. "UBCV//Zenith" arriving as "P#e//jnitm") overwrites the
 	// real name, and corrupt copies also spawn phantom nodes.
-	if a := p.Advert; a != nil && a.PublicKey != "" && a.SignatureValid {
+	if a := p.Advert; a != nil && a.PublicKey != "" && a.SignatureValid && s.mayUpsertNode(tx, o, a.PublicKey) {
 		var lat, lon interface{}
 		if a.HasLocation {
 			lat, lon = a.Latitude, a.Longitude
@@ -909,6 +913,17 @@ func (s *Store) Record(o Observation) error {
 	}
 	s.obsCount.Add(1)
 	return nil
+}
+
+// mayUpsertNode reports whether this advert may write its node row: always,
+// unless the observation is flagged NoNewNode and the node does not exist yet.
+func (s *Store) mayUpsertNode(tx *sql.Tx, o Observation, pubkey string) bool {
+	if !o.NoNewNode {
+		return true
+	}
+	var n int
+	tx.QueryRow(`SELECT COUNT(*) FROM nodes WHERE pubkey = ?`, pubkey).Scan(&n)
+	return n > 0
 }
 
 // advertTxGap is how far apart two adverts must land to count as separate

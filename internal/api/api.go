@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net/http"
 	"os"
 	"strconv"
@@ -39,6 +40,8 @@ type Server struct {
 	// nodeCache shares and briefly reuses the expensive per-node scans
 	// (heatmap, observers, history). See respcache.go.
 	nodeCache *respCache
+	// nodeList briefly reuses the node-list scan (see nodelist.go).
+	nodeList nodeList
 	// activity serves node heatmaps from memory (see analytics.ActivityIndex);
 	// nil, or not yet backfilled, falls back to scanning.
 	activity  *analytics.ActivityIndex
@@ -76,6 +79,14 @@ type Server struct {
 	// rather than IP: the action is irreversible and per-account, and a shared
 	// NAT must not let one user exhaust another's budget.
 	nodeLifecycleLimiter *rateLimiter
+	// noteLimiter bounds note creation per author, and noteMailLimiter bounds
+	// "new note on your node" emails per owner — each note mails a third party,
+	// so without these one account could flood an owner's inbox.
+	noteLimiter     *rateLimiter
+	noteMailLimiter *rateLimiter
+	// shareLimiter bounds share grants per owner: sharing by email answers
+	// "is this address registered?", so it must not be a free oracle.
+	shareLimiter *rateLimiter
 	// OnBridgeChanged asks for an immediate far-side segment sweep. Set by the
 	// daemon; nil in tests and when the sweep isn't running.
 	//
@@ -141,6 +152,11 @@ func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
 		// candidate is only a name to try and is confirmed only by real traffic,
 		// so this guards table growth, not a secret.
 		channelLimiter: newRateLimiter(1.0/10, 8),
+		// Notes: ~10 per author then 1 every 30s. Owner emails: ~3 then 1 every
+		// 10 min per owner; past that the note still posts, it just isn't mailed.
+		noteLimiter:     newRateLimiter(1.0/30, 10),
+		noteMailLimiter: newRateLimiter(1.0/600, 3),
+		shareLimiter:    newRateLimiter(1.0/60, 10), // ~10 then 1/min per owner
 	}
 }
 
@@ -177,14 +193,18 @@ func (s *Server) Handler() http.Handler {
 	// Accounts: registration, login/logout, current-user probe. Mutating auth
 	// endpoints are same-origin POSTs; CSRF is enforced on authenticated
 	// mutations elsewhere (requireUser) once a session exists.
-	mux.HandleFunc("POST /api/auth/register", s.authRegister)
-	mux.HandleFunc("POST /api/auth/login", s.authLogin)
+	// The pre-session ones carry no CSRF token (there is no session yet), so
+	// they also insist on a JSON body: a cross-site form or text/plain POST is
+	// refused, and a cross-site JSON POST needs a CORS preflight never granted.
+	// Cross-origin browser requests are refused outright (see Handler).
+	mux.HandleFunc("POST /api/auth/register", jsonOnly(s.authRegister))
+	mux.HandleFunc("POST /api/auth/login", jsonOnly(s.authLogin))
 	mux.HandleFunc("POST /api/auth/logout", s.authLogout)
 	mux.HandleFunc("GET /api/auth/me", s.authMe)
-	mux.HandleFunc("POST /api/auth/verify", s.authVerifyEmail)
-	mux.HandleFunc("POST /api/auth/resend-verification", s.authResendVerification)
-	mux.HandleFunc("POST /api/auth/forgot", s.authForgotPassword)
-	mux.HandleFunc("POST /api/auth/reset", s.authResetPassword)
+	mux.HandleFunc("POST /api/auth/verify", jsonOnly(s.authVerifyEmail))
+	mux.HandleFunc("POST /api/auth/resend-verification", jsonOnly(s.authResendVerification))
+	mux.HandleFunc("POST /api/auth/forgot", jsonOnly(s.authForgotPassword))
+	mux.HandleFunc("POST /api/auth/reset", jsonOnly(s.authResetPassword))
 	// Self-service account editing (authenticated + CSRF via requireUser).
 	mux.HandleFunc("PUT /api/account/profile", s.requireUser(s.accountUpdateProfile))
 	mux.HandleFunc("POST /api/account/password", s.requireUser(s.accountChangePassword))
@@ -274,7 +294,50 @@ func (s *Server) Handler() http.Handler {
 			s.log.Warn("web dir not found, serving API only", "dir", s.webDir)
 		}
 	}
-	return limitBody(mux)
+	// Refuse cross-origin browser writes on every route (Sec-Fetch-Site, else
+	// Origin vs Host); non-browser clients send neither header and pass. This is
+	// what stops login CSRF, where no session token exists to check.
+	xo := http.NewCrossOriginProtection()
+	return limitBody(xo.Handler(noStoreWhenSignedIn(s.freshNodesAfterWrites(mux))))
+}
+
+// noStoreWhenSignedIn marks every API response to a signed-in request
+// Cache-Control: no-store. Many of them depend on who is asking (account,
+// claims, notes, private locations), and the service worker caches /api/
+// responses by URL alone for offline use; a shared browser would otherwise
+// show one account's data to the next person offline.
+func noStoreWhenSignedIn(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			if _, err := r.Cookie(sessionCookie); err == nil {
+				w.Header().Set("Cache-Control", "no-store")
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// jsonOnly refuses a request whose body is not declared application/json.
+func jsonOnly(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct != "application/json" {
+			writeErr(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
+			return
+		}
+		h(w, r)
+	}
+}
+
+// freshNodesAfterWrites drops the cached node list after every write request
+// (retire, scrub, hash-size override, …) so the writer's next read shows the
+// change; only ingest-driven changes wait out nodeListTTL.
+func (s *Server) freshNodesAfterWrites(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			s.nodeList.invalidate()
+		}
+	})
 }
 
 // limitBody caps request bodies at maxRequestBody so a malicious or buggy client
@@ -470,7 +533,7 @@ func activeNodes(in []store.Node) []store.Node {
 }
 
 func (s *Server) nodes(w http.ResponseWriter, _ *http.Request) {
-	nodes, err := s.store.ListNodes()
+	nodes, err := s.cachedNodes()
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -527,7 +590,7 @@ func (s *Server) nodeDetail(w http.ResponseWriter, r *http.Request) {
 		}{Quarantined: true, Block: s.store.NodeBlock(pubkey)})
 		return
 	}
-	nodes, err := s.store.ListNodes()
+	nodes, err := s.cachedNodes()
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -581,13 +644,32 @@ func (s *Server) nodeDetail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, resp)
 }
 
+// knownNode answers 404 for a pubkey with no node row, before any scan. The
+// per-node scans cost the same for a key that matches nothing, so without this
+// an arbitrary pubkey bought a full window scan that no cache entry absorbs.
+func (s *Server) knownNode(w http.ResponseWriter, pubkey string) bool {
+	known, err := s.store.NodeExists(pubkey)
+	if err != nil {
+		s.fail(w, err)
+		return false
+	}
+	if !known {
+		writeErr(w, http.StatusNotFound, "unknown node")
+		return false
+	}
+	return true
+}
+
 // nodeHistory returns a node's stored observations over an arbitrary time range
 // (its own adverts + packets it relayed), newest first. Unlike nodeDetail's
 // fixed-window analytics snapshot, this queries the database on demand.
 func (s *Server) nodeHistory(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
-	sinceSec := queryInt(r, "since", 86400, 1, 7*86400)
-	limit := queryInt(r, "limit", 200, 1, 1000)
+	sinceSec := snapUp(queryInt(r, "since", 86400, 1, 7*86400), 3600, 6*3600, 86400, 3*86400, 7*86400)
+	limit := snapUp(queryInt(r, "limit", 200, 1, 1000), 100, 200, 300, 500, 1000)
+	if !s.knownNode(w, pubkey) {
+		return
+	}
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 
 	body, err := s.nodeCache.get(fmt.Sprintf("history|%s|%d|%d", pubkey, sinceSec, limit), nodeHistoryTTL, func() (any, error) {
@@ -610,8 +692,11 @@ func (s *Server) nodeHistory(w http.ResponseWriter, r *http.Request) {
 // node's ~30h advert cadence, so the detail page lets the user widen the range.
 func (s *Server) nodeObservers(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
-	sinceSec := queryInt(r, "since", 3*86400, 1, 7*86400)
+	sinceSec := snapUp(queryInt(r, "since", 3*86400, 1, 7*86400), 3600, 6*3600, 86400, 3*86400, 7*86400)
 	now := time.Now()
+	if !s.knownNode(w, pubkey) {
+		return
+	}
 
 	// Answered from memory when the activity index covers the window (it holds
 	// 7 days); the scan below remains for anything it can't answer.
@@ -642,7 +727,10 @@ func (s *Server) nodeObservers(w http.ResponseWriter, r *http.Request) {
 // nodeHeatmap returns a node's weekday×hour activity grid over the last `days`.
 func (s *Server) nodeHeatmap(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
-	days := queryInt(r, "days", 7, 1, 30)
+	days := snapUp(queryInt(r, "days", 7, 1, 30), 1, 7, 14, 30)
+	if !s.knownNode(w, pubkey) {
+		return
+	}
 	if s.activity != nil {
 		if grid, ok := s.activity.Heatmap(pubkey, days, time.Now()); ok {
 			writeJSON(w, grid)
@@ -681,8 +769,8 @@ const (
 // channel utilisation, busiest relays) over a selectable window. Computed on
 // demand from stored raw_hex, like nodeHistory.
 func (s *Server) meshAnalytics(w http.ResponseWriter, r *http.Request) {
-	sinceSec := queryInt(r, "since", 6*3600, 1, 24*3600)
-	bucketMin := queryInt(r, "bucket", 10, 1, 1440)
+	sinceSec := snapUp(queryInt(r, "since", 6*3600, 1, 24*3600), 3600, 6*3600, 24*3600)
+	bucketMin := snapUp(queryInt(r, "bucket", 10, 1, 1440), 1, 2, 5, 10, 15, 30, 60, 1440)
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 
 	// Polled every 30s by every open Overview (the landing page's activity
@@ -715,7 +803,14 @@ func (s *Server) observers(w http.ResponseWriter, _ *http.Request) {
 // SNR, RF neighbours, clock skew) over the last `since` seconds. On demand.
 func (s *Server) observerAnalytics(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sinceSec := queryInt(r, "since", 24*3600, 1, 7*86400)
+	sinceSec := snapUp(queryInt(r, "since", 24*3600, 1, 7*86400), 3600, 6*3600, 86400, 3*86400, 7*86400)
+	if known, err := s.store.ObserverExists(id); err != nil {
+		s.fail(w, err)
+		return
+	} else if !known {
+		writeErr(w, http.StatusNotFound, "unknown observer")
+		return
+	}
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 	// The observer page polls this every 15 s; share one computation per 30 s.
 	body, err := s.nodeCache.get(fmt.Sprintf("observer|%s|%d", id, sinceSec), observerAnalyticsTTL, func() (any, error) {
@@ -850,16 +945,46 @@ func (s *Server) channelsRecent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, out)
 }
 
+// Live-feed WebSocket limits. Clients never send anything meaningful (the
+// reader only detects close), so inbound messages are capped tiny; pings with
+// a pong deadline drop dead or stalled peers; maxLiveClients and
+// maxLiveClientsPerIP bound the hub, per visitor as clientIP sees them.
+const (
+	liveReadLimit  = 512
+	livePongWait   = 60 * time.Second
+	livePingEvery  = 25 * time.Second
+	liveWriteWait  = 10 * time.Second
+	maxLiveClients = 1000
+	// maxLiveClientsPerIP leaves room for a household or office behind one
+	// address with many tabs, while keeping one client from taking the pool.
+	maxLiveClientsPerIP = 20
+)
+
 func (s *Server) live(w http.ResponseWriter, r *http.Request) {
+	ip := clientIP(r)
+	if !s.hub.reserve(ip, maxLiveClients, maxLiveClientsPerIP) {
+		writeErr(w, http.StatusServiceUnavailable, "too many live connections")
+		return
+	}
+	defer s.hub.release(ip)
 	conn, err := s.up.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
+	conn.SetReadLimit(liveReadLimit)
+	conn.SetReadDeadline(time.Now().Add(livePongWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(livePongWait))
+	})
 	ch := s.hub.add(conn)
 	defer s.hub.remove(conn)
 
-	// Reader pump: discard input, detect close.
+	// Reader pump: discard input, detect close (or an oversized message, or a
+	// missed pong, which ends the read with an error). gone ends the writer at
+	// once, so a departed client's slot is freed without waiting for a write.
+	gone := make(chan struct{})
 	go func() {
+		defer close(gone)
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
 				conn.Close()
@@ -868,9 +993,24 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	for msg := range ch {
-		if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+	ping := time.NewTicker(livePingEvery)
+	defer ping.Stop()
+	for {
+		select {
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
+			conn.SetWriteDeadline(time.Now().Add(liveWriteWait))
+			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				return
+			}
+		case <-gone:
 			return
+		case <-ping.C:
+			if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(liveWriteWait)); err != nil {
+				return
+			}
 		}
 	}
 }
@@ -889,6 +1029,19 @@ func writeJSON(w http.ResponseWriter, v any) {
 
 // queryInt reads an integer query parameter, falling back to def when absent or
 // unparseable, then clamps the result to [min, max].
+// snapUp returns the smallest preset >= v, or the largest preset if v exceeds
+// them all. Public scan endpoints key their shared cache on these parameters,
+// so a free integer would give every caller a fresh, uncached scan; snapping to
+// the UI's presets keeps the key space to a handful of values.
+func snapUp(v int, presets ...int) int {
+	for _, p := range presets {
+		if v <= p {
+			return p
+		}
+	}
+	return presets[len(presets)-1]
+}
+
 func queryInt(r *http.Request, key string, def, min, max int) int {
 	v := def
 	if s := r.URL.Query().Get(key); s != "" {

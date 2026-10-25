@@ -161,4 +161,25 @@ func TestEmailVerificationAndNoteNotifyFlow(t *testing.T) {
 	if after := len(fm.ofKind("note")); after != before {
 		t.Errorf("owner self-note should not send email: before=%d after=%d", before, after)
 	}
+	// 8) A burst of notes is throttled per author, and the owner's inbox is
+	// throttled separately: past the mail burst, notes still post but aren't mailed.
+	posted, limited := 0, 0
+	for i := 0; i < 15; i++ {
+		r, _ := member.do("POST", "/api/nodes/"+pubkey+"/notes",
+			map[string]string{"body": "flood", "visibility": "public"}, true)
+		switch r.StatusCode {
+		case 200:
+			posted++
+		case 429:
+			limited++
+		default:
+			t.Fatalf("burst note: unexpected status %d", r.StatusCode)
+		}
+	}
+	if posted != 9 || limited != 6 {
+		t.Errorf("note burst: want 9 posted + 6 limited (10/author burst), got %d + %d", posted, limited)
+	}
+	if n := len(fm.ofKind("note")); n != 3 {
+		t.Errorf("owner should get at most 3 note emails in a burst, got %d", n)
+	}
 }

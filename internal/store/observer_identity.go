@@ -22,11 +22,24 @@ import (
 // separate identities purely because of a rename are merged into one, and the
 // friendly name is demoted to the `name` label column.
 //
+// Rows already keyed by a public key are never re-keyed: their id came from the
+// ACL-bound MQTT topic, while the pubkey column could (before the ingest fix)
+// be set from a publisher-supplied origin_id. Acting on a mismatch there would
+// let one observer move another's history and blocklist entry onto itself.
+//
 // Observers whose public key is unknown (rows predating the pubkey column, or a
 // status message that never carried one) are left keyed by name — there is
 // nothing better to key them by, and dropping them would lose their history.
 func migrateObserversToPubkey(db *sql.DB) error {
 	// Nothing to do once every observer that HAS a key is keyed by it.
+	// Repair rows keyed by a public key whose pubkey column disagrees: the id is
+	// the authoritative key.
+	if _, err := db.Exec(`
+		UPDATE observers SET pubkey = id
+		WHERE length(id) = 64 AND id NOT GLOB '*[^0-9A-Fa-f]*'
+		  AND pubkey IS NOT NULL AND pubkey != '' AND pubkey != id`); err != nil {
+		return fmt.Errorf("store: repair observer pubkeys: %w", err)
+	}
 	var pending int
 	if err := db.QueryRow(`
 		SELECT COUNT(*) FROM observers

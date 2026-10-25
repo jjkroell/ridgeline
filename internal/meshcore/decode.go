@@ -12,6 +12,10 @@ import (
 )
 
 // DecodeHex decodes a packet from its uppercase-or-lowercase hex string form.
+// MaxPacketSize mirrors the firmware's MAX_TRANS_UNIT: no MeshCore frame on
+// air is longer, so ingest can refuse anything bigger before decoding it.
+const MaxPacketSize = 255
+
 func DecodeHex(s string) (*Packet, error) {
 	s = strings.ReplaceAll(s, " ", "")
 	b, err := hex.DecodeString(s)

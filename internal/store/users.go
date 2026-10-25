@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -57,24 +58,19 @@ func (s *Store) CreateUser(email, passwordHash, displayName string) (User, error
 	email = strings.ToLower(strings.TrimSpace(email))
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
-	// Bootstrap: the first user is the owner/admin.
-	n, err := s.UserCount()
-	if err != nil {
-		return User{}, err
-	}
-	admin := 0
-	if n == 0 {
-		admin = 1
-	}
-
+	// Bootstrap: the first user is the owner/admin. The "is this the first
+	// account?" test runs INSIDE the insert, which SQLite executes atomically;
+	// counting first and inserting after let two concurrent first registrations
+	// both see zero users and both become protected owners.
+	//
 	// Every registered user may claim nodes (no admin approval needed). The
 	// bootstrap account is additionally admin + the protected owner.
 	// The bootstrap owner is auto-verified (there's no one to email a link to yet,
 	// and the deployment must always have a usable owner account).
 	res, err := s.db.Exec(`
 		INSERT INTO users (email, password_hash, display_name, is_admin, can_claim, protected, email_verified, created_at)
-		VALUES (?,?,?,?,1,?,?,?)`,
-		email, passwordHash, nullStr(displayName), admin, admin, admin, now)
+		SELECT ?, ?, ?, b, 1, b, b, ? FROM (SELECT NOT EXISTS (SELECT 1 FROM users) AS b)`,
+		email, passwordHash, nullStr(displayName), now)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return User{}, ErrEmailTaken
@@ -82,10 +78,12 @@ func (s *Store) CreateUser(email, passwordHash, displayName string) (User, error
 		return User{}, err
 	}
 	id, _ := res.LastInsertId()
-	return User{
-		ID: id, Email: email, PasswordHash: passwordHash, DisplayName: displayName,
-		IsAdmin: admin == 1, CanClaim: true, IsOwner: admin == 1, EmailVerified: admin == 1, CreatedAt: now,
-	}, nil
+	// Report the flags actually stored, not a guess made before the insert.
+	u, ok, err := s.GetUserByID(id)
+	if err == nil && !ok {
+		err = fmt.Errorf("store: created user %d not found", id)
+	}
+	return u, err
 }
 
 // GetUserByEmail looks up an account by (lowercased) email. ok is false when no
@@ -209,11 +207,28 @@ func (s *Store) UpdatePassword(id int64, passwordHash string) error {
 // ErrEmailTaken on a collision.
 func (s *Store) UpdateEmail(id int64, newEmail string) error {
 	newEmail = strings.ToLower(strings.TrimSpace(newEmail))
-	_, err := s.db.Exec(`UPDATE users SET email = ?, email_verified = 0 WHERE id = ?`, newEmail, id)
-	if err != nil && isUniqueViolation(err) {
-		return ErrEmailTaken
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
 	}
-	return err
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE users SET email = ?, email_verified = 0 WHERE id = ?`, newEmail, id); err != nil {
+		if isUniqueViolation(err) {
+			return ErrEmailTaken
+		}
+		return err
+	}
+	// Tokens mailed to the old address must not vouch for the new one: a reset
+	// completed with one marks the account's (new) email verified.
+	for _, q := range []string{
+		`DELETE FROM password_resets WHERE user_id = ?`,
+		`DELETE FROM email_verifications WHERE user_id = ?`,
+	} {
+		if _, err := tx.Exec(q, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // SetUserAdmin grants or revokes an account's admin rights (admin action).
@@ -301,6 +316,13 @@ func (s *Store) DeleteUserAndReleaseNodes(id int64, ownerLabel string) error {
 // so existing logins stop working immediately).
 func (s *Store) DeleteUserSessions(userID int64) error {
 	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id = ?`, userID)
+	return err
+}
+
+// DeleteOtherSessions signs a user out everywhere except the session whose
+// token hash is keepHash (the caller's own).
+func (s *Store) DeleteOtherSessions(userID int64, keepHash string) error {
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id = ? AND token_hash != ?`, userID, keepHash)
 	return err
 }
 

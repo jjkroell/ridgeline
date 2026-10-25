@@ -102,6 +102,10 @@ func (s *Server) locationShareCreate(w http.ResponseWriter, r *http.Request, use
 		writeErr(w, http.StatusForbidden, "only the node's owner can share this location")
 		return
 	}
+	if !s.shareLimiter.Allow(strconv.FormatInt(user.ID, 10)) {
+		writeErr(w, http.StatusTooManyRequests, "too many share attempts — try again in a minute")
+		return
+	}
 	// Grant by user id (from the autocomplete picker) or, as a fallback, by email.
 	var req struct {
 		UserID int64  `json:"userId"`

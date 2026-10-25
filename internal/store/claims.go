@@ -82,7 +82,7 @@ func (s *Store) NodeOwner(nodePubkey string) (OwnerInfo, bool, error) {
 	nodePubkey = strings.ToUpper(nodePubkey)
 	var o OwnerInfo
 	err := s.db.QueryRow(`
-		SELECT u.id, COALESCE(NULLIF(u.display_name,''), u.email)
+		SELECT u.id, COALESCE(NULLIF(u.display_name,''), 'User #' || u.id)
 		FROM node_claims c JOIN users u ON u.id = c.user_id
 		WHERE c.node_pubkey = ? AND c.status = 'verified'`, nodePubkey).
 		Scan(&o.UserID, &o.DisplayName)
@@ -232,9 +232,18 @@ func (s *Store) CreateVerifiedClaim(nodePubkey string, userID int64) (Claim, err
 	}
 	// A new verified owner supersedes any "previously owned by" marker.
 	s.db.Exec(`UPDATE nodes SET prev_owner_name = NULL WHERE pubkey = ?`, nodePubkey)
+	s.retireTeamNotes(nodePubkey)
 	s.loadPendingClaims() // a promoted pending claim leaves the pending set
 	c, _, err := s.UserClaim(nodePubkey, userID)
 	return c, err
+}
+
+// retireTeamNotes makes a node's team notes private to their authors. Called
+// when a new owner is verified: team notes were written for the circle of the
+// ownership that existed then, and must not pass to whoever claims the node
+// next (after a release, an account deletion, or an admin removal).
+func (s *Store) retireTeamNotes(nodePubkey string) {
+	s.db.Exec(`UPDATE node_notes SET visibility = 'private' WHERE node_pubkey = ? AND visibility = 'team'`, nodePubkey)
 }
 
 // DeleteClaim removes a user's claim on a node (cancels a pending code or
@@ -311,6 +320,7 @@ func (s *Store) VerifyPendingClaims(nodePubkey, advertName string) ([]Claim, err
 		}
 		// A new verified owner supersedes any "previously owned by" marker.
 		s.db.Exec(`UPDATE nodes SET prev_owner_name = NULL WHERE pubkey = ?`, nodePubkey)
+		s.retireTeamNotes(nodePubkey)
 		verified = append(verified, Claim{ID: c.id, NodePubkey: nodePubkey, UserID: c.userID, Status: "verified", VerifiedAt: now})
 		break
 	}
@@ -349,6 +359,13 @@ func (s *Store) ListUserClaims(userID int64) ([]ClaimWithNode, error) {
 func (s *Store) NodeExists(pubkey string) (bool, error) {
 	var n int
 	err := s.db.QueryRow(`SELECT COUNT(*) FROM nodes WHERE pubkey = ?`, strings.ToUpper(pubkey)).Scan(&n)
+	return n > 0, err
+}
+
+// ObserverExists reports whether an observer row exists (a primary-key lookup).
+func (s *Store) ObserverExists(id string) (bool, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM observers WHERE id = ?`, id).Scan(&n)
 	return n > 0, err
 }
 

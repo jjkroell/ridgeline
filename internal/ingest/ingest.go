@@ -452,6 +452,14 @@ func (in *Ingestor) handleStatus(msg mqtt.Message) {
 	if observerID == "" {
 		return
 	}
+	// A blocklisted observer gets no row back: its packets are already dropped,
+	// and a status would otherwise re-create the public observer row and its
+	// telemetry that the block (or a purge) removed. Standby and radio
+	// quarantine are different: those observers are meant to keep reporting.
+	if in.store.IsObserverBlocked(observerID) {
+		in.log.Debug("ignored status from blocked observer", "observer", observerID)
+		return
+	}
 
 	st := store.ObserverStatus{
 		State:         env.Status,

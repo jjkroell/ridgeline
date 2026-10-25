@@ -14,7 +14,7 @@ type LocationShare struct {
 	// with any registered user id, so an email here would let them read every
 	// account's address.
 	DisplayName string `json:"displayName"`
-	CreatedAt     string `json:"createdAt"`
+	CreatedAt   string `json:"createdAt"`
 }
 
 // ShareLocation grants granteeUserID read access to nodePubkey's private

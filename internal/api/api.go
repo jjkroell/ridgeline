@@ -39,6 +39,8 @@ type Server struct {
 	// nodeCache shares and briefly reuses the expensive per-node scans
 	// (heatmap, observers, history). See respcache.go.
 	nodeCache *respCache
+	// nodeList briefly reuses the node-list scan (see nodelist.go).
+	nodeList nodeList
 	// activity serves node heatmaps from memory (see analytics.ActivityIndex);
 	// nil, or not yet backfilled, falls back to scanning.
 	activity  *analytics.ActivityIndex
@@ -287,7 +289,19 @@ func (s *Server) Handler() http.Handler {
 			s.log.Warn("web dir not found, serving API only", "dir", s.webDir)
 		}
 	}
-	return limitBody(mux)
+	return limitBody(s.freshNodesAfterWrites(mux))
+}
+
+// freshNodesAfterWrites drops the cached node list after every write request
+// (retire, scrub, hash-size override, …) so the writer's next read shows the
+// change; only ingest-driven changes wait out nodeListTTL.
+func (s *Server) freshNodesAfterWrites(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			s.nodeList.invalidate()
+		}
+	})
 }
 
 // limitBody caps request bodies at maxRequestBody so a malicious or buggy client
@@ -483,7 +497,7 @@ func activeNodes(in []store.Node) []store.Node {
 }
 
 func (s *Server) nodes(w http.ResponseWriter, _ *http.Request) {
-	nodes, err := s.store.ListNodes()
+	nodes, err := s.cachedNodes()
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -540,7 +554,7 @@ func (s *Server) nodeDetail(w http.ResponseWriter, r *http.Request) {
 		}{Quarantined: true, Block: s.store.NodeBlock(pubkey)})
 		return
 	}
-	nodes, err := s.store.ListNodes()
+	nodes, err := s.cachedNodes()
 	if err != nil {
 		s.fail(w, err)
 		return

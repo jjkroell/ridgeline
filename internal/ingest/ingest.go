@@ -76,6 +76,8 @@ type Ingestor struct {
 	penMu sync.Mutex
 	pens  map[string]*pen
 	held  int // packets across all pens, bounded by holdTotal
+	// newNodes rations node-row creation per observer (see new_nodes.go).
+	newNodes newNodeRation
 	// Connection-gap accounting. Packets published while disconnected are lost,
 	// so the time spent disconnected is the loss.
 	lostAt atomic.Value // time.Time of the last connection loss (paho DETECTED it)
@@ -371,6 +373,13 @@ func (in *Ingestor) commit(obs store.Observation) bool {
 		return in.commitFn(obs)
 	}
 	packet := obs.Packet
+	if a := packet.Advert; a != nil && a.SignatureValid && a.PublicKey != "" {
+		if known, err := in.store.NodeExists(a.PublicKey); err == nil && !known &&
+			!in.newNodes.allow(obs.ObserverID, obs.ReceivedAt) {
+			obs.NoNewNode = true
+			in.log.Debug("new-node ration spent, not creating node", "observer", obs.ObserverID, "node", a.PublicKey)
+		}
+	}
 	if err := in.store.Record(obs); err != nil {
 		in.log.Error("store record failed", "err", err)
 		return false

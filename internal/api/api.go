@@ -298,7 +298,23 @@ func (s *Server) Handler() http.Handler {
 	// Origin vs Host); non-browser clients send neither header and pass. This is
 	// what stops login CSRF, where no session token exists to check.
 	xo := http.NewCrossOriginProtection()
-	return limitBody(xo.Handler(s.freshNodesAfterWrites(mux)))
+	return limitBody(xo.Handler(noStoreWhenSignedIn(s.freshNodesAfterWrites(mux))))
+}
+
+// noStoreWhenSignedIn marks every API response to a signed-in request
+// Cache-Control: no-store. Many of them depend on who is asking (account,
+// claims, notes, private locations), and the service worker caches /api/
+// responses by URL alone for offline use; a shared browser would otherwise
+// show one account's data to the next person offline.
+func noStoreWhenSignedIn(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			if _, err := r.Cookie(sessionCookie); err == nil {
+				w.Header().Set("Cache-Control", "no-store")
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // jsonOnly refuses a request whose body is not declared application/json.

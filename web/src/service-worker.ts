@@ -72,7 +72,10 @@ sw.addEventListener('fetch', (event) => {
 			(async () => {
 				try {
 					const res = await fetch(req);
-					if (res.ok) (await caches.open(CACHE)).put(req, res.clone());
+					// The server marks signed-in responses no-store: they are per-user
+					// and must never be replayed to whoever uses this browser next.
+					if (res.ok && !/no-store/i.test(res.headers.get('cache-control') ?? ''))
+						(await caches.open(CACHE)).put(req, res.clone());
 					return res;
 				} catch {
 					const cached = await caches.match(req);

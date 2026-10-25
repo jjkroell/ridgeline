@@ -120,6 +120,7 @@ class Auth {
 		try {
 			await authApi.logout();
 		} finally {
+			purgeApiCache();
 			this.user = null;
 			this.csrf = '';
 			this.unseenShares = 0;
@@ -132,6 +133,7 @@ class Auth {
 	 *  UI reflects a signed-out user immediately. */
 	async deleteAccount(password: string) {
 		await account.deleteAccount(this.csrf, password);
+		purgeApiCache();
 		this.user = null;
 		this.csrf = '';
 		this.unseenShares = 0;
@@ -139,6 +141,7 @@ class Auth {
 	}
 
 	#adopt(r: { user: AuthUser | null; csrfToken?: string; unseenShares?: number }) {
+		purgeApiCache(); // nothing from a previous account survives a sign-in
 		this.user = r.user;
 		this.csrf = r.csrfToken ?? '';
 		this.unseenShares = r.unseenShares ?? 0;
@@ -157,3 +160,23 @@ class Auth {
 }
 
 export const auth = new Auth();
+
+/** Drop every cached /api/ response from the service worker's caches, so a
+ *  signed-out or different account on this browser can never be shown them
+ *  offline. Best-effort: Cache Storage may be unavailable. */
+function purgeApiCache(): void {
+	if (typeof caches === 'undefined') return;
+	void (async () => {
+		try {
+			for (const key of await caches.keys()) {
+				if (!key.startsWith('ridgeline-')) continue;
+				const cache = await caches.open(key);
+				for (const req of await cache.keys()) {
+					if (new URL(req.url).pathname.startsWith('/api/')) await cache.delete(req);
+				}
+			}
+		} catch {
+			/* storage blocked — nothing cached to leak either */
+		}
+	})();
+}

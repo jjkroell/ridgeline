@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -57,24 +58,19 @@ func (s *Store) CreateUser(email, passwordHash, displayName string) (User, error
 	email = strings.ToLower(strings.TrimSpace(email))
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
-	// Bootstrap: the first user is the owner/admin.
-	n, err := s.UserCount()
-	if err != nil {
-		return User{}, err
-	}
-	admin := 0
-	if n == 0 {
-		admin = 1
-	}
-
+	// Bootstrap: the first user is the owner/admin. The "is this the first
+	// account?" test runs INSIDE the insert, which SQLite executes atomically;
+	// counting first and inserting after let two concurrent first registrations
+	// both see zero users and both become protected owners.
+	//
 	// Every registered user may claim nodes (no admin approval needed). The
 	// bootstrap account is additionally admin + the protected owner.
 	// The bootstrap owner is auto-verified (there's no one to email a link to yet,
 	// and the deployment must always have a usable owner account).
 	res, err := s.db.Exec(`
 		INSERT INTO users (email, password_hash, display_name, is_admin, can_claim, protected, email_verified, created_at)
-		VALUES (?,?,?,?,1,?,?,?)`,
-		email, passwordHash, nullStr(displayName), admin, admin, admin, now)
+		SELECT ?, ?, ?, b, 1, b, b, ? FROM (SELECT NOT EXISTS (SELECT 1 FROM users) AS b)`,
+		email, passwordHash, nullStr(displayName), now)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return User{}, ErrEmailTaken
@@ -82,10 +78,12 @@ func (s *Store) CreateUser(email, passwordHash, displayName string) (User, error
 		return User{}, err
 	}
 	id, _ := res.LastInsertId()
-	return User{
-		ID: id, Email: email, PasswordHash: passwordHash, DisplayName: displayName,
-		IsAdmin: admin == 1, CanClaim: true, IsOwner: admin == 1, EmailVerified: admin == 1, CreatedAt: now,
-	}, nil
+	// Report the flags actually stored, not a guess made before the insert.
+	u, ok, err := s.GetUserByID(id)
+	if err == nil && !ok {
+		err = fmt.Errorf("store: created user %d not found", id)
+	}
+	return u, err
 }
 
 // GetUserByEmail looks up an account by (lowercased) email. ok is false when no

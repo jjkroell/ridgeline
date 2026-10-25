@@ -286,13 +286,13 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 
 	observerKey, region := topicMeta(msg.Topic())
 	if region == "" {
-		region = env.Region
+		region = clipRunes(env.Region, maxLabelLen)
 	}
 	// The public key identifies the observer; the friendly name is a label the
 	// operator can change at any time, so it must not be the identity. The topic
 	// carries the key on every message, and env.OriginID repeats it; fall back to
 	// the name only when neither is present.
-	observerID, observerName := observerKey, env.Origin
+	observerID, observerName := observerKey, clipRunes(env.Origin, maxLabelLen)
 	if observerID == "" {
 		observerID = env.OriginID
 	}
@@ -432,17 +432,27 @@ type statusEnvelope struct {
 // telemetry. The observer is keyed by its friendly origin name (matching the
 // packet path), so status attaches to the same observer row.
 func (in *Ingestor) handleStatus(msg mqtt.Message) {
+	// A real status is a few hundred bytes. Everything in it is stored and
+	// served to every anonymous /api/observers visitor, so cap the message (as
+	// /neighbors does) and each free-text field.
+	if len(msg.Payload()) > maxStatusPayload {
+		in.log.Debug("oversized status dropped", "topic", msg.Topic(), "bytes", len(msg.Payload()))
+		return
+	}
 	var env statusEnvelope
 	if err := json.Unmarshal(msg.Payload(), &env); err != nil {
 		in.log.Debug("bad status envelope", "topic", msg.Topic(), "err", err)
 		return
 	}
+	for _, f := range []*string{&env.Status, &env.Radio, &env.Model, &env.FirmwareVersion, &env.ClientVersion} {
+		*f = clipRunes(*f, maxStatusFieldLen)
+	}
 	observerKey, region := topicMeta(msg.Topic())
 	if region == "" {
-		region = env.Region
+		region = clipRunes(env.Region, maxLabelLen)
 	}
 	// Keyed by public key like the packet path — the name is only a label.
-	observerID, observerName := observerKey, env.Origin
+	observerID, observerName := observerKey, clipRunes(env.Origin, maxLabelLen)
 	if observerID == "" {
 		observerID = env.OriginID
 	}
@@ -607,4 +617,22 @@ func (in *Ingestor) evaluateRadio(observerID, observerName, reported, at string,
 		"observer", observerID, "name", observerName, "radio", reported)
 	// Vouched for — commit whatever arrived before it identified itself.
 	in.releaseHeld(observerID)
+}
+
+const (
+	maxStatusPayload  = 64 << 10 // same cap as maxNeighborPayload
+	maxStatusFieldLen = 128      // status, radio, model, firmware, client version
+	maxLabelLen       = 64       // observer name, region
+)
+
+// clipRunes shortens s to at most n runes, leaving shorter values untouched.
+func clipRunes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
 }

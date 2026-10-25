@@ -594,13 +594,32 @@ func (s *Server) nodeDetail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, resp)
 }
 
+// knownNode answers 404 for a pubkey with no node row, before any scan. The
+// per-node scans cost the same for a key that matches nothing, so without this
+// an arbitrary pubkey bought a full window scan that no cache entry absorbs.
+func (s *Server) knownNode(w http.ResponseWriter, pubkey string) bool {
+	known, err := s.store.NodeExists(pubkey)
+	if err != nil {
+		s.fail(w, err)
+		return false
+	}
+	if !known {
+		writeErr(w, http.StatusNotFound, "unknown node")
+		return false
+	}
+	return true
+}
+
 // nodeHistory returns a node's stored observations over an arbitrary time range
 // (its own adverts + packets it relayed), newest first. Unlike nodeDetail's
 // fixed-window analytics snapshot, this queries the database on demand.
 func (s *Server) nodeHistory(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
-	sinceSec := queryInt(r, "since", 86400, 1, 7*86400)
-	limit := queryInt(r, "limit", 200, 1, 1000)
+	sinceSec := snapUp(queryInt(r, "since", 86400, 1, 7*86400), 3600, 6*3600, 86400, 3*86400, 7*86400)
+	limit := snapUp(queryInt(r, "limit", 200, 1, 1000), 100, 200, 300, 500, 1000)
+	if !s.knownNode(w, pubkey) {
+		return
+	}
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 
 	body, err := s.nodeCache.get(fmt.Sprintf("history|%s|%d|%d", pubkey, sinceSec, limit), nodeHistoryTTL, func() (any, error) {
@@ -623,8 +642,11 @@ func (s *Server) nodeHistory(w http.ResponseWriter, r *http.Request) {
 // node's ~30h advert cadence, so the detail page lets the user widen the range.
 func (s *Server) nodeObservers(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
-	sinceSec := queryInt(r, "since", 3*86400, 1, 7*86400)
+	sinceSec := snapUp(queryInt(r, "since", 3*86400, 1, 7*86400), 3600, 6*3600, 86400, 3*86400, 7*86400)
 	now := time.Now()
+	if !s.knownNode(w, pubkey) {
+		return
+	}
 
 	// Answered from memory when the activity index covers the window (it holds
 	// 7 days); the scan below remains for anything it can't answer.
@@ -655,7 +677,10 @@ func (s *Server) nodeObservers(w http.ResponseWriter, r *http.Request) {
 // nodeHeatmap returns a node's weekday×hour activity grid over the last `days`.
 func (s *Server) nodeHeatmap(w http.ResponseWriter, r *http.Request) {
 	pubkey := strings.ToUpper(r.PathValue("pubkey"))
-	days := queryInt(r, "days", 7, 1, 30)
+	days := snapUp(queryInt(r, "days", 7, 1, 30), 1, 7, 14, 30)
+	if !s.knownNode(w, pubkey) {
+		return
+	}
 	if s.activity != nil {
 		if grid, ok := s.activity.Heatmap(pubkey, days, time.Now()); ok {
 			writeJSON(w, grid)
@@ -694,8 +719,8 @@ const (
 // channel utilisation, busiest relays) over a selectable window. Computed on
 // demand from stored raw_hex, like nodeHistory.
 func (s *Server) meshAnalytics(w http.ResponseWriter, r *http.Request) {
-	sinceSec := queryInt(r, "since", 6*3600, 1, 24*3600)
-	bucketMin := queryInt(r, "bucket", 10, 1, 1440)
+	sinceSec := snapUp(queryInt(r, "since", 6*3600, 1, 24*3600), 3600, 6*3600, 24*3600)
+	bucketMin := snapUp(queryInt(r, "bucket", 10, 1, 1440), 1, 2, 5, 10, 15, 30, 60, 1440)
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 
 	// Polled every 30s by every open Overview (the landing page's activity
@@ -728,7 +753,14 @@ func (s *Server) observers(w http.ResponseWriter, _ *http.Request) {
 // SNR, RF neighbours, clock skew) over the last `since` seconds. On demand.
 func (s *Server) observerAnalytics(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	sinceSec := queryInt(r, "since", 24*3600, 1, 7*86400)
+	sinceSec := snapUp(queryInt(r, "since", 24*3600, 1, 7*86400), 3600, 6*3600, 86400, 3*86400, 7*86400)
+	if known, err := s.store.ObserverExists(id); err != nil {
+		s.fail(w, err)
+		return
+	} else if !known {
+		writeErr(w, http.StatusNotFound, "unknown observer")
+		return
+	}
 	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
 	// The observer page polls this every 15 s; share one computation per 30 s.
 	body, err := s.nodeCache.get(fmt.Sprintf("observer|%s|%d", id, sinceSec), observerAnalyticsTTL, func() (any, error) {
@@ -902,6 +934,19 @@ func writeJSON(w http.ResponseWriter, v any) {
 
 // queryInt reads an integer query parameter, falling back to def when absent or
 // unparseable, then clamps the result to [min, max].
+// snapUp returns the smallest preset >= v, or the largest preset if v exceeds
+// them all. Public scan endpoints key their shared cache on these parameters,
+// so a free integer would give every caller a fresh, uncached scan; snapping to
+// the UI's presets keeps the key space to a handful of values.
+func snapUp(v int, presets ...int) int {
+	for _, p := range presets {
+		if v <= p {
+			return p
+		}
+	}
+	return presets[len(presets)-1]
+}
+
 func queryInt(r *http.Request, key string, def, min, max int) int {
 	v := def
 	if s := r.URL.Query().Get(key); s != "" {

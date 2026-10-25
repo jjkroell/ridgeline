@@ -352,6 +352,13 @@ func (s *Store) NodeExists(pubkey string) (bool, error) {
 	return n > 0, err
 }
 
+// ObserverExists reports whether an observer row exists (a primary-key lookup).
+func (s *Store) ObserverExists(id string) (bool, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM observers WHERE id = ?`, id).Scan(&n)
+	return n > 0, err
+}
+
 // NodeName returns a node's advertised name (empty string if the node is unknown
 // or unnamed).
 func (s *Store) NodeName(pubkey string) string {

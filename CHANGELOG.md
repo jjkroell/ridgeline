@@ -4,6 +4,19 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.21] — 2026-10-26
+
+### Changed
+- **Hashtag-channel discovery can use a large wordlist, and the brute-force
+  pass is stricter.** Point `channelWordlistFile` at a dictionary to try many
+  names each sweep (the 1-byte channel hash filters out all but ~1 in 256
+  before any real work). To avoid false matches across a large name set, a
+  wordlist name is confirmed only when two distinct messages decrypt with its
+  key and carry a plausible timestamp; names harvested from mentions or
+  submitted by users still confirm on one message. Hashtag channels are
+  public by design — this only recovers their names, never private channels
+  or direct messages.
+
 ## [v0.23.20] — 2026-10-25
 
 A security hardening release, from a full source audit of Ridgeline.

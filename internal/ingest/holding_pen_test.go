@@ -3,9 +3,11 @@ package ingest
 import (
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jjkroell/ridgeline/internal/meshcore"
 	"github.com/jjkroell/ridgeline/internal/store"
 )
 
@@ -144,5 +146,44 @@ func TestSweeperStopsWithIngestor(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("pen sweeper did not exit on Stop")
+	}
+}
+
+// Observer keys are self-minted, so the per-observer cap alone bounds nothing:
+// many pens together must stay under holdTotal, and the count must come back
+// down as pens are released or discarded.
+func TestHoldTotalBoundedAcrossObservers(t *testing.T) {
+	in := testIngestor()
+	accepted := 0
+	for o := 0; o < holdTotal/holdPerObserver+5; o++ {
+		id := "flood-" + string(rune('A'+o%26)) + string(rune('a'+o/26))
+		for i := 0; i < holdPerObserver; i++ {
+			if in.holdObservation(id, obsAt(id, time.Now())) {
+				accepted++
+			}
+		}
+	}
+	if accepted != holdTotal {
+		t.Fatalf("accepted %d across all pens, want exactly holdTotal=%d", accepted, holdTotal)
+	}
+	in.discardHeld("flood-Aa", "test")
+	if !in.holdObservation("late", obsAt("late", time.Now())) {
+		t.Error("room freed by a discard should be usable again")
+	}
+}
+
+// No MeshCore frame exceeds the radio MTU; ingest must refuse longer raw hex
+// before it reaches the store (or a pen).
+func TestIngestRefusesFramesOverMTU(t *testing.T) {
+	in, _ := nbIngestor(t)
+	var committed []int
+	in.commitFn = func(o store.Observation) bool { committed = append(committed, len(o.RawHex)); return true }
+	topic := "meshcore/TST/" + strings.Repeat("AB", 32) + "/packets"
+	for _, n := range []int{100, meshcore.MaxPacketSize, meshcore.MaxPacketSize + 1, 16384} {
+		raw := "1100" + strings.Repeat("00", n-2)
+		in.handle(nil, fakeMsg{topic: topic, payload: `{"raw":"` + raw + `","origin":"t"}`})
+	}
+	if len(committed) != 2 || committed[0] != 200 || committed[1] != 2*meshcore.MaxPacketSize {
+		t.Fatalf("want only the 100- and 255-byte frames stored, got hex lengths %v", committed)
 	}
 }

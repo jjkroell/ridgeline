@@ -75,6 +75,7 @@ type Ingestor struct {
 	// until the verdict arrives. See holding_pen.go.
 	penMu sync.Mutex
 	pens  map[string]*pen
+	held  int // packets across all pens, bounded by holdTotal
 	// Connection-gap accounting. Packets published while disconnected are lost,
 	// so the time spent disconnected is the loss.
 	lostAt atomic.Value // time.Time of the last connection loss (paho DETECTED it)
@@ -227,6 +228,10 @@ func reconnectGap(now, detectedAt, lastMsgAt time.Time) (gap, detectionLag time.
 	return now.Sub(start), detectedAt.Sub(start)
 }
 
+// maxPacketEnvelope bounds a packets-topic MQTT payload: generous for the JSON
+// around a 255-byte frame, small enough that no single message is a memory cost.
+const maxPacketEnvelope = 8 << 10
+
 func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 	// Every message — even one we go on to drop — is proof the link was alive at
 	// this instant. On the next reconnect this marks the last moment before the
@@ -250,12 +255,24 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 		in.handleNeighbors(msg)
 		return
 	}
+	// A packet envelope is a few hundred bytes of JSON around at most
+	// MaxPacketSize bytes of hex; refuse anything far larger before parsing it.
+	if len(msg.Payload()) > maxPacketEnvelope {
+		in.log.Debug("oversized packet envelope", "topic", msg.Topic(), "bytes", len(msg.Payload()))
+		return
+	}
 	var env envelope
 	if err := json.Unmarshal(msg.Payload(), &env); err != nil {
 		in.log.Debug("bad envelope", "topic", msg.Topic(), "err", err)
 		return
 	}
 	if env.Raw == "" {
+		return
+	}
+	// No real frame exceeds the radio MTU. Without this an observer could store
+	// arbitrarily long raw_hex rows that every later scan reads back.
+	if len(strings.ReplaceAll(env.Raw, " ", "")) > 2*meshcore.MaxPacketSize {
+		in.log.Debug("raw packet longer than the MeshCore MTU", "topic", msg.Topic(), "hexLen", len(env.Raw))
 		return
 	}
 

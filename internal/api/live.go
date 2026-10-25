@@ -25,6 +25,13 @@ func (h *hub) add(c *websocket.Conn) chan []byte {
 	return ch
 }
 
+// count reports how many clients are connected.
+func (h *hub) count() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.clients)
+}
+
 func (h *hub) remove(c *websocket.Conn) {
 	h.mu.Lock()
 	if ch, ok := h.clients[c]; ok {

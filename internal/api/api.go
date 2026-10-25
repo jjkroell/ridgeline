@@ -929,15 +929,36 @@ func (s *Server) channelsRecent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, out)
 }
 
+// Live-feed WebSocket limits. Clients never send anything meaningful (the
+// reader only detects close), so inbound messages are capped tiny; pings with
+// a pong deadline drop dead or stalled peers; maxLiveClients bounds the hub.
+const (
+	liveReadLimit  = 512
+	livePongWait   = 60 * time.Second
+	livePingEvery  = 25 * time.Second
+	liveWriteWait  = 10 * time.Second
+	maxLiveClients = 1000
+)
+
 func (s *Server) live(w http.ResponseWriter, r *http.Request) {
+	if s.hub.count() >= maxLiveClients {
+		writeErr(w, http.StatusServiceUnavailable, "too many live connections")
+		return
+	}
 	conn, err := s.up.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
+	conn.SetReadLimit(liveReadLimit)
+	conn.SetReadDeadline(time.Now().Add(livePongWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(livePongWait))
+	})
 	ch := s.hub.add(conn)
 	defer s.hub.remove(conn)
 
-	// Reader pump: discard input, detect close.
+	// Reader pump: discard input, detect close (or an oversized message, or a
+	// missed pong, which ends the read with an error).
 	go func() {
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
@@ -947,9 +968,22 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	for msg := range ch {
-		if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-			return
+	ping := time.NewTicker(livePingEvery)
+	defer ping.Stop()
+	for {
+		select {
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
+			conn.SetWriteDeadline(time.Now().Add(liveWriteWait))
+			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				return
+			}
+		case <-ping.C:
+			if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(liveWriteWait)); err != nil {
+				return
+			}
 		}
 	}
 }

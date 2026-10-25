@@ -3,15 +3,30 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 // The shipped example is the thing people copy; if it drifts out of sync with
 // the struct it is worse than no example at all.
 func TestLoadExampleConfig(t *testing.T) {
-	cfg, err := Load(filepath.Join("..", "..", "config.example.json"))
+	example := filepath.Join("..", "..", "config.example.json")
+	// Copied unedited, the example must refuse to start: its CHANGE_ME broker
+	// passwords are published, and the consumer is a broker superuser.
+	if _, err := Load(example); err == nil || !strings.Contains(err.Error(), "CHANGE_ME") {
+		t.Fatalf("unedited config.example.json should be refused for its placeholders, got %v", err)
+	}
+	raw, err := os.ReadFile(example)
 	if err != nil {
-		t.Fatalf("loading config.example.json: %v", err)
+		t.Fatal(err)
+	}
+	edited := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(edited, []byte(strings.ReplaceAll(string(raw), "CHANGE_ME", "dummy-test-secret")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(edited)
+	if err != nil {
+		t.Fatalf("loading config.example.json with its placeholders filled: %v", err)
 	}
 
 	if cfg.MQTT.Broker == "" {
@@ -110,4 +125,19 @@ func TestSubscriberDefaultsAndValidation(t *testing.T) {
 			t.Fatal("Load succeeded, want an error")
 		}
 	})
+}
+
+// Placeholder or empty broker secrets are refused once observer auth is on.
+func TestPlaceholderBrokerSecretsRefused(t *testing.T) {
+	for name, body := range map[string]string{
+		"consumer placeholder":   `{"mqttAuth": {"audience": "a", "consumerUsername": "c", "consumerPassword": "CHANGE_ME-consumer"}}`,
+		"consumer empty":         `{"mqttAuth": {"audience": "a", "consumerUsername": "c", "consumerPassword": ""}}`,
+		"subscriber placeholder": `{"mqttAuth": {"audience": "a", "consumerUsername": "c", "consumerPassword": "real", "subscribers": [{"username": "s", "password": "change_me"}]}}`,
+	} {
+		path := filepath.Join(t.TempDir(), "config.json")
+		os.WriteFile(path, []byte(body), 0o600)
+		if _, err := Load(path); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
 }

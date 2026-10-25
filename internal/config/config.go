@@ -276,6 +276,13 @@ func Load(path string) (Config, error) {
 		}
 	}
 
+	// The ingest consumer is a broker superuser on username alone, so its
+	// password is the whole of its protection. Refuse the examples' placeholder
+	// (and an empty one) rather than run with a published credential.
+	if cfg.MQTTAuth.Audience != "" && cfg.MQTTAuth.ConsumerUsername != "" && placeholderSecret(cfg.MQTTAuth.ConsumerPassword) {
+		return cfg, fmt.Errorf("config: mqttAuth.consumerPassword is empty or still a CHANGE_ME placeholder")
+	}
+
 	// Downstream subscriber accounts are checked BEFORE observer tokens, so a
 	// misconfigured one could shadow a real identity or the ingest consumer.
 	// Refuse to start rather than serve a broker with an ambiguous account.
@@ -285,9 +292,10 @@ func Load(path string) (Config, error) {
 		switch {
 		case sub.Username == "":
 			return cfg, fmt.Errorf("config: mqttAuth.subscribers[%d] has no username", i)
-		case sub.Password == "":
-			// An empty password would authenticate anyone naming the account.
-			return cfg, fmt.Errorf("config: mqttAuth.subscribers[%d] (%s) has no password", i, sub.Username)
+		case placeholderSecret(sub.Password):
+			// An empty password would authenticate anyone naming the account,
+			// and a CHANGE_ME one is published in the example configs.
+			return cfg, fmt.Errorf("config: mqttAuth.subscribers[%d] (%s) has no password or a CHANGE_ME placeholder", i, sub.Username)
 		case strings.HasPrefix(strings.ToLower(sub.Username), "v1_"):
 			return cfg, fmt.Errorf("config: mqttAuth.subscribers[%d] (%s) uses the v1_ observer prefix", i, sub.Username)
 		case sub.Username == cfg.MQTTAuth.ConsumerUsername:
@@ -301,4 +309,11 @@ func Load(path string) (Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+// placeholderSecret reports whether a configured secret is empty or still the
+// CHANGE_ME placeholder from the example configs.
+func placeholderSecret(v string) bool {
+	v = strings.TrimSpace(v)
+	return v == "" || strings.HasPrefix(strings.ToUpper(v), "CHANGE_ME")
 }

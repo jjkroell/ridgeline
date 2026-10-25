@@ -76,6 +76,11 @@ type Server struct {
 	// rather than IP: the action is irreversible and per-account, and a shared
 	// NAT must not let one user exhaust another's budget.
 	nodeLifecycleLimiter *rateLimiter
+	// noteLimiter bounds note creation per author, and noteMailLimiter bounds
+	// "new note on your node" emails per owner — each note mails a third party,
+	// so without these one account could flood an owner's inbox.
+	noteLimiter     *rateLimiter
+	noteMailLimiter *rateLimiter
 	// OnBridgeChanged asks for an immediate far-side segment sweep. Set by the
 	// daemon; nil in tests and when the sweep isn't running.
 	//
@@ -141,6 +146,10 @@ func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
 		// candidate is only a name to try and is confirmed only by real traffic,
 		// so this guards table growth, not a secret.
 		channelLimiter: newRateLimiter(1.0/10, 8),
+		// Notes: ~10 per author then 1 every 30s. Owner emails: ~3 then 1 every
+		// 10 min per owner; past that the note still posts, it just isn't mailed.
+		noteLimiter:     newRateLimiter(1.0/30, 10),
+		noteMailLimiter: newRateLimiter(1.0/600, 3),
 	}
 }
 

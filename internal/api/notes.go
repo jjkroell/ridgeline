@@ -80,6 +80,10 @@ func (s *Server) noteCreate(w http.ResponseWriter, r *http.Request, user store.U
 	if !ok {
 		return
 	}
+	if !s.noteLimiter.Allow(strconv.FormatInt(user.ID, 10)) {
+		writeErr(w, http.StatusTooManyRequests, "too many notes — try again in a minute")
+		return
+	}
 	if exists, err := s.store.NodeExists(pubkey); err != nil {
 		s.fail(w, err)
 		return

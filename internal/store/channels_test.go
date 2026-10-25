@@ -159,3 +159,54 @@ func TestNormalizeChannelNameRejectsJunk(t *testing.T) {
 		}
 	}
 }
+
+// The brute-force wordlist pass needs two distinct authenticated payloads
+// before confirming a name — one MAC match is too weak across a large name
+// set. Harvested/user names (minPayloads=1) are unaffected (see the main test).
+func TestBruteForceWordlistNeedsTwoPayloads(t *testing.T) {
+	st := testStore(t)
+	now := time.Now().UTC()
+
+	// "alpha" is in the wordlist and has ONE message → must stay pending.
+	oneKey := meshcore.DeriveHashtagKey("alpha")
+	recordRaw(t, st, groupTextRaw(t, oneKey, "a", "hi"), now)
+	// "bravo" is in the wordlist and has TWO distinct messages → confirms.
+	twoKey := meshcore.DeriveHashtagKey("bravo")
+	recordRaw(t, st, groupTextRaw(t, twoKey, "a", "one"), now)
+	recordRaw(t, st, groupTextRaw(t, twoKey, "b", "two"), now)
+
+	st.SetChannelWordlist([]string{"alpha", "bravo"})
+	confirmed, err := st.DiscoverChannels(now.Add(-time.Hour).Format(time.RFC3339Nano), 0)
+	if err != nil {
+		t.Fatalf("DiscoverChannels: %v", err)
+	}
+	got := map[string]bool{}
+	for _, c := range confirmed {
+		got[c] = true
+	}
+	if got["alpha"] {
+		t.Error("a wordlist name with a single message was confirmed")
+	}
+	if !got["bravo"] {
+		t.Error("a wordlist name with two messages was not confirmed")
+	}
+}
+
+// A reflooded copy of one message is the same payload bytes, so it counts once
+// and does not satisfy the two-payload brute-force threshold on its own.
+func TestBruteForceRefloodCountsOnce(t *testing.T) {
+	st := testStore(t)
+	now := time.Now().UTC()
+	key := meshcore.DeriveHashtagKey("charlie")
+	raw := groupTextRaw(t, key, "a", "only once")
+	recordRaw(t, st, raw, now)                    // original
+	recordRaw(t, st, raw, now.Add(2*time.Second)) // reflood: identical payload bytes
+
+	st.SetChannelWordlist([]string{"charlie"})
+	confirmed, _ := st.DiscoverChannels(now.Add(-time.Hour).Format(time.RFC3339Nano), 0)
+	for _, c := range confirmed {
+		if c == "charlie" {
+			t.Error("two reflooded copies of one message confirmed a brute-force name")
+		}
+	}
+}

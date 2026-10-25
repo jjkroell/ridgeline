@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -159,7 +160,16 @@ func run(log *slog.Logger, configPath string, configRequired bool) error {
 	// traffic each discovery sweep. Harvest alone is sporadic — it only finds a
 	// channel when someone references it in a readable message during the window.
 	if cfg.ChannelBruteForce == nil || *cfg.ChannelBruteForce {
-		st.SetChannelWordlist(store.DefaultChannelWordlist())
+		words := store.DefaultChannelWordlist()
+		if cfg.ChannelWordlistFile != "" {
+			if b, err := os.ReadFile(cfg.ChannelWordlistFile); err != nil {
+				log.Warn("channel wordlist file unreadable; using built-in list", "file", cfg.ChannelWordlistFile, "err", err)
+			} else {
+				words = strings.Split(string(b), "\n")
+				log.Info("loaded channel wordlist from file", "file", cfg.ChannelWordlistFile, "lines", len(words))
+			}
+		}
+		st.SetChannelWordlist(words)
 	}
 
 	apiServer := api.New(st, log, version, cfg.WebDir)

@@ -96,6 +96,12 @@ type Config struct {
 	// discovery, which tries common names against observed traffic each sweep
 	// (in addition to harvested #mentions and submitted names). Default true.
 	ChannelBruteForce *bool `json:"channelBruteForce"`
+	// ChannelWordlistFile, when set, replaces the built-in starter wordlist for
+	// the brute-force pass with names read from this file (one per line, '#'
+	// optional, blank and comment '#'-only lines ignored). Lets the operator
+	// point discovery at a large dictionary without rebuilding. Ignored when
+	// channelBruteForce is false.
+	ChannelWordlistFile string `json:"channelWordlistFile"`
 	// Email configures outbound transactional mail (verification + notifications).
 	// When Host is empty, email is disabled and those features degrade gracefully.
 	Email Email `json:"email"`

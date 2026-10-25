@@ -166,3 +166,45 @@ func TestObsTimeLessHandlesMixedPrecision(t *testing.T) {
 		t.Error("unparseable timestamps should fall back to a string compare")
 	}
 }
+
+// TestMigrateNeverRekeysPubkeyKeyedObserver: a row already keyed by a public
+// key (from the ACL-bound topic) must not be re-keyed because its pubkey column
+// names a different key — that column could once be set from a publisher's
+// own origin_id, which let observer A move B's blocklist entry onto itself.
+func TestMigrateNeverRekeysPubkeyKeyedObserver(t *testing.T) {
+	st := testStore(t)
+	ka := "AAAA" + "00000000000000000000000000000000000000000000000000000000000A"[:60]
+	kb := "BBBB" + "00000000000000000000000000000000000000000000000000000000000B"[:60]
+	for _, row := range [][2]string{{ka, kb}, {kb, kb}} {
+		if _, err := st.db.Exec(`
+			INSERT INTO observers (id, region, pubkey, first_seen, last_seen, packet_count)
+			VALUES (?,'R1',?,'2026-01-01T00:00:00Z','2026-01-02T00:00:00Z',1)`, row[0], row[1]); err != nil {
+			t.Fatalf("insert observer: %v", err)
+		}
+	}
+	if _, err := st.db.Exec(`
+		INSERT INTO blocklist (kind, key, name, reason, created_at)
+		VALUES ('observer',?,'A','rogue','2026-01-01T00:00:00Z')`, ka); err != nil {
+		t.Fatalf("insert blocklist: %v", err)
+	}
+
+	if err := migrateObserversToPubkey(st.db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	var n int
+	st.db.QueryRow(`SELECT COUNT(*) FROM observers WHERE id IN (?,?)`, ka, kb).Scan(&n)
+	if n != 2 {
+		t.Errorf("both observers should survive as separate rows, got %d", n)
+	}
+	var pk string
+	st.db.QueryRow(`SELECT pubkey FROM observers WHERE id = ?`, ka).Scan(&pk)
+	if pk != ka {
+		t.Errorf("A's pubkey column should be repaired to its id, got %q", pk)
+	}
+	var blockKey string
+	st.db.QueryRow(`SELECT key FROM blocklist WHERE kind = 'observer'`).Scan(&blockKey)
+	if blockKey != ka {
+		t.Errorf("blocklist entry moved off the blocked observer: key=%q", blockKey)
+	}
+}

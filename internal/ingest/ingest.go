@@ -322,7 +322,7 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 		RawHex:         env.Raw,
 		ObserverID:     observerID,
 		ObserverName:   observerName,
-		ObserverPubkey: env.OriginID,
+		ObserverPubkey: observerPubkey(observerKey, env.OriginID),
 		Region:         region,
 		SNR:            env.SNR.ptr(),
 		RSSI:           env.RSSI.ptr(),
@@ -447,10 +447,7 @@ func (in *Ingestor) handleStatus(msg mqtt.Message) {
 	if err != nil {
 		return
 	}
-	pubkey := env.OriginID
-	if pubkey == "" {
-		pubkey = observerKey
-	}
+	pubkey := observerPubkey(observerKey, env.OriginID)
 	now := time.Now().UTC().Format(time.RFC3339)
 	// A retained status is the broker replaying an observer's last known value on
 	// every reconnect, not a live sighting — it may refresh an observer we already
@@ -518,6 +515,18 @@ func firstNonNil(a, b *int) *int {
 
 // topicMeta extracts region and observer id from a meshcore/{region}/{observer}/packets
 // topic. Missing segments yield empty strings.
+// observerPubkey picks the key recorded in observers.pubkey. The topic key is
+// the one the broker ACL bound to this publisher's token; the payload's
+// origin_id is whatever the publisher typed, so it may only stand in when the
+// topic carries no key. Trusting origin_id let one observer point its row at
+// another's key, which the identity migration then acted on.
+func observerPubkey(topicKey, originID string) string {
+	if topicKey != "" {
+		return topicKey
+	}
+	return originID
+}
+
 func topicMeta(topic string) (observerID, region string) {
 	parts := strings.Split(topic, "/")
 	if len(parts) >= 2 {

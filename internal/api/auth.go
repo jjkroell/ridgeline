@@ -188,12 +188,18 @@ func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	email := strings.ToLower(strings.TrimSpace(req.Email))
+	if email == "" {
+		// No account to check, and no address bucket to charge: refuse before
+		// any password work rather than run a dummy hash for free.
+		writeErr(w, http.StatusBadRequest, "email is required")
+		return
+	}
 	// Brute-force protection: throttle by client IP and by target account before
 	// doing any password work. Bursts are generous enough that a real user who
 	// mistypes a few times is unaffected, but sustained guessing is bounded. The
 	// 429 is returned before the account lookup, so it reveals nothing about
 	// whether the address exists.
-	if !s.authIPLimiter.Allow(clientIP(r)) || (email != "" && !s.authAddrLimiter.Allow(email)) {
+	if !s.authIPLimiter.Allow(clientIP(r)) || !s.authAddrLimiter.Allow(email) {
 		writeErr(w, http.StatusTooManyRequests, "too many sign-in attempts; please wait a minute and try again")
 		return
 	}

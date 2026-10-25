@@ -27,6 +27,18 @@ const (
 	argonSaltLen = 16
 )
 
+// argonSlots bounds how many Argon2id computations run at once. Each one holds
+// argonMemory, and login/register/reset run them before any authentication,
+// so without a bound a burst of requests multiplies 64 MiB by the burst. Extra
+// callers wait their turn; the work per request is unchanged.
+var argonSlots = make(chan struct{}, 4)
+
+func idKey(password, salt []byte, time, memory uint32, threads uint8, keyLen uint32) []byte {
+	argonSlots <- struct{}{}
+	defer func() { <-argonSlots }()
+	return argon2.IDKey(password, salt, time, memory, threads, keyLen)
+}
+
 // HashPassword returns a PHC-format Argon2id hash of the password:
 //
 //	$argon2id$v=19$m=65536,t=3,p=2$<b64 salt>$<b64 hash>
@@ -35,7 +47,7 @@ func HashPassword(password string) (string, error) {
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
-	key := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+	key := idKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
 	b64 := base64.RawStdEncoding.EncodeToString
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, argonMemory, argonTime, argonThreads, b64(salt), b64(key)), nil
@@ -66,7 +78,7 @@ func VerifyPassword(password, encoded string) bool {
 	if err != nil {
 		return false
 	}
-	got := argon2.IDKey([]byte(password), salt, time, mem, threads, uint32(len(want)))
+	got := idKey([]byte(password), salt, time, mem, threads, uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1
 }
 

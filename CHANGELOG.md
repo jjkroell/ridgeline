@@ -4,6 +4,46 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.23.20] — 2026-10-25
+
+A security hardening release, from a full source audit of Ridgeline.
+
+### Security
+- **Map tooltips escape node names**, and the site now sends a
+  Content-Security-Policy (scripts only from the site itself, by hash).
+- **Accounts:** owners and note authors without a display name show as
+  "User #id", never their email; location shares no longer list grantees'
+  emails. Changing your password or email signs out your other sessions and
+  cancels outstanding reset and verification links. Sign-in and other
+  account forms refuse cross-site requests. Only one account can ever become
+  the bootstrap owner. Team notes become private to their authors when a
+  node gets a new owner.
+- **Rate limits** key on the visitor's real address behind Cloudflare, note
+  creation and owner note emails are throttled, location shares are
+  throttled, and password hashing runs at most four at a time.
+- **Mesh input:** advert names come only from the signed part of the advert;
+  raw packets over the LoRa MTU and oversized observer status messages are
+  dropped; observers are identified by their authenticated topic key; a
+  blocklisted observer cannot reappear through its status messages; each
+  observer may introduce new nodes only at a bounded rate.
+- **Node cleanup** no longer deletes a genuine node because a newer
+  look-alike key shares its prefix, and a fresh look-alike cannot cancel an
+  established repeater's relay credit.
+- **Public endpoints:** analytics and per-node scans snap their parameters
+  to a few cached presets, unknown nodes and observers return 404, scans run
+  at most two at a time, the node list is shared for a few seconds, and
+  channel-recent reads only its window.
+- **Live feed:** inbound message limit, ping/pong timeouts, and caps of 1000
+  connections overall and 20 per visitor.
+- **Privacy:** reset and verification tokens are removed from the address bar
+  before analytics loads; signed-in API responses are no longer cached by the
+  offline service worker, and its API cache is cleared on sign-in and out.
+- **Firmware builder:** downloads serve only regular files inside the
+  artifact directory, and `firmware.tags` entries can pin a commit
+  (`tag@<40-hex sha>`) so a moved upstream tag fails to build.
+- **Config:** the daemon refuses to start with an empty or `CHANGE_ME`
+  broker consumer or subscriber password.
+
 ## [v0.23.19] — 2026-10-22
 
 ### Changed

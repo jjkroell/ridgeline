@@ -57,7 +57,7 @@ type SharedWithMe struct {
 func (s *Store) SharesForUser(granteeUserID int64) ([]SharedWithMe, error) {
 	rows, err := s.db.Query(`
 		SELECT ls.node_pubkey, COALESCE(n.name,''), COALESCE(n.role,''),
-		       ls.owner_user_id, COALESCE(NULLIF(o.display_name,''), o.email),
+		       ls.owner_user_id, COALESCE(NULLIF(o.display_name,''), 'User #' || o.id),
 		       ls.created_at, ls.seen, n.pubkey IS NOT NULL
 		FROM location_shares ls
 		JOIN users o ON o.id = ls.owner_user_id

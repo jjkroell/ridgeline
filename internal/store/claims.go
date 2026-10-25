@@ -82,7 +82,7 @@ func (s *Store) NodeOwner(nodePubkey string) (OwnerInfo, bool, error) {
 	nodePubkey = strings.ToUpper(nodePubkey)
 	var o OwnerInfo
 	err := s.db.QueryRow(`
-		SELECT u.id, COALESCE(NULLIF(u.display_name,''), u.email)
+		SELECT u.id, COALESCE(NULLIF(u.display_name,''), 'User #' || u.id)
 		FROM node_claims c JOIN users u ON u.id = c.user_id
 		WHERE c.node_pubkey = ? AND c.status = 'verified'`, nodePubkey).
 		Scan(&o.UserID, &o.DisplayName)

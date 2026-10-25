@@ -209,11 +209,28 @@ func (s *Store) UpdatePassword(id int64, passwordHash string) error {
 // ErrEmailTaken on a collision.
 func (s *Store) UpdateEmail(id int64, newEmail string) error {
 	newEmail = strings.ToLower(strings.TrimSpace(newEmail))
-	_, err := s.db.Exec(`UPDATE users SET email = ?, email_verified = 0 WHERE id = ?`, newEmail, id)
-	if err != nil && isUniqueViolation(err) {
-		return ErrEmailTaken
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
 	}
-	return err
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE users SET email = ?, email_verified = 0 WHERE id = ?`, newEmail, id); err != nil {
+		if isUniqueViolation(err) {
+			return ErrEmailTaken
+		}
+		return err
+	}
+	// Tokens mailed to the old address must not vouch for the new one: a reset
+	// completed with one marks the account's (new) email verified.
+	for _, q := range []string{
+		`DELETE FROM password_resets WHERE user_id = ?`,
+		`DELETE FROM email_verifications WHERE user_id = ?`,
+	} {
+		if _, err := tx.Exec(q, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // SetUserAdmin grants or revokes an account's admin rights (admin action).

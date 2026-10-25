@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net/http"
 	"os"
 	"strconv"
@@ -192,14 +193,18 @@ func (s *Server) Handler() http.Handler {
 	// Accounts: registration, login/logout, current-user probe. Mutating auth
 	// endpoints are same-origin POSTs; CSRF is enforced on authenticated
 	// mutations elsewhere (requireUser) once a session exists.
-	mux.HandleFunc("POST /api/auth/register", s.authRegister)
-	mux.HandleFunc("POST /api/auth/login", s.authLogin)
+	// The pre-session ones carry no CSRF token (there is no session yet), so
+	// they also insist on a JSON body: a cross-site form or text/plain POST is
+	// refused, and a cross-site JSON POST needs a CORS preflight never granted.
+	// Cross-origin browser requests are refused outright (see Handler).
+	mux.HandleFunc("POST /api/auth/register", jsonOnly(s.authRegister))
+	mux.HandleFunc("POST /api/auth/login", jsonOnly(s.authLogin))
 	mux.HandleFunc("POST /api/auth/logout", s.authLogout)
 	mux.HandleFunc("GET /api/auth/me", s.authMe)
-	mux.HandleFunc("POST /api/auth/verify", s.authVerifyEmail)
-	mux.HandleFunc("POST /api/auth/resend-verification", s.authResendVerification)
-	mux.HandleFunc("POST /api/auth/forgot", s.authForgotPassword)
-	mux.HandleFunc("POST /api/auth/reset", s.authResetPassword)
+	mux.HandleFunc("POST /api/auth/verify", jsonOnly(s.authVerifyEmail))
+	mux.HandleFunc("POST /api/auth/resend-verification", jsonOnly(s.authResendVerification))
+	mux.HandleFunc("POST /api/auth/forgot", jsonOnly(s.authForgotPassword))
+	mux.HandleFunc("POST /api/auth/reset", jsonOnly(s.authResetPassword))
 	// Self-service account editing (authenticated + CSRF via requireUser).
 	mux.HandleFunc("PUT /api/account/profile", s.requireUser(s.accountUpdateProfile))
 	mux.HandleFunc("POST /api/account/password", s.requireUser(s.accountChangePassword))
@@ -289,7 +294,22 @@ func (s *Server) Handler() http.Handler {
 			s.log.Warn("web dir not found, serving API only", "dir", s.webDir)
 		}
 	}
-	return limitBody(s.freshNodesAfterWrites(mux))
+	// Refuse cross-origin browser writes on every route (Sec-Fetch-Site, else
+	// Origin vs Host); non-browser clients send neither header and pass. This is
+	// what stops login CSRF, where no session token exists to check.
+	xo := http.NewCrossOriginProtection()
+	return limitBody(xo.Handler(s.freshNodesAfterWrites(mux)))
+}
+
+// jsonOnly refuses a request whose body is not declared application/json.
+func jsonOnly(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct != "application/json" {
+			writeErr(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
+			return
+		}
+		h(w, r)
+	}
 }
 
 // freshNodesAfterWrites drops the cached node list after every write request

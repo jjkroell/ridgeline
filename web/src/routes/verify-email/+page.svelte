@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { auth } from '$lib/auth.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -10,6 +10,9 @@
 
 	onMount(async () => {
 		const token = page.url.searchParams.get('token') ?? '';
+		// Drop the single-use token from the address bar before analytics (or
+		// anything else that reads the URL) can record it.
+		if (token) replaceState(page.url.pathname, {});
 		if (!token) {
 			phase = 'error';
 			message = 'This link is missing its verification token.';

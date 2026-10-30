@@ -14,8 +14,10 @@ export type ThemeId = 'dark' | 'light' | 'slate' | 'graphite' | 'mist' | 'apple'
  *  the system light/dark setting and resolves to apple / apple-dark. */
 export type ThemeChoice = ThemeId | 'apple-auto';
 
-/** Cupertino tint colours (iOS Settings → Accent colour). Stored separately
- *  from the theme; only the Cupertino themes read data-accent. */
+/** Harbour tint colours (the accent choice). The Harbour theme was called
+ *  Cupertino before v0.24.1; its ids stay 'apple'/'apple-dark'/'apple-auto' so
+ *  saved choices keep working. Stored separately
+ *  from the theme; only the Harbour themes read data-accent. */
 export type AccentId = 'blue' | 'purple' | 'pink' | 'red' | 'orange' | 'green' | 'graphite';
 export const ACCENTS: { id: AccentId; label: string; light: string; dark: string }[] = [
 	{ id: 'blue', label: 'Blue', light: '#0071e3', dark: '#0a84ff' },
@@ -76,14 +78,14 @@ export const THEMES: ThemeDef[] = [
 	},
 	{
 		id: 'apple',
-		label: 'Cupertino',
+		label: 'Harbour',
 		light: true,
 		swatch: ['#e4e4e9', '#f3f3f6', '#0071e3'],
 		themeColor: '#e4e4e9'
 	},
 	{
 		id: 'apple-dark',
-		label: 'Cupertino Dark',
+		label: 'Harbour Dark',
 		light: false,
 		swatch: ['#000000', '#1c1c1e', '#0a84ff'],
 		themeColor: '#000000'

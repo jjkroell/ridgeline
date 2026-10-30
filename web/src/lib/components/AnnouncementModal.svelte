@@ -7,13 +7,13 @@
 	const items: { icon: string; title: string; body: string }[] = [
 		{
 			icon: 'M12 3a9 9 0 100 18c1.1 0 1.6-.9 1.2-1.8-.5-1-.1-2.2 1.1-2.2H17a4 4 0 004-4c0-5-4-10-9-10zM7.5 12a1 1 0 100-2 1 1 0 000 2zM10.5 8a1 1 0 100-2 1 1 0 000 2zM15 8a1 1 0 100-2 1 1 0 000 2z',
-			title: 'Cupertino, a new look for Ridgeline',
-			body: 'A new theme in the style of Apple’s own apps: soft grey surfaces, frosted glass bars, the system font, rounder cards and a single accent colour. Pick Light, Dark, or Auto to follow your device’s appearance, and choose an accent: blue, purple, pink, red, orange, green or graphite. To try it, open Theme at the bottom of the sidebar (on a phone, the round button at the top right, or More → Settings). Your choice is saved in this browser, and every other theme is still there.'
+			title: 'Harbour, a new look for Ridgeline',
+			body: 'A clean, rounded new theme: soft grey surfaces, frosted glass bars, your device’s own system font, rounder cards and a single accent colour. Pick Light, Dark, or Auto to follow your device’s appearance, and choose an accent: blue, purple, pink, red, orange, green or graphite. To try it, open Theme at the bottom of the sidebar (on a phone, the round button at the top right, or More → Settings). Your choice is saved in this browser, and every other theme is still there.'
 		},
 		{
 			icon: 'M8 3h8a2 2 0 012 2v14a2 2 0 01-2 2H8a2 2 0 01-2-2V5a2 2 0 012-2zM11 18h2',
 			title: 'On a phone, it feels like an app',
-			body: 'With Cupertino on, the phone layout gets large page titles that tuck into the bar as you scroll, content that slides under frosted bars, full-screen maps, iOS-style switches and segmented controls, and grouped lists. Add Ridgeline to your home screen and it opens with a proper launch screen, and you can swipe in from the left edge to go back.'
+			body: 'With Harbour on, the phone layout gets large page titles that tuck into the bar as you scroll, content that slides under frosted bars, full-screen maps, toggle switches and segmented controls, and grouped lists. Add Ridgeline to your home screen and it opens with a proper launch screen, and you can swipe in from the left edge to go back.'
 		},
 		{
 			icon: 'M4 14h16M4 14a2 2 0 01-2-2V6a2 2 0 012-2h16a2 2 0 012 2v6a2 2 0 01-2 2M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4M12 8h.01',
@@ -28,7 +28,7 @@
 		{
 			icon: 'M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM21 21l-5.2-5.2',
 			title: 'Faster to get around',
-			body: 'Press Ctrl+K (⌘K on a Mac), or Search in the sidebar, to jump to any page or node by name. Clicking a node on the map opens a side panel so the map stays in view. On a phone, the Nodes list can be sorted A–Z with a letter strip down the side to jump through it, and Nodes and Observers both have a search field (in Cupertino, pull the list down to show it). On an iPad held sideways, Nodes shows the list and the selected node side by side.'
+			body: 'Press Ctrl+K (⌘K on a Mac), or Search in the sidebar, to jump to any page or node by name. Clicking a node on the map opens a side panel so the map stays in view. On a phone, the Nodes list can be sorted A–Z with a letter strip down the side to jump through it, and Nodes and Observers both have a search field (in Harbour, pull the list down to show it). On an iPad held sideways, Nodes shows the list and the selected node side by side.'
 		},
 		{
 			icon: 'M2 12h3l2-7 3.5 15L16 8l2 4h4',
@@ -38,17 +38,17 @@
 		{
 			icon: 'M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z',
 			title: 'Widgets in three sizes, and a Settings page',
-			body: 'In Cupertino, Customize on the overview lets you make each widget small, medium or large, like home-screen widgets, with its headline number up front. Phones get a Settings page (More → Settings) for theme, map style, packet times and your account.'
+			body: 'In Harbour, Customize on the overview lets you make each widget small, medium or large, like home-screen widgets, with its headline number up front. Phones get a Settings page (More → Settings) for theme, map style, packet times and your account.'
 		},
 		{
 			icon: 'M12 3v18M3 12h18M5.6 5.6l12.8 12.8',
 			title: 'Easier to read',
-			body: 'Turn on Reduce transparency (under the theme choices) to make frosted bars and panels solid. It also switches on by itself if your device asks for less transparency, and in Cupertino, edges and secondary text get firmer when Increase Contrast is on. Copying a key or starring a node now shows a short confirmation in the middle of the screen.'
+			body: 'Turn on Reduce transparency (under the theme choices) to make frosted bars and panels solid. It also switches on by itself if your device asks for less transparency, and in Harbour, edges and secondary text get firmer when Increase Contrast is on. Copying a key or starring a node now shows a short confirmation in the middle of the screen.'
 		},
 		{
 			icon: 'M3 20l6-9 4 5 3-4 5 8zM16 4.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z',
 			title: 'A calmer map, and a new logo on the way',
-			body: 'There is a new Muted base map, a soft, low-colour map that lets the nodes stand out (Cupertino uses it by default; change it under Base map on any map). Ridgeline’s logo is being replaced: the one you see now is a stand-in, and the new one is being chosen by public vote at logo.ve7kod.ca until Friday, November 6 at 18:00 BC time.'
+			body: 'There is a new Muted base map, a soft, low-colour map that lets the nodes stand out (Harbour uses it by default; change it under Base map on any map). Ridgeline’s logo is being replaced: the one you see now is a stand-in, and the new one is being chosen by public vote at logo.ve7kod.ca until Friday, November 6 at 18:00 BC time.'
 		},
 		{
 			icon: 'M5 12.5l4.5 4.5L19 7.5',
@@ -56,7 +56,7 @@
 			body: 'Bold text is bold again across the site, so headings and numbers stand out more in every theme. The live map now plays its sound as soon as you tap or click anywhere, instead of staying silent until you switched sound off and on. Pages show a quiet outline while they load instead of “Loading…”, and the node count on the phone map is no longer hidden under Copy link.'
 		}
 	];
-	const onCupertino = $derived(theme.choice === 'apple' || theme.choice === 'apple-dark' || theme.choice === 'apple-auto');
+	const onHarbour = $derived(theme.choice === 'apple' || theme.choice === 'apple-dark' || theme.choice === 'apple-auto');
 	function tryIt() {
 		theme.set('apple-auto');
 		announce.close();
@@ -107,11 +107,11 @@
 				onclick={() => announce.close()}
 				class="text-fg-dim hover:text-fg text-sm transition-colors">Learn more</a
 			>
-			{#if !onCupertino}
+			{#if !onHarbour}
 				<button
 					onclick={tryIt}
 					class="bg-signal text-ink hover:bg-signal-deep rounded-[var(--radius)] px-4 py-2 text-sm font-600 transition-colors"
-					>Try Cupertino</button
+					>Try Harbour</button
 				>
 			{/if}
 			<button

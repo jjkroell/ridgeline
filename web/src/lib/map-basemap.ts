@@ -23,7 +23,7 @@ export interface BasemapOption {
 export const BASEMAPS: BasemapOption[] = [
 	{ id: 'topo', label: 'Hillshade', desc: 'Shaded terrain relief over a clean base', themed: true },
 	{ id: 'minimal', label: 'Minimal', desc: 'Flat, label-light base', themed: true },
-	{ id: 'muted', label: 'Muted', desc: 'Soft Apple Maps-style colours with light relief', themed: true },
+	{ id: 'muted', label: 'Muted', desc: 'Soft, low-colour map with light relief', themed: true },
 	{ id: 'street', label: 'Street', desc: 'Detailed streets & places', themed: false },
 	{ id: 'satellite', label: 'Satellite', desc: 'Aerial imagery', themed: false },
 	{ id: 'terrain', label: 'Topographic', desc: 'Contour lines & relief', themed: false },

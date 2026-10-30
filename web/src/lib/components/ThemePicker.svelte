@@ -2,7 +2,7 @@
 	// Shared theme picker — desktop sidebar and the mobile More sheet render the
 	// same swatch row. Each swatch previews the theme it selects: the square is
 	// that theme's page ground, the dot its accent, so the choice reads without
-	// applying it. Cupertino is ONE swatch (split light/dark); once chosen, a
+	// applying it. Harbour is ONE swatch (split light/dark); once chosen, a
 	// Light / Dark / Auto switch and an accent row appear beneath it.
 	import { theme, THEMES, ACCENTS, type ThemeChoice } from '$lib/theme.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -13,10 +13,10 @@
 	const dot = $derived(compact ? 'h-2.5 w-2.5' : 'h-1.5 w-1.5');
 	const accentDot = $derived(compact ? 'h-6 w-6' : 'h-4 w-4');
 
-	const CUPERTINO = { id: 'cupertino', label: 'Cupertino', swatch: ['#e4e4e9', '#1c1c1e', '#0a84ff'] };
+	const HARBOUR = { id: 'harbour', label: 'Harbour', swatch: ['#e4e4e9', '#1c1c1e', '#0a84ff'] };
 	const swatches = [
 		...THEMES.filter((t) => !t.id.startsWith('apple')).map((t) => ({ id: t.id as string, label: t.label, swatch: t.swatch })),
-		CUPERTINO
+		HARBOUR
 	];
 	const MODES: { id: ThemeChoice; label: string }[] = [
 		{ id: 'apple', label: 'Light' },
@@ -24,13 +24,13 @@
 		{ id: 'apple-auto', label: 'Auto' }
 	];
 
-	const isCupertino = $derived(theme.choice.startsWith('apple'));
-	const selected = (id: string) => (id === 'cupertino' ? isCupertino : theme.choice === id);
+	const isHarbour = $derived(theme.choice.startsWith('apple'));
+	const selected = (id: string) => (id === 'harbour' ? isHarbour : theme.choice === id);
 
 	function pick(id: string) {
-		// Cupertino starts in Auto (follows the system), as Apple's own apps do.
-		if (id === 'cupertino') {
-			if (!isCupertino) theme.set('apple-auto');
+		// Harbour starts in Auto (follows the system), as Apple's own apps do.
+		if (id === 'harbour') {
+			if (!isHarbour) theme.set('apple-auto');
 		} else theme.set(id as ThemeChoice);
 	}
 </script>
@@ -48,7 +48,7 @@
 		aria-label="Colour theme"
 	>
 		{#each swatches as t (t.id)}
-			{@const split = t.id === 'cupertino'}
+			{@const split = t.id === 'harbour'}
 			<Tooltip text={t.label}>
 				<button
 					type="button"
@@ -69,7 +69,7 @@
 		{/each}
 	</div>
 
-	{#if isCupertino}
+	{#if isHarbour}
 		<div
 			data-seg
 			class="border-line mt-1.5 flex overflow-hidden rounded-[var(--radius)] border text-xs {compact ? 'max-w-xs' : ''}"

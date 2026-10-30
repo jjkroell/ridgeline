@@ -13,7 +13,7 @@
 	}
 
 	const mode = $derived(theme.choice === 'apple-auto' ? 'Auto' : theme.id === 'apple-dark' ? 'Dark' : 'Light');
-	const name = $derived(theme.isApple ? `Cupertino · ${mode}` : theme.def.label);
+	const name = $derived(theme.isApple ? `Harbour · ${mode}` : theme.def.label);
 </script>
 
 {#snippet swatch(size: string, dot: string)}

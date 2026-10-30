@@ -4,6 +4,13 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.1] — 2026-10-29
+
+### Changed
+- **The Cupertino theme is now called Harbour** (Harbour and Harbour Dark).
+  Saved theme choices carry over unchanged. The What's new text and the Muted
+  base map's description no longer refer to another company's products.
+
 ## [v0.24.0] — 2026-10-29
 
 A big look-and-feel release: a new Apple-style theme, a phone layout that

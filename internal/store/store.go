@@ -289,6 +289,25 @@ CREATE TABLE IF NOT EXISTS neighbor_reports (
 	rows_json     TEXT NOT NULL            -- []NeighborEntry
 );
 
+-- Who monitors a channel: senders who have posted a message starting with
+-- "test" to it (#sos only, for now), less those who sent "unsub" since.
+-- One row per channel+sender name. See sos.go.
+CREATE TABLE IF NOT EXISTS channel_monitors (
+	channel    TEXT NOT NULL,              -- hashtag name without '#'
+	sender     TEXT NOT NULL,              -- sender name as the message carries it
+	first_test TEXT NOT NULL,              -- server receive time (RFC3339)
+	last_test  TEXT NOT NULL,
+	tests      INTEGER NOT NULL,           -- distinct test messages
+	last_hash  TEXT NOT NULL DEFAULT '',   -- dedupes copies of one transmission
+	unsub_at   TEXT NOT NULL DEFAULT '',   -- newest unsub; listed while last_test is newer
+	PRIMARY KEY (channel, sender)
+);
+-- Marks a channel whose history has been scanned once for monitors.
+CREATE TABLE IF NOT EXISTS channel_monitor_backfills (
+	channel TEXT PRIMARY KEY,
+	done_at TEXT NOT NULL
+);
+
 `
 
 // Store wraps a SQLite database.
@@ -366,6 +385,13 @@ type Store struct {
 	// connection. See neighbors.go.
 	neighborMu      sync.RWMutex
 	neighborReports map[string]NeighborReport
+
+	// #sos monitor roster (sender -> monitor), read by the public endpoint so
+	// it never queues on the DB connection. See sos.go.
+	sosMu        sync.RWMutex
+	sosMonitors  map[string]*ChannelMonitor
+	sosLastHash  map[string]string
+	sosLastAlert string // newest #sos message with an emergency word (RFC3339)
 }
 
 // Open opens (creating if needed) the SQLite database at path, enables WAL
@@ -418,6 +444,7 @@ func Open(path string) (*Store, error) {
 	// by the node's verified owner). The consensus pass never overrides a 'manual' row.
 	db.Exec(`ALTER TABLE nodes ADD COLUMN hash_size_source TEXT NOT NULL DEFAULT 'auto'`)
 	db.Exec(`ALTER TABLE observers ADD COLUMN status_json TEXT`)
+	db.Exec(`ALTER TABLE channel_monitors ADD COLUMN unsub_at TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE observers ADD COLUMN last_status_at TEXT`)
 	db.Exec(`ALTER TABLE observers ADD COLUMN radio TEXT`)
 	db.Exec(`ALTER TABLE nodes ADD COLUMN radio TEXT`)
@@ -561,6 +588,10 @@ func Open(path string) (*Store, error) {
 	if err := s.loadNeighborReports(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("store: load neighbor reports: %w", err)
+	}
+	if err := s.loadSOSMonitors(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: load sos monitors: %w", err)
 	}
 	// One-time repair of radio values a far-side receiver wrote onto near-side
 	// nodes back when any hop count could set one. Needs the blocklist loaded
@@ -908,10 +939,25 @@ func (s *Store) Record(o Observation) error {
 		}
 	}
 
+	// A #sos check-in ("test …") lists its sender as a channel monitor; an
+	// "unsub …" takes them off.
+	sosSender, sosKind := sosMonitorMsg(p)
+	if sosKind != notMonitor {
+		if err := writeMonitor(tx, sosKind, SOSChannel, sosSender, p.MessageHash, ts); err != nil {
+			return fmt.Errorf("store: upsert sos monitor: %w", err)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 	s.obsCount.Add(1)
+	if sosKind != notMonitor {
+		s.noteMonitor(sosKind, sosSender, p.MessageHash, ts)
+	}
+	if isSOSAlert(p) {
+		s.noteSOSAlert(ts)
+	}
 	return nil
 }
 

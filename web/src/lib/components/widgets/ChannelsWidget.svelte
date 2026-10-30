@@ -4,7 +4,8 @@
 	import { overview } from '$lib/overview.svelte';
 	import { api, type LiveEvent } from '$lib/api';
 	import { live } from '$lib/live.svelte';
-	import { channels } from '$lib/channels.svelte';
+	import { channels, SOS_ID } from '$lib/channels.svelte';
+	import { sos } from '$lib/sos.svelte';
 	import { decryptGroupText } from '$lib/channel-crypto';
 	import { ago } from '$lib/format';
 
@@ -20,6 +21,7 @@
 		}
 	}
 	onMount(load);
+	onMount(() => sos.watch());
 
 	interface Msg {
 		hash: string;
@@ -39,6 +41,8 @@
 				if (c.hashByte !== hb) continue;
 				const d = decryptGroupText(ev.payloadRaw, c.keyHex);
 				if (!d) continue;
+				// #sos test/unsub housekeeping drops out after five minutes, as in the chat.
+				if (sos.hidden(c.id, d.text, +new Date(ev.receivedAt))) break;
 				if (!seen.has(ev.messageHash)) {
 					seen.set(ev.messageHash, {
 						hash: ev.messageHash,

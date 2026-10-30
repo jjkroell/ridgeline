@@ -151,6 +151,9 @@ func run(log *slog.Logger, configPath string, configRequired bool) error {
 	} else if n > 0 {
 		log.Info("registered confirmed hashtag channels", "count", n)
 	}
+	// #sos is a permanent channel: always decrypted, confirmed or not, so its
+	// monitor roster (senders of "test") builds from the first packet.
+	store.RegisterSOSChannel()
 	for _, name := range cfg.HashtagChannels {
 		if _, err := st.AddChannelCandidate(name, store.ChannelSourceConfig, nil); err != nil {
 			log.Warn("seed hashtag channel candidate", "name", name, "err", err)
@@ -315,6 +318,7 @@ func run(log *slog.Logger, configPath string, configRequired bool) error {
 	activity := analytics.NewActivityIndex(7 * 24 * time.Hour)
 	apiServer.SetActivityIndex(activity)
 	go runActivityIndex(ctx, st, activity, log)
+	go backfillSOSMonitors(ctx, st, cfg.ObservationRetentionDays, log)
 	if cfg.ObservationRetentionDays > 0 {
 		go runObservationRetention(ctx, st, cfg.ObservationRetentionDays, log)
 	}
@@ -934,6 +938,34 @@ func runObservationRecount(ctx context.Context, st *store.Store, log *slog.Logge
 
 // runActivityIndex keeps the node-heatmap index current: a batched 7-day
 // backfill at start, then every 60 s just the observations stored since.
+// backfillSOSMonitors finds the newest #sos alert of the last 12 h (every
+// boot), then lists the #sos monitors who checked in before the roster
+// existed, by scanning the retained history once (first boot only; the store
+// marks it done). Kept off the startup path: it is batched by the hour,
+// so the site stays responsive while it runs.
+func backfillSOSMonitors(ctx context.Context, st *store.Store, retentionDays int, log *slog.Logger) {
+	days := retentionDays
+	if days <= 0 {
+		days = 90
+	}
+	// The newest #sos alert, so the UI's flag survives this restart.
+	if err := st.LoadSOSAlert(ctx, time.Now()); err != nil && ctx.Err() == nil {
+		log.Warn("sos alert load", "err", err)
+	}
+	t0 := time.Now()
+	scanned, found, err := st.BackfillSOSMonitors(ctx, days, time.Now())
+	if err != nil {
+		if ctx.Err() == nil {
+			log.Warn("sos monitor backfill", "err", err)
+		}
+		return
+	}
+	if scanned > 0 {
+		log.Info("sos monitor backfill complete", "days", days, "scanned", scanned,
+			"tests", found, "monitors", len(st.SOSMonitors()), "took", time.Since(t0).Round(time.Millisecond))
+	}
+}
+
 func runActivityIndex(ctx context.Context, st *store.Store, idx *analytics.ActivityIndex, log *slog.Logger) {
 	update := func() {
 		nodes, err := st.ListNodes()

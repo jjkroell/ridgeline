@@ -4,6 +4,7 @@
 	import { live } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { sos } from '$lib/sos.svelte';
 	import PwaInstall from '$lib/components/PwaInstall.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import DevBanner from '$lib/components/DevBanner.svelte';
@@ -244,7 +245,8 @@
 		{#each tabs as t (t.href)}
 			{@const on = t.sheet ? moreOpen || anyMoreActive : activeTab(t.href, t.exact)}
 			{#if t.sheet}
-				<button onclick={() => (moreOpen = !moreOpen)} class="relative flex flex-col items-center gap-1 py-2.5">
+				<!-- Channels lives in the More sheet, so an #sos alert pulses More. -->
+				<button onclick={() => (moreOpen = !moreOpen)} class="relative flex flex-col items-center gap-1 py-2.5" class:sos-alert-row={sos.flagged}>
 					{#if on}<span data-nav-bar class="bg-signal absolute top-0 h-[2px] w-7 rounded-full"></span>{/if}
 					<svg viewBox="0 0 24 24" class="h-[22px] w-[22px] {on ? 'text-signal' : 'text-fg-faint'}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d={icons[t.icon]} /></svg>
 					<span class="text-[0.62rem] font-medium whitespace-nowrap {on ? 'text-signal' : 'text-fg-faint'}">{t.label}</span>
@@ -276,12 +278,12 @@
 		<div class="grid grid-cols-1 gap-1">
 			{#each visibleMore as m (m.href)}
 				{@const on = activeTab(m.href)}
-				<a href={m.href} class="flex items-center gap-3 rounded-xl px-3 py-3 {on ? 'bg-signal/10' : 'active:bg-line/40'}">
+				<a href={m.href} class="flex items-center gap-3 rounded-xl px-3 py-3 {on ? 'bg-signal/10' : 'active:bg-line/40'}" class:sos-alert-row={m.href === '/m/channels' && sos.flagged}>
 					<span class="border-line/60 grid h-10 w-10 shrink-0 place-items-center rounded-xl border {on ? 'bg-signal/15' : 'bg-panel'}">
 						<svg viewBox="0 0 24 24" class="h-[20px] w-[20px] {on ? 'text-signal' : 'text-fg-dim'}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d={icons[m.icon]} /></svg>
 					</span>
 					<span class="min-w-0">
-						<span class="text-fg block text-sm font-600 {on ? '!text-signal' : ''}">{m.label}</span>
+						<span class="text-fg block text-sm font-600 {on ? '!text-signal' : ''}" class:sos-alert={m.href === '/m/channels' && sos.flagged}>{m.label}</span>
 						<span class="text-fg-faint block text-xs">{m.desc}</span>
 					</span>
 				</a>

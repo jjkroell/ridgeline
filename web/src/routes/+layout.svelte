@@ -7,6 +7,7 @@
 	import { theme } from '$lib/theme.svelte';
 	import { timeMode } from '$lib/time-mode.svelte';
 	import { channels } from '$lib/channels.svelte';
+	import { sos } from '$lib/sos.svelte';
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemap } from '$lib/basemap.svelte';
 	import { overview } from '$lib/overview.svelte';
@@ -59,7 +60,10 @@
 		consent.init();
 		announce.init();
 		env.init();
+		sos.init();
 	});
+	// #sos alert flag on every page (the Channels nav item pulses from it).
+	onMount(() => sos.watch());
 
 	// Analytics is strictly consent-gated: inject Umami (and fire the once-per-
 	// session WebGL event) only after the visitor opts in. If they later withdraw
@@ -179,6 +183,8 @@
 					data-active={on}
 					class="group relative flex items-center gap-3 rounded-[var(--radius)] px-3 py-2.5 text-sm transition-colors
 						{on ? 'text-fg' : 'text-fg-dim hover:text-fg'}"
+					class:sos-alert-row={item.href === '/channels' && sos.flagged}
+					title={item.href === '/channels' && sos.flagged ? 'Emergency word on #sos' : undefined}
 				>
 					{#if on}
 						<span data-nav-bar class="bg-signal absolute top-1/2 left-0 h-5 w-[2px] -translate-y-1/2 rounded-full"
@@ -197,7 +203,7 @@
 					>
 						<path d={icons[item.icon]} />
 					</svg>
-					<span class="font-medium">{item.label}</span>
+					<span class="font-medium" class:sos-alert={item.href === '/channels' && sos.flagged}>{item.label}</span>
 				</a>
 			{/each}
 		</nav>
@@ -305,7 +311,9 @@
 								item.exact
 							)
 								? 'bg-signal/10 text-signal'
-								: 'text-fg-dim hover:text-fg'}">{item.label}</a
+								: 'text-fg-dim hover:text-fg'}"
+							class:sos-alert-row={item.href === '/channels' && sos.flagged}
+							class:sos-alert={item.href === '/channels' && sos.flagged}>{item.label}</a
 						>
 					{/each}
 					<div class="col-span-2 px-1 pt-2"><ThemeButton /></div>

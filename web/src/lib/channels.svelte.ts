@@ -1,7 +1,8 @@
 // User's group channels, persisted to localStorage. Channels live only in the
 // browser — keys never go to the server; GroupText is decrypted client-side
 // (see channel-crypto.ts). The well-known Public channel is added by default
-// but can be removed like any other.
+// but can be removed like any other. #sos, the mesh's emergency channel, is
+// permanent: every browser carries it and it cannot be removed.
 import { deriveHashtagKey, channelHashByte, decryptGroupText } from './channel-crypto';
 
 export type ChannelType = 'public' | 'hashtag' | 'private';
@@ -37,6 +38,29 @@ function publicChannel(): Channel {
 	};
 }
 
+/** id of the permanent #sos channel. */
+export const SOS_ID = 'sos';
+
+function sosChannel(): Channel {
+	const keyHex = deriveHashtagKey('sos');
+	return { id: SOS_ID, name: '#sos', type: 'hashtag', keyHex, hashByte: channelHashByte(keyHex) };
+}
+
+/** A channel the user cannot remove. */
+export function isPermanent(c: Pick<Channel, 'id'> | null | undefined): boolean {
+	return c?.id === SOS_ID;
+}
+
+// Put #sos in a saved list that lacks it — right after Public when that is
+// there, else first — replacing a '#sos' the user added by hand before it was
+// built in (same key), so it never shows twice.
+function withSOS(list: Channel[]): Channel[] {
+	const sos = sosChannel();
+	const rest = list.filter((c) => c.id !== SOS_ID && c.keyHex !== sos.keyHex);
+	const at = rest[0]?.type === 'public' ? 1 : 0;
+	return [...rest.slice(0, at), sos, ...rest.slice(at)];
+}
+
 function rid(): string {
 	try {
 		return crypto.randomUUID();
@@ -64,7 +88,7 @@ function normalize(c: Partial<Channel>): Channel | null {
 }
 
 class Channels {
-	list = $state<Channel[]>([publicChannel()]);
+	list = $state<Channel[]>([publicChannel(), sosChannel()]);
 	// Per-channel reader sort direction, keyed by channel id.
 	sortById = $state<Record<string, SortDir>>({});
 	#loaded = false;
@@ -78,7 +102,9 @@ class Channels {
 			if (raw) {
 				const parsed = JSON.parse(raw);
 				if (Array.isArray(parsed)) {
-					this.list = parsed.map(normalize).filter((c): c is Channel => c !== null);
+					const saved = parsed.map(normalize).filter((c): c is Channel => c !== null);
+					this.list = withSOS(saved);
+					if (!saved.some((c) => c.id === SOS_ID)) this.#persist();
 				}
 			}
 		} catch {
@@ -165,6 +191,7 @@ class Channels {
 	}
 
 	remove(id: string) {
+		if (id === SOS_ID) return; // permanent
 		this.list = this.list.filter((c) => c.id !== id);
 		this.#persist();
 		if (id in this.sortById) {

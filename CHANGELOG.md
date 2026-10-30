@@ -4,6 +4,29 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.3] — 2026-10-30
+
+### Added
+- **#sos, a permanent emergency channel.** Every browser now carries #sos
+  (after Public); it cannot be removed. An info card above its messages says
+  what the channel is for, to call 911 first, and how to help monitor it, with
+  a "Why a separate channel?" note. It opens on first launch and minimizes to
+  an **Info** pill beside the channel name.
+- **Who monitors #sos.** Sending a message whose first word is `test` lists
+  the sender as a monitor; `unsub` (or `unsubscribe`) takes them off. The
+  names have their own card, minimized by default to an **N monitoring** pill.
+  The roster is kept by the server (`GET /api/channels/sos`), built once from
+  the retained history on first start and updated as messages arrive.
+- **Test and unsub messages leave the #sos chat after 5 minutes**, so the
+  channel stays clear (the sender stays listed). They are hidden in the
+  channel pages, the channel list preview and the Overview Channels widget.
+- **An emergency word on #sos flags it.** `sos`, `emergency`, `mayday`,
+  `911`, "need help" or "help me" in a #sos message from the last 12 hours
+  pulses the #sos row and the Channels nav item (the More tab on mobile) red
+  until you switch to #sos — on every page, and after a reload.
+- `cmd/purgechannel` removes one hashtag channel's stored messages (dry run
+  by default; `-apply` needs a JSON `-backup`), keeping its monitor roster.
+
 ## [v0.24.2] — 2026-10-29
 
 ### Fixed

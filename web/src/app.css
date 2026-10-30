@@ -514,6 +514,31 @@ html:is([data-theme='apple'], [data-theme='apple-dark']) {
 	.tnum {
 		font-variant-numeric: tabular-nums;
 	}
+
+	/* #sos channel row: an emergency word in a recent message turns its name
+	   red and pulses the row's background (where the selected highlight sits)
+	   until the channel is opened. A steady tint when motion is reduced. */
+	.sos-alert {
+		color: var(--color-coral) !important;
+	}
+	.sos-alert-row {
+		animation: sos-row-pulse 1.4s ease-in-out infinite;
+	}
+	@keyframes sos-row-pulse {
+		0%,
+		100% {
+			background-color: transparent;
+		}
+		50% {
+			background-color: color-mix(in srgb, var(--color-coral) 24%, transparent);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.sos-alert-row {
+			animation: none;
+			background-color: color-mix(in srgb, var(--color-coral) 16%, transparent);
+		}
+	}
 }
 
 /* MapLibre navigation control, themed to match the panels. Shared by every map
@@ -826,6 +851,29 @@ html:is([data-theme='apple'], [data-theme='apple-dark']) {
 		border-radius: 10px;
 		padding-top: 0.5rem;
 		padding-bottom: 0.5rem;
+	}
+
+	/* #sos channel: the minimized pill is a tinted capsule (like a tinted
+	   iOS button), the card drops the instrument-style edge rule, and the
+	   monitor names are grey capsules. */
+	[data-sos-pill] {
+		border-color: transparent !important;
+		border-radius: 999px;
+		padding: 0.2rem 0.65rem;
+		font-family: var(--font-sans);
+		font-weight: 600;
+		letter-spacing: 0;
+		background: color-mix(in srgb, var(--color-coral) 14%, transparent) !important;
+	}
+	[data-sos-rule] {
+		display: none;
+	}
+	[data-sos-monitor] {
+		border-color: transparent;
+		border-radius: 999px;
+		background: var(--fill);
+		padding-left: 0.6rem;
+		padding-right: 0.6rem;
 	}
 
 	/* Segmented control (UISegmentedControl): a grey track with a raised

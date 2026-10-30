@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import Seo from '$lib/components/Seo.svelte';
-	import { channels, type Channel } from '$lib/channels.svelte';
+	import { channels, isPermanent, SOS_ID, type Channel } from '$lib/channels.svelte';
+	import { sos } from '$lib/sos.svelte';
+	import SosCard from '$lib/components/SosCard.svelte';
+	import SosPill from '$lib/components/SosPill.svelte';
+	import SosMonitors from '$lib/components/SosMonitors.svelte';
 	import { decryptGroupText } from '$lib/channel-crypto';
 	import { live } from '$lib/live.svelte';
 	import { api, type LiveEvent } from '$lib/api';
@@ -19,9 +23,13 @@
 	// On mobile only one pane shows at a time; desktop shows both.
 	let mobilePane = $state<'list' | 'chat'>('list');
 
+	onMount(() => sos.watch());
 	onMount(async () => {
 		channels.init();
-		if (!selectedId && channels.list.length) selectedId = channels.list[0].id;
+		sos.init();
+		// First launch opens on #sos, so its card is seen expanded once.
+		if (!selectedId && channels.list.length) selectedId = sos.seen ? channels.list[0].id : SOS_ID;
+		sos.markSeen();
 		try {
 			history = await api.channelHistory(HISTORY_SEC);
 		} finally {
@@ -77,7 +85,9 @@
 		}
 		const out = new Map<string, ChatMsg[]>();
 		for (const [id, m] of buckets) {
+			// #sos test/unsub housekeeping drops out five minutes after it was heard.
 			const arr = [...m.values()]
+				.filter((x) => !sos.hidden(id, x.text, x.t))
 				.map(({ obs, ...rest }) => ({ ...rest, observers: obs.size }))
 				.sort((a, b) => a.t - b.t);
 			out.set(id, arr);
@@ -95,7 +105,13 @@
 		return a && a.length ? a[a.length - 1] : undefined;
 	};
 
+	// The #sos row pulses red on an emergency word there until the user
+	// switches to #sos (or clicks its row while it is open) — merely having it
+	// open when the message lands does not count as seeing it.
+	const sosAlert = $derived(sos.alerting(byChannel.get(SOS_ID)));
+
 	function selectChannel(id: string) {
+		if (id === SOS_ID) sos.ackAlert();
 		selectedId = id;
 		mobilePane = 'chat';
 		pinned = true;
@@ -364,11 +380,16 @@
 							class="relative flex w-full flex-col gap-0.5 px-4 py-2.5 text-left transition-colors {on
 								? 'bg-panel-2/60'
 								: 'hover:bg-panel-2/30'}"
+							class:sos-alert-row={c.id === SOS_ID && sosAlert}
 						>
 							{#if on}<span class="bg-signal absolute top-1/2 left-0 h-7 w-[2px] -translate-y-1/2 rounded-full"></span>{/if}
 							<div class="flex items-center gap-2">
 								<span class="h-2 w-2 shrink-0 rounded-full" style="background:{typeColor[c.type]}"></span>
-								<span class="font-display truncate text-sm font-700 {on ? 'text-fg' : 'text-fg-dim'}">{c.name}</span>
+								<span
+									class="font-display truncate text-sm font-700 {on ? 'text-fg' : 'text-fg-dim'}"
+									class:sos-alert={c.id === SOS_ID && sosAlert}
+									title={c.id === SOS_ID && sosAlert ? 'Emergency word in a recent #sos message' : undefined}
+								>{c.name}</span>
 								{#if last}<span class="text-fg-faint ml-auto shrink-0 font-mono text-[0.62rem]">{ago(last.receivedAt)}</span>{/if}
 							</div>
 							<div class="text-fg-faint truncate pl-4 text-xs">
@@ -410,6 +431,10 @@
 						</button>
 						<span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background:{typeColor[selected.type]}"></span>
 						<h2 class="font-display text-fg truncate text-xl font-700">{selected.name}</h2>
+						{#if isPermanent(selected)}
+							{#if sos.infoMinimized}<SosPill kind="info" />{/if}
+							{#if sos.monitorsMinimized}<SosPill kind="monitors" />{/if}
+						{/if}
 						<Tooltip
 							text={sortDir === 'desc' ? 'Newest first — tap for oldest first' : 'Oldest first — tap for newest first'}
 							class="ml-auto shrink-0"
@@ -440,10 +465,21 @@
 							<code class="font-mono text-fg-dim text-xs break-all">{showKey ? selected.keyHex : '•'.repeat(32)}</code>
 							<button onclick={() => (showKey = !showKey)} class="text-fg-faint hover:text-fg text-xs">{showKey ? 'hide' : 'show'}</button>
 							<button onclick={() => selected && copyKey(selected)} class="text-xs {copied ? 'text-signal' : 'text-fg-faint hover:text-fg'}">{copied ? 'copied' : 'copy'}</button>
-							<button onclick={() => selected && removeChannel(selected.id)} class="text-fg-faint hover:text-coral hover:border-coral/50 border-line ml-auto rounded-[var(--radius)] border px-2 py-1 text-xs transition-colors">Remove channel</button>
+							{#if isPermanent(selected)}
+								<span class="text-fg-faint ml-auto text-xs">Permanent channel</span>
+							{:else}
+								<button onclick={() => selected && removeChannel(selected.id)} class="text-fg-faint hover:text-coral hover:border-coral/50 border-line ml-auto rounded-[var(--radius)] border px-2 py-1 text-xs transition-colors">Remove channel</button>
+							{/if}
 						</div>
 					{/if}
 				</header>
+
+				{#if isPermanent(selected) && (!sos.infoMinimized || !sos.monitorsMinimized)}
+					<div class="flex shrink-0 flex-col gap-3 px-4 pt-4 md:px-6">
+						{#if !sos.infoMinimized}<SosCard />{/if}
+						{#if !sos.monitorsMinimized}<SosMonitors />{/if}
+					</div>
+				{/if}
 
 				<!-- Messages -->
 				<div bind:this={scroller} onscroll={onScroll} class="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-5 md:px-6">

@@ -23,6 +23,19 @@ func (s *Server) channelsDiscovered(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// channelsSOS returns who monitors #sos: every sender who has posted a
+// message starting with "test" there (and not "unsub" since), most recent
+// first, plus when the newest message with an emergency word was heard there
+// (lastAlert, "" if none in the last 12 h) — the UI flags #sos from it on
+// every page. Served from memory.
+func (s *Server) channelsSOS(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, map[string]any{
+		"channel":   "#" + store.SOSChannel,
+		"monitors":  s.store.SOSMonitors(),
+		"lastAlert": s.store.SOSLastAlert(),
+	})
+}
+
 // channelCandidateCreate records a submitted hashtag name to try and kicks an
 // immediate discovery pass. The name is only a candidate — it is listed only if
 // it later decrypts real traffic, so submitting a wrong name reveals nothing and

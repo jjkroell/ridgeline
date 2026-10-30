@@ -1,7 +1,11 @@
 <script lang="ts">
 	import Seo from '$lib/components/Seo.svelte';
 	import { onMount, tick } from 'svelte';
-	import { channels, type Channel } from '$lib/channels.svelte';
+	import { channels, isPermanent, SOS_ID, type Channel } from '$lib/channels.svelte';
+	import { sos } from '$lib/sos.svelte';
+	import SosCard from '$lib/components/SosCard.svelte';
+	import SosPill from '$lib/components/SosPill.svelte';
+	import SosMonitors from '$lib/components/SosMonitors.svelte';
 	import { decryptGroupText } from '$lib/channel-crypto';
 	import { live } from '$lib/live.svelte';
 	import { api, type LiveEvent } from '$lib/api';
@@ -14,8 +18,13 @@
 	let selectedId = $state<string | null>(null);
 	let pane = $state<'list' | 'chat'>('list');
 
+	onMount(() => sos.watch());
 	onMount(async () => {
 		channels.init();
+		sos.init();
+		// First launch opens #sos, so its card is seen expanded once.
+		if (!sos.seen) open(SOS_ID);
+		sos.markSeen();
 		try {
 			history = await api.channelHistory(HISTORY_SEC);
 		} finally {
@@ -57,7 +66,8 @@
 		}
 		const out = new Map<string, ChatMsg[]>();
 		for (const [id, m] of buckets) {
-			out.set(id, [...m.values()].map(({ obs, ...r }) => ({ ...r, observers: obs.size })).sort((a, b) => a.t - b.t));
+			// #sos test/unsub housekeeping drops out five minutes after it was heard.
+			out.set(id, [...m.values()].filter((x) => !sos.hidden(id, x.text, x.t)).map(({ obs, ...r }) => ({ ...r, observers: obs.size })).sort((a, b) => a.t - b.t));
 		}
 		return out;
 	});
@@ -66,7 +76,13 @@
 	const messages = $derived(selectedId ? (byChannel.get(selectedId) ?? []) : []);
 	const lastOf = (id: string) => { const a = byChannel.get(id); return a && a.length ? a[a.length - 1] : undefined; };
 
+	// The #sos row pulses red on an emergency word there until the user opens
+	// #sos from the list — merely having it open when the message lands does
+	// not count as seeing it (the list is out of sight then anyway).
+	const sosAlert = $derived(sos.alerting(byChannel.get(SOS_ID)));
+
 	function open(id: string) {
+		if (id === SOS_ID) sos.ackAlert();
 		selectedId = id;
 		pane = 'chat';
 		pinned = true;
@@ -219,10 +235,10 @@
 			{:else}
 				{#each channels.list as c (c.id)}
 					{@const last = lastOf(c.id)}
-					<button onclick={() => open(c.id)} class="active:bg-line/40 flex w-full flex-col gap-1 px-4 py-3 text-left">
+					<button onclick={() => open(c.id)} class="active:bg-line/40 flex w-full flex-col gap-1 px-4 py-3 text-left" class:sos-alert-row={c.id === SOS_ID && sosAlert}>
 						<div class="flex items-center gap-2">
 							<span class="h-2 w-2 shrink-0 rounded-full" style="background:{typeColor[c.type]}"></span>
-							<span class="font-display text-fg truncate text-sm font-700">{c.name}</span>
+							<span class="font-display text-fg truncate text-sm font-700" class:sos-alert={c.id === SOS_ID && sosAlert}>{c.name}</span>
 							{#if last}<span class="text-fg-faint ml-auto shrink-0 font-mono text-[0.6rem]">{ago(last.receivedAt)}</span>{/if}
 						</div>
 						<div class="text-fg-faint truncate pl-4 text-xs">
@@ -242,12 +258,23 @@
 				<svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
 			</button>
 			<span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background:{typeColor[selected.type]}"></span>
-			<h2 class="font-display text-fg min-w-0 flex-1 truncate text-lg font-700">{selected.name}</h2>
+			<div class="flex min-w-0 flex-1 items-center gap-2">
+				<h2 class="font-display text-fg min-w-0 truncate text-lg font-700">{selected.name}</h2>
+				{#if isPermanent(selected)}
+					{#if sos.infoMinimized}<SosPill kind="info" />{/if}
+					{#if sos.monitorsMinimized}<SosPill kind="monitors" />{/if}
+				{/if}
+			</div>
 			<span class="text-fg-faint font-mono text-[0.62rem]"><span class="text-signal tnum">{messages.length}</span> msgs</span>
-			{#if selected.type !== 'public' || !channels.hasPublic}
+			{#if !isPermanent(selected) && (selected.type !== 'public' || !channels.hasPublic)}
 				<button onclick={() => removeChannel(selected.id)} class="text-fg-faint active:text-coral text-xs">remove</button>
 			{/if}
 		</div>
+
+		{#if isPermanent(selected)}
+			{#if !sos.infoMinimized}<SosCard mobile />{/if}
+			{#if !sos.monitorsMinimized}<SosMonitors mobile />{/if}
+		{/if}
 
 		<!-- messages -->
 		<div bind:this={scroller} onscroll={onScroll} class="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain">

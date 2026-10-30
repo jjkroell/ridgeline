@@ -188,6 +188,8 @@ func (s *Server) Handler() http.Handler {
 	// grants nothing — the limiter guards table growth, not a secret.
 	mux.HandleFunc("GET /api/channels/discovered", s.channelsDiscovered)
 	mux.HandleFunc("POST /api/channels/candidates", s.channelCandidateCreate)
+	// The permanent #sos channel's monitor roster (senders of "test"); public.
+	mux.HandleFunc("GET /api/channels/sos", s.channelsSOS)
 	mux.HandleFunc("GET /api/live", s.live)
 
 	// Accounts: registration, login/logout, current-user probe. Mutating auth

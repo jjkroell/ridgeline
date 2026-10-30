@@ -705,6 +705,20 @@ export interface DiscoveredChannels {
   confirmed: number;
 }
 
+/** A sender who has posted "test" on #sos — someone who monitors the channel. */
+export interface ChannelMonitor {
+  name: string;
+  firstTest: string;
+  lastTest: string;
+  tests: number;
+}
+export interface SOSRoster {
+  channel: string;
+  monitors: ChannelMonitor[];
+  /** When the newest #sos message with an emergency word was heard ("" if none in 12 h). */
+  lastAlert?: string;
+}
+
 export const api = {
   /** What can be built: vetted release tags, boards/environments, and the option allowlist. */
   firmwareCatalogue: () => get<FirmwareCatalogue>("/api/firmware/catalogue"),
@@ -773,6 +787,8 @@ export const api = {
     get<LiveEvent[]>(`/api/channels/recent?since=${sinceSec}`),
   /** Hashtag channels confirmed on the mesh by decryption, plus candidate counts. */
   discoveredChannels: () => get<DiscoveredChannels>(`/api/channels/discovered`),
+  /** Who monitors #sos: senders of a "test" message there, most recent first. */
+  sosMonitors: () => get<SOSRoster>(`/api/channels/sos`),
   /**
    * Submit a hashtag name to the shared discovery pool (best-effort; open to
    * anonymous callers, rate-limited). The name is only tried — it is listed only

@@ -4,6 +4,49 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.10] — 2026-10-30
+
+### Added
+- **Open in MeshCore** and **Copy link** under the node-page contact QR
+  (desktop and phone): the same `meshcore://contact/add` link, so a phone
+  with the app can add the contact without scanning.
+- **Full width on desktop** for any overview card: a ↔ toggle beside S/M/L
+  in Customize (every theme; not for Harbour small cards). Saved per
+  browser; Mini Map stays full width by default.
+- **Large overview cards end on a whole row** with a **"+N more ⌄"** line
+  that counts what is left and scrolls on when tapped.
+- **Activity pill bars show their counts** on hover (or a finger dragged
+  along them): "15:51 · 5 packets", the current minute "so far".
+
+### Changed
+- **Medium overview cards** are a fixed 224 px that show only whole rows
+  (two node rows, three feed rows) — nothing cut off or faded; a chart that
+  doesn't fit still fades. Medium and small cards no longer stretch to a
+  taller neighbour.
+- **Favorites** reads "N · starred nodes · all/N/none online" (the big
+  number is the starred count).
+- **Desktop live map:** the activity pill moved into the page header (in
+  place of "N located · N active"), accent-tinted, with a tooltip saying
+  what it counts; it opens down over the map and closes on a click outside,
+  its new × or Esc. The open panel's footer carries the located/animating
+  counts.
+- **Phone live map:** the activity pill is frosted glass (solid under
+  Reduce transparency), and the zoom/compass controls moved to the
+  bottom right, out from under the open pill.
+
+### Fixed
+- **Choosing a card size applies at once.** The card kept its old size's
+  clipping until a reload, so a card set to Large could not scroll.
+- **The activity pill's 15-minute bars no longer shift.** They were rolling
+  60 s windows counted from the live buffer, which on a busy mesh holds
+  only a minute or two; they are now clock minutes counted on arrival
+  (kept 16 minutes), scaled to the finished minutes.
+- **No stuck row highlight on iPhone** after scrolling a card: hover styles
+  now apply only on devices with a real pointer.
+- **Frosted blur in Chrome/Android** for the activity pill and the
+  confirmation pop-up (the CSS minifier dropped the unprefixed
+  `backdrop-filter` when both forms were written).
+
 ## [v0.24.9] — 2026-10-30
 
 ### Changed

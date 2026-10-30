@@ -6,6 +6,7 @@
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import QRCode from 'qrcode';
+	import { copyText } from '$lib/mobile/context-menu.svelte';
 	import { api, type Node, type NodeAnalytics, type NodeObserverStat, type BlockEntry, type RFNeighbors } from '$lib/api';
 	import { ago, shortKey, fmtNum, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, fmtRadio, fmtCoord, fmtAirtime, fmtClockDrift, clockDriftLevel } from '$lib/format';
 	import { nodeHashId } from '$lib/hash-ids';
@@ -28,6 +29,7 @@
 	let rf = $state<RFNeighbors | null>(null);
 	let loaded = $state(false);
 	let qrSvg = $state('');
+	let contactUri = $state('');
 	let copied = $state(false);
 
 	async function refresh() {
@@ -139,6 +141,7 @@
 		const n = node;
 		const role = n.role === 'Repeater' ? 2 : n.role === 'RoomServer' ? 3 : n.role === 'Sensor' ? 4 : 1;
 		const url = `meshcore://contact/add?name=${encodeURIComponent(n.name || 'Unknown')}&public_key=${n.publicKey.toLowerCase()}&type=${role}`;
+		contactUri = url; // also a link: opens the app directly on this phone
 		QRCode.toString(url, { type: 'svg', margin: 1, errorCorrectionLevel: 'L' }).then((s) => (qrSvg = s)).catch(() => (qrSvg = ''));
 	});
 
@@ -279,6 +282,10 @@
 				<span class="label self-start">MeshCore Contact</span>
 				<div class="w-48 rounded-lg bg-white p-2.5">{@html qrSvg}</div>
 				<span class="text-fg-faint text-center text-[0.62rem]">Scan from the MeshCore app: Contacts → + → Scan QR</span>
+				<div class="flex items-center gap-4 text-sm">
+					<a href={contactUri} class="text-signal font-600 active:opacity-60">Open in MeshCore</a>
+					<button type="button" onclick={() => copyText(contactUri, 'Contact link')} class="text-fg-dim active:text-fg">Copy link</button>
+				</div>
 			</div>
 		{/if}
 

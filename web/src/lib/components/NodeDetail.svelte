@@ -5,6 +5,7 @@
 	// (e.g. /nodes/[pubkey]) without having visited a full map route first.
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import QRCode from 'qrcode';
+	import { copyText } from '$lib/mobile/context-menu.svelte';
 	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry, type NodeObserverStat, type NodeActivity, type BlockEntry, type RFNeighbors } from '$lib/api';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { ensureHillshade } from '$lib/map-hillshade';
@@ -333,12 +334,16 @@
 	// 1=Companion 2=Repeater 3=RoomServer 4=Sensor. errorCorrectionLevel 'L'
 	// keeps the module count (and density) lowest so the on-screen code stays
 	// easy to scan even for nodes with long / emoji names.
+	// The same URI is also offered as a link, which opens the app directly on a
+	// phone that has it, and copied for pasting into a message.
 	let qrSvg = $state('');
+	let contactUri = $state('');
 	$effect(() => {
 		if (!node) return;
 		const typeMap: Record<string, number> = { ChatNode: 1, Repeater: 2, RoomServer: 3, Sensor: 4 };
 		const t = typeMap[node.role] ?? 2;
 		const url = `meshcore://contact/add?name=${encodeURIComponent(node.name || 'Unknown')}&public_key=${node.publicKey.toLowerCase()}&type=${t}`;
+		contactUri = url;
 		QRCode.toString(url, { type: 'svg', margin: 1, errorCorrectionLevel: 'L' })
 			.then((s) => (qrSvg = s))
 			.catch(() => (qrSvg = ''));
@@ -563,6 +568,10 @@
 					<div class="label self-start">MeshCore Contact</div>
 					<div class="qr w-44 rounded-[var(--radius)] bg-white p-2.5">{@html qrSvg}</div>
 					<div class="text-fg-faint text-center text-[0.62rem]">Scan from the MeshCore app: Contacts → + → Scan QR</div>
+					<div class="flex items-center gap-3 text-xs">
+						<a href={contactUri} class="text-signal font-600 hover:underline">Open in MeshCore</a>
+						<button type="button" onclick={() => copyText(contactUri, 'Contact link')} class="text-fg-faint hover:text-fg">Copy link</button>
+					</div>
 				</div>
 			{/if}
 

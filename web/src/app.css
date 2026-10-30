@@ -459,9 +459,13 @@ html:is([data-theme='apple'], [data-theme='apple-dark']) {
 			transform 0.18s ease,
 			background-color 0.18s ease;
 	}
-	.panel-hover:hover {
-		border-color: var(--color-line-bright);
-		background-color: var(--color-panel-2);
+	/* Hover only where there is a real pointer: on touch, iOS leaves :hover
+	   stuck on whatever row ends up under the finger after a scroll. */
+	@media (hover: hover) {
+		.panel-hover:hover {
+			border-color: var(--color-line-bright);
+			background-color: var(--color-panel-2);
+		}
 	}
 
 	/* Luminous signal text + glow */
@@ -664,11 +668,13 @@ html:is([data-theme='apple'], [data-theme='apple-dark']) {
 				transform 0.22s var(--ease-out-quart),
 				background-color 0.22s var(--ease-out-quart);
 		}
-		.panel-hover:hover {
-			border-color: var(--hairline);
-			background-color: var(--color-panel);
-			box-shadow: var(--sh-lift);
-			transform: translateY(-2px);
+		@media (hover: hover) {
+			.panel-hover:hover {
+				border-color: var(--hairline);
+				background-color: var(--color-panel);
+				box-shadow: var(--sh-lift);
+				transform: translateY(-2px);
+			}
 		}
 
 		.glow-signal {
@@ -785,8 +791,10 @@ html:is([data-theme='apple'], [data-theme='apple-dark']) {
 		padding-top: 0.45rem;
 		padding-bottom: 0.45rem;
 	}
-	[data-nav-link]:hover {
-		background: var(--fill);
+	@media (hover: hover) {
+		[data-nav-link]:hover {
+			background: var(--fill);
+		}
 	}
 	[data-nav-link][data-active='true'] {
 		background: var(--fill-strong);
@@ -803,9 +811,11 @@ html:is([data-theme='apple'], [data-theme='apple-dark']) {
 		border-color: transparent;
 		background-color: var(--fill);
 	}
-	:is(button, a).border-line:not([class^='bg-']):not([class*=' bg-']):hover {
-		border-color: transparent;
-		background-color: var(--fill-strong);
+	@media (hover: hover) {
+		:is(button, a).border-line:not([class^='bg-']):not([class*=' bg-']):hover {
+			border-color: transparent;
+			background-color: var(--fill-strong);
+		}
 	}
 
 	input:not([type='checkbox']):not([type='radio']):not([type='range']),
@@ -1000,8 +1010,10 @@ html:is([data-theme='apple'], [data-theme='apple-dark']) {
 		border-radius: 3px 3px 1px 1px;
 		background: color-mix(in srgb, var(--color-signal) 85%, transparent);
 	}
-	[data-chart-bars] > * > div:hover {
-		background: var(--color-signal);
+	@media (hover: hover) {
+		[data-chart-bars] > * > div:hover {
+			background: var(--color-signal);
+		}
 	}
 
 	/* Large title (UINavigationBar prefersLargeTitles): the page title sits

@@ -7,6 +7,9 @@ import { api, type LiveEvent, type LiveNode } from './api';
 const RETAIN_MS = 60 * 60 * 1000;
 // Hard safety cap so a busy mesh can't grow the buffer without bound.
 const MAX_EVENTS = 5000;
+// Per-minute packet counts are kept apart from that buffer, which on a busy
+// mesh (each packet heard by many observers) holds only a minute or two.
+const KEEP_MINUTES = 16;
 
 /** A collapsed set of related live events shown as one feed row. */
 export interface LiveGroup {
@@ -75,6 +78,10 @@ class LiveFeed {
 	events = $state<LiveEvent[]>([]);
 	connected = $state(false);
 	total = $state(0);
+	/** Distinct packets per clock minute (key: epoch minute), last KEEP_MINUTES. */
+	perMinute = $state<Record<number, number>>({});
+	#hashMinute = new Map<string, number>();
+	#prunedAt = 0;
 
 	#ws: WebSocket | null = null;
 	#retry = 0;
@@ -82,6 +89,21 @@ class LiveFeed {
 	#started = false;
 	#everConnected = false;
 	#hydrating = false;
+
+	// Count a packet once, in the clock minute it was first heard.
+	#tally(e: LiveEvent) {
+		if (this.#hashMinute.has(e.messageHash)) return;
+		const m = Math.floor(+new Date(e.receivedAt) / 60_000);
+		const oldest = Math.floor(Date.now() / 60_000) - KEEP_MINUTES;
+		if (m < oldest) return;
+		this.#hashMinute.set(e.messageHash, m);
+		this.perMinute[m] = (this.perMinute[m] ?? 0) + 1;
+		if (this.#prunedAt !== oldest) {
+			this.#prunedAt = oldest;
+			for (const [h, hm] of this.#hashMinute) if (hm < oldest) this.#hashMinute.delete(h);
+			for (const k of Object.keys(this.perMinute)) if (+k < oldest) delete this.perMinute[+k];
+		}
+	}
 
 	start() {
 		if (this.#started) return;
@@ -112,6 +134,7 @@ class LiveFeed {
 				...seed.filter((e) => !seen.has(e.observerId + e.messageHash + e.receivedAt))
 			];
 			merged.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+			for (let i = merged.length - 1; i >= 0; i--) this.#tally(merged[i]);
 			this.events = merged.slice(0, MAX_EVENTS);
 		} catch {
 			/* history is best-effort; live stream still works */
@@ -137,6 +160,7 @@ class LiveFeed {
 		ws.onmessage = (e) => {
 			try {
 				const ev = JSON.parse(e.data) as LiveEvent;
+				this.#tally(ev);
 				const cutoff = Date.now() - RETAIN_MS;
 				this.events = [ev, ...this.events]
 					.filter((x) => +new Date(x.receivedAt) >= cutoff)

@@ -17,9 +17,15 @@
 			.filter((n): n is Node => !!n)
 	);
 	const onlineFavs = $derived(favNodes.filter((n) => nodeStatus(n).tier === 'online').length);
+	// The big number is how many are starred; the line says how many are up.
+	const favLabel = $derived(
+		`starred ${favNodes.length === 1 ? 'node' : 'nodes'} · ${
+			onlineFavs === favNodes.length ? (favNodes.length === 1 ? 'online' : 'all online') : onlineFavs === 0 ? 'none online' : `${onlineFavs} online`
+		}`
+	);
 </script>
 
-<WidgetShell title={m.title} icon={m.icon} color="amber" fill href="{base}/nodes" linkLabel="Manage →" stat={favNodes.length ? onlineFavs : null} statLabel="of {favNodes.length} starred online">
+<WidgetShell title={m.title} icon={m.icon} color="amber" fill href="{base}/nodes" linkLabel="Manage →" stat={favNodes.length || null} statLabel={favLabel}>
 	{#if favNodes.length}
 		<div class="divide-line/50 divide-y">
 			{#each favNodes as n (n.publicKey)}

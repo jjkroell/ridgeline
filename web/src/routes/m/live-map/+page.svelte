@@ -248,7 +248,7 @@
 		basemapLight = theme.isLight;
 		map = new maplibregl.Map({ container: mapEl, style: basemapStyle(currentBasemap, basemapLight), center: [incoming.lon ?? -123.65, incoming.lat ?? 49.25], zoom: incoming.zoom ?? 7, attributionControl: { compact: true } });
 		map.on('moveend', syncUrl);
-		map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'top-right');
+		map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
 		map.on('load', () => {
 			if (!map) return;
 			map.resize();

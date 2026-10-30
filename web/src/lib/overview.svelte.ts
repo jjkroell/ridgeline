@@ -66,6 +66,8 @@ interface Entry {
 	id: string;
 	visible: boolean;
 	shape?: WidgetShape;
+	/** Full width on a desktop (both columns); unset = the widget's default. */
+	wide?: boolean;
 }
 
 function defaults(): Entry[] {
@@ -99,7 +101,8 @@ class Overview {
 			const e = s as Partial<Entry>;
 			if (e && typeof e.id === 'string' && META.has(e.id) && !seen.has(e.id)) {
 				const shape = SHAPES.some((x) => x.id === e.shape) ? e.shape : undefined;
-				out.push({ id: e.id, visible: e.visible !== false, ...(shape ? { shape } : {}) });
+				const wide = typeof e.wide === 'boolean' ? { wide: e.wide } : {};
+				out.push({ id: e.id, visible: e.visible !== false, ...(shape ? { shape } : {}), ...wide });
 				seen.add(e.id);
 			}
 		}
@@ -128,6 +131,16 @@ class Overview {
 
 	setShape(id: string, shape: WidgetShape) {
 		this.entries = this.entries.map((e) => (e.id === id ? { ...e, shape } : e));
+		this.#persist();
+	}
+
+	/** Spans the whole desktop width: the saved choice, else the widget's default. */
+	wideOf(id: string): boolean {
+		return this.entries.find((e) => e.id === id)?.wide ?? META.get(id)?.size === 'full';
+	}
+
+	setWide(id: string, wide: boolean) {
+		this.entries = this.entries.map((e) => (e.id === id ? { ...e, wide } : e));
 		this.#persist();
 	}
 

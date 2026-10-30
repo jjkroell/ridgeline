@@ -391,15 +391,18 @@
 	path="/live-map"
 />
 
+<!-- Above the map: the activity pill in the header opens down over it. -->
+<div class="relative z-30">
 <PageHeader eyebrow="Real-time Propagation" title="Live Map">
-	<div class="font-mono text-fg-dim flex items-center gap-4 text-xs">
-		<span><span class="text-signal tnum">{located.length}</span> <span class="text-fg-faint">located</span></span>
-		<span class="flex items-center gap-1.5">
-			{#if live.connected}<span class="live-dot"></span>{/if}
-			<span class="text-fg-faint">{animCount} active</span>
-		</span>
+	<!-- Live activity pill. A fixed-size slot: opened, it drops down over the
+	     map from the right instead of pushing the page. -->
+	<div class="relative z-30 h-8 w-56">
+		<div class="absolute top-0 right-0">
+			<LivePill bar detail="{located.length} located nodes · {animCount} animating now" onnode={(k) => (nodeKey = k)} />
+		</div>
 	</div>
 </PageHeader>
+</div>
 
 <div class="px-6 py-6 md:px-10">
 	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
@@ -433,7 +436,6 @@
 		     expand downward when opened, so stacking under either collides. -->
 		<div data-map-center class="pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2">
 			<div class="pointer-events-auto"><CopyMapLink url={linkUrl} /></div>
-			<LivePill detail="{located.length} located nodes" onnode={(k) => (nodeKey = k)} />
 		</div>
 
 		<MapRoleFilter bind:selected={selectedRoles} title="Map Control" bind:open={mapCtrlOpen}>

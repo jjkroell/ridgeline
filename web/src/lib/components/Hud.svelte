@@ -32,7 +32,6 @@
 		border: 1px solid color-mix(in srgb, var(--color-line) 60%, transparent);
 		box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
 		backdrop-filter: saturate(180%) blur(24px);
-		-webkit-backdrop-filter: saturate(180%) blur(24px);
 		animation:
 			hud-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both,
 			hud-out 0.3s ease-in 1.1s forwards;

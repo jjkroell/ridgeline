@@ -94,6 +94,21 @@
 							{/each}
 						</div>
 					{/if}
+					<!-- Full width is a desktop thing: a phone already shows one card per row. -->
+					{#if e.visible && !(theme.isApple && overview.shapeOf(e.id) === 'small')}
+						{@const wide = overview.wideOf(e.id)}
+						<div data-seg class="border-line flex shrink-0 overflow-hidden rounded-[var(--radius)] border text-[0.7rem] max-lg:hidden" role="group" aria-label="{meta.title} width">
+							<button
+								onclick={() => overview.setWide(e.id, !wide)}
+								aria-pressed={wide}
+								aria-label="Full width {meta.title}"
+								title={wide ? 'Full width — click for half' : 'Half width — click for full width'}
+								class="flex w-9 items-center justify-center py-1 {wide ? 'bg-signal/15 text-signal' : 'text-fg-faint'}"
+							>
+								<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18M7 8l-4 4 4 4M17 8l4 4-4 4" /></svg>
+							</button>
+						</div>
+					{/if}
 					<button
 						onclick={() => overview.toggle(e.id)}
 						class="shrink-0 rounded-[var(--radius)] p-1.5 transition-colors {e.visible ? 'text-signal' : 'text-fg-faint hover:text-fg-dim'}"

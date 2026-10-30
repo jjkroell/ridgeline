@@ -3,11 +3,14 @@
 
 	// `class` is applied to the wrapper so it can carry the layout classes of the
 	// element it replaces (widths, shrink-0, etc.) and not disturb flex rows.
+	// `below` opens the bubble under the anchor, for anchors near the top of
+	// the window (a page header) where above would run off screen.
 	let {
 		text,
 		class: cls = '',
+		below = false,
 		children
-	}: { text: string; class?: string; children: Snippet } = $props();
+	}: { text: string; class?: string; below?: boolean; children: Snippet } = $props();
 
 	let show = $state(false);
 	// The anchor's centre, unclamped — the edge clamp is applied at render, once
@@ -41,7 +44,7 @@
 		// reflows the page (~10px shift) near edge-anchored controls — but the
 		// clamp can only be correct once the bubble has been measured.
 		bubbleW = 0;
-		pos = { x: r.left + r.width / 2, y: r.top };
+		pos = { x: r.left + r.width / 2, y: below ? r.bottom : r.top };
 		show = true;
 	}
 </script>
@@ -55,13 +58,15 @@
 		use:portal
 		bind:clientWidth={bubbleW}
 		class="border-line-bright bg-ink-2 text-fg-dim pointer-events-none fixed z-[100] max-w-[250px] rounded-[var(--radius)] border px-2.5 py-1.5 text-xs leading-snug shadow-xl"
-		style="left:{left}px;top:{pos.y}px;transform:translate(-50%,calc(-100% - 9px));visibility:{bubbleW
+		style="left:{left}px;top:{pos.y}px;transform:translate(-50%,{below ? '9px' : 'calc(-100% - 9px)'});visibility:{bubbleW
 			? 'visible'
 			: 'hidden'}"
 	>
 		{text}
 		<span
-			class="bg-ink-2 border-line-bright absolute top-full left-1/2 -mt-[5px] h-2 w-2 -translate-x-1/2 rotate-45 border-r border-b"
+			class="bg-ink-2 border-line-bright absolute left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 {below
+				? 'bottom-full -mb-[5px] border-t border-l'
+				: 'top-full -mt-[5px] border-r border-b'}"
 		></span>
 	</div>
 {/if}

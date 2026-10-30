@@ -50,7 +50,7 @@
 		for (const e of overview.entries) {
 			if (!e.visible || !COMPONENTS[e.id]) continue;
 			const item = { id: e.id, n: n++ };
-			if (overview.meta(e.id)?.size === 'full') {
+			if (overview.wideOf(e.id)) {
 				out.push({ full: item });
 				run = null;
 				continue;
@@ -77,21 +77,21 @@
 	</div>
 {:else if theme.isApple}
 	<!-- Cupertino: a home-screen widget grid. Small is a square, medium a wide
-	     strip, large a tall card; dense flow lets smalls fill the gaps the way
-	     iOS packs a home screen. 2 columns on a phone, 4 on a desktop, where a
-	     small takes the medium height instead (a 400px square would tower). -->
+	     strip (tall enough for two node rows or three feed rows, whole rows
+	     only — see WidgetShell), large a tall card; dense flow lets smalls fill
+	     the gaps the way iOS packs a home screen. 2 columns on a phone, 4 on a
+	     desktop, where a small takes the medium height instead (a 400px square
+	     would tower). -->
 	<div data-widget-grid class="mt-6 grid grid-cols-2 gap-4 [grid-auto-flow:row_dense] lg:grid-cols-4">
 		{#each overview.visibleIds as id (id)}
 			{#if COMPONENTS[id]}
 				{@const shape = overview.shapeOf(id)}
 				<div
-					class={shape === 'small'
-						? 'col-span-1 aspect-square lg:aspect-auto lg:h-[176px]'
+					class="{shape === 'small'
+						? 'col-span-1 aspect-square lg:aspect-auto lg:h-[224px]'
 						: shape === 'medium'
-							? 'col-span-2 h-[176px]'
-							: overview.meta(id)?.size === 'full'
-								? 'col-span-2 h-[372px] lg:col-span-4'
-								: 'col-span-2 h-[372px]'}
+							? 'col-span-2 h-[224px]'
+							: 'col-span-2 h-[372px]'} {shape !== 'small' && overview.wideOf(id) ? 'lg:col-span-4' : ''}"
 				>
 					<WidgetSlot {shape}>{@render card(id)}</WidgetSlot>
 				</div>

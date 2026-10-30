@@ -6,7 +6,6 @@
 -->
 <script lang="ts">
 	import { sos } from '$lib/sos.svelte';
-	import SosAlarmPrefs from './SosAlarmPrefs.svelte';
 
 	let { mobile = false }: { mobile?: boolean } = $props();
 </script>
@@ -47,16 +46,9 @@
 				have already gone out over the radio, so other apps may still show them.)
 			</p>
 			<p class="text-fg-dim mt-1.5 text-xs leading-relaxed">
-				Have a Ridgeline account? You can get an <span class="text-fg font-600">email</span> when someone calls
-				for help here: turn on #sos alerts under
-				<a href="{mobile ? '/m' : ''}/account#sos-alerts" class="text-coral hover:underline">Account</a>.
+				Ridgeline can alert you too — a sound, a notification or an email: see
+				<button type="button" onclick={() => sos.setCard('alerts', true)} class="text-coral hover:underline">Alerts</button>.
 			</p>
-			<div class="border-line/60 mt-2.5 border-t pt-2.5">
-				<p class="text-fg-dim mb-2 text-xs leading-relaxed">
-					<span class="text-fg font-600">Alerts in this browser.</span> When someone calls for help here:
-				</p>
-				<SosAlarmPrefs compact={mobile} />
-			</div>
 			<details class="group mt-1.5 text-xs">
 				<summary class="text-fg-dim hover:text-fg cursor-pointer list-none select-none">
 					<span class="inline-block transition-transform group-open:rotate-90" aria-hidden="true">›</span>
@@ -76,7 +68,7 @@
 			</details>
 		</div>
 		<button
-			onclick={() => sos.setInfoMinimized(true)}
+			onclick={() => sos.setCard('info', false)}
 			aria-label="Minimize the #sos info"
 			title="Minimize"
 			class="text-fg-faint hover:text-fg {mobile ? '-mr-1 p-1' : ''} shrink-0 transition-colors"

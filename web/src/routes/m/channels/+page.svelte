@@ -6,6 +6,7 @@
 	import { sos } from '$lib/sos.svelte';
 	import SosCard from '$lib/components/SosCard.svelte';
 	import SosPill from '$lib/components/SosPill.svelte';
+	import SosAlerts from '$lib/components/SosAlerts.svelte';
 	import SosMonitors from '$lib/components/SosMonitors.svelte';
 	import { decryptGroupText } from '$lib/channel-crypto';
 	import { live } from '$lib/live.svelte';
@@ -260,10 +261,11 @@
 			</button>
 			<span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background:{typeColor[selected.type]}"></span>
 			<div class="flex min-w-0 flex-1 items-center gap-2">
-				<h2 class="font-display text-fg min-w-0 truncate text-lg font-700">{selected.name}</h2>
+				<h2 class="font-display text-fg min-w-0 truncate text-lg font-700 {isPermanent(selected) ? 'shrink-0' : ''}">{selected.name}</h2>
 				{#if isPermanent(selected)}
-					{#if sos.infoMinimized}<SosPill kind="info" />{/if}
-					{#if sos.monitorsMinimized}<SosPill kind="monitors" />{/if}
+					{#if sos.infoMinimized}<SosPill kind="info" compact />{/if}
+					{#if sos.monitorsMinimized}<SosPill kind="monitors" compact />{/if}
+					{#if sos.alertsMinimized}<SosPill kind="alerts" compact />{/if}
 				{/if}
 			</div>
 			<span class="text-fg-faint font-mono text-[0.62rem]"><span class="text-signal tnum">{messages.length}</span> msgs</span>
@@ -275,6 +277,7 @@
 		{#if isPermanent(selected)}
 			{#if !sos.infoMinimized}<SosCard mobile />{/if}
 			{#if !sos.monitorsMinimized}<SosMonitors mobile />{/if}
+			{#if !sos.alertsMinimized}<SosAlerts mobile />{/if}
 		{/if}
 
 		<!-- messages -->

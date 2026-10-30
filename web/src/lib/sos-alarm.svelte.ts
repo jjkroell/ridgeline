@@ -34,6 +34,8 @@ class SosAlarm {
 	blocked = $state(false);
 	/** Notification permission: 'default' | 'granted' | 'denied' | 'unsupported'. */
 	permission = $state<string>('unsupported');
+	/** Feedback under the notification switch (a closed prompt, a test sent…). */
+	notifyNote = $state('');
 	#actx: AudioContext | null = null;
 	#armed = false;
 	#inited = false;
@@ -45,7 +47,24 @@ class SosAlarm {
 		this.sound = readOn(SOUND_KEY);
 		this.notify = readOn(NOTIFY_KEY) && this.permission === 'granted';
 		if (this.sound) this.#arm();
+		// The permission can change in the browser's site settings while the page
+		// is open (e.g. un-blocking it): follow it, where the browser says so, and
+		// re-read it whenever the tab comes back into focus.
+		if (this.permission !== 'unsupported') {
+			navigator.permissions
+				?.query({ name: 'notifications' })
+				.then((st) => (st.onchange = this.#syncPermission))
+				.catch(() => {});
+			window.addEventListener('focus', this.#syncPermission);
+		}
 	}
+
+	#syncPermission = () => {
+		const was = this.permission;
+		this.permission = Notification.permission;
+		if (this.permission !== 'granted') this.notify = false;
+		else if (was !== 'granted') this.notifyNote = '';
+	};
 
 	setSound(on: boolean) {
 		this.sound = on;
@@ -60,12 +79,19 @@ class SosAlarm {
 	async setNotify(on: boolean) {
 		if (on && this.permission !== 'granted') {
 			if (this.permission === 'unsupported') return;
+			// Chrome's quieter prompt is only a bell in the address bar, and the
+			// request stays pending until it is answered there: say where to look.
+			this.notifyNote =
+				'Waiting for your answer. No box? Look for a bell icon at the left or right end of the address bar.';
 			try {
 				this.permission = await Notification.requestPermission();
 			} catch {
 				/* very old Safari: callback form only — treat as not granted */
 			}
 			if (this.permission !== 'granted') on = false;
+			// 'default' after asking = the prompt was closed (or auto-dismissed).
+			this.notifyNote =
+				this.permission === 'default' ? 'The browser’s question was closed without an answer — tick the box to be asked again.' : '';
 		}
 		this.notify = on;
 		writeOn(NOTIFY_KEY, on);
@@ -92,7 +118,12 @@ class SosAlarm {
 			this.#unlock();
 			this.#ring();
 		}
-		if (this.notify) this.#notify('Test', 'This is what a #sos alert looks like. No one needs help.');
+		if (this.notify)
+			this.#notify('Test', 'This is what a #sos alert looks like. No one needs help.').then((err) => {
+				this.notifyNote = err
+					? `The browser refused the notification (${err}).`
+					: 'Test notification sent. Nothing appeared? Check that your computer or phone allows notifications from this browser, and that Do Not Disturb or Focus is off.';
+			});
 	}
 
 	// --- sound ---
@@ -166,26 +197,31 @@ class SosAlarm {
 
 	// --- notification ---
 
-	async #notify(sender?: string, text?: string) {
-		if (this.permission !== 'granted') return;
+	/** Shows the notification; resolves to an error message, or '' when shown. */
+	async #notify(sender?: string, text?: string): Promise<string> {
+		this.#syncPermission();
+		if (this.permission !== 'granted') return 'notifications are not allowed for this site';
 		const title = sender ? `SOS on the mesh: ${sender}` : 'SOS on the mesh';
 		const opts: NotificationOptions = {
 			body: text?.trim() || 'An emergency word was heard on #sos.',
 			tag: 'ridgeline-sos',
+			// @ts-expect-error renotify: alert again even when replacing a shown one (Chrome)
+			renotify: true,
 			requireInteraction: true,
 			icon: '/icons/icon-192.png',
 			data: { url: '/channels?channel=sos' }
 		};
 		// Phones (Android Chrome, iOS home-screen apps) only show notifications
 		// through the service worker; desktops take either.
+		let swErr = '';
 		try {
 			const reg = await navigator.serviceWorker?.getRegistration();
 			if (reg) {
 				await reg.showNotification(title, opts);
-				return;
+				return '';
 			}
-		} catch {
-			/* fall through to the page notification */
+		} catch (e) {
+			swErr = e instanceof Error ? e.message : String(e); // try the page notification
 		}
 		try {
 			const n = new Notification(title, opts);
@@ -194,8 +230,9 @@ class SosAlarm {
 				location.href = '/channels?channel=sos';
 				n.close();
 			};
-		} catch {
-			/* not supported here */
+			return '';
+		} catch (e) {
+			return swErr || (e instanceof Error ? e.message : String(e));
 		}
 	}
 }

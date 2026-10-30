@@ -30,7 +30,7 @@
 		{
 			icon: 'M11 5L6 9H2v6h4l5 4zM15.5 8.5a5 5 0 010 7M19 5a10 10 0 010 14',
 			title: 'A sound and a notification, too',
-			body: 'While Ridgeline is open, it can also play a bell and show a system notification when someone calls for help on #sos. Turn either on in the #sos info card (on a phone, also under More → Settings), and press Test to hear it. They are off unless you turn them on, and the choice is saved in this browser only.'
+			body: 'While Ridgeline is open, it can also play a bell and show a system notification when someone calls for help on #sos. Turn either on under the Alerts pill beside #sos (on a phone, also under More → Settings), and press Test to hear it. They are off unless you turn them on, and the choice is saved in this browser only.'
 		}
 	];
 	const items: { icon: string; title: string; body: string }[] = [

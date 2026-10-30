@@ -4,6 +4,24 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.9] — 2026-10-30
+
+### Changed
+- **#sos alerts get their own pill.** The sound and notification switches
+  (and the pointer to alert emails) moved out of the info card into an
+  **Alerts** card, minimized to an Alerts pill beside Info and N monitoring;
+  the pill shows a dot when an alert is on.
+- **One #sos card open at a time.** Opening a pill closes whichever card
+  was open.
+
+### Fixed
+- **The notification switch explains itself.** Blocked notifications get
+  how-to-allow instructions; a closed permission prompt says so; Test says
+  whether the notification was sent (or why the browser refused it). The
+  page follows the permission when it changes in the site settings (no
+  reload needed), and a repeat notification alerts again instead of
+  silently replacing the last one.
+
 ## [v0.24.8] — 2026-10-30
 
 ### Added

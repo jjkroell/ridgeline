@@ -24,6 +24,9 @@ export function alertWord(text: string): boolean {
 	return ALERT_RE.test(text);
 }
 const MONITORS_KEY = 'ridgeline-sos-monitors';
+const ALERTS_KEY = 'ridgeline-sos-alerts-card';
+/** The three #sos cards; at most one is open, the rest are pills. */
+export type SosCardKind = 'info' | 'monitors' | 'alerts';
 /** Only alerts this fresh ring the alarm (not ones found on load or reconnect). */
 const ALARM_FRESH_MS = 5 * 60_000;
 // How often an open page refreshes the roster; it changes only when someone
@@ -68,6 +71,8 @@ class SOS {
 	infoMinimized = $state(false);
 	/** Monitor list minimized to its pill (the default — the pill carries the count). */
 	monitorsMinimized = $state(true);
+	/** This browser's alarm switches minimized to their pill (the default). */
+	alertsMinimized = $state(true);
 	/** Whether this browser has seen the #sos card before (false = first launch). */
 	seen = $state(false);
 	monitors = $state<ChannelMonitor[]>([]);
@@ -89,6 +94,10 @@ class SOS {
 		this.seen = info.seen;
 		this.infoMinimized = info.value === 'min';
 		this.monitorsMinimized = readFlag(MONITORS_KEY, 'min').value === 'min';
+		this.alertsMinimized = readFlag(ALERTS_KEY, 'min').value === 'min';
+		// One card open at a time (older saves could have two).
+		if (!this.infoMinimized) this.monitorsMinimized = this.alertsMinimized = true;
+		else if (!this.monitorsMinimized) this.alertsMinimized = true;
 		try {
 			this.alertAckAt = Number(localStorage.getItem(ALERT_ACK_KEY)) || 0;
 		} catch {
@@ -102,6 +111,7 @@ class SOS {
 		this.seen = true;
 		writeFlag(INFO_KEY, this.infoMinimized);
 		writeFlag(MONITORS_KEY, this.monitorsMinimized);
+		writeFlag(ALERTS_KEY, this.alertsMinimized);
 	}
 
 	/**
@@ -141,14 +151,16 @@ class SOS {
 		}
 	}
 
-	setInfoMinimized(min: boolean) {
-		this.infoMinimized = min;
-		writeFlag(INFO_KEY, min);
-	}
-
-	setMonitorsMinimized(min: boolean) {
-		this.monitorsMinimized = min;
-		writeFlag(MONITORS_KEY, min);
+	/** Open one card (minimizing the others to their pills) or minimize it. */
+	setCard(kind: SosCardKind, open: boolean) {
+		// Opening: only `kind` stays open. Minimizing: `kind` closes, others keep.
+		const min = (k: SosCardKind, was: boolean) => (open ? k !== kind : k === kind || was);
+		this.infoMinimized = min('info', this.infoMinimized);
+		this.monitorsMinimized = min('monitors', this.monitorsMinimized);
+		this.alertsMinimized = min('alerts', this.alertsMinimized);
+		writeFlag(INFO_KEY, this.infoMinimized);
+		writeFlag(MONITORS_KEY, this.monitorsMinimized);
+		writeFlag(ALERTS_KEY, this.alertsMinimized);
 	}
 
 	/**

@@ -52,12 +52,16 @@
 				</span>
 			{:else if denied}
 				<span class="text-amber mt-0.5 block text-xs leading-relaxed">
-					Notifications are blocked for this site. Allow them in your browser's site settings, then try again.
+					Notifications are blocked for this site, so the browser won't ask again. Click the icon at the left of
+					the address bar (on a phone, the site settings), set Notifications to Allow, then tick the box.
 				</span>
 			{:else if !compact}
 				<span class="text-fg-faint mt-0.5 block text-xs leading-relaxed">
 					A system notification with the message, while Ridgeline is open. Your browser asks first.
 				</span>
+			{/if}
+			{#if sosAlarm.notifyNote && !denied}
+				<span class="text-fg-dim mt-0.5 block text-xs leading-relaxed">{sosAlarm.notifyNote}</span>
 			{/if}
 		</span>
 	</label>

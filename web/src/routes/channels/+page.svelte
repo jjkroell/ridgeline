@@ -6,6 +6,7 @@
 	import { sos } from '$lib/sos.svelte';
 	import SosCard from '$lib/components/SosCard.svelte';
 	import SosPill from '$lib/components/SosPill.svelte';
+	import SosAlerts from '$lib/components/SosAlerts.svelte';
 	import SosMonitors from '$lib/components/SosMonitors.svelte';
 	import { decryptGroupText } from '$lib/channel-crypto';
 	import { live } from '$lib/live.svelte';
@@ -440,6 +441,7 @@
 						{#if isPermanent(selected)}
 							{#if sos.infoMinimized}<SosPill kind="info" />{/if}
 							{#if sos.monitorsMinimized}<SosPill kind="monitors" />{/if}
+							{#if sos.alertsMinimized}<SosPill kind="alerts" />{/if}
 						{/if}
 						<Tooltip
 							text={sortDir === 'desc' ? 'Newest first — tap for oldest first' : 'Oldest first — tap for newest first'}
@@ -480,10 +482,11 @@
 					{/if}
 				</header>
 
-				{#if isPermanent(selected) && (!sos.infoMinimized || !sos.monitorsMinimized)}
+				{#if isPermanent(selected) && (!sos.infoMinimized || !sos.monitorsMinimized || !sos.alertsMinimized)}
 					<div class="flex shrink-0 flex-col gap-3 px-4 pt-4 md:px-6">
 						{#if !sos.infoMinimized}<SosCard />{/if}
 						{#if !sos.monitorsMinimized}<SosMonitors />{/if}
+						{#if !sos.alertsMinimized}<SosAlerts />{/if}
 					</div>
 				{/if}
 

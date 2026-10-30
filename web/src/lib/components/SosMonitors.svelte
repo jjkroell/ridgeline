@@ -26,7 +26,7 @@
 		<span class="label">Monitoring</span>
 		{#if sos.loaded}<span class="text-coral tnum font-mono text-xs">{sos.monitors.length}</span>{/if}
 		<button
-			onclick={() => sos.setMonitorsMinimized(true)}
+			onclick={() => sos.setCard('monitors', false)}
 			aria-label="Minimize the #sos monitor list"
 			title="Minimize"
 			class="text-fg-faint hover:text-fg {mobile ? '-mr-1 p-1' : ''} ml-auto shrink-0 transition-colors"

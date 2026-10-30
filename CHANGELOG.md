@@ -4,6 +4,42 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.0] — 2026-10-29
+
+A big look-and-feel release: a new Apple-style theme, a phone layout that
+behaves like an app, and touch and mouse shortcuts throughout.
+
+### Added
+- **Cupertino theme** (Light, Dark, or Auto to follow the device) with seven
+  accent colours, frosted bars, the system font, iOS-style switches and
+  segmented controls, and firmer edges under Increase Contrast. Other themes
+  are unchanged apart from the fixes below.
+- **Phone app (/m):** large titles that hand off to the bar, content under
+  translucent bars, full-bleed maps, a node card on the maps that rests at
+  half and full height, press-and-hold menus, swipe-to-star, pull-to-refresh,
+  search on Nodes and Observers (tucked under the title in Cupertino), an A–Z
+  order with a jump strip, swipe back from the left edge in the home-screen
+  iPhone app, a Settings page, and iPhone launch screens.
+- **Desktop:** Ctrl/⌘-K command palette, a node side panel on the maps
+  (replaces the node modal), right-click menus on the node and observer lists,
+  an iPad split view on Nodes, and drag-to-read charts. `/map?node=<key>`
+  opens that node.
+- **Live packet-rate pill** on both live maps (packets in the last minute,
+  last node heard; tap for 15 minutes of history and the latest packets).
+- **Overview widgets in three sizes** (Cupertino).
+- **Muted base map**, a low-colour basemap (Cupertino's default).
+- **Reduce transparency** setting, also honoured from the OS setting.
+- A "Copied" / "Starred" confirmation, skeleton loading states, and a new
+  stand-in logo while the logo vote runs.
+
+### Fixed
+- `font-600`/`font-700`/`font-900` were not real utilities, so bold text was
+  regular weight everywhere; every theme now renders its intended weights.
+- The live map stayed silent with sound on until it was toggled; audio now
+  unlocks on the first tap, click or key in any browser.
+- `/favicon.svg` returned the app page instead of the icon.
+- The phone map's node count was hidden under Copy link.
+
 ## [v0.23.21] — 2026-10-26
 
 ### Changed

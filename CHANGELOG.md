@@ -12,6 +12,10 @@ history lives in the git log).
   to sit beside it, and Copy link (plus the live pill) centres on the part
   of the map still showing. `/live-map?node=<key>` now opens a node's panel,
   as `/map` already did.
+- **Clicking empty map closes the node panel**, on both desktop maps
+  (including the basic no-WebGL map); clicking another node switches the
+  panel to it. Dragging the map leaves it open, and in coverage mode a click
+  still places the transmitter pin.
 
 ## [v0.24.1] — 2026-10-29
 

@@ -54,6 +54,8 @@
 		onmapclick?: (lat: number, lon: number) => void;
 		/** Pin dragged to a new spot (lat, lon). */
 		onpinmove?: (lat: number, lon: number) => void;
+		/** A click on the map that hit no node (outside coverage mode). */
+		onblankclick?: () => void;
 	}
 	let {
 		nodes,
@@ -70,7 +72,8 @@
 		pin = null,
 		coverageMode = false,
 		onmapclick = undefined,
-		onpinmove = undefined
+		onpinmove = undefined,
+		onblankclick = undefined
 	}: Props = $props();
 
 	let el: HTMLDivElement;
@@ -243,7 +246,9 @@
 				color: n.viaBridge ? SEGMENT_COLOR : stroke,
 				weight: n.viaBridge ? 2 : 1,
 				fillColor: color,
-				fillOpacity: 0.9
+				fillOpacity: 0.9,
+				// A node click is not also a click on the empty map.
+				bubblingMouseEvents: false
 			});
 			m.bindTooltip(nodeTooltip(n), {
 				direction: 'top'
@@ -447,8 +452,11 @@
 			applyPin();
 
 			// Coverage mode: a map click drops/moves the planned-transmitter pin.
+			// Otherwise a click that missed every node (markers don't pass
+			// their clicks on to the map) is a click on empty map.
 			map.on('click', (e: { latlng: { lat: number; lng: number } }) => {
 				if (coverageMode) onmapclick?.(e.latlng.lat, e.latlng.lng);
+				else onblankclick?.();
 			});
 
 			// Re-plot dots at the new zoom-scaled radius — both the live circleMarkers

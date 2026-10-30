@@ -303,6 +303,10 @@
 			const p = e.features![0].properties as { pubkey?: string };
 			if (p?.pubkey) nodeKey = p.pubkey;
 		});
+		// A click that misses every node closes the node panel.
+		map.on('click', (e) => {
+			if (!map!.queryRenderedFeatures(e.point, { layers: ['nodes'] }).length) nodeKey = null;
+		});
 		map.on('mouseenter', 'nodes', () => map && (map.getCanvas().style.cursor = 'pointer'));
 		map.on('mouseleave', 'nodes', () => map && (map.getCanvas().style.cursor = ''));
 		// Name-only label while hovering a node dot.
@@ -410,6 +414,7 @@
 				audio
 				bind:bannerOpen={fbBanner}
 				onselect={(k) => (nodeKey = k)}
+				onblankclick={() => (nodeKey = null)}
 				notice="WebGL is disabled — showing the basic live map. Enable WebGL for terrain and the full-fidelity animation."
 			/>
 			<MapRoleFilter

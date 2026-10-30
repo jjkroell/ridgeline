@@ -325,8 +325,13 @@
 			if (p?.pubkey) nodeKey = p.pubkey;
 		});
 		// Coverage mode: a map click drops/moves the transmitter pin and recomputes.
+		// Otherwise a click that misses every node closes the node panel (a click
+		// on another node swaps it, above).
 		map.on('click', (e) => {
-			if (!coverageMode) return;
+			if (!coverageMode) {
+				if (!map!.queryRenderedFeatures(e.point, { layers: ['unclustered'] }).length) nodeKey = null;
+				return;
+			}
 			placePin(e.lngLat.lat, e.lngLat.lng);
 			runCoverage();
 		});
@@ -460,6 +465,7 @@
 					runCoverage();
 				}}
 				onselect={(k) => (nodeKey = k)}
+				onblankclick={() => (nodeKey = null)}
 			/>
 			<MapRoleFilter bind:selected={selectedRoles} pos={fbBanner ? 'top-16' : 'top-3'} />
 			<BasemapSelector posClass={fbBanner ? 'top-16 right-3' : 'top-3 right-3'} />

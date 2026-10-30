@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Seo from '$lib/components/Seo.svelte';
 	import { onMount, tick } from 'svelte';
+	import { page } from '$app/state';
 	import { channels, isPermanent, SOS_ID, type Channel } from '$lib/channels.svelte';
 	import { sos } from '$lib/sos.svelte';
 	import SosCard from '$lib/components/SosCard.svelte';
@@ -22,8 +23,8 @@
 	onMount(async () => {
 		channels.init();
 		sos.init();
-		// First launch opens #sos, so its card is seen expanded once.
-		if (!sos.seen) open(SOS_ID);
+		// First launch, or ?channel=sos (the What's new "Open #sos" link), opens #sos.
+		if (!sos.seen || page.url.searchParams.get('channel') === SOS_ID) open(SOS_ID);
 		sos.markSeen();
 		try {
 			history = await api.channelHistory(HISTORY_SEC);

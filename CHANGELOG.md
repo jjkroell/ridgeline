@@ -4,6 +4,19 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.4] — 2026-10-30
+
+### Added
+- **What's new announces #sos**: three items on the emergency channel, how
+  to help monitor it and the red alert, above the earlier Harbour items
+  (kept under "Earlier this week"). It shows once more for everyone. An
+  **Open #sos** link in the footer opens the channel.
+- `/channels?channel=sos` opens #sos (desktop and phone).
+
+### Fixed
+- Sending a phone to the mobile layout no longer drops the address's query
+  string (`/channels?channel=sos` now lands on `/m/channels?channel=sos`).
+
 ## [v0.24.3] — 2026-10-30
 
 ### Added

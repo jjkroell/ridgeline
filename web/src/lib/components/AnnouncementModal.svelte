@@ -3,7 +3,26 @@
 	import { announce } from '$lib/announce.svelte';
 	import { theme } from '$lib/theme.svelte';
 
-	// Each entry is one new capability, in user-facing terms.
+	// Each entry is one new capability, in user-facing terms. The newest
+	// release's items lead (red for #sos); `items` below are the previous
+	// release's, kept under an "Earlier this week" label.
+	const latest: { icon: string; title: string; body: string }[] = [
+		{
+			icon: 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
+			title: '#sos, the mesh’s emergency channel',
+			body: 'Everyone now has #sos under Channels, next to Public. It is for people who need help: post there if you or someone near you needs assistance, and say where you are. Keep it clear otherwise. In a life-threatening emergency, call 911 first; the mesh is a backup, not a replacement.'
+		},
+		{
+			icon: 'M9 8a3.2 3.2 0 100-.01M3 20a6 6 0 0112 0M16 4.5a3.2 3.2 0 010 6.3M18 20a6 6 0 00-3-5.2',
+			title: 'Help keep watch on #sos',
+			body: 'Join #sos on your radio or app and send one (just one) test message. You will be listed as a monitor, so everyone can see how many people are listening. Then leave notifications on for #sos. Send unsub to come off the list. Test and unsub messages leave the #sos chat on Ridgeline after 5 minutes, and your name stays on the list.'
+		},
+		{
+			icon: 'M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0',
+			title: '#sos lights up when someone needs help',
+			body: 'If a #sos message mentions sos, emergency, mayday or 911, or says someone needs help, the #sos row and Channels in the menu (More on a phone) pulse red until you open #sos. They also pulse if it arrived while Ridgeline was closed, for up to 12 hours.'
+		}
+	];
 	const items: { icon: string; title: string; body: string }[] = [
 		{
 			icon: 'M12 3a9 9 0 100 18c1.1 0 1.6-.9 1.2-1.8-.5-1-.1-2.2 1.1-2.2H17a4 4 0 004-4c0-5-4-10-9-10zM7.5 12a1 1 0 100-2 1 1 0 000 2zM10.5 8a1 1 0 100-2 1 1 0 000 2zM15 8a1 1 0 100-2 1 1 0 000 2z',
@@ -77,6 +96,32 @@
 
 		<div class="min-h-0 flex-1 overflow-y-auto px-6 py-5">
 			<ul class="flex flex-col gap-4">
+				{#each latest as item (item.title)}
+					<li class="flex items-start gap-3">
+						<span class="text-coral mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full" style="background:color-mix(in srgb, var(--color-coral) 14%, transparent)">
+							<svg
+								viewBox="0 0 24 24"
+								class="h-[18px] w-[18px]"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.6"
+								stroke-linecap="round"
+								stroke-linejoin="round"><path d={item.icon} /></svg
+							>
+						</span>
+						<div class="min-w-0">
+							<div class="text-fg text-sm font-600">{item.title}</div>
+							<div class="text-fg-dim mt-0.5 text-sm leading-relaxed">{item.body}</div>
+						</div>
+					</li>
+				{/each}
+			</ul>
+
+			<div class="border-line/60 mt-5 mb-4 flex items-center gap-3 border-t pt-4">
+				<span class="label" data-caps>Earlier this week: Harbour</span>
+			</div>
+
+			<ul class="flex flex-col gap-4">
 				{#each items as item (item.title)}
 					<li class="flex items-start gap-3">
 						<span
@@ -106,6 +151,11 @@
 				href="/about"
 				onclick={() => announce.close()}
 				class="text-fg-dim hover:text-fg text-sm transition-colors">Learn more</a
+			>
+			<a
+				href="/channels?channel=sos"
+				onclick={() => announce.close()}
+				class="text-coral hover:brightness-125 text-sm font-600 transition-[filter]">Open #sos</a
 			>
 			{#if !onHarbour}
 				<button

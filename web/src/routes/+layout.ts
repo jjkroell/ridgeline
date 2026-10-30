@@ -17,6 +17,7 @@ export const load: LayoutLoad = ({ url }) => {
 	if (url.pathname === '/m' || url.pathname.startsWith('/m/')) return;
 	const isPhone = window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 820;
 	if (isPhone && MOBILE_ROOTS.includes(url.pathname)) {
-		redirect(307, url.pathname === '/' ? '/m' : '/m' + url.pathname);
+		// Keep the query (e.g. /channels?channel=sos) across the hop.
+		redirect(307, (url.pathname === '/' ? '/m' : '/m' + url.pathname) + url.search);
 	}
 };

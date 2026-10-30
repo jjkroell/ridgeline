@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
+	import { page } from '$app/state';
 	import Seo from '$lib/components/Seo.svelte';
 	import { channels, isPermanent, SOS_ID, type Channel } from '$lib/channels.svelte';
 	import { sos } from '$lib/sos.svelte';
@@ -109,6 +110,11 @@
 	// switches to #sos (or clicks its row while it is open) — merely having it
 	// open when the message lands does not count as seeing it.
 	const sosAlert = $derived(sos.alerting(byChannel.get(SOS_ID)));
+
+	// ?channel=sos (the What's new "Open #sos" link) opens #sos.
+	$effect(() => {
+		if (page.url.searchParams.get('channel') === SOS_ID) selectChannel(SOS_ID);
+	});
 
 	function selectChannel(id: string) {
 		if (id === SOS_ID) sos.ackAlert();

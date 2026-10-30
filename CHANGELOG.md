@@ -4,6 +4,15 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.2] — 2026-10-29
+
+### Fixed
+- **The node panel on the desktop maps no longer covers the map controls.**
+  While it is open, the base map picker, zoom/compass and attribution move
+  to sit beside it, and Copy link (plus the live pill) centres on the part
+  of the map still showing. `/live-map?node=<key>` now opens a node's panel,
+  as `/map` already did.
+
 ## [v0.24.1] — 2026-10-29
 
 ### Changed

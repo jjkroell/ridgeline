@@ -1073,3 +1073,36 @@ html[data-solid] [data-cm-backdrop] {
 		background: color-mix(in srgb, var(--color-ink) 75%, transparent) !important;
 	}
 }
+
+/* Node side panel (NodeInspector) open on a desktop map: it covers the
+   map's right edge, so the controls there (base map picker, zoom/compass,
+   attribution) step left to sit beside it instead of under it. The panel
+   is 400px wide at right-3; on a map too narrow for that, they stay put. */
+:has(> [data-inspector]) :is(.maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-right, .leaflet-top.leaflet-right, .leaflet-bottom.leaflet-right) {
+	right: 412px;
+}
+:has(> [data-inspector]) > [data-map-right] {
+	right: 424px;
+}
+/* Top-centre controls (Copy link, live pill) centre on the uncovered part. */
+:has(> [data-inspector]) > [data-map-center] {
+	left: calc((100% - 412px) / 2);
+}
+:is(.maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-right, .leaflet-top.leaflet-right, .leaflet-bottom.leaflet-right),
+[data-map-right],
+[data-map-center] {
+	transition:
+		right 0.25s cubic-bezier(0.32, 0.72, 0, 1),
+		left 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+@media (max-width: 900px) {
+	:has(> [data-inspector]) :is(.maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-right, .leaflet-top.leaflet-right, .leaflet-bottom.leaflet-right) {
+		right: 0;
+	}
+	:has(> [data-inspector]) > [data-map-right] {
+		right: 0.75rem;
+	}
+	:has(> [data-inspector]) > [data-map-center] {
+		left: 50%;
+	}
+}

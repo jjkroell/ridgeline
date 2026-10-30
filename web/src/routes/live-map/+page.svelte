@@ -77,7 +77,8 @@
 	// Recent packets overlay (grouped, max 15) with minimize/maximize.
 	let panelOpen = $state(false);
 	let selected = $state<LiveGroup | null>(null);
-	let nodeKey = $state<string | null>(null);
+	// ?node=<pubkey> opens that node's panel, as on /map.
+	let nodeKey = $state<string | null>(page.url.searchParams.get('node'));
 	const recent = $derived(groupLive(live.events).slice(0, 15));
 
 	// ── propagation pulses (shared, renderer-agnostic engine) ──────────────
@@ -425,7 +426,7 @@
 		<BasemapSelector />
 		<!-- Top-centre: the left (map control) and right (basemap) panels both
 		     expand downward when opened, so stacking under either collides. -->
-		<div class="pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2">
+		<div data-map-center class="pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2">
 			<div class="pointer-events-auto"><CopyMapLink url={linkUrl} /></div>
 			<LivePill detail="{located.length} located nodes" onnode={(k) => (nodeKey = k)} />
 		</div>

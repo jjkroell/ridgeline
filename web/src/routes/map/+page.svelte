@@ -469,7 +469,7 @@
 		<BasemapSelector />
 		<!-- Top-centre: the left (role filter) and right (basemap) controls both
 		     expand downward when opened, so stacking under either collides. -->
-		<div class="absolute top-3 left-1/2 z-10 -translate-x-1/2"><CopyMapLink url={linkUrl} /></div>
+		<div data-map-center class="absolute top-3 left-1/2 z-10 -translate-x-1/2"><CopyMapLink url={linkUrl} /></div>
 		{/if}
 
 		<!-- Coverage prediction control (bottom-left; panel expands upward) — shared by

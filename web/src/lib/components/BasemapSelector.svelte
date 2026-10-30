@@ -15,7 +15,7 @@
 	}
 </script>
 
-<div class="absolute {posClass} z-10">
+<div data-map-right class="absolute {posClass} z-10">
 	<button
 		onclick={() => (open = !open)}
 		class="border-line bg-ink-2/85 hover:bg-panel-2/70 flex items-center gap-2 rounded-[var(--radius)] border backdrop-blur-md transition-colors {compact ? 'p-2.5' : 'w-[176px] max-w-[60vw] px-3 py-2'}"

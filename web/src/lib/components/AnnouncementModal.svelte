@@ -20,7 +20,12 @@
 		{
 			icon: 'M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0',
 			title: '#sos lights up when someone needs help',
-			body: 'If a #sos message mentions sos, emergency, mayday or 911, or says someone needs help, the #sos row and Channels in the menu (More on a phone) pulse red until you open #sos. They also pulse if it arrived while Ridgeline was closed, for up to 12 hours.'
+			body: 'If a #sos message mentions sos, emergency, mayday, 911, threat or life, or says someone needs help, the #sos row and Channels in the menu (More on a phone) pulse red until you open #sos. They also pulse if it arrived while Ridgeline was closed, for up to 12 hours.'
+		},
+		{
+			icon: 'M3 6h18v12H3zM3 7l9 6 9-6',
+			title: 'Get an email when someone calls for help',
+			body: 'If you have a Ridgeline account, you can turn on #sos alert emails under Account → Account settings (on a phone, More → Settings → Account). When one of the words above is heard on #sos, Ridgeline emails you the message with a link to the channel. Messages that arrive close together come in one email, with at least 10 minutes between emails. Alerts are off unless you turn them on, your email address needs to be confirmed first, and you can turn them off again at any time.'
 		}
 	];
 	const items: { icon: string; title: string; body: string }[] = [

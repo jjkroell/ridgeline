@@ -16,7 +16,7 @@ export const ALERT_WINDOW_MS = 12 * 60 * 60_000;
 // "announce #sos on Public") does not count, nor does a bare "help" ("thanks
 // for the help"); "need help" / "help me" do. Mirrors sosAlertRe in
 // internal/store/sos.go — keep the two in step.
-const ALERT_RE = /(?<![#\w])(sos|emergency|mayday|911)(?!\w)|\bneed(s)? help\b|\bhelp me\b/i;
+const ALERT_RE = /(?<![#\w])(sos|emergency|mayday|911|threat|life)(?!\w)|\bneed(s)? help\b|\bhelp me\b/i;
 
 /** Whether a message mentions an emergency word. */
 export function alertWord(text: string): boolean {

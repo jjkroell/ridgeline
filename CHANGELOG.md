@@ -4,6 +4,15 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.7] — 2026-10-30
+
+### Added
+- **"threat" and "life" are #sos alert words** (whole words, so
+  "life-threatening" counts but "wildlife" and "threats" don't). They start
+  the channel pulse and the alert emails like the others.
+- **What's new announces #sos alert emails** and lists the new words. It
+  shows once more for everyone.
+
 ## [v0.24.6] — 2026-10-30
 
 ### Added

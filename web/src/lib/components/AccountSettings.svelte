@@ -152,7 +152,7 @@
 			<span class="min-w-0">
 				<span class="text-fg block text-sm font-600">Email me about #sos alerts</span>
 				<span class="text-fg-faint mt-0.5 block text-xs leading-relaxed">
-					When Ridgeline hears an emergency word on #sos — sos, emergency, mayday, 911, “need help” or
+					When Ridgeline hears an emergency word on #sos — sos, emergency, mayday, 911, threat, life, “need help” or
 					“help me” — it emails you the message. Messages that arrive close together come in one email, and
 					after an email there’s a gap of at least 10 minutes before the next.
 					{#if u && !u.emailVerified}<span class="text-amber">Confirm your email address first.</span>{/if}

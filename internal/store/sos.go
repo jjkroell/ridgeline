@@ -84,7 +84,7 @@ func monitorWord(msg string) monitorKind {
 // "help me" (a bare "help" — "thanks for the help" — does not). Mirrored by
 // ALERT_RE in web/src/lib/sos.svelte.ts; keep the two in step. Go's RE2 has no
 // lookbehind, so the '#' and word-boundary tests on the left are a group.
-var sosAlertRe = regexp.MustCompile(`(?i)(?:^|[^#\w])(?:sos|emergency|mayday|911)(?:\W|$)|\bneeds? help\b|\bhelp me\b`)
+var sosAlertRe = regexp.MustCompile(`(?i)(?:^|[^#\w])(?:sos|emergency|mayday|911|threat|life)(?:\W|$)|\bneeds? help\b|\bhelp me\b`)
 
 // SOSAlertWindow is how far back an alert keeps the #sos channel flagged in
 // the UI (the channel row and the Channels nav item pulse), unless the viewer

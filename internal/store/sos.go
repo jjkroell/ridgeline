@@ -97,6 +97,25 @@ func isSOSAlert(p *meshcore.Packet) bool {
 		p.GroupText.Channel == SOSChannel && sosAlertRe.MatchString(p.GroupText.Message)
 }
 
+// SOSAlertMsg is a newly heard #sos message carrying an emergency word, handed
+// to the alert hook (the email notifier) once per transmission.
+type SOSAlertMsg struct {
+	Hash       string
+	Sender     string
+	Message    string
+	ReceivedAt time.Time
+}
+
+// SetSOSAlertHook registers fn to be called, after the write commits, the
+// first time a #sos alert transmission is stored — never for another
+// observer's copy or a late copy (the message hash is already stored), nor for
+// the startup scan. fn must not block: Record holds the write lock.
+func (s *Store) SetSOSAlertHook(fn func(SOSAlertMsg)) {
+	s.sosMu.Lock()
+	s.sosAlertHook = fn
+	s.sosMu.Unlock()
+}
+
 // noteSOSAlert remembers the newest #sos alert time (RFC3339).
 func (s *Store) noteSOSAlert(at string) {
 	s.sosMu.Lock()

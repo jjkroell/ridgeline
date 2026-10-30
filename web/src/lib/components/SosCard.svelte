@@ -45,6 +45,11 @@
 				and unsub messages are removed from the chat here after 5 minutes — your name stays on the list. (They
 				have already gone out over the radio, so other apps may still show them.)
 			</p>
+			<p class="text-fg-dim mt-1.5 text-xs leading-relaxed">
+				Have a Ridgeline account? You can get an <span class="text-fg font-600">email</span> when someone calls
+				for help here: turn on #sos alerts under
+				<a href="{mobile ? '/m' : ''}/account#sos-alerts" class="text-coral hover:underline">Account</a>.
+			</p>
 			<details class="group mt-1.5 text-xs">
 				<summary class="text-fg-dim hover:text-fg cursor-pointer list-none select-none">
 					<span class="inline-block transition-transform group-open:rotate-90" aria-hidden="true">›</span>

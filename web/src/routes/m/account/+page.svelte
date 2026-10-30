@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Skeleton from '$lib/components/Skeleton.svelte';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -79,9 +79,17 @@
 		}
 	}
 
+	// /account#sos-alerts (the #sos alert emails and the #sos card link here)
+	// opens Account settings and scrolls to the #sos alerts switch.
+	function openSOSAlerts() {
+		if (location.hash !== '#sos-alerts') return;
+		settingsOpen = true;
+		tick().then(() => document.getElementById('sos-alerts')?.scrollIntoView({ block: 'center' }));
+	}
 	onMount(() => {
 		loadMyNodes();
 		loadSharedWithMe();
+		openSOSAlerts();
 	});
 
 	async function signOut() {

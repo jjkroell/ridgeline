@@ -105,6 +105,11 @@ class Auth {
 		this.user = await account.updateProfile(this.csrf, displayName);
 	}
 
+	/** Turn #sos alert emails on or off; updates the cached user on success. */
+	async setSOSAlerts(enabled: boolean) {
+		this.user = await account.setSOSAlerts(this.csrf, enabled);
+	}
+
 	/** Change password (re-auth with the current one). Session stays valid. */
 	async changePassword(currentPassword: string, newPassword: string) {
 		await account.changePassword(this.csrf, currentPassword, newPassword);

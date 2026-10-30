@@ -107,7 +107,8 @@ CREATE TABLE IF NOT EXISTS users (
 	blocked       INTEGER NOT NULL DEFAULT 0, -- suspended: cannot log in, existing sessions void
 	protected     INTEGER NOT NULL DEFAULT 0, -- the initial/owner admin: cannot be demoted/blocked/removed
 	created_at    TEXT NOT NULL,
-	last_login    TEXT
+	last_login    TEXT,
+	sos_alerts    INTEGER NOT NULL DEFAULT 0 -- opted in to #sos alert emails
 );
 
 -- sessions are server-side so they can be revoked. token_hash is the SHA-256 of
@@ -392,6 +393,7 @@ type Store struct {
 	sosMonitors  map[string]*ChannelMonitor
 	sosLastHash  map[string]string
 	sosLastAlert string // newest #sos message with an emergency word (RFC3339)
+	sosAlertHook func(SOSAlertMsg)
 }
 
 // Open opens (creating if needed) the SQLite database at path, enables WAL
@@ -526,6 +528,8 @@ func Open(path string) (*Store, error) {
 	// User account status columns (added after the initial users table shipped).
 	db.Exec(`ALTER TABLE users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE users ADD COLUMN protected INTEGER NOT NULL DEFAULT 0`)
+	// #sos alert emails are opt-in: every existing account starts off.
+	db.Exec(`ALTER TABLE users ADD COLUMN sos_alerts INTEGER NOT NULL DEFAULT 0`)
 	// Email verification: new accounts must confirm their address before logging
 	// in. Accounts that predate this feature are grandfathered as verified on the
 	// one-time column add, so nobody is locked out.
@@ -818,6 +822,16 @@ func (s *Store) Record(o Observation) error {
 	ts := o.ReceivedAt.UTC().Format(time.RFC3339Nano)
 	p := o.Packet
 
+	// A #sos alert's FIRST stored copy fires the alert hook (email). Checked
+	// before the insert, on idx_obs_hash; only alert packets — rare — pay it.
+	sosAlert := isSOSAlert(p)
+	sosAlertNew := false
+	if sosAlert {
+		var one int
+		sosAlertNew = tx.QueryRow(`SELECT 1 FROM observations WHERE message_hash = ? LIMIT 1`,
+			p.MessageHash).Scan(&one) == sql.ErrNoRows
+	}
+
 	rawHex := o.RawHex
 	if rawHex == "" {
 		rawHex = p.PayloadRaw
@@ -955,8 +969,17 @@ func (s *Store) Record(o Observation) error {
 	if sosKind != notMonitor {
 		s.noteMonitor(sosKind, sosSender, p.MessageHash, ts)
 	}
-	if isSOSAlert(p) {
+	if sosAlert {
 		s.noteSOSAlert(ts)
+		if sosAlertNew {
+			s.sosMu.RLock()
+			hook := s.sosAlertHook
+			s.sosMu.RUnlock()
+			if hook != nil {
+				hook(SOSAlertMsg{Hash: p.MessageHash, Sender: p.GroupText.Sender,
+					Message: p.GroupText.Message, ReceivedAt: o.ReceivedAt})
+			}
+		}
 	}
 	return nil
 }

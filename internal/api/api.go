@@ -84,6 +84,8 @@ type Server struct {
 	// so without these one account could flood an owner's inbox.
 	noteLimiter     *rateLimiter
 	noteMailLimiter *rateLimiter
+	// sosMail batches #sos alert emails (see sos_alerts.go).
+	sosMail sosNotifier
 	// shareLimiter bounds share grants per owner: sharing by email answers
 	// "is this address registered?", so it must not be a free oracle.
 	shareLimiter *rateLimiter
@@ -157,6 +159,7 @@ func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
 		noteLimiter:     newRateLimiter(1.0/30, 10),
 		noteMailLimiter: newRateLimiter(1.0/600, 3),
 		shareLimiter:    newRateLimiter(1.0/60, 10), // ~10 then 1/min per owner
+		sosMail:         sosNotifier{coalesce: sosAlertCoalesce, minGap: sosAlertMinGap},
 	}
 }
 
@@ -212,6 +215,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/account/password", s.requireUser(s.accountChangePassword))
 	mux.HandleFunc("POST /api/account/email", s.requireUser(s.accountChangeEmail))
 	mux.HandleFunc("POST /api/account/delete", s.requireUser(s.accountDelete))
+	mux.HandleFunc("PUT /api/account/sos-alerts", s.requireUser(s.accountSOSAlerts))
 
 	// Node ownership claims (authenticated; creating requires the can_claim gate).
 	mux.HandleFunc("POST /api/claims", s.requireUser(s.claimCreate))

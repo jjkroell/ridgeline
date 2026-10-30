@@ -176,6 +176,8 @@ func run(log *slog.Logger, configPath string, configRequired bool) error {
 	}
 
 	apiServer := api.New(st, log, version, cfg.WebDir)
+	// #sos alert emails for opted-in accounts (batched; see api/sos_alerts.go).
+	st.SetSOSAlertHook(apiServer.NotifySOSAlert)
 	// Recording a bridge's far side should take effect at once, not at the next
 	// scheduled sweep. One slot: extra requests while a sweep is pending are
 	// redundant, so they are dropped rather than queued.

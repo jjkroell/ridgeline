@@ -4,6 +4,19 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.6] — 2026-10-30
+
+### Added
+- **#sos alert emails (opt-in).** Account settings has a new switch, "Email
+  me about #sos alerts" (needs a verified email). When Ridgeline hears an
+  emergency word on #sos (the same words that start the channel's red pulse)
+  it emails everyone who turned it on, with the message, a link to the
+  channel and a turn-off link. Messages close together share one email
+  (30 s), and there are at least 10 minutes between emails. Only the first
+  copy of a transmission counts; the restart scan never emails.
+  `PUT /api/account/sos-alerts`; `/account#sos-alerts` opens the setting.
+- The #sos info card points account holders to the new setting.
+
 ## [v0.24.5] — 2026-10-30
 
 ### Changed

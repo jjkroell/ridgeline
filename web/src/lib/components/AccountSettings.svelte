@@ -28,6 +28,24 @@
 		}
 	}
 
+	// #sos alert emails (opt-in)
+	let sosBusy = $state(false);
+	let sosMsg = $state('');
+	async function toggleSOS(e: Event) {
+		const box = e.currentTarget as HTMLInputElement;
+		sosBusy = true;
+		sosMsg = '';
+		try {
+			await auth.setSOSAlerts(box.checked);
+			sosMsg = box.checked ? 'On — you’ll get an email when someone calls for help on #sos.' : 'Off.';
+		} catch (err) {
+			box.checked = !box.checked;
+			sosMsg = String((err as Error).message ?? err);
+		} finally {
+			sosBusy = false;
+		}
+	}
+
 	// Email
 	let newEmail = $state('');
 	let emailPw = $state('');
@@ -119,6 +137,30 @@
 		<p class="text-fg-faint mt-1.5 text-xs">Shown on your public notes and as the owner of nodes you claim.</p>
 		{#if dnMsg}<p class="text-signal mt-1.5 text-xs">{dnMsg}</p>{/if}
 	</form>
+
+	<!-- #sos alert emails (target of /account#sos-alerts) -->
+	<div id="sos-alerts" class="scroll-mt-20 {pad}">
+		<label class="flex cursor-pointer items-start gap-3" for="acct-sos">
+			<input
+				id="acct-sos"
+				type="checkbox"
+				checked={u?.sosAlerts ?? false}
+				disabled={sosBusy || !u?.emailVerified}
+				onchange={toggleSOS}
+				class="accent-coral mt-0.5 h-4 w-4 shrink-0"
+			/>
+			<span class="min-w-0">
+				<span class="text-fg block text-sm font-600">Email me about #sos alerts</span>
+				<span class="text-fg-faint mt-0.5 block text-xs leading-relaxed">
+					When Ridgeline hears an emergency word on #sos — sos, emergency, mayday, 911, “need help” or
+					“help me” — it emails you the message. Messages that arrive close together come in one email, and
+					after an email there’s a gap of at least 10 minutes before the next.
+					{#if u && !u.emailVerified}<span class="text-amber">Confirm your email address first.</span>{/if}
+				</span>
+			</span>
+		</label>
+		{#if sosMsg}<p class="text-signal mt-1.5 pl-7 text-xs">{sosMsg}</p>{/if}
+	</div>
 
 	<!-- Email -->
 	<form onsubmit={(e) => (e.preventDefault(), saveEmail())} class={pad}>

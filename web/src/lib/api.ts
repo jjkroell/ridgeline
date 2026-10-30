@@ -823,6 +823,8 @@ export interface AuthUser {
   isOwner: boolean;
   /** Whether the account's email address has been confirmed. */
   emailVerified: boolean;
+  /** Opted in to an email when an emergency word is heard on #sos. */
+  sosAlerts: boolean;
   createdAt: string;
   lastLogin?: string;
 }
@@ -910,6 +912,9 @@ export const account = {
   /** Change display name; returns the updated account. */
   updateProfile: (csrf: string, displayName: string) =>
     mutate<AuthUser>("/api/account/profile", "PUT", csrf, { displayName }),
+  /** Turn #sos alert emails on or off; returns the updated account. */
+  setSOSAlerts: (csrf: string, enabled: boolean) =>
+    mutate<AuthUser>("/api/account/sos-alerts", "PUT", csrf, { enabled }),
   /** Change password after re-authenticating with the current one. */
   changePassword: (
     csrf: string,

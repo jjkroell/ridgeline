@@ -14,7 +14,6 @@
 	const fullTitle = $derived(
 		title.includes('Ridgeline') ? title : `${title} · Ridgeline`
 	);
-	const canonical = $derived(`${SITE}${path}`);
 
 	// The Go server owns the initial no-JS head. Once this component mounts,
 	// Svelte owns navigation metadata, so a previous node's image cannot linger.
@@ -26,6 +25,9 @@
 		}
 	});
 	const sharePath = $derived(path === '/m' ? '/' : path.replace(/^\/m\//, '/').replace(/\/$/, '') || '/');
+	// A /m page is the phone layout of the same page: point search at the
+	// desktop URL, as the server's initial head does (share_preview.go).
+	const canonical = $derived(`${SITE}${sharePath}`);
 	const hasCard = $derived(
 		['/', '/nodes', '/live', '/channels', '/map', '/live-map', '/analytics', '/topology', '/identity', '/observers'].includes(sharePath)
 		|| /^\/nodes\/[a-fA-F0-9]{64}$/.test(sharePath)

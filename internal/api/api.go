@@ -42,6 +42,10 @@ type Server struct {
 	nodeCache *respCache
 	// nodeList briefly reuses the node-list scan (see nodelist.go).
 	nodeList nodeList
+	// site is the public name and origin from the web build's share-site.json,
+	// set when the web UI is mounted; sitemapCache holds /sitemap.xml (seo.go).
+	site         shareSite
+	sitemapCache sitemapCache
 	// activity serves node heatmaps from memory (see analytics.ActivityIndex);
 	// nil, or not yet backfilled, falls back to scanning.
 	activity  *analytics.ActivityIndex
@@ -295,6 +299,7 @@ func (s *Server) Handler() http.Handler {
 	if s.webDir != "" {
 		if info, err := os.Stat(s.webDir); err == nil && info.IsDir() {
 			mux.HandleFunc("/", s.shareHandler(staticHandler(s.webDir)))
+			mux.HandleFunc("GET /sitemap.xml", s.sitemap)
 			s.log.Info("serving web UI", "dir", s.webDir)
 		} else {
 			s.log.Warn("web dir not found, serving API only", "dir", s.webDir)

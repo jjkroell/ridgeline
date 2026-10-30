@@ -4,6 +4,37 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.11] — 2026-10-30
+
+### Added
+- **Search-engine view of every public page.** Crawlers that don't run
+  JavaScript (Bing, AI search engines) now get each page's own summary in
+  place of the generic one: the node directory lists every node heard in the
+  last 30 days with links, and each node page gives its role, public key,
+  path hash ID and first/last heard. Each page also carries JSON-LD (WebPage
+  + breadcrumbs).
+- **Sitemap built from the database:** `/sitemap.xml` now lists every node
+  heard in the last 30 days (about 350) with last-modified dates, beside the
+  section pages; it replaces the static 10-URL file.
+- **`/llms.txt`**, a plain summary of the site for AI answer engines.
+
+### Changed
+- **Search titles and descriptions** from the server now match what the app
+  sets once it runs, e.g. "VE7CBH-RVTC — MeshCore repeater · Ridgeline" with
+  a description naming the region and when the node was last heard.
+- **robots.txt** explicitly allows AI search and answer engines
+  (OAI-SearchBot, ChatGPT-User, Claude-SearchBot, Claude-User, PerplexityBot,
+  DuckAssistBot) and signals `ai-input=yes, ai-train=no`.
+- **Phone pages (`/m/…`) point search engines at the desktop URL** once the
+  app runs, as the server's first response already did.
+
+### Fixed
+- **A missing, retired or hidden node's page returns 404** to crawlers (the
+  app still opens and says so) rather than an empty 200 page.
+- **Share cards labelled every node "MeshCore node":** stored roles
+  (`Repeater`, `ChatNode`, `RoomServer`) didn't match the labels, so cards
+  now say Repeater, Companion or Room server.
+
 ## [v0.24.10] — 2026-10-30
 
 ### Added

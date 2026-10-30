@@ -1,7 +1,26 @@
 # Ridgeline — MeshCore mesh observatory (Vancouver Island & Lower Mainland, BC)
-# Public content is open to all crawlers; account/admin/API areas are not useful
-# to index.
+# Public content is open to search engines and to AI search and answer engines,
+# which may read and cite it. Training AI models on it is not permitted.
+# Account/admin/API areas are not useful to index.
 User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+Allow: /
+Disallow: /admin
+Disallow: /account
+Disallow: /identity
+Disallow: /login
+Disallow: /api/
+
+# AI search and answer engines (fetch pages to answer a question and link to
+# them; these are not the training crawlers).
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: DuckAssistBot
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 Allow: /
 Disallow: /admin
 Disallow: /account

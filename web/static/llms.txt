@@ -1,0 +1,22 @@
+# Ridgeline
+
+> Ridgeline is a live observatory for the MeshCore LoRa mesh network across Vancouver Island and the Lower Mainland of British Columbia, Canada. Receive-only observer stations report every packet they hear; Ridgeline turns that into a node and repeater directory, a live packet feed, coverage maps and link-health analytics for the mesh on 909.000 MHz.
+
+MeshCore is an off-grid, long-range text-messaging mesh built on low-cost LoRa radios: repeaters on hilltops and rooftops relay messages between companion radios with no internet or cell service. Every node page is listed in the sitemap.
+
+## Pages
+
+- [About Ridgeline and the MeshCore mesh](https://ridgeline.ve7kod.ca/about): what the mesh is, how to join, radio settings
+- [Multi-byte hash IDs](https://ridgeline.ve7kod.ca/hash-ids): why meshes outgrow 1-byte path IDs and how to move a node to 2- or 3-byte IDs
+- [Node and repeater directory](https://ridgeline.ve7kod.ca/nodes): every node heard, with a page per node
+- [Coverage map](https://ridgeline.ve7kod.ca/map)
+- [Live signal map](https://ridgeline.ve7kod.ca/live-map)
+- [Live packet feed](https://ridgeline.ve7kod.ca/live)
+- [Network analytics](https://ridgeline.ve7kod.ca/analytics)
+- [Channels](https://ridgeline.ve7kod.ca/channels), including #sos, the mesh's permanent emergency channel
+- [Observers](https://ridgeline.ve7kod.ca/observers): the receive-only stations feeding Ridgeline
+
+## Optional
+
+- [Sitemap](https://ridgeline.ve7kod.ca/sitemap.xml)
+- [Privacy](https://ridgeline.ve7kod.ca/privacy)

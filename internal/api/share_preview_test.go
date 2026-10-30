@@ -170,8 +170,9 @@ func TestSharePreviewStableIdentityAndVisibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	after := previewRequest(h, "GET", path)
-	if !bytes.Equal(before.Body.Bytes(), after.Body.Bytes()) || before.Header().Get("ETag") != after.Header().Get("ETag") {
-		t.Fatal("new observations must not invalidate identity metadata or its image revision")
+	// The page text may move on (its "last heard" date); the card must not.
+	if headTags(t, after.Body.String())["og:image"][0] != imageURL {
+		t.Fatal("new observations must not invalidate the image revision")
 	}
 	afterPNG := previewRequest(h, "GET", parsed.RequestURI())
 	if !bytes.Equal(beforePNG.Body.Bytes(), afterPNG.Body.Bytes()) || beforePNG.Header().Get("ETag") != afterPNG.Header().Get("ETag") {
@@ -313,7 +314,7 @@ func TestSharePreviewFallbacksAndPages(t *testing.T) {
 }
 func TestShareEscapingAndCard(t *testing.T) {
 	p := sharePreview{Title: `<script>alert("x")</script> & 'hello'`, Description: `"><img src=x onerror=alert(1)>`, Path: "/nodes"}
-	b, err := shareHTML([]byte(previewShell), shareSite{Name: "A & B", URL: "https://mesh.example"}, p)
+	b, err := shareHTML([]byte(previewShell), shareSite{Name: "A & B", URL: "https://mesh.example"}, p, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

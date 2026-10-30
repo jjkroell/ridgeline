@@ -91,13 +91,16 @@ func (s *Server) lookupPreview(r *http.Request, path string) (*sharePreview, err
 }
 
 func shareRole(role string) string {
-	switch role {
+	// Stored roles are meshcore.DeviceRole names ("Repeater", "ChatNode", …).
+	switch strings.ToLower(role) {
 	case "repeater":
 		return "Repeater"
-	case "companion":
+	case "chatnode", "companion":
 		return "Companion"
-	case "room", "room_server":
+	case "roomserver", "room", "room_server":
 		return "Room server"
+	case "sensor":
+		return "Sensor"
 	default:
 		return "MeshCore node"
 	}
@@ -177,6 +180,7 @@ func (s *Server) shareHandler(next http.HandlerFunc) http.HandlerFunc {
 			return next
 		}
 	}
+	s.site = site
 	renderSlots := make(chan struct{}, 4) // Bound concurrent PNG memory/CPU; no unbounded cache.
 	return func(w http.ResponseWriter, r *http.Request) {
 		imageRequest := r.URL.Path == "/share/card.png"
@@ -215,10 +219,20 @@ func (s *Server) shareHandler(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		if p == nil {
-			if imageRequest {
+			switch {
+			case imageRequest:
 				w.Header().Set("Cache-Control", "no-store")
 				http.NotFound(w, r)
-			} else {
+			case isNodePagePath(path):
+				// A missing, retired or quarantined node: the app still loads (and
+				// says so), but crawlers get a real 404 rather than an empty page.
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.Header().Set("Cache-Control", "no-store")
+				w.WriteHeader(http.StatusNotFound)
+				if r.Method != http.MethodHead {
+					w.Write(shell)
+				}
+			default:
 				next(w, r)
 			}
 			return
@@ -245,7 +259,7 @@ func (s *Server) shareHandler(next http.HandlerFunc) http.HandlerFunc {
 			body, err = renderShareCard(site, *p, layout)
 			contentType = "image/png"
 		} else {
-			body, err = shareHTML(shell, site, *p)
+			body, err = shareHTML(shell, site, *p, s.seoFor(site, p))
 		}
 		if err != nil {
 			w.Header().Set("Cache-Control", "no-store")
@@ -270,10 +284,12 @@ func (s *Server) shareHandler(next http.HandlerFunc) http.HandlerFunc {
 
 // Tokenize rather than regex-rewriting HTML. Preserve scripts, Svelte markers,
 // style tags and the entire body byte-for-byte; remove all competing head tags.
-func shareHTML(shell []byte, site shareSite, p sharePreview) ([]byte, error) {
+// The shell's <noscript> summary is the one exception: seo, when given,
+// replaces it with the page's own.
+func shareHTML(shell []byte, site shareSite, p sharePreview, seo *seoDoc) ([]byte, error) {
 	z := xhtml.NewTokenizer(bytes.NewReader(shell))
 	var out bytes.Buffer
-	inHead, skipTitle, wrote := false, false, false
+	inHead, skipTitle, wrote, skipNoscript := false, false, false, false
 	for {
 		tt := z.Next()
 		if tt == xhtml.ErrorToken {
@@ -283,14 +299,26 @@ func shareHTML(shell []byte, site shareSite, p sharePreview) ([]byte, error) {
 			break
 		}
 		raw := append([]byte(nil), z.Raw()...)
+		if skipNoscript {
+			// The tokenizer reads <noscript> as raw text, so this is one text token.
+			if tt == xhtml.EndTagToken && z.Token().Data == "noscript" {
+				skipNoscript = false
+			}
+			continue
+		}
 		if tt == xhtml.StartTagToken || tt == xhtml.EndTagToken || tt == xhtml.SelfClosingTagToken {
 			tok := z.Token()
+			if wrote && seo != nil && seo.Body != "" && tt == xhtml.StartTagToken && tok.Data == "noscript" {
+				out.WriteString("<noscript>\n" + seo.Body + "</noscript>")
+				skipNoscript = true
+				continue
+			}
 			if tok.Data == "head" {
 				if tt == xhtml.StartTagToken {
 					inHead = true
 				}
 				if tt == xhtml.EndTagToken {
-					out.WriteString(shareHead(site, p))
+					out.WriteString(shareHead(site, p, seo))
 					inHead = false
 					wrote = true
 				}
@@ -328,9 +356,13 @@ func shareHTML(shell []byte, site shareSite, p sharePreview) ([]byte, error) {
 	}
 	return out.Bytes(), nil
 }
-func shareHead(site shareSite, p sharePreview) string {
+func shareHead(site shareSite, p sharePreview, seo *seoDoc) string {
 	esc := html.EscapeString
 	title := p.Title + " · " + site.Name
+	desc := p.Description
+	if seo != nil {
+		title, desc = seo.Title, seo.Description
+	}
 	image := p.imageURL(site)
 	alt := p.Title + " — " + p.Description
 	if p.Node != nil {
@@ -339,17 +371,22 @@ func shareHead(site shareSite, p sharePreview) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "<title data-ridgeline-share>%s</title>\n<link data-ridgeline-share rel=\"canonical\" href=\"%s\">\n", esc(title), esc(site.URL+p.Path))
 	for _, tag := range [][3]string{
-		{"name", "description", p.Description}, {"property", "og:type", "website"},
+		{"name", "description", desc}, {"property", "og:type", "website"},
 		{"property", "og:site_name", site.Name}, {"property", "og:title", title},
-		{"property", "og:description", p.Description}, {"property", "og:url", site.URL + p.Path},
+		{"property", "og:description", desc}, {"property", "og:url", site.URL + p.Path},
 		{"property", "og:image", image}, {"property", "og:image:type", "image/png"},
 		{"property", "og:image:width", "1200"}, {"property", "og:image:height", "630"},
 		{"property", "og:image:alt", alt},
 		{"name", "twitter:card", "summary_large_image"}, {"name", "twitter:title", title},
-		{"name", "twitter:description", p.Description}, {"name", "twitter:image", image},
+		{"name", "twitter:description", desc}, {"name", "twitter:image", image},
 		{"name", "twitter:image:alt", alt},
 	} {
 		fmt.Fprintf(&b, "<meta data-ridgeline-share %s=\"%s\" content=\"%s\">\n", tag[0], tag[1], esc(tag[2]))
+	}
+	// Not data-ridgeline-share: Seo.svelte removes those on mount, and Google
+	// reads structured data from the rendered page.
+	if seo != nil && seo.JSONLD != "" {
+		fmt.Fprintf(&b, "<script type=\"application/ld+json\" data-ridgeline-seo>%s</script>\n", seo.JSONLD)
 	}
 	return b.String()
 }

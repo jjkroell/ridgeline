@@ -7,10 +7,11 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import type { Feature, FeatureCollection } from 'geojson';
 	import { api, type Node } from '$lib/api';
+	import LivePill from '$lib/components/LivePill.svelte';
 	import { live, groupLive, hashColor, type LiveGroup } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import { favorites } from '$lib/favorites.svelte';
-	import { basemapStyle, basemapHasHillshade, basemapHasLocalTerrain, collapseAttribution, ensureLocalTerrain } from '$lib/map-basemap';
+	import { basemapStyle, basemapHasHillshade, basemapHasLocalTerrain, collapseAttribution, ensureLocalTerrain, basemapHasTint, ensureTint } from '$lib/map-basemap';
 	import { basemap } from '$lib/basemap.svelte';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, SEGMENT_COLOR, locatedNodes } from '$lib/map-util';
@@ -26,9 +27,10 @@
 	import CopyMapLink from '$lib/components/CopyMapLink.svelte';
 	import { addressBarUrl } from '$lib/address-bar';
 	import { parseMapView, shareUrl, withSavedCamera, saveCamera } from '$lib/map-share';
-	import NodeModal from '$lib/components/NodeModal.svelte';
+	import NodeInspector from '$lib/components/NodeInspector.svelte';
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
 	import ChimeControls from '$lib/components/ChimeControls.svelte';
+	import { chime } from '$lib/live-audio.svelte';
 	import { hasWebGL } from '$lib/webgl';
 
 	let mapEl: HTMLDivElement;
@@ -66,106 +68,11 @@
 		saveCamera('live-map', currentView());
 	}
 
-	// ── Low-key audio: a mellow wind-chime as each pulse reaches a node ─────
-	let soundOn = $state(false);
-	const SOUND_KEY = 'ridgeline-livemap-sound';
 	// Overlay collapse state — both default minimized, persisted across visits.
 	const MAPCTRL_KEY = 'ridgeline-livemap-mapcontrol';
 	const PANEL_KEY = 'ridgeline-livemap-recent';
 	let mapCtrlOpen = $state(false);
 	let overlaysReady = $state(false); // gate persistence until localStorage is loaded
-	let actx: AudioContext | null = null;
-	let masterGain: GainNode | null = null;
-	let lastTickAt = 0;
-
-	// ── Chime tuning (user-adjustable, persisted) ──────────────────────────
-	const AUDIO_KEY = 'ridgeline-livemap-audio';
-	let volume = $state(0.4); // master gain, 0..0.8
-	let chordId = $state('calm');
-	let ringId = $state('medium');
-
-	// Each chord is a pentatonic-style scale whose notes stay consonant however
-	// they overlap, so random hits always sound musical. Lower registers read
-	// mellower, the Japanese scale most wind-chime-like.
-	const CHORDS: { id: string; label: string; notes: number[] }[] = [
-		{ id: 'calm', label: 'Calm', notes: [261.63, 293.66, 329.63, 392.0, 440.0] }, // C major pentatonic
-		{ id: 'mellow', label: 'Mellow', notes: [220.0, 261.63, 293.66, 329.63, 392.0] }, // A minor pentatonic
-		{ id: 'zen', label: 'Zen', notes: [261.63, 293.66, 311.13, 392.0, 415.3] }, // Hirajoshi
-		{ id: 'deep', label: 'Deep', notes: [130.81, 146.83, 164.81, 196.0, 220.0] } // C major pentatonic, low
-	];
-	// How long each chime rings out (fundamental decay, seconds).
-	const RINGS: { id: string; label: string; decay: number }[] = [
-		{ id: 'short', label: 'Short', decay: 1.0 },
-		{ id: 'medium', label: 'Med', decay: 1.8 },
-		{ id: 'long', label: 'Long', decay: 3.2 }
-	];
-	const scale = $derived(CHORDS.find((c) => c.id === chordId)?.notes ?? CHORDS[0].notes);
-	const ringDecay = $derived(RINGS.find((r) => r.id === ringId)?.decay ?? 1.8);
-
-	function ensureAudio() {
-		if (!actx) {
-			const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-			if (!AC) return;
-			actx = new AC();
-			masterGain = actx.createGain();
-			masterGain.gain.value = volume;
-			masterGain.connect(actx.destination);
-		}
-		if (actx.state === 'suspended') actx.resume();
-	}
-
-	// Keep the live master gain in sync with the volume control.
-	$effect(() => {
-		if (masterGain) masterGain.gain.value = volume;
-	});
-
-	function toggleSound() {
-		soundOn = !soundOn;
-		if (soundOn) ensureAudio(); // created within the click gesture so the browser allows it
-		try {
-			localStorage.setItem(SOUND_KEY, soundOn ? '1' : '0');
-		} catch {
-			/* storage unavailable */
-		}
-	}
-
-	// A soft tubular-chime hit: a fundamental that rings out slowly plus a quieter
-	// inharmonic partial (≈2.76×, the ratio of a real wind chime) that shimmers and
-	// fades fast. Soft attack, long tail. seed picks a scale note so nodes differ.
-	function playTick(seed: number) {
-		if (!actx || !masterGain) return;
-		const wall = performance.now();
-		if (wall - lastTickAt < 120) return; // sparse, gentle trickle — chimes don't rush
-		lastTickAt = wall;
-		const t = actx.currentTime;
-		const base = scale[Math.abs(seed) % scale.length];
-		const partials = [
-			{ ratio: 1, peak: 0.08, decay: ringDecay },
-			{ ratio: 2.76, peak: 0.026, decay: ringDecay * 0.5 }
-		];
-		for (const p of partials) {
-			const osc = actx.createOscillator();
-			const g = actx.createGain();
-			osc.type = 'sine';
-			osc.frequency.value = base * p.ratio;
-			osc.detune.value = (Math.random() - 0.5) * 12; // tiny drift, never mechanical
-			g.gain.setValueAtTime(0, t);
-			g.gain.linearRampToValueAtTime(p.peak, t + 0.012); // soft attack, no click
-			g.gain.exponentialRampToValueAtTime(0.0001, t + p.decay);
-			osc.connect(g).connect(masterGain);
-			osc.start(t);
-			osc.stop(t + p.decay + 0.05);
-		}
-	}
-
-	// Play a sample chime so a tuning change is audible immediately. Bypasses the
-	// trickle throttle so dragging/selecting always responds.
-	function previewChime() {
-		if (!soundOn) return;
-		ensureAudio();
-		lastTickAt = 0;
-		playTick(Math.floor(Math.random() * scale.length));
-	}
 
 	// Recent packets overlay (grouped, max 15) with minimize/maximize.
 	let panelOpen = $state(false);
@@ -220,8 +127,8 @@
 			})) as Feature[]
 		});
 
-		// Chime once as the dot reaches each node.
-		if (soundOn) for (const at of out.arrivals) playTick(Math.round((at[0] + at[1]) * 100));
+		// Chime once as the dot reaches each node (shared engine: $lib/live-audio).
+		if (chime.on) for (const at of out.arrivals) chime.play(Math.round((at[0] + at[1]) * 100));
 
 		animCount = out.count;
 		requestAnimationFrame(frame);
@@ -256,6 +163,7 @@
 		if (!map || !map.isStyleLoaded()) return;
 		if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
 		if (basemapHasLocalTerrain(currentBasemap)) ensureLocalTerrain(map, basemapLight);
+		if (basemapHasTint(currentBasemap)) ensureTint(map, basemapLight);
 		if (map.getSource('nodes')) return;
 		addLayers();
 		(map.getSource('nodes') as maplibregl.GeoJSONSource | undefined)?.setData(nodeFeatures());
@@ -404,12 +312,10 @@
 	$effect(() => {
 		const mc = mapCtrlOpen;
 		const rp = panelOpen;
-		const audio = { vol: volume, ch: chordId, rg: ringId };
 		if (!overlaysReady) return;
 		try {
 			localStorage.setItem(MAPCTRL_KEY, mc ? '1' : '0');
 			localStorage.setItem(PANEL_KEY, rp ? '1' : '0');
-			localStorage.setItem(AUDIO_KEY, JSON.stringify(audio));
 		} catch {
 			/* storage unavailable */
 		}
@@ -417,29 +323,15 @@
 
 	onMount(() => {
 		try {
-			soundOn = localStorage.getItem(SOUND_KEY) === '1';
 			mapCtrlOpen = localStorage.getItem(MAPCTRL_KEY) === '1';
 			panelOpen = localStorage.getItem(PANEL_KEY) === '1';
-			const rawAudio = localStorage.getItem(AUDIO_KEY);
-			if (rawAudio) {
-				const a = JSON.parse(rawAudio);
-				if (typeof a.vol === 'number') volume = Math.max(0, Math.min(0.8, a.vol));
-				if (typeof a.ch === 'string' && CHORDS.some((c) => c.id === a.ch)) chordId = a.ch;
-				if (typeof a.rg === 'string' && RINGS.some((r) => r.id === a.rg)) ringId = a.rg;
-			}
 		} catch {
 			/* storage unavailable */
 		}
 		overlaysReady = true;
-		// If sound was left on, the AudioContext can only start after a user
-		// gesture — arm it on the first interaction.
-		if (soundOn) {
-			const unlock = () => {
-				ensureAudio();
-				window.removeEventListener('pointerdown', unlock);
-			};
-			window.addEventListener('pointerdown', unlock);
-		}
+		// Restores sound on/off + tuning; if sound was left on it arms the
+		// gesture unlock the browser requires before audio can start.
+		chime.load();
 
 		basemap.init();
 		if (incoming.basemap) basemap.preview(incoming.basemap);
@@ -466,6 +358,7 @@
 			map?.resize();
 			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map!, basemapLight);
 			if (basemapHasLocalTerrain(currentBasemap)) ensureLocalTerrain(map!, basemapLight);
+			if (basemapHasTint(currentBasemap)) ensureTint(map!, basemapLight);
 			collapseAttribution(map!);
 			addLayers();
 			bindEvents();
@@ -505,6 +398,7 @@
 
 <div class="px-6 py-6 md:px-10">
 	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
+		<NodeInspector pubkey={nodeKey} onclose={() => (nodeKey = null)} />
 		{#if !webglOk}
 			<FallbackMap
 				nodes={located}
@@ -531,80 +425,13 @@
 		<BasemapSelector />
 		<!-- Top-centre: the left (map control) and right (basemap) panels both
 		     expand downward when opened, so stacking under either collides. -->
-		<div class="absolute top-3 left-1/2 z-10 -translate-x-1/2"><CopyMapLink url={linkUrl} /></div>
+		<div class="pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2">
+			<div class="pointer-events-auto"><CopyMapLink url={linkUrl} /></div>
+			<LivePill detail="{located.length} located nodes" onnode={(k) => (nodeKey = k)} />
+		</div>
 
 		<MapRoleFilter bind:selected={selectedRoles} title="Map Control" bind:open={mapCtrlOpen}>
-			<div class="label mb-1.5">Audio</div>
-			<Tooltip text={soundOn ? 'Mute node chimes' : 'Play a soft wind chime as pulses reach nodes'} class="block w-full">
-				<button
-					onclick={toggleSound}
-					aria-pressed={soundOn}
-					class="flex w-full items-center justify-center gap-1.5 rounded-[var(--radius)] border px-2 py-1 text-[0.68rem] font-medium transition-colors {soundOn
-						? 'border-signal/50 text-signal'
-						: 'border-line text-fg-dim hover:text-fg'}"
-				>
-					{#if soundOn}
-						<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" /></svg>
-						<span>Sound on</span>
-					{:else}
-						<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M22 9l-6 6M16 9l6 6" /></svg>
-						<span>Muted</span>
-					{/if}
-				</button>
-			</Tooltip>
-
-			{#if soundOn}
-				<div class="border-line/60 mt-2 space-y-2 border-t pt-2">
-					<div>
-						<div class="label mb-1 flex items-center justify-between">
-							<span>Volume</span><span class="text-fg-faint tnum">{Math.round((volume / 0.8) * 100)}%</span>
-						</div>
-						<input
-							type="range"
-							min="0"
-							max="0.8"
-							step="0.05"
-							bind:value={volume}
-							onchange={previewChime}
-							class="accent-signal h-1 w-full cursor-pointer"
-						/>
-					</div>
-					<div>
-						<div class="label mb-1">Chord</div>
-						<div class="grid grid-cols-2 gap-1">
-							{#each CHORDS as c (c.id)}
-								<button
-									onclick={() => {
-										chordId = c.id;
-										previewChime();
-									}}
-									class="rounded-[var(--radius)] border px-1.5 py-1 text-[0.66rem] font-medium transition-colors {chordId ===
-									c.id
-										? 'border-signal/50 text-signal'
-										: 'border-line text-fg-dim hover:text-fg'}">{c.label}</button
-								>
-							{/each}
-						</div>
-					</div>
-					<div>
-						<div class="label mb-1">Ring</div>
-						<div class="grid grid-cols-3 gap-1">
-							{#each RINGS as r (r.id)}
-								<button
-									onclick={() => {
-										ringId = r.id;
-										previewChime();
-									}}
-									class="rounded-[var(--radius)] border px-0.5 py-1 text-center text-[0.66rem] font-medium transition-colors {ringId ===
-									r.id
-										? 'border-signal/50 text-signal'
-										: 'border-line text-fg-dim hover:text-fg'}">{r.label}</button
-								>
-							{/each}
-						</div>
-					</div>
-				</div>
-			{/if}
+			<ChimeControls />
 		</MapRoleFilter>
 		{/if}
 
@@ -620,7 +447,7 @@
 					: ''}"
 			>
 				{#if live.connected}<span class="live-dot"></span>{/if}
-				<span class="font-display text-fg text-xs font-700 tracking-wide">RECENT PACKETS</span>
+				<span data-caps class="font-display text-fg text-xs font-700 tracking-wide uppercase">Recent packets</span>
 				<span class="label ml-auto tnum">{recent.length}</span>
 				<svg
 					viewBox="0 0 24 24"
@@ -676,4 +503,3 @@
 </div>
 
 <LiveGroupModal group={selected} onclose={() => (selected = null)} />
-<NodeModal pubkey={nodeKey} onclose={() => (nodeKey = null)} />

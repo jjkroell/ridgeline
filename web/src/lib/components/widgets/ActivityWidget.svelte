@@ -25,6 +25,7 @@
 	});
 
 	const util = $derived(data?.airtime?.map((b) => b.utilPct) ?? []);
+	const utilAt = $derived(data?.airtime?.map((b) => new Date(b.timestamp).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })) ?? []);
 	const tierColor = $derived(
 		{ idle: 'var(--color-fg-dim)', light: 'var(--color-signal)', moderate: 'var(--color-amber)', heavy: 'var(--color-coral)', congested: 'var(--color-coral)' }[
 			data?.kpis?.congestionTier ?? ''
@@ -32,7 +33,7 @@
 	);
 </script>
 
-<WidgetShell title={m.title} icon={m.icon} href="{base}/analytics" linkLabel="Analytics →">
+<WidgetShell stat={data ? data.kpis.channelUtilPct.toFixed(1) + '%' : null} statLabel="channel use · {data?.kpis.congestionTier ?? ''} load" title={m.title} icon={m.icon} href="{base}/analytics" linkLabel="Analytics →">
 	{#if !data}
 		<div class="text-fg-faint px-5 py-10 text-center text-sm">Loading…</div>
 	{:else}
@@ -54,7 +55,7 @@
 			{#if util.length > 1}
 				<div class="mt-4">
 					<div class="label mb-1">Channel utilisation · 6h</div>
-					<Sparkline values={util} height={44} color={tierColor} />
+					<Sparkline values={util} height={44} color={tierColor} labels={utilAt} format={(v) => v.toFixed(1) + '%'} />
 				</div>
 			{/if}
 		</div>

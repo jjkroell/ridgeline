@@ -118,7 +118,7 @@
 	});
 </script>
 
-<WidgetShell title={m.title} icon={m.icon} href="{base}/map" linkLabel="Full map →">
+<WidgetShell title={m.title} icon={m.icon} href="{base}/map" linkLabel="Full map →" stat={located.length} statLabel="nodes on the map">
 	<a href="{base}/map" class="relative block" aria-label="Open full map">
 		<div bind:this={el} class="h-60 w-full" style="background:var(--color-ink-2)"></div>
 		<div class="absolute inset-0"></div>

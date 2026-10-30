@@ -4,7 +4,8 @@
   the eye toggle. Reflects overview.entries live; changes persist immediately.
 -->
 <script lang="ts">
-	import { overview } from '$lib/overview.svelte';
+	import { overview, SHAPES } from '$lib/overview.svelte';
+	import { theme } from '$lib/theme.svelte';
 
 	let draggingId = $state<string | null>(null);
 
@@ -44,7 +45,7 @@
 		<svg viewBox="0 0 24 24" class="text-signal h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
 			<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
 		</svg>
-		<h2 class="font-display text-fg text-sm font-700 tracking-wide">CUSTOMIZE DASHBOARD</h2>
+		<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Customize dashboard</h2>
 		<button onclick={() => overview.reset()} class="label hover:text-signal ml-auto transition-colors">Reset</button>
 		<button
 			onclick={() => (overview.editing = false)}
@@ -54,7 +55,7 @@
 		</button>
 	</div>
 	<p class="text-fg-faint border-line/50 border-b px-5 py-2.5 text-xs">
-		Drag <span class="text-fg-dim">⠿</span> to reorder · tap the eye to show or hide a card. The top stats row stays put.
+		Drag <span class="text-fg-dim">⠿</span> to reorder · tap the eye to show or hide a card{#if theme.isApple} · S, M and L set each widget’s size{/if}. The top stats row stays put.
 	</p>
 	<div class="divide-line/50 divide-y">
 		{#each overview.entries as e (e.id)}
@@ -81,6 +82,18 @@
 						</div>
 						<div class="text-fg-faint mt-0.5 text-xs">{meta.desc}</div>
 					</div>
+					{#if theme.isApple && e.visible}
+						<div data-seg class="border-line flex shrink-0 overflow-hidden rounded-[var(--radius)] border text-[0.7rem]" role="group" aria-label="{meta.title} size">
+							{#each SHAPES as sh (sh.id)}
+								<button
+									onclick={() => overview.setShape(e.id, sh.id)}
+									aria-pressed={overview.shapeOf(e.id) === sh.id}
+									aria-label="{sh.id} {meta.title}"
+									class="w-7 py-1 font-600">{sh.label}</button
+								>
+							{/each}
+						</div>
+					{/if}
 					<button
 						onclick={() => overview.toggle(e.id)}
 						class="shrink-0 rounded-[var(--radius)] p-1.5 transition-colors {e.visible ? 'text-signal' : 'text-fg-faint hover:text-fg-dim'}"

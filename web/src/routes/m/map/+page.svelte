@@ -11,7 +11,7 @@
 	import { roleLabel } from '$lib/format';
 	import { theme } from '$lib/theme.svelte';
 	import { favorites } from '$lib/favorites.svelte';
-	import { basemapStyle, basemapHasHillshade, basemapHasLocalTerrain, collapseAttribution, ensureLocalTerrain } from '$lib/map-basemap';
+	import { basemapStyle, basemapHasHillshade, basemapHasLocalTerrain, collapseAttribution, ensureLocalTerrain, basemapHasTint, ensureTint } from '$lib/map-basemap';
 	import { basemap } from '$lib/basemap.svelte';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { ROLE_HEX, FAV_COLOR, SEGMENT_COLOR, locatedNodes } from '$lib/map-util';
@@ -22,13 +22,22 @@
 	import { parseMapView, hasMapView, shareUrl, withSavedCamera, saveCamera } from '$lib/map-share';
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
 	import { hasWebGL } from '$lib/webgl';
+	import NodeSheet from '$lib/mobile/NodeSheet.svelte';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
 	let webglOk = $state(true);
 	let fbBanner = $state(true); // WebGL-free banner open? (offsets the basemap selector below it)
 	let nodes = $state<Node[]>([]);
+	// A tapped node opens a bottom sheet over the map (the map stays in view);
+	// its Details button goes on to the full node page.
+	let sheetNode = $state<Node | null>(null);
+	function openNode(pk: string) {
+		sheetNode = nodes.find((n) => n.publicKey === pk) ?? null;
+		if (!sheetNode) goto('/m/nodes/' + pk);
+	}
 	let didFit = false;
+	let focusDone = false;
 
 	// Shareable view state. A link frames the map (suppressing the auto-fit)
 	// and previews its basemap without persisting it over the viewer's own.
@@ -186,7 +195,11 @@
 			if (coverageMode) return;
 			const f = e.features?.[0];
 			const pk = f?.properties?.pubkey as string | undefined;
-			if (pk) goto('/m/nodes/' + pk);
+			if (pk) openNode(pk);
+		});
+		// Tapping empty map dismisses the node sheet.
+		map.on('click', (e) => {
+			if (sheetNode && !map?.queryRenderedFeatures(e.point, { layers: ['node-dots'] }).length) sheetNode = null;
 		});
 		map.on('click', (e) => {
 			if (coverageMode) { placePin(e.lngLat.lat, e.lngLat.lng); runCoverage(); }
@@ -199,6 +212,7 @@
 		if (!map || !map.isStyleLoaded()) return;
 		if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
 		if (basemapHasLocalTerrain(currentBasemap)) ensureLocalTerrain(map, basemapLight);
+		if (basemapHasTint(currentBasemap)) ensureTint(map, basemapLight);
 		if (!map.getSource('nodes')) { addLayers(); updateSource(); drawCoverage(); }
 	}
 
@@ -227,6 +241,12 @@
 		try {
 			nodes = locatedNodes(await api.nodes());
 			updateSource();
+			// "Show on map" from a row's menu: open that node's sheet once.
+			const focus = page.url.searchParams.get('node');
+			if (focus && !focusDone) {
+				focusDone = true;
+				sheetNode = nodes.find((n) => n.publicKey === focus) ?? null;
+			}
 		} catch {
 			/* keep */
 		}
@@ -257,6 +277,7 @@
 			map.resize();
 			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
 			if (basemapHasLocalTerrain(currentBasemap)) ensureLocalTerrain(map, basemapLight);
+			if (basemapHasTint(currentBasemap)) ensureTint(map, basemapLight);
 			addLayers();
 			updateSource();
 			collapseAttribution(map);
@@ -288,14 +309,14 @@
 				pin = { lat, lon };
 				runCoverage();
 			}}
-			onselect={(k) => goto('/m/nodes/' + k)}
+			onselect={(k) => openNode(k)}
 		/>
 		<BasemapSelector compact posClass={fbBanner ? 'top-16 left-3' : 'top-3 left-3'} />
 	{:else}
-	<div bind:this={mapEl} class="h-full w-full"></div>
+	<div bind:this={mapEl} data-map-canvas class="h-full w-full"></div>
 	<div class="absolute top-3 left-3 z-20"><CopyMapLink url={linkUrl} compact /></div>
 
-	<div class="border-line/60 bg-ink-2/80 pointer-events-none absolute top-3 left-3 z-10 rounded-full border px-3 py-1.5 backdrop-blur-md">
+	<div class="border-line/60 bg-ink-2/80 pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full border px-3 py-1.5 backdrop-blur-md">
 		<span class="text-fg-dim font-mono text-[0.62rem] tnum">{nodes.length} located</span>
 	</div>
 
@@ -348,6 +369,9 @@
 				{/if}
 			{/if}
 		</div>
+	{/if}
+	{#if sheetNode}
+		<NodeSheet node={sheetNode} onclose={() => (sheetNode = null)} />
 	{/if}
 </div>
 

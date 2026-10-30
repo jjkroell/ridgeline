@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Skeleton from '$lib/components/Skeleton.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
@@ -13,6 +14,8 @@
 	import KpiStrip from '$lib/components/KpiStrip.svelte';
 	import WindowToggle from '$lib/components/WindowToggle.svelte';
 	import Sparkline from '$lib/components/Sparkline.svelte';
+	import { scrub } from '$lib/scrub';
+	import ScrubReadout from '$lib/components/ScrubReadout.svelte';
 	import StandbyBadge from '$lib/components/StandbyBadge.svelte';
 	import StandbyControl from '$lib/components/StandbyControl.svelte';
 
@@ -145,6 +148,8 @@
 	const sum = $derived(telemetry?.summary);
 	const batterySeries = $derived((telemetry?.points ?? []).map((p) => (p.batteryMv && p.batteryMv > 0 ? p.batteryMv / 1000 : null)));
 	const noiseSeries = $derived((telemetry?.points ?? []).map((p) => p.noiseFloor ?? null));
+	const telLabels = $derived((telemetry?.points ?? []).map((p) => when(p.recordedAt)));
+	const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 	const hasBattery = $derived(batterySeries.some((v) => v != null));
 	const hasNoise = $derived(noiseSeries.some((v) => v != null));
 	const hasTelemetry = $derived((telemetry?.summary.samples ?? 0) > 0 && (hasBattery || hasNoise));
@@ -171,6 +176,7 @@
 	const maxPayload = $derived(Math.max(1, ...(data?.payloadTypes ?? []).map((p) => p.count)));
 	const maxSnr = $derived(Math.max(1, ...(data?.snrHist ?? []).map((b) => b.count)));
 	const maxNbr = $derived(Math.max(1, ...(data?.neighbors ?? []).map((n) => n.count)));
+	let barI = $state<number | null>(null);
 </script>
 
 <Seo title={observer?.name || 'Observer'} description={`Telemetry and reception statistics for the ${observer?.name || 'observer'} listening post.`} path={`/observers/${id}`} />
@@ -200,7 +206,7 @@
 
 <div class="px-6 py-6 md:px-10">
 	{#if loading && !data}
-		<div class="panel text-fg-faint px-5 py-12 text-center text-sm">Loading…</div>
+		<div class="panel px-5 py-6"><Skeleton variant="detail" rows={4} /></div>
 	{:else if !observer}
 		<div class="panel text-fg-faint px-5 py-12 text-center text-sm">
 			Observer not found. It may not have reported recently.
@@ -238,7 +244,7 @@
 		<!-- Radio & device telemetry (from the observer's /status message) -->
 		<section class="panel rise mt-6" style="animation-delay:100ms">
 			<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-				<h2 class="font-display text-fg text-sm font-700 tracking-wide">RADIO & DEVICE</h2>
+				<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Radio & device</h2>
 				<span class="font-mono text-fg-faint text-[0.68rem]">
 					{observer.lastStatusAt ? `status ${ago(observer.lastStatusAt)} ago` : 'no status reported'}
 				</span>
@@ -274,7 +280,7 @@
 		<!-- Device trends (battery / noise floor over time, from the telemetry log) -->
 		<section class="panel rise mt-6" style="animation-delay:110ms">
 			<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-				<h2 class="font-display text-fg text-sm font-700 tracking-wide">DEVICE TRENDS</h2>
+				<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Device trends</h2>
 				<span class="font-mono text-fg-faint text-[0.68rem]">
 					{#if sum && sum.samples > 0}
 						{sum.samples} samples · {sum.spanHours.toFixed(1)}h{#if sum.reboots > 0} · {sum.reboots} reboot{sum.reboots === 1 ? '' : 's'}{/if}
@@ -299,7 +305,7 @@
 							<div class="font-mono text-fg text-lg font-700 tracking-tight">
 								{sum?.batteryMv ? (sum.batteryMv / 1000).toFixed(2) + ' V' : '—'}
 							</div>
-							<div class="mt-2"><Sparkline values={batterySeries} color="var(--color-signal)" /></div>
+							<div class="mt-2"><Sparkline values={batterySeries} color="var(--color-signal)" labels={telLabels} format={(v) => v.toFixed(2) + ' V'} /></div>
 						{:else}
 							<div class="text-fg-faint py-3 text-sm">Mains-powered (no battery reported).</div>
 						{/if}
@@ -314,7 +320,7 @@
 							<div class="font-mono text-lg font-700 tracking-tight" style="color:{noiseColor(sum?.noiseFloor)}">
 								{sum?.noiseFloor != null ? sum.noiseFloor.toFixed(0) + ' dBm' : '—'}
 							</div>
-							<div class="mt-2"><Sparkline values={noiseSeries} color="var(--color-amber)" /></div>
+							<div class="mt-2"><Sparkline values={noiseSeries} color="var(--color-amber)" labels={telLabels} format={(v) => v.toFixed(0) + ' dBm'} /></div>
 							<div class="text-fg-faint mt-2 flex justify-between font-mono text-[0.62rem] tnum">
 								<span>min {sum?.noiseMin?.toFixed(0) ?? '—'}</span>
 								<span>avg {sum?.noiseAvg?.toFixed(1) ?? '—'}</span>
@@ -331,19 +337,22 @@
 		<!-- Feed throughput timeline -->
 		<section class="panel rise mt-6" style="animation-delay:120ms">
 			<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-				<h2 class="font-display text-fg text-sm font-700 tracking-wide">FEED THROUGHPUT</h2>
+				<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Feed throughput</h2>
 				<span class="font-mono text-fg-faint text-[0.68rem]">packets / hour</span>
 			</div>
 			<div class="px-5 py-5">
 				{#if !data || data.activity.length === 0 || data.totalPackets === 0}
 					<div class="text-fg-faint py-8 text-center text-sm">No packets in window.</div>
 				{:else}
-					<div class="flex h-[140px] items-end gap-px">
-						{#each data.activity as count, i (i)}
-							<Tooltip text="{data.activity.length - 1 - i === 0 ? 'this hour' : `${data.activity.length - 1 - i}h ago`} · {count} pkt" class="flex-1 items-end">
-								<div class="bg-signal/70 hover:bg-signal w-full rounded-t-[2px] transition-colors" style="height:{Math.max(2, (count / maxAct) * 140)}px"></div>
-							</Tooltip>
-						{/each}
+					<div class="relative">
+						{#if barI != null}
+							<ScrubReadout at={((barI + 0.5) / data.activity.length) * 100}><b>{data.activity[barI]} pkt</b><span class="text-fg-faint"> · {data.activity.length - 1 - barI === 0 ? 'this hour' : `${data.activity.length - 1 - barI}h ago`}</span></ScrubReadout>
+						{/if}
+						<div class="flex h-[140px] items-end gap-px" use:scrub={{ onpick: (i) => (barI = i) }}>
+							{#each data.activity as count, i (i)}
+								<div data-scrub-i={i} class="flex-1 rounded-t-[2px] {barI === i ? 'bg-signal' : 'bg-signal/70'}" style="height:{Math.max(2, (count / maxAct) * 140)}px"></div>
+							{/each}
+						</div>
 					</div>
 					<div class="text-fg-faint mt-2 flex justify-between font-mono text-[0.62rem]">
 						<span>-{Math.round(data.windowHours)}h</span><span>peak {maxAct} pkt/h</span><span>now</span>
@@ -356,7 +365,7 @@
 		<div class="mt-6 grid gap-6 lg:grid-cols-2">
 			<section class="panel rise" style="animation-delay:180ms">
 				<div class="border-line/70 border-b px-5 py-3.5">
-					<h2 class="font-display text-fg text-sm font-700 tracking-wide">PAYLOAD MIX</h2>
+					<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Payload mix</h2>
 				</div>
 				<div class="py-3">
 					{#each data?.payloadTypes ?? [] as p (p.label)}
@@ -366,7 +375,7 @@
 			</section>
 			<section class="panel rise" style="animation-delay:220ms">
 				<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-					<h2 class="font-display text-fg text-sm font-700 tracking-wide">SNR DISTRIBUTION</h2>
+					<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">SNR distribution</h2>
 					<span class="font-mono text-fg-faint text-[0.68rem]">dB</span>
 				</div>
 				<div class="py-3">
@@ -380,7 +389,7 @@
 		<!-- Direct RF neighbours -->
 		<section class="panel rise mt-6" style="animation-delay:260ms">
 			<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
-				<h3 class="font-display text-fg text-sm font-700 tracking-wide">DIRECTLY HEARS</h3>
+				<h3 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Directly hears</h3>
 				<span class="label normal-case ml-2 text-fg-faint">zero-hop RF neighbours</span>
 				<span class="label ml-auto tnum">{data?.neighbors?.length ?? 0} node{(data?.neighbors?.length ?? 0) === 1 ? '' : 's'}</span>
 			</div>

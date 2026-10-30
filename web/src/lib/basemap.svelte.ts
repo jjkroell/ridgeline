@@ -12,6 +12,8 @@ class Basemap {
 		try {
 			const saved = localStorage.getItem(KEY);
 			if (saved && BASEMAP_IDS.has(saved)) this.id = saved;
+			// Cupertino's default is the Apple Maps-style base; an explicit pick wins.
+			else if (document.documentElement.dataset.theme?.startsWith('apple')) this.id = 'muted';
 		} catch {
 			/* storage unavailable */
 		}

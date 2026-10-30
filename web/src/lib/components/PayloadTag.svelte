@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Tooltip from './Tooltip.svelte';
+	import { payloadAbbr } from '$lib/format';
 
 	// `tip` gates the hover tooltip — off where the full type is already obvious
 	// from surrounding context (e.g. inside the packet modal header).
@@ -20,16 +21,7 @@
 
 	// Short labels to keep the badge (and the feed's Type column) compact.
 	// Full name stays available on hover via the title attribute.
-	const abbr: Record<string, string> = {
-		Advert: 'Adv',
-		TextMessage: 'DM',
-		GroupText: 'Grp Msg',
-		Request: 'Req',
-		Response: 'Resp',
-		Control: 'Ctrl',
-		AnonRequest: 'AnonRqst'
-	};
-	const label = $derived(abbr[type] ?? type);
+	const label = $derived(payloadAbbr(type));
 </script>
 
 {#snippet tag()}

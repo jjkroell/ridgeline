@@ -1,8 +1,10 @@
 <script lang="ts">
+	import Skeleton from '$lib/components/Skeleton.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { onMount } from 'svelte';
 	import { api, type MeshAnalytics } from '$lib/api';
 	import { fmtNum, shortKey, roleColor } from '$lib/format';
+	import Sparkline from '$lib/components/Sparkline.svelte';
 
 	let windowSec = $state(21600);
 	const windows = [
@@ -49,6 +51,10 @@
 				]
 			: []
 	);
+	const util = $derived(data?.airtime?.map((b) => b.utilPct) ?? []);
+	const utilAt = $derived(
+		data?.airtime?.map((b) => new Date(b.timestamp).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })) ?? []
+	);
 	const maxPay = $derived(Math.max(1, ...(data?.payloadTypes ?? []).map((p) => p.count)));
 	const maxRelay = $derived(Math.max(1, ...(data?.topRelays ?? []).map((r) => r.relayed)));
 </script>
@@ -67,7 +73,7 @@
 	</div>
 
 	{#if loading && !data}
-		<div class="text-fg-faint py-16 text-center text-sm">Loading…</div>
+		<div class="py-4"><Skeleton rows={6} /></div>
 	{:else if data}
 		<!-- KPIs -->
 		<div class="border-line/60 bg-panel grid grid-cols-3 gap-px overflow-hidden rounded-2xl border">
@@ -79,8 +85,17 @@
 			{/each}
 		</div>
 
+		<!-- channel use over time: press and drag to read a point -->
+		{#if util.length > 1}
+			<h2 data-caps class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide uppercase">Channel use</h2>
+			<div class="border-line/60 bg-panel rounded-2xl border px-4 pt-7 pb-3">
+				<Sparkline values={util} height={72} color={tierColor[data.kpis.congestionTier] ?? 'var(--color-signal)'} labels={utilAt} format={(v) => v.toFixed(2) + '%'} />
+				<div class="text-fg-faint mt-2 flex justify-between font-mono text-[0.6rem]"><span>-{Math.round(data.windowHours)}h</span><span>Press and drag to read</span><span>now</span></div>
+			</div>
+		{/if}
+
 		<!-- traffic mix -->
-		<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">TRAFFIC MIX</h2>
+		<h2 data-caps class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide uppercase">Traffic mix</h2>
 		<div class="border-line/60 bg-panel rounded-2xl border px-4 py-3">
 			{#each data.payloadTypes as p (p.label)}
 				<div class="flex items-center gap-3 py-1.5">
@@ -92,7 +107,7 @@
 		</div>
 
 		<!-- busiest relays -->
-		<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">BUSIEST RELAYS</h2>
+		<h2 data-caps class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide uppercase">Busiest relays</h2>
 		<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
 			{#each data.topRelays.slice(0, 10) as r (r.publicKey)}
 				<a href="/m/nodes/{r.publicKey}" class="active:bg-line/40 flex items-center gap-3 px-4 py-2.5">
@@ -105,7 +120,7 @@
 		</div>
 
 		<!-- observer coverage -->
-		<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">OBSERVER COVERAGE</h2>
+		<h2 data-caps class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide uppercase">Observer coverage</h2>
 		<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
 			{#each data.observers as o (o.id)}
 				<a href="/m/observers/{encodeURIComponent(o.id)}" class="active:bg-line/40 flex items-center gap-3 px-4 py-2.5">

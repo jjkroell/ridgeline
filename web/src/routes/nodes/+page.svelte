@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { onMount } from 'svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { api, type Node } from '$lib/api';
@@ -12,6 +13,12 @@
 	import NodeFilterModal from '$lib/components/NodeFilterModal.svelte';
 	import { favorites } from '$lib/favorites.svelte';
 	import { NodeFilters } from '$lib/node-filters.svelte';
+	import { longpress, rightclick, nodeMenu } from '$lib/mobile/context-menu.svelte';
+	import { MediaQuery } from 'svelte/reactivity';
+	import { page } from '$app/state';
+	import { replaceState } from '$app/navigation';
+	import NodeDetail from '$lib/components/NodeDetail.svelte';
+	import { roleColor, roleLabel } from '$lib/format';
 
 	const GPS_WARNING =
 		'GPS coordinates appear corrupt — a statistical outlier versus the rest of the mesh, so this node is hidden from the maps. The node is otherwise valid and still appears in packet paths.';
@@ -38,6 +45,20 @@
 	// NOTE: read `sorted` directly everywhere — aliasing a $derived with a plain
 	// `const` captures its value at init and never updates.
 	const sorted = $derived(filters.apply(nodes));
+
+	// iPad in landscape: list and detail side by side (Mail-style split view)
+	// instead of leaving the list for every node. Touch screens only, so a
+	// desktop keeps its full table; ?node= keeps the selection on reload.
+	const split = new MediaQuery('(pointer: coarse) and (min-width: 1100px)');
+	let selected = $state<string | null>(page.url.searchParams.get('node'));
+	const selectedNode = $derived(nodes.find((n) => n.publicKey === selected) ?? null);
+	function choose(e: MouseEvent, pk: string) {
+		e.preventDefault();
+		selected = pk;
+		const u = new URL(page.url);
+		u.searchParams.set('node', pk);
+		replaceState(u, {});
+	}
 </script>
 
 <Seo
@@ -97,6 +118,56 @@
 		</button>
 	</div>
 
+	{#if split.current}
+		<div class="grid grid-cols-[minmax(300px,360px)_minmax(0,1fr)] items-start gap-5">
+			<div data-split-list class="panel divide-line/50 divide-y overflow-hidden">
+				{#if loading}
+					<div class="px-4 py-6"><Skeleton rows={8} /></div>
+				{:else if sorted.length === 0}
+					<p class="text-fg-dim px-4 py-10 text-center text-sm">No nodes match these filters.</p>
+				{:else}
+					{#each sorted as n (n.publicKey)}
+						{@const st = nodeStatus(n)}
+						{@const on = n.publicKey === selected}
+						<a
+							href="/nodes/{n.publicKey}"
+							onclick={(e) => choose(e, n.publicKey)}
+							use:longpress={() => nodeMenu(n, '')}
+							aria-current={on ? 'true' : undefined}
+							class="flex items-center gap-3 px-4 py-3 {on ? 'bg-signal/12' : 'panel-hover'}"
+						>
+							<span class="h-2 w-2 shrink-0 rounded-full" style="background:{st.color}"></span>
+							<span class="min-w-0 flex-1">
+								<span class="flex items-center gap-1.5">
+									<span class="truncate text-sm font-medium {on ? 'text-signal' : n.viaBridge ? 'text-violet' : 'text-fg'}">{n.name || shortKey(n.publicKey)}</span>
+									{#if favorites.has(n.publicKey)}<span class="text-amber text-xs" aria-label="Starred">★</span>{/if}
+								</span>
+								<span class="mt-0.5 block font-mono text-[0.65rem]">
+									<span style="color:{roleColor(n.role)}">{roleLabel(n.role)}</span>
+									<span class="text-fg-faint">· {ago(lastHeard(n))}</span>
+								</span>
+							</span>
+						</a>
+					{/each}
+				{/if}
+			</div>
+			<section data-split-detail class="panel sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto" aria-label="Node detail">
+				{#if selected}
+					<div class="border-line/60 flex items-center gap-3 border-b px-5 py-4">
+						<FavoriteStar pubkey={selected} size="md" />
+						<h2 class="font-display text-fg min-w-0 flex-1 truncate text-xl font-700">{selectedNode?.name || shortKey(selected, 8, 4)}</h2>
+						{#if selectedNode}<RoleBadge role={selectedNode.role} />{/if}
+						<a href="/nodes/{selected}" class="label hover:text-signal shrink-0">Full page</a>
+					</div>
+					<div class="px-5 py-5">
+						{#key selected}<NodeDetail pubkey={selected} {nodes} narrow />{/key}
+					</div>
+				{:else}
+					<div class="text-fg-dim grid min-h-[50dvh] place-items-center px-6 text-center text-sm">Choose a node to see its details here.</div>
+				{/if}
+			</section>
+		</div>
+	{:else}
 	<!-- Table -->
 	<div class="panel overflow-hidden">
 		<div
@@ -115,7 +186,7 @@
 		</div>
 
 		{#if loading}
-			<div class="text-fg-faint px-5 py-12 text-center text-sm">Loading…</div>
+			<div class="px-5 py-6"><Skeleton rows={8} /></div>
 		{:else if sorted.length === 0}
 			<div class="px-5 py-12 text-center">
 				<p class="text-fg-dim text-sm">
@@ -141,6 +212,7 @@
 					{@const heard = lastHeard(n)}
 					<a
 						href="/nodes/{n.publicKey}"
+						use:rightclick={() => nodeMenu(n, '')}
 						class="panel-hover grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 px-5 py-3 md:grid-cols-[1.4fr_120px_1fr_80px_70px_70px] {n.gpsSuspect
 							? 'border-amber/60 bg-amber/[0.07] border-l-2'
 							: n.viaBridge
@@ -197,6 +269,7 @@
 			</div>
 		{/if}
 	</div>
+	{/if}
 </div>
 
 {#if filterOpen}

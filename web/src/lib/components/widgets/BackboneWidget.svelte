@@ -16,7 +16,7 @@
 	);
 </script>
 
-<WidgetShell title={m.title} icon={m.icon} href="{base}/analytics" linkLabel="Analytics →">
+<WidgetShell title={m.title} icon={m.icon} href="{base}/analytics" linkLabel="Analytics →" stat={top[0]?.relayCount1h ?? null} statLabel="relayed by {top[0]?.name || 'the busiest node'} this hour">
 	{#if top.length}
 		<div class="divide-line/50 divide-y">
 			{#each top as n (n.publicKey)}

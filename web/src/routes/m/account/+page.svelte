@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth.svelte';
@@ -102,7 +103,7 @@
 <svelte:head><title>Account · Ridgeline</title></svelte:head>
 
 {#if !auth.ready}
-	<div class="text-fg-faint px-4 py-16 text-center text-sm">Loading…</div>
+	<div class="px-4 py-6"><Skeleton rows={4} /></div>
 {:else if !auth.loggedIn}
 	<!-- Signed-out prompt -->
 	<div class="px-4 py-10 text-center">

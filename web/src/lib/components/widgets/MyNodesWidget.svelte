@@ -34,7 +34,7 @@
 	onMount(load);
 </script>
 
-<WidgetShell title={m.title} icon={m.icon} color="signal" href="{base}/account" linkLabel="Account →">
+<WidgetShell title={m.title} icon={m.icon} color="signal" href="{base}/account" linkLabel="Account →" stat={auth.loggedIn ? mine.length + shared.length : null} statLabel="{mine.length} claimed · {shared.length} shared with you">
 	{#if !auth.loggedIn}
 		<div class="text-fg-faint px-5 py-8 text-center text-sm">
 			<a href="{base}/account" class="text-signal hover:underline">Sign in</a> to see nodes you've claimed

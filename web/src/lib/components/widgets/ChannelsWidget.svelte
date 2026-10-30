@@ -56,7 +56,7 @@
 	});
 </script>
 
-<WidgetShell title={m.title} icon={m.icon} href="{base}/channels" linkLabel="Open →">
+<WidgetShell title={m.title} icon={m.icon} href="{base}/channels" linkLabel="Open →" stat={channels.list.length ? recent.length : null} statLabel="messages in the last day">
 	{#if recent.length === 0}
 		<div class="text-fg-faint px-5 py-10 text-center text-sm">No recent channel messages.</div>
 	{:else}

@@ -28,9 +28,10 @@
 		return o.lastSeen ? Date.now() - +new Date(o.lastSeen) < 15 * 60 * 1000 : false;
 	}
 	const sorted = $derived([...observers].sort((a, b) => (b.lastSeen ?? '').localeCompare(a.lastSeen ?? '')));
+	const onlineCount = $derived(observers.filter(online).length);
 </script>
 
-<WidgetShell title={m.title} icon={m.icon} href="{base}/observers" linkLabel="All →">
+<WidgetShell title={m.title} icon={m.icon} href="{base}/observers" linkLabel="All →" stat={observers.length ? onlineCount : null} statLabel="of {observers.length} observers reporting">
 	{#if sorted.length === 0}
 		<div class="text-fg-faint px-5 py-10 text-center text-sm">No observers yet.</div>
 	{:else}

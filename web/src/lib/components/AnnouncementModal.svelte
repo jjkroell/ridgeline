@@ -1,20 +1,46 @@
 <script lang="ts">
 	import Modal from './Modal.svelte';
 	import { announce } from '$lib/announce.svelte';
+	import { theme } from '$lib/theme.svelte';
 
 	// Each entry is one new capability, in user-facing terms.
 	const items: { icon: string; title: string; body: string }[] = [
 		{
-			icon: 'M5 12a2 2 0 100-4 2 2 0 000 4zM19 7a2 2 0 100-4 2 2 0 000 4zM19 21a2 2 0 100-4 2 2 0 000 4zM6.8 9.2l10.4-4.4M6.8 10.8l10.4 7.4',
-			title: 'RF neighbours, straight from the repeaters',
-			body: 'Node pages have a new RF neighbours section listing the nodes a repeater hears directly over the air, with the SNR it hears each at and how long ago. The data comes from the repeaters themselves: openHop repeaters (and firmware built with neighbour publishing) can send their neighbour table to Ridgeline\'s MQTT broker about once a day. To build it, the repeater runs a zero-hop node discover, records who answers, asks each one which regions it serves, and publishes the table. Ridgeline keeps the latest table from each repeater, so it appears on that repeater\'s page, and every node it lists gets a "Hears this node directly" line on its own page. Only lists from trusted observers on this mesh are kept, and anything older than about two weeks is hidden.'
+			icon: 'M12 3a9 9 0 100 18c1.1 0 1.6-.9 1.2-1.8-.5-1-.1-2.2 1.1-2.2H17a4 4 0 004-4c0-5-4-10-9-10zM7.5 12a1 1 0 100-2 1 1 0 000 2zM10.5 8a1 1 0 100-2 1 1 0 000 2zM15 8a1 1 0 100-2 1 1 0 000 2z',
+			title: 'Cupertino, a new look for Ridgeline',
+			body: 'A new theme in the style of Apple’s own apps: soft grey surfaces, frosted glass bars, the system font, rounder cards and a single accent colour. Pick Light, Dark, or Auto to follow your device’s appearance, and choose an accent: blue, purple, pink, red, orange, green or graphite. If your device has Increase Contrast turned on, edges and secondary text get firmer to match. To try it, open Theme at the bottom of the sidebar (on a phone, the round button at the top right, or More → Settings). Your choice is saved in this browser, and every other theme is still there, unchanged.'
 		},
 		{
-			icon: 'M4 12h4l2-5 4 10 2-5h4',
-			title: 'Turning it on for your station',
-			body: 'It is off by default everywhere. OpenHop (set neighbors: true on your Ridgeline broker entry), the observer firmware (set mqtt.neighbors on), meshcore-packet-capture and MeshCore Bot can all publish it; meshcoretomqtt, RemoteTerm, the Home Assistant integration and MeshMonitor cannot yet. Exact settings for each are in the Add an observer guide on the Observers page. Coverage grows with every station that opts in. Nodes outside their range keep the existing list, now called Path neighbours: links inferred from which nodes relay packets one after another, a useful guess rather than a measurement.'
+			icon: 'M8 3h8a2 2 0 012 2v14a2 2 0 01-2 2H8a2 2 0 01-2-2V5a2 2 0 012-2zM11 18h2',
+			title: 'On a phone, it feels like an app',
+			body: 'With Cupertino on, the phone layout gets large page titles that tuck into the bar as you scroll, content that slides under frosted bars, full-screen maps, iOS-style switches and segmented controls, and grouped lists. Tapping a node on the map opens a sheet over the map instead of leaving it. Add Ridgeline to your home screen and it opens with a proper launch screen.'
+		},
+		{
+			icon: 'M9 11V6a1.5 1.5 0 013 0v5m0-1a1.5 1.5 0 013 0v1m0 0a1.5 1.5 0 013 0v3a6 6 0 01-6 6h-1a5 5 0 01-4-2l-2.5-3.5a1.5 1.5 0 012.4-1.8L9 15',
+			title: 'Touch shortcuts',
+			body: 'Press and hold a node or observer in a list for a quick menu: open it, star it, show it on the map, copy its key or share a link. Swipe a node to the left to star it, and pull down on a list to refresh it. On charts such as battery, noise, activity, throughput and channel use, drag a finger (or the mouse) along the chart to read each value.'
+		},
+		{
+			icon: 'M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z',
+			title: 'Widgets in three sizes',
+			body: 'In Cupertino, Customize on the overview lets you make each widget small, medium or large, like home-screen widgets, with its headline number up front. Small ones sit two to a row on a phone.'
+		},
+		{
+			icon: 'M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM21 21l-5.2-5.2',
+			title: 'Faster to get around',
+			body: 'Press Ctrl+K (⌘K on a Mac), or Search in the sidebar, to jump to any page or node by name. Clicking a node on the map opens a side panel so the map stays in view. On an iPad held sideways, Nodes shows the list and the selected node side by side. Phones get a Settings page for theme, map style, packet times and your account, and pages show a quiet outline while they load instead of “Loading…”.'
+		},
+		{
+			icon: 'M3 20l6-9 4 5 3-4 5 8zM16 4.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z',
+			title: 'A calmer map, and a new logo on the way',
+			body: 'Cupertino uses a new Muted base map, a soft greyscale that lets the nodes stand out (change it under Base map on the map page). The logo on this test site is one candidate. The new logo is being chosen by public vote at logo.ve7kod.ca until Friday, November 6 at 18:00 BC time.'
 		}
 	];
+	const onCupertino = $derived(theme.choice === 'apple' || theme.choice === 'apple-dark' || theme.choice === 'apple-auto');
+	function tryIt() {
+		theme.set('apple-auto');
+		announce.close();
+	}
 </script>
 
 {#if announce.open}
@@ -61,6 +87,13 @@
 				onclick={() => announce.close()}
 				class="text-fg-dim hover:text-fg text-sm transition-colors">Learn more</a
 			>
+			{#if !onCupertino}
+				<button
+					onclick={tryIt}
+					class="bg-signal text-ink hover:bg-signal-deep rounded-[var(--radius)] px-4 py-2 text-sm font-600 transition-colors"
+					>Try Cupertino</button
+				>
+			{/if}
 			<button
 				onclick={() => announce.close()}
 				class="bg-signal/15 text-signal border-signal/40 hover:bg-signal/25 rounded-[var(--radius)] border px-4 py-2 text-sm font-600 transition-colors"

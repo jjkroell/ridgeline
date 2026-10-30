@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Skeleton from '$lib/components/Skeleton.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
@@ -181,7 +182,7 @@
 
 <div class="px-4 py-4">
 	{#if !loaded}
-		<div class="text-fg-faint py-16 text-center text-sm">Loading…</div>
+		<div class="py-4"><Skeleton variant="detail" rows={4} /></div>
 	{:else if quarantined}
 		<div class="border-coral/40 bg-coral/5 rounded-2xl border p-5">
 			<div class="text-coral flex items-center gap-2 text-sm font-700"><span class="text-base">⚠</span> QUARANTINED NODE</div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { onMount } from 'svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { api, type Observer, type ObserverCoverage } from '$lib/api';
@@ -7,6 +8,7 @@
 	import Tooltip from '$lib/components/Tooltip.svelte';
 	import StandbyBadge from '$lib/components/StandbyBadge.svelte';
 	import ObserverSetupModal from '$lib/components/ObserverSetupModal.svelte';
+	import { rightclick, observerMenu } from '$lib/mobile/context-menu.svelte';
 
 	let observers = $state<Observer[]>([]);
 	let coverage = $state<Record<string, ObserverCoverage>>({});
@@ -55,7 +57,7 @@
 
 <div class="px-6 py-6 md:px-10">
 	{#if loading}
-		<div class="panel text-fg-faint px-5 py-12 text-center text-sm">Loading…</div>
+		<div class="panel px-5 py-6"><Skeleton /></div>
 	{:else if observers.length === 0}
 		<div class="panel text-fg-faint px-5 py-12 text-center text-sm">
 			No observers reporting yet.
@@ -69,6 +71,7 @@
 				     the problem while scanning the grid, not after reading it. -->
 				<a
 					href="/observers/{encodeURIComponent(o.id)}"
+					use:rightclick={() => observerMenu(o, '')}
 					class="panel panel-hover rise block px-5 py-4 {o.radioQuarantinedAt
 						? 'border-coral/50 bg-coral/10'
 						: ''}"

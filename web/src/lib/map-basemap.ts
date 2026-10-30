@@ -23,6 +23,7 @@ export interface BasemapOption {
 export const BASEMAPS: BasemapOption[] = [
 	{ id: 'topo', label: 'Hillshade', desc: 'Shaded terrain relief over a clean base', themed: true },
 	{ id: 'minimal', label: 'Minimal', desc: 'Flat, label-light base', themed: true },
+	{ id: 'muted', label: 'Muted', desc: 'Soft Apple Maps-style colours with light relief', themed: true },
 	{ id: 'street', label: 'Street', desc: 'Detailed streets & places', themed: false },
 	{ id: 'satellite', label: 'Satellite', desc: 'Aerial imagery', themed: false },
 	{ id: 'terrain', label: 'Topographic', desc: 'Contour lines & relief', themed: false },
@@ -94,6 +95,7 @@ export function basemapStyle(id: string, light: boolean): string | StyleSpecific
 				17
 			);
 		case 'minimal':
+		case 'muted':
 		case 'topo':
 		default:
 			return basemapStyleUrl(light);
@@ -104,7 +106,57 @@ export function basemapStyle(id: string, light: boolean): string | StyleSpecific
 // "minimal" is intentionally flat and the raster terrain/satellite styles carry
 // their own relief.
 export function basemapHasHillshade(id: string): boolean {
-	return id === 'topo';
+	return id === 'topo' || id === 'muted';
+}
+
+// "muted" is the theme-aware OpenFreeMap base recoloured toward Apple Maps:
+// warm paper land, soft blue water, sage parks, pale-gold highways (light) or a
+// deep-blue-and-graphite night palette (dark). Applied in place after the style
+// loads, so it rides the same vector tiles as "topo".
+export function basemapHasTint(id: string): boolean {
+	return id === 'muted';
+}
+
+type Paint = [layer: string, prop: string, value: string];
+const TINT_LIGHT: Paint[] = [
+	['background', 'background-color', '#f6f3ec'],
+	['water', 'fill-color', '#a9d3f2'],
+	['waterway', 'line-color', '#a9d3f2'],
+	['park', 'fill-color', '#d6e9c6'],
+	['landuse_park', 'fill-color', '#d6e9c6'],
+	['landcover_wood', 'fill-color', '#dcebcf'],
+	['landuse_residential', 'fill-color', '#f0ece4'],
+	['building', 'fill-color', '#e9e4da'],
+	['highway_major_casing', 'line-color', '#e3ddd0'],
+	['highway_motorway_casing', 'line-color', '#ebc77a'],
+	['highway_motorway_inner', 'line-color', '#fbdc96'],
+	['highway_motorway_bridge_inner', 'line-color', '#fbdc96']
+];
+const TINT_DARK: Paint[] = [
+	['background', 'background-color', '#1f2124'],
+	['water', 'fill-color', '#173a5e'],
+	['waterway', 'line-color', '#1d4670'],
+	['water_name', 'text-color', '#7fa6cf'],
+	['water_name', 'text-halo-color', '#0f2640'],
+	['landuse_park', 'fill-color', '#1f2b22'],
+	['landcover_wood', 'fill-color', '#212b23'],
+	['landuse_residential', 'fill-color', '#25272b'],
+	['building', 'fill-color', '#2d3034']
+];
+
+// Idempotent: setPaintProperty raises styledata, which calls back in here, so
+// bail once the background already carries the tint. Gate on the style's own
+// layers, not isStyleLoaded(): that stays false while the hillshade DEM tiles
+// (added just before this) are still loading, and no styledata follows when
+// they finish, so the tint was never applied.
+export function ensureTint(map: MlMap, light: boolean): void {
+	if (!map.getLayer('background')) return;
+	const paints = light ? TINT_LIGHT : TINT_DARK;
+	if (map.getLayer('background') && map.getPaintProperty('background', 'background-color') === paints[0][2]) return;
+	for (const [layer, prop, value] of paints) {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		if (map.getLayer(layer)) map.setPaintProperty(layer, prop as any, value);
+	}
 }
 
 // "localterrain" composites the self-hosted shaded-relief raster UNDER the vector

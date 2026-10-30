@@ -39,7 +39,7 @@
 <div class="px-4 py-4">
 	<div class="mb-3 flex items-center gap-2">
 		<div class="text-fg-faint flex items-center gap-2 font-mono text-[0.68rem]">
-			<span>LAST PACKET</span>
+			<span data-caps class="uppercase">Last packet</span>
 			<span class="text-signal tnum">{ago(stats?.lastPacketAt)} ago</span>
 		</div>
 		<button

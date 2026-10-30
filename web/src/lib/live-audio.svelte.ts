@@ -27,10 +27,16 @@ class LiveChime {
 	chordId = $state('calm');
 	ringId = $state('medium');
 
+	/** Sound is on but the browser hasn't let audio start yet (no user gesture
+	 *  since the page loaded, or it was suspended in the background). The
+	 *  controls show a "tap to enable" hint while this is true. */
+	blocked = $state(false);
+
 	#actx: AudioContext | null = null;
 	#master: GainNode | null = null;
 	#lastTickAt = 0;
 	#loaded = false;
+	#armed = false;
 
 	get scale(): number[] {
 		return CHORDS.find((c) => c.id === this.chordId)?.notes ?? CHORDS[0].notes;
@@ -55,7 +61,43 @@ class LiveChime {
 		} catch {
 			/* storage unavailable or malformed */
 		}
+		// Sound was left on: audio can only start inside a user gesture, so try
+		// now (browsers that remember this site's engagement allow it) and
+		// otherwise unlock on the first interaction anywhere on the page.
+		if (this.on) this.ensure();
 	}
+
+	// Browsers only let an AudioContext start (or resume) inside an activation
+	// gesture, and they disagree on which events count: Chrome/Firefox accept a
+	// mouse pointerdown, Safari/iOS only a touchend/click/keydown, and a wheel
+	// zoom counts nowhere. So listen for all of them, in the capture phase (the
+	// map canvas handles its own pointer events), and keep listening until the
+	// context actually reports `running`.
+	static #UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'mousedown', 'touchend', 'click', 'keydown'];
+
+	#unlock = () => {
+		if (!this.on) return this.#disarm();
+		this.ensure();
+	};
+
+	#arm() {
+		if (this.#armed || typeof window === 'undefined') return;
+		this.#armed = true;
+		for (const ev of LiveChime.#UNLOCK_EVENTS) window.addEventListener(ev, this.#unlock, { capture: true, passive: true });
+	}
+
+	#disarm() {
+		if (!this.#armed) return;
+		this.#armed = false;
+		for (const ev of LiveChime.#UNLOCK_EVENTS) window.removeEventListener(ev, this.#unlock, { capture: true });
+	}
+
+	#syncState = () => {
+		const running = this.#actx?.state === 'running';
+		this.blocked = this.on && !running;
+		if (running || !this.on) this.#disarm();
+		else this.#arm(); // suspended / iOS 'interrupted' → resume on the next gesture
+	};
 
 	#persist() {
 		try {
@@ -66,8 +108,9 @@ class LiveChime {
 		}
 	}
 
-	// Lazily build the AudioContext. MUST be called from within a user gesture
-	// (e.g. the toggle click) or the browser keeps it suspended.
+	// Build the AudioContext on first use and resume it if it's suspended. It
+	// only actually starts when called within a user gesture; outside one it
+	// stays suspended and the unlock listeners take over.
 	ensure() {
 		if (!this.#actx) {
 			const AC =
@@ -78,13 +121,16 @@ class LiveChime {
 			this.#master = this.#actx.createGain();
 			this.#master.gain.value = this.volume;
 			this.#master.connect(this.#actx.destination);
+			this.#actx.onstatechange = this.#syncState;
 		}
-		if (this.#actx.state === 'suspended') this.#actx.resume();
+		if (this.#actx.state !== 'running') this.#actx.resume().then(this.#syncState, this.#syncState);
+		this.#syncState();
 	}
 
 	toggle() {
 		this.on = !this.on;
 		if (this.on) this.ensure(); // within the click gesture so the browser allows it
+		else this.#syncState();
 		this.#persist();
 	}
 
@@ -107,6 +153,9 @@ class LiveChime {
 	// fast. Soft attack, long tail. `seed` picks a scale note so nodes differ.
 	play(seed: number) {
 		if (!this.on || !this.#actx || !this.#master) return;
+		// While suspended the audio clock is frozen, so anything scheduled now
+		// would all fire at once when it resumes. Drop chimes until it runs.
+		if (this.#actx.state !== 'running') return;
 		const wall = performance.now();
 		if (wall - this.#lastTickAt < 120) return; // sparse, gentle trickle — chimes don't rush
 		this.#lastTickAt = wall;

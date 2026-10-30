@@ -1,13 +1,17 @@
 <script lang="ts">
 	import Seo from '$lib/components/Seo.svelte';
 	import { onMount } from 'svelte';
+	import { swipeAction } from '$lib/mobile/swipe';
+	import { longpress, nodeMenu, toggleStar } from '$lib/mobile/context-menu.svelte';
 	import { api, type Node } from '$lib/api';
 	import { ago, shortKey, nodeStatus, roleColor, roleLabel, lastHeard } from '$lib/format';
 	import { favorites } from '$lib/favorites.svelte';
 	import ClaimedBadge from '$lib/components/ClaimedBadge.svelte';
 	import ObserverBadge from '$lib/components/ObserverBadge.svelte';
 	import NodeFilterModal from '$lib/components/NodeFilterModal.svelte';
-	import { NodeFilters } from '$lib/node-filters.svelte';
+	import { NodeFilters, indexLetter } from '$lib/node-filters.svelte';
+	import SearchField from '$lib/mobile/SearchField.svelte';
+	import IndexStrip from '$lib/mobile/IndexStrip.svelte';
 
 	let nodes = $state<Node[]>([]);
 	const filters = new NodeFilters();
@@ -28,29 +32,50 @@
 
 	// Filtering + ordering live in NodeFilters so /nodes and /m/nodes agree.
 	const filtered = $derived(filters.apply(nodes));
+
+	// A–Z: the first row of each letter carries an id the strip jumps to.
+	const firstOf = $derived.by(() => {
+		const m = new Map<string, string>();
+		if (filters.sort !== 'name') return m;
+		for (const n of filtered) {
+			const l = indexLetter(n);
+			if (!m.has(l)) m.set(l, n.publicKey);
+		}
+		return m;
+	});
+	const letterRow = $derived(new Map([...firstOf].map(([l, k]) => [k, l])));
+	function jump(l: string) {
+		document.getElementById(`az-${l === '#' ? 'other' : l}`)?.scrollIntoView({ block: 'start' });
+	}
 </script>
 
 <Seo title="Nodes" description="Every node heard on the mesh." path="/m/nodes" />
 
-<div class="px-4 py-4">
-	<!-- Controls: quiet by design — search plus one control that names the active filters. -->
-	<div class="border-line bg-panel mb-2 flex items-center gap-2 rounded-xl border px-3 py-2.5">
-		<svg viewBox="0 0 24 24" class="text-fg-faint h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
-		<input bind:value={filters.query} placeholder="Search nodes…" class="text-fg placeholder:text-fg-faint min-w-0 flex-1 bg-transparent text-sm outline-none" />
-		{#if filters.query}<button onclick={() => (filters.query = '')} aria-label="Clear search" class="text-fg-faint text-lg leading-none">×</button>{/if}
-	</div>
+<!-- Room on the right for the A–Z strip. -->
+<div class="py-4 pl-4 {filters.sort === 'name' && filtered.length > 20 ? 'pr-7' : 'pr-4'}">
+	<!-- Controls: quiet by design — search (with the filter inside it) and a
+	     count line that names the active filters and the order. -->
+	<SearchField bind:value={filters.query} placeholder="Search nodes">
+		{#snippet trailing()}
+			<button
+				onclick={() => (filterOpen = true)}
+				class="-my-1 -mr-1 shrink-0 p-1 {filters.activeCount ? 'text-signal' : 'text-fg-faint'}"
+				aria-label={filters.activeCount ? `Filters: ${filters.summary}` : 'Filter'}
+			>
+				<svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18M7 12h10M11 19h2" /></svg>
+			</button>
+		{/snippet}
+	</SearchField>
 
-	<div class="mb-3 flex items-center gap-3 px-1">
-		<button
-			onclick={() => (filterOpen = true)}
-			class="flex items-center gap-1.5 text-xs {filters.activeCount ? 'text-signal' : 'text-fg-dim'}"
-		>
-			<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18M7 12h10M11 19h2" /></svg>
-			<span class="font-mono">{filters.summary || 'Filter'}</span>
-		</button>
+	<div class="mb-2 flex items-center gap-2 px-1">
+		<div class="text-fg-faint min-w-0 flex-1 truncate font-mono text-[0.62rem]">
+			{filtered.length} node{filtered.length === 1 ? '' : 's'}{#if filters.summary}<span class="text-signal"> · {filters.summary}</span>{/if}
+		</div>
+		<div data-seg class="border-line flex shrink-0 rounded-lg border p-0.5 text-[0.68rem]" role="radiogroup" aria-label="Order">
+			<button role="radio" aria-checked={filters.sort === 'heard'} onclick={() => (filters.sort = 'heard')} class="rounded-md px-2.5 py-0.5 {filters.sort === 'heard' ? 'bg-signal/15 text-signal' : 'text-fg-dim'}">Recent</button>
+			<button role="radio" aria-checked={filters.sort === 'name'} onclick={() => (filters.sort = 'name')} class="rounded-md px-2.5 py-0.5 {filters.sort === 'name' ? 'bg-signal/15 text-signal' : 'text-fg-dim'}">A–Z</button>
+		</div>
 	</div>
-
-	<div class="text-fg-faint mb-2 px-1 font-mono text-[0.62rem]">{filtered.length} node{filtered.length === 1 ? '' : 's'}</div>
 
 	<!-- List -->
 	<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
@@ -73,7 +98,20 @@
 			{#each filtered as n (n.publicKey)}
 				{@const st = nodeStatus(n)}
 				{@const heard = lastHeard(n)}
-				<a href="/m/nodes/{n.publicKey}" class="active:bg-line/40 flex items-center gap-3 px-4 py-3">
+				{@const fav = favorites.has(n.publicKey)}
+				{@const letter = letterRow.get(n.publicKey)}
+				{#if letter}
+					<div id="az-{letter === '#' ? 'other' : letter}" data-az-head class="bg-panel-2 text-fg-dim px-4 py-1 text-[0.72rem] font-600">{letter}</div>
+				{/if}
+				<div data-swipe class="relative overflow-hidden">
+				<!-- Revealed by swiping the row left; release to toggle the star. -->
+				<div class="bg-amber absolute inset-y-0 right-0 flex w-24 items-center justify-center text-[0.7rem] font-600 text-white" style="opacity:var(--swipe, 0)" aria-hidden="true">
+					<span class="flex flex-col items-center gap-0.5">
+						<svg viewBox="0 0 24 24" class="h-5 w-5" fill={fav ? 'none' : 'currentColor'} stroke="currentColor" stroke-width="1.6"><path d="M12 2.5l2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.9l-5.8 3.05 1.1-6.45-4.7-4.6 6.5-.95z" /></svg>
+						{fav ? 'Unstar' : 'Star'}
+					</span>
+				</div>
+				<a href="/m/nodes/{n.publicKey}" use:swipeAction={() => toggleStar(n.publicKey)} use:longpress={() => nodeMenu(n)} class="bg-panel active:bg-line/40 relative flex items-center gap-3 px-4 py-3">
 					<span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background:{st.color}"></span>
 					<div class="min-w-0 flex-1">
 						<div class="flex items-center gap-1.5">
@@ -97,10 +135,15 @@
 						<svg viewBox="0 0 24 24" class="h-5 w-5 {favorites.has(n.publicKey) ? 'text-amber' : 'text-fg-faint'}" fill={favorites.has(n.publicKey) ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.5"><path d="M12 2.5l2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.9l-5.8 3.05 1.1-6.45-4.7-4.6 6.5-.95z" /></svg>
 					</button>
 				</a>
+				</div>
 			{/each}
 		{/if}
 	</div>
 </div>
+
+{#if filters.sort === 'name' && filtered.length > 20}
+	<IndexStrip letters={new Set(firstOf.keys())} onjump={jump} />
+{/if}
 
 {#if filterOpen}
 	<NodeFilterModal {filters} {nodes} onclose={() => (filterOpen = false)} />

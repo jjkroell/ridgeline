@@ -72,7 +72,7 @@
 		What's new
 	</button>
 	<div class="font-mono text-fg-dim flex items-center gap-2 text-xs">
-		<span class="text-fg-faint">LAST PACKET</span>
+		<span data-caps class="text-fg-faint uppercase">Last packet</span>
 		<span class="text-signal tnum">{ago(stats?.lastPacketAt)} ago</span>
 	</div>
 </PageHeader>
@@ -87,7 +87,7 @@
 	<!-- Fixed stat row -->
 	<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
 		{#each cards as c, i (c.label)}
-			<div class="panel rise relative overflow-hidden px-5 py-5" style="animation-delay:{i * 50}ms">
+			<div class="panel rise @container relative overflow-hidden px-5 py-5" style="animation-delay:{i * 50}ms">
 				{#if c.accent}
 					<div class="from-signal/[0.07] absolute inset-0 bg-gradient-to-br to-transparent"></div>
 				{/if}
@@ -96,7 +96,7 @@
 						{c.label}
 						<svg viewBox="0 0 24 24" class="h-4 w-4 {c.accent ? 'text-signal' : 'text-fg-faint'}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d={icons[c.icon]} /></svg>
 					</div>
-					<div class="font-display tnum mt-3 text-4xl font-700 {c.accent ? 'text-signal glow-signal' : 'text-fg'}">
+					<div class="font-display tnum mt-3 text-[clamp(1.25rem,13cqw,2.25rem)] leading-tight font-700 {c.accent ? 'text-signal glow-signal' : 'text-fg'}">
 						{fmtNum(c.value)}
 					</div>
 				</div>

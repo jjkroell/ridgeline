@@ -1,10 +1,13 @@
 <script lang="ts">
+	import Skeleton from '$lib/components/Skeleton.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { api, type Observer, type ObserverAnalytics, type ObserverTelemetry, type ObserverStatus } from '$lib/api';
 	import { ago, fmtNum, skewColor, fmtSkew, snrColor, roleColor, roleLabel, isFresh } from '$lib/format';
 	import Sparkline from '$lib/components/Sparkline.svelte';
+	import { scrub } from '$lib/scrub';
+	import ScrubReadout from '$lib/components/ScrubReadout.svelte';
 	import StandbyBadge from '$lib/components/StandbyBadge.svelte';
 	import StandbyControl from '$lib/components/StandbyControl.svelte';
 
@@ -79,17 +82,20 @@
 
 	const batterySeries = $derived((tel?.points ?? []).map((p) => (p.batteryMv && p.batteryMv > 0 ? p.batteryMv / 1000 : null)));
 	const noiseSeries = $derived((tel?.points ?? []).map((p) => p.noiseFloor ?? null));
+	const telLabels = $derived((tel?.points ?? []).map((p) => when(p.recordedAt)));
+	const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 	const hasBattery = $derived(batterySeries.some((v) => v != null));
 	const hasNoise = $derived(noiseSeries.some((v) => v != null));
 	const maxAct = $derived(Math.max(1, ...(data?.activity ?? [])));
 	const maxPay = $derived(Math.max(1, ...(data?.payloadTypes ?? []).map((p) => p.count)));
+	let barI = $state<number | null>(null);
 </script>
 
 <Seo title={observer?.name || 'Observer'} description={`Telemetry and reception statistics for the ${observer?.name || 'observer'} listening post.`} path={`/m/observers/${id}`} />
 
 <div class="px-4 py-4">
 	{#if loading && !observer}
-		<div class="text-fg-faint py-16 text-center text-sm">Loading…</div>
+		<div class="py-4"><Skeleton variant="detail" rows={4} /></div>
 	{:else if !observer}
 		<div class="text-fg-faint py-16 text-center text-sm">Observer not found.</div>
 	{:else}
@@ -139,7 +145,7 @@
 		</div>
 
 		<!-- radio & device -->
-		<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">RADIO & DEVICE</h2>
+		<h2 data-caps class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide uppercase">Radio & device</h2>
 		<div class="border-line/60 bg-panel rounded-2xl border p-4">
 			{#if !st}
 				<div class="text-fg-faint py-2 text-center text-sm">No status reported yet.</div>
@@ -166,20 +172,20 @@
 
 		<!-- device trends -->
 		{#if hasBattery || hasNoise}
-			<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">DEVICE TRENDS</h2>
+			<h2 data-caps class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide uppercase">Device trends</h2>
 			<div class="grid grid-cols-1 gap-3">
 				{#if hasBattery}
 					<div class="border-line/60 bg-panel rounded-2xl border p-4">
 						<div class="label">Battery</div>
 						<div class="font-mono text-fg mt-1 text-lg font-700">{tel?.summary.batteryMv ? (tel.summary.batteryMv / 1000).toFixed(2) + ' V' : '—'}</div>
-						<div class="mt-2"><Sparkline values={batterySeries} color="var(--color-signal)" /></div>
+						<div class="mt-2"><Sparkline values={batterySeries} color="var(--color-signal)" labels={telLabels} format={(v) => v.toFixed(2) + ' V'} /></div>
 					</div>
 				{/if}
 				{#if hasNoise}
 					<div class="border-line/60 bg-panel rounded-2xl border p-4">
 						<div class="label">Noise floor</div>
 						<div class="font-mono mt-1 text-lg font-700" style="color:{noiseColor(tel?.summary.noiseFloor)}">{tel?.summary.noiseFloor != null ? tel.summary.noiseFloor.toFixed(0) + ' dBm' : '—'}</div>
-						<div class="mt-2"><Sparkline values={noiseSeries} color="var(--color-amber)" /></div>
+						<div class="mt-2"><Sparkline values={noiseSeries} color="var(--color-amber)" labels={telLabels} format={(v) => v.toFixed(0) + ' dBm'} /></div>
 					</div>
 				{/if}
 			</div>
@@ -187,12 +193,17 @@
 
 		<!-- throughput -->
 		{#if data && data.activity.length && data.totalPackets > 0}
-			<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">FEED THROUGHPUT</h2>
+			<h2 data-caps class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide uppercase">Feed throughput</h2>
 			<div class="border-line/60 bg-panel rounded-2xl border p-4">
-				<div class="flex h-[90px] items-end gap-px">
-					{#each data.activity as c, i (i)}
-						<div class="bg-signal/70 w-full rounded-t-[2px]" style="height:{Math.max(2, (c / maxAct) * 90)}px"></div>
-					{/each}
+				<div class="relative">
+					{#if barI != null}
+						<ScrubReadout at={((barI + 0.5) / data.activity.length) * 100}><b>{data.activity[barI]} pkt</b><span class="text-fg-faint"> · {data.activity.length - 1 - barI === 0 ? 'this hour' : `${data.activity.length - 1 - barI}h ago`}</span></ScrubReadout>
+					{/if}
+					<div class="flex h-[90px] items-end gap-px" use:scrub={{ onpick: (i) => (barI = i) }}>
+						{#each data.activity as c, i (i)}
+							<div data-scrub-i={i} class="w-full rounded-t-[2px] {barI === i ? 'bg-signal' : 'bg-signal/70'}" style="height:{Math.max(2, (c / maxAct) * 90)}px"></div>
+						{/each}
+					</div>
 				</div>
 				<div class="text-fg-faint mt-2 flex justify-between font-mono text-[0.6rem]"><span>-{Math.round(data.windowHours)}h</span><span>now</span></div>
 			</div>
@@ -200,7 +211,7 @@
 
 		<!-- payload mix -->
 		{#if data?.payloadTypes?.length}
-			<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">PAYLOAD MIX</h2>
+			<h2 data-caps class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide uppercase">Payload mix</h2>
 			<div class="border-line/60 bg-panel rounded-2xl border px-4 py-3">
 				{#each data.payloadTypes as p (p.label)}
 					<div class="flex items-center gap-3 py-1.5">
@@ -214,7 +225,7 @@
 
 		<!-- neighbours -->
 		{#if data?.neighbors?.length}
-			<h2 class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide">DIRECTLY HEARS <span class="text-fg-faint font-400">· zero-hop</span></h2>
+			<h2 data-caps class="font-display text-fg mt-5 mb-2 px-1 text-xs font-700 tracking-wide uppercase">Directly hears <span class="text-fg-faint font-400">· zero-hop</span></h2>
 			<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
 				{#each data.neighbors as l (l.nodeKey)}
 					<a href="/m/nodes/{l.nodeKey}" class="active:bg-line/40 flex items-center gap-3 px-4 py-2.5">

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,300;0,400;0,500;0,700;0,900;1,400&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Space+Mono:wght@400;700&family=Inter:opsz,wght@14..32,400..900&display=swap');
 @import 'tailwindcss';
 
 /* ── Ridgeline design tokens ───────────────────────────────────────────────
@@ -38,6 +38,17 @@
 	--font-mono: 'Space Mono', ui-monospace, 'SF Mono', monospace;
 
 	--radius: 2px;
+
+	/* Numeric weight classes (font-600, font-700…) used throughout the markup.
+	   Tailwind only ships named weights (font-bold), so without these the
+	   numeric classes generated nothing and every heading fell back to 400. */
+	--font-weight-300: 300;
+	--font-weight-400: 400;
+	--font-weight-500: 500;
+	--font-weight-600: 600;
+	--font-weight-700: 700;
+	--font-weight-800: 800;
+	--font-weight-900: 900;
 
 	/* Atmosphere (dark defaults). Overridden by .theme-light below. */
 	--contour-color: rgba(94, 124, 140, 0.17);
@@ -190,6 +201,173 @@ html[data-theme='mist'] {
 	--contour-color: rgba(70, 105, 150, 0.24);
 	--glow-a: rgba(43, 95, 168, 0.07);
 	--glow-b: rgba(154, 108, 20, 0.05);
+}
+
+/* ── Cupertino (experimental) ──────────────────────────────────────────────
+   An Apple-HIG reading of Ridgeline, built from the apple-design skills
+   (dickwu/apple-design-skill, naplesblue/apple-design-skill,
+   s1gmamale1/apple-design-skills). Two token blocks (light + dark) and one
+   shared structural layer below. Rules it follows, in order:
+     1. Unified surfaces: white/elevated panels on a cool grey ground, hairline
+        dividers, two-layer soft shadows; never hard borders.
+     2. Glass only where layers overlap (sidebar, top bar, popovers, modals).
+     3. Hierarchy from weight + size + grey, not colour; one blue accent.
+     4. System type (SF where available), negative tracking on titles,
+        tabular numbers; no textured background. */
+html[data-theme='apple'] {
+	/* Dialled one step down from Apple's white-on-#f5f5f7 so a full screen
+	   of it isn't glaring: soft grey page, off-white panels, same steps. */
+	--color-ink: #e4e4e9;
+	--color-ink-2: #dadadf;
+	--color-panel: #f3f3f6;
+	--color-panel-2: #eaeaee;
+	--color-line: #d5d5db;
+	--color-line-bright: #c3c3ca;
+
+	--color-fg: #1d1d1f;
+	--color-fg-dim: #6e6e73;
+	--color-fg-faint: #86868b;
+
+	/* Apple's accessible (higher-contrast) system colours, so they hold up as
+	   text on white as well as fills. */
+	--color-signal: #0071e3;
+	--color-signal-deep: #0058b0;
+	--color-amber: #c93400;
+	--color-coral: #d70015;
+	--color-violet: #8944ab;
+	--color-sky: #0071e3;
+	--color-lime: #248a3d;
+
+	--color-role-repeater: #ff3b30;
+	--color-role-companion: #007aff;
+	--color-role-room: #34c759;
+	--color-role-sensor: #ff2d55;
+	--color-role-observer: #af52de;
+
+	--hairline: rgba(0, 0, 0, 0.07);
+	--fill: rgba(120, 120, 128, 0.12);
+	--fill-strong: rgba(120, 120, 128, 0.2);
+	--live: #30d158;
+	--glass: rgba(228, 228, 233, 0.76);
+	--glass-side: rgba(218, 218, 223, 0.8);
+	--sh-panel: 0 1px 3px rgba(0, 0, 0, 0.05), 0 14px 40px rgba(0, 0, 0, 0.05);
+	--sh-lift: 0 1px 3px rgba(0, 0, 0, 0.06), 0 12px 32px rgba(0, 0, 0, 0.1);
+	--sh-overlay: 0 2px 8px rgba(0, 0, 0, 0.1), 0 30px 80px rgba(0, 0, 0, 0.24);
+	--contour-color: rgba(60, 60, 67, 0.11);
+	/* Selected segment of a segmented control. */
+	--seg-on: #f8f8fa;
+}
+/* The muted basemap is near-white too; take the edge off it. */
+html[data-theme='apple'] .maplibregl-canvas {
+	filter: brightness(0.93);
+}
+
+html[data-theme='apple-dark'] {
+	--color-ink: #000000;
+	--color-ink-2: #121214;
+	--color-panel: #1c1c1e;
+	--color-panel-2: #2c2c2e;
+	--color-line: #38383a;
+	--color-line-bright: #48484a;
+
+	--color-fg: #f5f5f7;
+	--color-fg-dim: #a1a1a6;
+	--color-fg-faint: #8e8e93;
+
+	--color-signal: #0a84ff;
+	--color-signal-deep: #0062cc;
+	--color-amber: #ff9f0a;
+	--color-coral: #ff453a;
+	--color-violet: #bf5af2;
+	--color-sky: #64d2ff;
+	--color-lime: #30d158;
+
+	--color-role-repeater: #ff453a;
+	--color-role-companion: #0a84ff;
+	--color-role-room: #30d158;
+	--color-role-sensor: #ff375f;
+	--color-role-observer: #bf5af2;
+
+	--hairline: rgba(255, 255, 255, 0.05);
+	--fill: rgba(118, 118, 128, 0.24);
+	--fill-strong: rgba(118, 118, 128, 0.36);
+	--live: #30d158;
+	--glass: rgba(22, 22, 24, 0.72);
+	--glass-side: rgba(28, 28, 30, 0.72);
+	/* Dark mode separates by elevation (lighter surface), not shadow. */
+	--sh-panel: none;
+	--sh-lift: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 12px 32px rgba(0, 0, 0, 0.5);
+	--sh-overlay: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 30px 80px rgba(0, 0, 0, 0.6);
+	--contour-color: rgba(235, 235, 245, 0.07);
+	--seg-on: #636366;
+}
+
+/* Accent colour (iOS-style tint), chosen in the theme picker. Blue is the
+   token default above; signal-deep is derived so every tint gets a pressed
+   shade. Only the Cupertino themes read data-accent. */
+html[data-theme='apple'][data-accent='purple'] { --color-signal: #8944ab; }
+html[data-theme='apple'][data-accent='pink'] { --color-signal: #d30f45; }
+html[data-theme='apple'][data-accent='red'] { --color-signal: #d70015; }
+html[data-theme='apple'][data-accent='orange'] { --color-signal: #c93400; }
+html[data-theme='apple'][data-accent='green'] { --color-signal: #248a3d; }
+html[data-theme='apple'][data-accent='graphite'] { --color-signal: #6e6e73; }
+html[data-theme='apple-dark'][data-accent='purple'] { --color-signal: #bf5af2; }
+html[data-theme='apple-dark'][data-accent='pink'] { --color-signal: #ff375f; }
+html[data-theme='apple-dark'][data-accent='red'] { --color-signal: #ff453a; }
+html[data-theme='apple-dark'][data-accent='orange'] { --color-signal: #ff9f0a; }
+html[data-theme='apple-dark'][data-accent='green'] { --color-signal: #30d158; }
+html[data-theme='apple-dark'][data-accent='graphite'] { --color-signal: #98989d; }
+/* The logo's second stroke is amber; against an orange accent it would
+   blur into the first, so it switches to the text colour. */
+html:is([data-theme='apple'], [data-theme='apple-dark'])[data-accent='orange'] {
+	--logo-b: var(--color-fg);
+}
+html:is([data-theme='apple'], [data-theme='apple-dark']):not([data-accent='blue']) {
+	--color-signal-deep: color-mix(in srgb, var(--color-signal) 78%, black);
+	--color-sky: var(--color-signal);
+}
+
+/* Increase Contrast (macOS/iOS accessibility setting): firmer edges, darker
+   secondary text, no faint tier. */
+@media (prefers-contrast: more) {
+	html[data-theme='apple'] {
+		--hairline: rgba(0, 0, 0, 0.22);
+		--color-line: #c6c6c8;
+		--color-fg-dim: #3a3a3c;
+		--color-fg-faint: #48484a;
+		--fill: rgba(120, 120, 128, 0.22);
+		--contour-color: rgba(60, 60, 67, 0.16);
+	}
+	html[data-theme='apple-dark'] {
+		--hairline: rgba(255, 255, 255, 0.24);
+		--color-line: #545456;
+		--color-fg-dim: #d1d1d6;
+		--color-fg-faint: #aeaeb2;
+		--fill: rgba(118, 118, 128, 0.4);
+		--contour-color: rgba(235, 235, 245, 0.1);
+	}
+}
+
+html:is([data-theme='apple'], [data-theme='apple-dark']) {
+	/* SF on Apple devices; Inter (the closest open cut) everywhere else, so
+	   Linux/Windows/Android viewers don't fall back to DejaVu/Arial. */
+	--font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', Inter, 'Segoe UI Variable Display',
+		'Segoe UI', system-ui, sans-serif;
+	--font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, 'Segoe UI Variable Text', 'Segoe UI',
+		system-ui, sans-serif;
+	/* Data readouts use the text face with tabular figures (see .font-mono
+	   below); true monospace is kept for code and hex dumps. */
+	--font-mono: var(--font-sans);
+	--font-code: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, 'Cascadia Mono', 'DejaVu Sans Mono',
+		monospace;
+	/* Controls; panels take the larger tier below. */
+	--radius: 10px;
+	--r-panel: 18px;
+	--ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+	--ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+	/* Text on a filled accent button. */
+	--on-signal: #ffffff;
+	--chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 14'%3E%3Cpath d='M1 1l6 6-6 6' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 @layer base {
@@ -407,4 +585,491 @@ html[data-theme='mist'] {
 }
 .maplibregl-popup.node-hover .maplibregl-popup-tip {
 	display: none;
+}
+
+/* ── Cupertino structural layer ────────────────────────────────────────────
+   Everything below is scoped to the two Cupertino themes, so the existing
+   themes render exactly as before. */
+@layer components {
+	html:is([data-theme='apple'], [data-theme='apple-dark']) {
+		body {
+			font-feature-settings: normal;
+			font-optical-sizing: auto;
+			letter-spacing: -0.003em;
+		}
+		/* Flat cool ground, no glows. The topographic contours stay — Ridgeline's
+		   signature — but drawn as a faint grey etching behind solid panels. */
+		body::before {
+			background: var(--color-ink);
+		}
+
+		::selection {
+			background: color-mix(in srgb, var(--color-signal) 28%, transparent);
+			color: inherit;
+		}
+		::-webkit-scrollbar-thumb {
+			background: var(--fill-strong);
+			background-clip: content-box;
+		}
+		::-webkit-scrollbar-thumb:hover {
+			background: var(--color-fg-faint);
+			background-clip: content-box;
+		}
+
+		/* Section label: a quiet secondary caption, not a tracked-out mono eyebrow. */
+		.label {
+			font-family: var(--font-sans);
+			font-size: 0.75rem;
+			font-weight: 500;
+			letter-spacing: 0;
+			text-transform: none;
+			color: var(--color-fg-dim);
+		}
+
+		/* Unified surface: solid panel, hairline edge, soft two-layer shadow. */
+		.panel {
+			background: var(--color-panel);
+			border: 1px solid var(--hairline);
+			border-radius: var(--r-panel);
+			box-shadow: var(--sh-panel);
+		}
+		.panel-hover {
+			transition:
+				box-shadow 0.22s var(--ease-out-quart),
+				transform 0.22s var(--ease-out-quart),
+				background-color 0.22s var(--ease-out-quart);
+		}
+		.panel-hover:hover {
+			border-color: var(--hairline);
+			background-color: var(--color-panel);
+			box-shadow: var(--sh-lift);
+			transform: translateY(-2px);
+		}
+
+		.glow-signal {
+			text-shadow: none;
+		}
+
+		.live-dot {
+			background: var(--live);
+			box-shadow: none;
+		}
+		.live-dot::after {
+			inset: 0;
+			border: 0;
+			box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 50%, transparent);
+			animation: apple-pulse 2s var(--ease-out-quart) infinite;
+		}
+
+	}
+}
+
+@keyframes apple-pulse {
+	0% {
+		box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 50%, transparent);
+		transform: none;
+		opacity: 1;
+	}
+	70% {
+		box-shadow: 0 0 0 7px transparent;
+		transform: none;
+		opacity: 1;
+	}
+	100% {
+		box-shadow: 0 0 0 0 transparent;
+		transform: none;
+		opacity: 1;
+	}
+}
+
+/* Unlayered: these must beat Tailwind utilities on the same element. */
+html:is([data-theme='apple'], [data-theme='apple-dark']) {
+	/* Large title: bold, tight tracking (bigger = more negative). */
+	h1.font-display {
+		font-weight: 700;
+		letter-spacing: -0.03em;
+	}
+	h2.font-display,
+	h3.font-display {
+		letter-spacing: -0.015em;
+	}
+
+	.font-mono {
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0;
+	}
+	pre,
+	code,
+	kbd,
+	pre.font-mono,
+	code.font-mono {
+		font-family: var(--font-code);
+	}
+
+	/* Apple tops out at bold; heavy (900) reads as a poster face. */
+	.font-900 {
+		font-weight: 700;
+	}
+	/* Large numerals: semibold, tight, like Apple's stat readouts. */
+	.tnum.font-display {
+		font-weight: 600;
+		letter-spacing: -0.025em;
+	}
+
+	/* Headings the other themes set in tracked caps: sentence case here. */
+	[data-caps] {
+		text-transform: none;
+		letter-spacing: -0.01em;
+		font-weight: 600;
+	}
+
+	/* Page-header eyebrow rule reads as instrument chrome; drop it. */
+	[data-eyebrow-rule] {
+		display: none;
+	}
+
+	/* Sidebar + mobile top bar: the one place layers overlap content → glass. */
+	[data-chrome] {
+		background: var(--glass-side);
+		backdrop-filter: saturate(180%) blur(20px);
+		-webkit-backdrop-filter: saturate(180%) blur(20px);
+		border-color: var(--hairline);
+	}
+	/* Mobile app: content scrolls beneath the translucent top and tab bars,
+	   as on iOS, so the glass has something to frost. The bars stay in flow
+	   (they size the layout); main reaches under them by their measured
+	   height and pads its content back out. */
+	[data-m-main] {
+		position: relative;
+		z-index: 0;
+		margin-top: calc(-1 * var(--m-header-h, 0px));
+		margin-bottom: calc(-1 * var(--m-nav-h, 0px));
+		padding-top: var(--m-header-h, 0px);
+		padding-bottom: var(--m-nav-h, 0px);
+		scroll-padding-top: var(--m-header-h, 0px);
+	}
+	header[data-chrome],
+	nav[data-chrome] {
+		position: relative;
+		z-index: 20;
+	}
+
+	/* Sidebar selection: a filled rounded row (macOS source list), no bar. */
+	[data-nav-link] {
+		border-radius: 8px;
+		padding-top: 0.45rem;
+		padding-bottom: 0.45rem;
+	}
+	[data-nav-link]:hover {
+		background: var(--fill);
+	}
+	[data-nav-link][data-active='true'] {
+		background: var(--fill-strong);
+	}
+	[data-nav-link][data-active='true'] svg {
+		color: var(--color-signal);
+	}
+	[data-nav-bar] {
+		display: none;
+	}
+
+	/* Bordered secondary buttons → tinted fill buttons, Apple's "gray" style. */
+	:is(button, a).border-line:not([class^='bg-']):not([class*=' bg-']) {
+		border-color: transparent;
+		background-color: var(--fill);
+	}
+	:is(button, a).border-line:not([class^='bg-']):not([class*=' bg-']):hover {
+		border-color: transparent;
+		background-color: var(--fill-strong);
+	}
+
+	input:not([type='checkbox']):not([type='radio']):not([type='range']),
+	select,
+	textarea {
+		border-radius: var(--radius);
+	}
+
+	.maplibregl-ctrl-group {
+		border: 1px solid var(--hairline);
+		border-radius: 10px;
+		box-shadow: var(--sh-panel);
+		overflow: hidden;
+	}
+
+	/* Hover bubbles are overlays: frosted, rounded, two-layer shadow. */
+	.leaflet-container .leaflet-tooltip,
+	.maplibregl-popup.node-hover .maplibregl-popup-content {
+		background: var(--glass);
+		backdrop-filter: saturate(180%) blur(20px);
+		-webkit-backdrop-filter: saturate(180%) blur(20px);
+		border: 1px solid var(--hairline);
+		border-radius: 10px;
+		color: var(--color-fg);
+		box-shadow: var(--sh-overlay);
+	}
+
+	/* Spotlight-style search and the map's node inspector are overlays:
+	   frosted, larger radius, two-layer shadow. */
+	:is([data-palette], [data-inspector]) {
+		background: var(--glass);
+		backdrop-filter: saturate(180%) blur(30px);
+		-webkit-backdrop-filter: saturate(180%) blur(30px);
+		border-color: var(--hairline);
+		border-radius: 14px;
+		box-shadow: var(--sh-overlay);
+	}
+
+	/* Search field (UISearchBar): a borderless grey capsule. */
+	[data-search] {
+		background: var(--fill);
+		border-color: transparent;
+		border-radius: 10px;
+		padding-top: 0.5rem;
+		padding-bottom: 0.5rem;
+	}
+
+	/* Segmented control (UISegmentedControl): a grey track with a raised
+	   white thumb under the selected segment. */
+	[data-seg] {
+		background: var(--fill);
+		border: 0;
+		border-radius: 9px;
+		padding: 2px;
+		gap: 0;
+	}
+	[data-seg] button {
+		border-radius: 7px;
+		font-family: var(--font-sans);
+		font-weight: 500;
+		color: var(--color-fg);
+		background: transparent;
+		transition:
+			background-color 0.2s var(--ease-out-quart),
+			box-shadow 0.2s var(--ease-out-quart);
+	}
+	[data-seg] button:is([aria-pressed='true'], [aria-selected='true'], [aria-checked='true']) {
+		background: var(--seg-on);
+		color: var(--color-fg);
+		font-weight: 600;
+		box-shadow:
+			0 3px 8px rgba(0, 0, 0, 0.12),
+			0 3px 1px rgba(0, 0, 0, 0.04);
+	}
+
+	/* Checkboxes → switches (UISwitch). Green when on, as iOS does whatever
+	   the app tint. */
+	input[type='checkbox'] {
+		appearance: none;
+		-webkit-appearance: none;
+		position: relative;
+		flex-shrink: 0;
+		width: 2.25rem;
+		height: 1.375rem;
+		margin: 0;
+		border-radius: 999px;
+		background: var(--fill-strong);
+		cursor: pointer;
+		transition: background-color 0.25s var(--ease-out-quart);
+	}
+	input[type='checkbox']::before {
+		content: '';
+		position: absolute;
+		top: 2px;
+		left: 2px;
+		width: calc(1.375rem - 4px);
+		height: calc(1.375rem - 4px);
+		border-radius: 999px;
+		background: #ffffff;
+		box-shadow:
+			0 3px 8px rgba(0, 0, 0, 0.15),
+			0 1px 1px rgba(0, 0, 0, 0.16);
+		transition: transform 0.3s var(--ease-spring);
+	}
+	input[type='checkbox']:checked {
+		background: #34c759;
+	}
+	input[type='checkbox']:checked::before {
+		transform: translateX(0.875rem);
+	}
+	input[type='checkbox']:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+	input[type='checkbox']:focus-visible {
+		outline: 3px solid color-mix(in srgb, var(--color-signal) 50%, transparent);
+		outline-offset: 1px;
+	}
+
+	/* Mobile lists → inset grouped tables (Settings): no frame, separators
+	   inset from the leading edge, a chevron on rows that navigate. */
+	[data-m-main] .divide-y.rounded-2xl {
+		border-color: transparent;
+		border-radius: 12px;
+		box-shadow: none;
+	}
+	[data-m-main] .divide-y.rounded-2xl > * {
+		border-width: 0;
+	}
+	[data-m-main] .divide-y.rounded-2xl > :not(:last-child),
+	[data-m-main] .divide-y.rounded-2xl > [data-swipe]:not(:last-child) > a {
+		background-image: linear-gradient(var(--color-line), var(--color-line));
+		background-repeat: no-repeat;
+		background-position: left 1rem bottom;
+		background-size: calc(100% - 1rem) 1px;
+	}
+	[data-m-main] .divide-y.rounded-2xl > a.flex::after,
+	[data-m-main] .divide-y.rounded-2xl > [data-swipe] > a.flex::after {
+		content: '';
+		flex-shrink: 0;
+		width: 0.45rem;
+		height: 0.8rem;
+		margin-left: 0.25rem;
+		background: var(--color-fg-faint);
+		opacity: 0.7;
+		-webkit-mask: var(--chevron) center / contain no-repeat;
+		mask: var(--chevron) center / contain no-repeat;
+	}
+
+	/* Charts in the Health/Stocks manner: hairline gridlines, rounded bars,
+	   pill meters, a slightly heavier trend line over a soft fill. */
+	[data-spark] polyline {
+		stroke-width: 2;
+	}
+	[data-bar-track] {
+		height: 0.5rem;
+		border-radius: 999px;
+		background: var(--fill);
+	}
+	[data-bar-track] > div {
+		border-radius: 999px;
+	}
+	[data-chart-bars] {
+		gap: 2px;
+		background: linear-gradient(var(--color-line) 1px, transparent 1px) 0 0 / 100% 25%;
+		border-bottom: 1px solid var(--color-line);
+	}
+	[data-chart-bars] > * > div {
+		border-radius: 3px 3px 1px 1px;
+		background: color-mix(in srgb, var(--color-signal) 85%, transparent);
+	}
+	[data-chart-bars] > * > div:hover {
+		background: var(--color-signal);
+	}
+
+	/* Large title (UINavigationBar prefersLargeTitles): the page title sits
+	   big in the content and hands off to the bar once scrolled away. */
+	[data-large-title] {
+		font-family: var(--font-display);
+		font-size: 2.125rem;
+		font-weight: 700;
+		letter-spacing: -0.03em;
+		line-height: 1.15;
+		padding: 0.5rem 1rem 0;
+		color: var(--color-fg);
+	}
+	[data-bar-title] {
+		transition: opacity 0.2s var(--ease-out-quart);
+	}
+	[data-bar-title][data-collapsed='true'] {
+		opacity: 0;
+	}
+
+	/* Full-screen maps: the canvas reaches under the frosted bars while the
+	   page's own overlays stay in the visible area; MapLibre's corner
+	   controls are pushed back out from under the bars. */
+	[data-m-main] [data-map-canvas] {
+		position: absolute;
+		inset: calc(-1 * var(--m-header-h, 0px)) 0 calc(-1 * var(--m-nav-h, 0px));
+		width: auto;
+		height: auto;
+	}
+	[data-map-canvas] :is(.maplibregl-ctrl-top-left, .maplibregl-ctrl-top-right) {
+		top: var(--m-header-h, 0px);
+	}
+	[data-map-canvas] :is(.maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right) {
+		bottom: var(--m-nav-h, 0px);
+	}
+}
+
+/* iOS Dynamic Type: in the /m app, take the root size from the system text
+   size (Settings → Display → Text Size), so rem-based type follows it the way
+   native apps do. Only Safari/WebKit understands the keyword; others keep
+   16px. The default lands at 17px, iOS's own body size. */
+@supports (font: -apple-system-body) {
+	html:has([data-m-main]) {
+		font: -apple-system-body;
+		line-height: 1.5;
+	}
+}
+
+/* Page cross-fade (see onNavigate in +layout.svelte). Quick, and the new
+   page eases in rather than popping. */
+html:is([data-theme='apple'], [data-theme='apple-dark'])::view-transition-old(root) {
+	animation: 140ms ease-out both vt-fade-out;
+}
+html:is([data-theme='apple'], [data-theme='apple-dark'])::view-transition-new(root) {
+	animation: 220ms cubic-bezier(0.25, 1, 0.5, 1) both vt-fade-in;
+}
+/* The chrome holds still while the page under it fades. */
+html:is([data-theme='apple'], [data-theme='apple-dark']) {
+	aside[data-chrome] {
+		view-transition-name: rl-side;
+	}
+	header[data-chrome] {
+		view-transition-name: rl-head;
+	}
+	nav[data-chrome] {
+		view-transition-name: rl-tabs;
+	}
+}
+@keyframes vt-fade-out {
+	to {
+		opacity: 0;
+	}
+}
+@keyframes vt-fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+}
+
+/* Reduce transparency — the OS setting, or the toggle under the theme
+   picker (data-solid). Every frosted layer turns opaque in every theme:
+   with the blur gone, a see-through bar would leave text over text. The
+   press-and-hold backdrop keeps its dim; it is a scrim, not a surface. */
+@media (prefers-reduced-transparency: reduce) {
+	html *:not([data-cm-backdrop]) {
+		backdrop-filter: none !important;
+		-webkit-backdrop-filter: none !important;
+	}
+	html [data-chrome],
+	html [class*='backdrop-blur']:not([data-cm-backdrop]),
+	html :is([data-palette], [data-inspector], [data-hud], .node-sheet) {
+		background-color: var(--color-ink-2) !important;
+	}
+	html :is([data-palette], [data-inspector], [data-hud], .node-sheet) {
+		background-image: none !important;
+	}
+}
+html[data-solid] *:not([data-cm-backdrop]) {
+	backdrop-filter: none !important;
+	-webkit-backdrop-filter: none !important;
+}
+html[data-solid] :is([data-chrome], [data-palette], [data-inspector], [data-hud], .node-sheet),
+html[data-solid] [class*='backdrop-blur']:not([data-cm-backdrop]) {
+	background-color: var(--color-ink-2) !important;
+	background-image: none !important;
+}
+html[data-solid] [data-cm-backdrop] {
+	backdrop-filter: none !important;
+	-webkit-backdrop-filter: none !important;
+	background: color-mix(in srgb, var(--color-ink) 75%, transparent) !important;
+}
+@media (prefers-reduced-transparency: reduce) {
+	html [data-cm-backdrop] {
+		backdrop-filter: none !important;
+		-webkit-backdrop-filter: none !important;
+		background: color-mix(in srgb, var(--color-ink) 75%, transparent) !important;
+	}
 }

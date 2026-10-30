@@ -2,18 +2,24 @@
 	// A compact SVG line sparkline. Renders the trend of a numeric series; null/
 	// undefined entries are skipped (gaps bridged). Auto-scales to the value range
 	// with a little padding. Width is fluid (100%); height is fixed via the prop.
+	// Press and drag across it (or hover with a mouse) to read a sample, Health-
+	// style: `format` renders the value, `labels` (one per value) says when.
 	let {
 		values,
 		color = 'var(--color-signal)',
 		height = 40,
 		fill = true,
-		strokeWidth = 1.5
+		strokeWidth = 1.5,
+		labels,
+		format = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2))
 	}: {
 		values: (number | null | undefined)[];
 		color?: string;
 		height?: number;
 		fill?: boolean;
 		strokeWidth?: number;
+		labels?: string[];
+		format?: (v: number) => string;
 	} = $props();
 
 	// Use a fixed viewBox width and let SVG scale it to the container.
@@ -60,10 +66,43 @@
 			: ''
 	);
 	const gid = `spark-${Math.random().toString(36).slice(2, 9)}`;
+
+	// Scrubbing: the nearest real sample to the pointer.
+	let scrub = $state<{ v: number; i: number } | null>(null);
+	let pressed = false;
+	function pick(e: PointerEvent) {
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		const at = ((e.clientX - r.left) / r.width) * n;
+		let best = pts[0];
+		for (const p of pts) if (Math.abs(p.i - at) < Math.abs(best.i - at)) best = p;
+		scrub = best;
+	}
+	function down(e: PointerEvent) {
+		pressed = true;
+		pick(e);
+	}
+	function move(e: PointerEvent) {
+		if (pressed || e.pointerType === 'mouse') pick(e);
+	}
+	function up() {
+		pressed = false;
+		scrub = null;
+	}
+	const sx = $derived(scrub ? (x(scrub.i) / W) * 100 : 0);
 </script>
 
 {#if pts.length >= 2}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="relative touch-pan-y select-none"
+		onpointerdown={down}
+		onpointermove={move}
+		onpointerup={up}
+		onpointercancel={up}
+		onpointerleave={up}
+	>
 	<svg
+		data-spark
 		viewBox="0 0 {W} {height}"
 		preserveAspectRatio="none"
 		class="block w-full"
@@ -89,6 +128,21 @@
 			vector-effect="non-scaling-stroke"
 		/>
 	</svg>
+	{#if scrub}
+		<div class="pointer-events-none absolute inset-y-0 w-px" style="left:{sx}%;background:color-mix(in srgb, var(--color-fg) 35%, transparent)"></div>
+		<div
+			class="pointer-events-none absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-[var(--color-panel)]"
+			style="left:{sx}%;top:{y(scrub.v)}px;background:{color}"
+		></div>
+		<div
+			data-scrub
+			class="bg-ink-2 border-line/60 text-fg pointer-events-none absolute bottom-full z-10 mb-1 rounded-lg border px-2 py-1 font-mono text-[0.68rem] whitespace-nowrap shadow-lg tnum"
+			style="left:clamp(0px, calc({sx}% - 40px), calc(100% - 80px))"
+		>
+			<b>{format(scrub.v)}</b>{#if labels?.[scrub.i]}<span class="text-fg-faint"> · {labels[scrub.i]}</span>{/if}
+		</div>
+	{/if}
+	</div>
 {:else}
 	<div class="text-fg-faint flex items-center text-[0.62rem]" style="height:{height}px">
 		collecting…

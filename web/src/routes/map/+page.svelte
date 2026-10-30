@@ -10,16 +10,16 @@
 	import { roleLabel } from '$lib/format';
 	import { theme } from '$lib/theme.svelte';
 	import { favorites } from '$lib/favorites.svelte';
-	import { basemapStyle, basemapHasHillshade, basemapHasLocalTerrain, collapseAttribution, ensureLocalTerrain } from '$lib/map-basemap';
+	import { basemapStyle, basemapHasHillshade, basemapHasLocalTerrain, collapseAttribution, ensureLocalTerrain, basemapHasTint, ensureTint } from '$lib/map-basemap';
 	import { basemap } from '$lib/basemap.svelte';
 	import { ensureHillshade } from '$lib/map-hillshade';
-	import { isLight, inkColor, ROLE_HEX, FAV_COLOR, SEGMENT_COLOR, locatedNodes } from '$lib/map-util';
+	import { isLight, inkColor, clusterColors, ROLE_HEX, FAV_COLOR, SEGMENT_COLOR, locatedNodes } from '$lib/map-util';
 	import { attachHoverLabel } from '$lib/map-hover';
 	import { computeCoverage, covered, distKm, type CoverageResult } from '$lib/coverage';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import MapRoleFilter from '$lib/components/MapRoleFilter.svelte';
 	import BasemapSelector from '$lib/components/BasemapSelector.svelte';
-	import NodeModal from '$lib/components/NodeModal.svelte';
+	import NodeInspector from '$lib/components/NodeInspector.svelte';
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
 	import CopyMapLink from '$lib/components/CopyMapLink.svelte';
 	import { hasWebGL } from '$lib/webgl';
@@ -34,7 +34,8 @@
 	let didFit = false;
 	let allLocated = $state<Node[]>([]);
 	let selectedRoles = $state(new Set(['Repeater', 'RoomServer', 'ChatNode', 'Sensor']));
-	let nodeKey = $state<string | null>(null);
+	// ?node=<pubkey> (e.g. a row's "Show on map") opens that node's inspector.
+	let nodeKey = $state<string | null>(page.url.searchParams.get('node'));
 
 	const visible = $derived(allLocated.filter((n) => selectedRoles.has(n.role)));
 
@@ -167,6 +168,7 @@
 		if (!map || !map.isStyleLoaded()) return;
 		if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
 		if (basemapHasLocalTerrain(currentBasemap)) ensureLocalTerrain(map, basemapLight);
+		if (basemapHasTint(currentBasemap)) ensureTint(map, basemapLight);
 		if (map.getSource('nodes')) return;
 		addLayers();
 		updateSource();
@@ -175,7 +177,14 @@
 
 	$effect(() => {
 		void theme.id;
+		void theme.accent;
 		const light = isLight();
+		if (map?.getLayer('clusters')) {
+			const c = clusterColors();
+			map.setPaintProperty('clusters', 'circle-color', c.fill);
+			map.setPaintProperty('clusters', 'circle-stroke-color', c.stroke);
+			map.setPaintProperty('cluster-count', 'text-color', c.text);
+		}
 		if (!map || light === basemapLight) return;
 		basemapLight = light;
 		map.setStyle(basemapStyle(currentBasemap, light));
@@ -237,11 +246,11 @@
 			source: 'nodes',
 			filter: ['has', 'point_count'],
 			paint: {
-				'circle-color': '#159e8b',
+				'circle-color': clusterColors().fill,
 				'circle-opacity': 0.85,
 				'circle-radius': ['step', ['get', 'point_count'], 13, 10, 18, 30, 24],
 				'circle-stroke-width': 1.5,
-				'circle-stroke-color': '#34e3c4'
+				'circle-stroke-color': clusterColors().stroke
 			}
 		});
 		map.addLayer({
@@ -254,7 +263,7 @@
 				'text-font': ['Noto Sans Regular'],
 				'text-size': 12
 			},
-			paint: { 'text-color': '#04140f' }
+			paint: { 'text-color': clusterColors().text }
 		});
 		// Amber ring around favorited individual nodes, drawn beneath the dots.
 		map.addLayer({
@@ -396,6 +405,7 @@
 			map?.resize();
 			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map!, basemapLight);
 			if (basemapHasLocalTerrain(currentBasemap)) ensureLocalTerrain(map!, basemapLight);
+			if (basemapHasTint(currentBasemap)) ensureTint(map!, basemapLight);
 			collapseAttribution(map!);
 			addLayers();
 			bindEvents();
@@ -429,6 +439,7 @@
 
 <div class="px-6 py-6 md:px-10">
 	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
+		<NodeInspector pubkey={nodeKey} onclose={() => (nodeKey = null)} />
 		{#if !webglOk}
 			<FallbackMap
 				nodes={allLocated}
@@ -528,7 +539,6 @@
 	</div>
 </div>
 
-<NodeModal pubkey={nodeKey} onclose={() => (nodeKey = null)} />
 
 <style>
 	:global(.maplibregl-popup-content) {

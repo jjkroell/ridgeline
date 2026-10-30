@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { scrub } from '$lib/scrub';
+	import ScrubReadout from '$lib/components/ScrubReadout.svelte';
+	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { onMount } from 'svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { api, type MeshAnalytics, type Node } from '$lib/api';
@@ -308,6 +311,7 @@
 	const radioLabel = $derived(
 		data ? `SF${data.radio.SpreadingFactor} · BW${(data.radio.BandwidthHz / 1000).toFixed(1)}k · CR4/${data.radio.CodingRate}` : ''
 	);
+	let barI = $state<number | null>(null);
 </script>
 
 <Seo
@@ -339,7 +343,7 @@
 	{/if}
 
 	{#if loading && !data}
-		<div class="text-fg-faint px-5 py-16 text-center text-sm">Computing mesh analytics…</div>
+		<div class="px-5 py-6"><Skeleton variant="detail" rows={5} /></div>
 	{:else if data}
 		<!-- KPI strip -->
 		<KpiStrip items={kpis} />
@@ -347,7 +351,7 @@
 		<!-- Channel utilisation timeline -->
 		<section class="panel rise mt-6" style="animation-delay:120ms">
 			<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-				<h2 class="font-display text-fg text-sm font-700 tracking-wide">CHANNEL UTILISATION & RELAY HEALTH</h2>
+				<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Channel utilisation & relay health</h2>
 				<span class="font-mono text-fg-faint text-[0.68rem]">{bucketMin}-min buckets · airtime + link score</span>
 			</div>
 			<div class="px-5 py-5">
@@ -355,17 +359,19 @@
 					<div class="text-fg-faint py-8 text-center text-sm">No traffic in window.</div>
 				{:else}
 					<div class="relative h-[150px]">
-						<div class="flex h-full items-end gap-px">
-							{#each data.airtime as b (b.timestamp)}
-								<Tooltip
-									text="{fmtTime(b.timestamp)} · {pct(b.utilPct)} util · {b.transmissions} tx · {b.relayTx} relayed{b.avgLinkScore != null ? ` · link ${score(b.avgLinkScore)}` : ''}"
-									class="flex-1 items-end"
-								>
-									<div
-										class="bg-signal/70 hover:bg-signal w-full rounded-t-[2px] transition-colors"
-										style="height:{Math.max(2, (b.utilPct / maxUtil) * 150)}px"
-									></div>
-								</Tooltip>
+						{#if barI != null && data.airtime[barI]}
+							{@const b = data.airtime[barI]}
+							<ScrubReadout at={((barI + 0.5) / data.airtime.length) * 100}>
+								<b>{pct(b.utilPct)}</b><span class="text-fg-faint"> · {fmtTime(b.timestamp)} · {b.transmissions} tx · {b.relayTx} relayed{b.avgLinkScore != null ? ` · link ${score(b.avgLinkScore)}` : ''}</span>
+							</ScrubReadout>
+						{/if}
+						<div data-chart-bars class="flex h-full items-end gap-px" use:scrub={{ onpick: (i) => (barI = i) }}>
+							{#each data.airtime as b, i (b.timestamp)}
+								<div
+									data-scrub-i={i}
+									class="flex-1 rounded-t-[2px] {barI === i ? 'bg-signal' : 'bg-signal/70'}"
+									style="height:{Math.max(2, (b.utilPct / maxUtil) * 150)}px"
+								></div>
 							{/each}
 						</div>
 						{#if linkTrend}
@@ -391,7 +397,7 @@
 		<div class="mt-6 grid gap-6 lg:grid-cols-2">
 			<section class="panel rise" style="animation-delay:180ms">
 				<div class="border-line/70 border-b px-5 py-3.5">
-					<h2 class="font-display text-fg text-sm font-700 tracking-wide">PAYLOAD TYPES</h2>
+					<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Payload types</h2>
 				</div>
 				<div class="py-3">
 					{#each data.payloadTypes as p (p.label)}
@@ -401,7 +407,7 @@
 			</section>
 			<section class="panel rise" style="animation-delay:220ms">
 				<div class="border-line/70 border-b px-5 py-3.5">
-					<h2 class="font-display text-fg text-sm font-700 tracking-wide">ROUTE TYPES</h2>
+					<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Route types</h2>
 				</div>
 				<div class="py-3">
 					{#each data.routeTypes as p (p.label)}
@@ -415,7 +421,7 @@
 		<div class="mt-6 grid gap-6 lg:grid-cols-2">
 			<section class="panel rise" style="animation-delay:260ms">
 				<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-					<h2 class="font-display text-fg text-sm font-700 tracking-wide">LINK-SCORE DISTRIBUTION</h2>
+					<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Link-score distribution</h2>
 					<span class="font-mono text-fg-faint text-[0.68rem]">decode probability</span>
 				</div>
 				<div class="py-3">
@@ -426,7 +432,7 @@
 			</section>
 			<section class="panel rise" style="animation-delay:300ms">
 				<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-					<h2 class="font-display text-fg text-sm font-700 tracking-wide">SNR DISTRIBUTION</h2>
+					<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">SNR distribution</h2>
 					<span class="font-mono text-fg-faint text-[0.68rem]">dB</span>
 				</div>
 				<div class="py-3">
@@ -440,7 +446,7 @@
 		<!-- Top relays -->
 		<section class="panel rise mt-6" style="animation-delay:340ms">
 			<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-				<h2 class="font-display text-fg text-sm font-700 tracking-wide">BUSIEST RELAYS</h2>
+				<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Busiest relays</h2>
 				<span class="font-mono text-fg-faint text-[0.68rem]">forwarded tx · est. airtime contributed</span>
 			</div>
 			<div class="divide-line/50 divide-y">
@@ -547,7 +553,7 @@
 		<!-- Observer coverage (full width — includes clock skew) -->
 		<section class="panel rise mt-6" style="animation-delay:420ms">
 			<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-				<h2 class="font-display text-fg text-sm font-700 tracking-wide">OBSERVER COVERAGE</h2>
+				<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Observer coverage</h2>
 				<span class="font-mono text-fg-faint text-[0.68rem]">distinct · direct · clock skew · receptions</span>
 			</div>
 			<div class="divide-line/50 divide-y">
@@ -596,7 +602,7 @@
 			</section>
 			<section class="panel rise" style="animation-delay:500ms">
 				<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-					<h2 class="font-display text-fg text-sm font-700 tracking-wide">DIRECT-REACH REDUNDANCY</h2>
+					<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Direct-reach redundancy</h2>
 					<span class="font-mono text-fg-faint text-[0.68rem]">observers per node</span>
 				</div>
 				<div class="py-3">
@@ -613,7 +619,7 @@
 
 		<section class="panel rise mt-6" style="animation-delay:540ms">
 			<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-				<h2 class="font-display text-fg text-sm font-700 tracking-wide">CLOCK HEALTH</h2>
+				<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Clock health</h2>
 				<span class="font-mono text-fg-faint text-[0.68rem]">
 					{clockIssues.length} to check · {clockOk} in sync
 				</span>
@@ -650,7 +656,7 @@
 
 		<section class="panel rise mt-6" style="animation-delay:580ms">
 			<div class="border-line/70 flex items-center justify-between border-b px-5 py-3.5">
-				<h2 class="font-display text-fg text-sm font-700 tracking-wide">FLOOD SCOPING</h2>
+				<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Flood scoping</h2>
 				<span class="font-mono text-fg-faint text-[0.68rem]">
 					{floodCounts.pct.toFixed(1)}% of floods region-scoped
 				</span>

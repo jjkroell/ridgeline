@@ -11,9 +11,11 @@
 
 	const groups = $derived(groupLive(live.events));
 	let selected = $state<LiveGroup | null>(null);
+	// Packets in the last minute; live.events is the rolling buffer the feed shows.
+	const perMin = $derived(live.events.filter((e) => Date.now() - +new Date(e.receivedAt) < 60_000).length);
 </script>
 
-<WidgetShell title={m.title} icon={m.icon} href="{base}/live" linkLabel="View all →">
+<WidgetShell title={m.title} icon={m.icon} href="{base}/live" linkLabel="View all →" stat={perMin} statLabel="packets in the last minute">
 	<div class="divide-line/50 divide-y">
 		{#if groups.length === 0}
 			<div class="text-fg-faint px-5 py-10 text-center text-sm">Waiting for packets…</div>

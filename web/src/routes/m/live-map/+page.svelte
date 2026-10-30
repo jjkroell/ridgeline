@@ -10,7 +10,7 @@
 	import { api, type Node } from '$lib/api';
 	import { live, hashColor } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
-	import { basemapStyle, basemapHasHillshade, basemapHasLocalTerrain, collapseAttribution, ensureLocalTerrain } from '$lib/map-basemap';
+	import { basemapStyle, basemapHasHillshade, basemapHasLocalTerrain, collapseAttribution, ensureLocalTerrain, basemapHasTint, ensureTint } from '$lib/map-basemap';
 	import { basemap } from '$lib/basemap.svelte';
 	import { ensureHillshade } from '$lib/map-hillshade';
 	import { ROLE_HEX, SEGMENT_COLOR, locatedNodes } from '$lib/map-util';
@@ -20,12 +20,21 @@
 	import { parseMapView, hasMapView, shareUrl, withSavedCamera, saveCamera } from '$lib/map-share';
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
 	import { hasWebGL } from '$lib/webgl';
+	import NodeSheet from '$lib/mobile/NodeSheet.svelte';
+	import LivePill from '$lib/components/LivePill.svelte';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
 	let webglOk = $state(true);
 	let fbBanner = $state(true); // WebGL-free banner open? (offsets the basemap selector below it)
 	let nodes = $state<Node[]>([]);
+	// A tapped node opens a bottom sheet over the map (the map stays in view);
+	// its Details button goes on to the full node page.
+	let sheetNode = $state<Node | null>(null);
+	function openNode(pk: string) {
+		sheetNode = nodes.find((n) => n.publicKey === pk) ?? null;
+		if (!sheetNode) goto('/m/nodes/' + pk);
+	}
 	let basemapLight = false;
 	let didFit = false;
 
@@ -172,7 +181,11 @@
 		});
 		map.on('click', 'node-hit', (e) => {
 			const pk = e.features?.[0]?.properties?.pubkey as string | undefined;
-			if (pk) goto('/m/nodes/' + pk);
+			if (pk) openNode(pk);
+		});
+		// Tapping empty map dismisses the node sheet.
+		map.on('click', (e) => {
+			if (sheetNode && !map?.queryRenderedFeatures(e.point, { layers: ['node-hit'] }).length) sheetNode = null;
 		});
 		map.on('mouseenter', 'node-hit', () => { if (map) map.getCanvas().style.cursor = 'pointer'; });
 	}
@@ -181,6 +194,7 @@
 		if (!map || !map.isStyleLoaded()) return;
 		if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
 		if (basemapHasLocalTerrain(currentBasemap)) ensureLocalTerrain(map, basemapLight);
+		if (basemapHasTint(currentBasemap)) ensureTint(map, basemapLight);
 		if (!map.getSource('nodes')) addLayers();
 	}
 	function fit() {
@@ -240,6 +254,7 @@
 			map.resize();
 			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map, basemapLight);
 			if (basemapHasLocalTerrain(currentBasemap)) ensureLocalTerrain(map, basemapLight);
+			if (basemapHasTint(currentBasemap)) ensureTint(map, basemapLight);
 			addLayers();
 			collapseAttribution(map);
 			refresh();
@@ -260,17 +275,19 @@
 			zoom={7}
 			live
 			bind:bannerOpen={fbBanner}
-			onselect={(k) => goto('/m/nodes/' + k)}
+			onselect={(k) => openNode(k)}
 			notice="WebGL is disabled — showing the basic live map. Enable WebGL for terrain and the full-fidelity animation."
 		/>
 		<BasemapSelector compact posClass={fbBanner ? 'top-16 left-3' : 'top-3 left-3'} />
 	{:else}
-	<div bind:this={mapEl} class="h-full w-full"></div>
+	<div bind:this={mapEl} data-map-canvas class="h-full w-full"></div>
 	<div class="absolute top-3 left-3 z-20"><CopyMapLink url={linkUrl} compact /></div>
-	<div class="border-line/60 bg-ink-2/80 absolute top-3 left-3 z-10 flex items-center gap-2 rounded-full border px-3 py-1.5 backdrop-blur-md">
-		{#if live.connected}<span class="live-dot"></span>{:else}<span class="bg-coral/70 h-2 w-2 rounded-full"></span>{/if}
-		<span class="text-fg-dim font-mono text-[0.62rem] tnum">{nodes.length} nodes · {pulseCount} live</span>
+	<div class="pointer-events-none absolute top-3 right-3 left-[7.5rem] z-10 flex justify-center">
+		<LivePill detail="{nodes.length} nodes on the map · {pulseCount} animating now" onnode={openNode} />
 	</div>
 	<BasemapSelector compact posClass="top-14 left-3" />
+	{/if}
+	{#if sheetNode}
+		<NodeSheet node={sheetNode} onclose={() => (sheetNode = null)} />
 	{/if}
 </div>

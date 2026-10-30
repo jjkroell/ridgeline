@@ -16,9 +16,10 @@
 			.map((k) => nodes.find((n) => n.publicKey.toUpperCase() === k))
 			.filter((n): n is Node => !!n)
 	);
+	const onlineFavs = $derived(favNodes.filter((n) => nodeStatus(n).tier === 'online').length);
 </script>
 
-<WidgetShell title={m.title} icon={m.icon} color="amber" fill href="{base}/nodes" linkLabel="Manage →">
+<WidgetShell title={m.title} icon={m.icon} color="amber" fill href="{base}/nodes" linkLabel="Manage →" stat={favNodes.length ? onlineFavs : null} statLabel="of {favNodes.length} starred online">
 	{#if favNodes.length}
 		<div class="divide-line/50 divide-y">
 			{#each favNodes as n (n.publicKey)}

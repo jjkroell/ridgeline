@@ -47,6 +47,8 @@ export class NodeFilters {
 	segment = $state<SegmentKey>('all');
 	favOnly = $state(false);
 	claimedOnly = $state(false);
+	/** 'heard' = most recent first (favourites pinned); 'name' = A to Z. */
+	sort = $state<'heard' | 'name'>('heard');
 
 	/** Filters in effect, excluding the search box (which is always visible). */
 	get activeCount(): number {
@@ -94,6 +96,12 @@ export class NodeFilters {
 			);
 		});
 
+		// A–Z as Contacts does it: letters first, then everything else under #.
+		if (this.sort === 'name')
+			return [...list].sort(
+				(a, b) => +(indexLetter(a) === '#') - +(indexLetter(b) === '#') || nameKey(a).localeCompare(nameKey(b))
+			);
+
 		// When filtering to claimed nodes, ownership leads: your own nodes first,
 		// then other operators'. Otherwise favorites pin to the top. Ties break on
 		// lastHeard — the same value the lists render in their "Heard" column, so
@@ -112,4 +120,13 @@ export class NodeFilters {
 			return (lastHeard(b) ?? '').localeCompare(lastHeard(a) ?? '');
 		});
 	}
+}
+
+/** What an A–Z list sorts and indexes by: the name, or the key when unnamed. */
+export const nameKey = (n: Node) => (n.name || n.publicKey).trim().toLocaleLowerCase();
+
+/** The index letter for a row: A–Z, or # for anything else (digits, emoji). */
+export function indexLetter(n: Node): string {
+	const c = nameKey(n).normalize('NFD').charAt(0).toUpperCase();
+	return c >= 'A' && c <= 'Z' ? c : '#';
 }

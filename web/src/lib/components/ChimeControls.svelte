@@ -39,6 +39,11 @@
 	{/if}
 </button>
 </Tooltip>
+{#if chime.blocked}
+	<!-- The browser holds audio until the page is interacted with; any click,
+	     tap or key press anywhere starts it (see live-audio.svelte.ts). -->
+	<div class="text-amber mt-1 text-center text-[0.62rem] leading-snug">Tap or click anywhere to start sound</div>
+{/if}
 
 {#if chime.on}
 	<div class="border-line/60 mt-2 space-y-2 border-t pt-2">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Skeleton from '$lib/components/Skeleton.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
@@ -41,7 +42,7 @@
 
 <div class="px-6 py-6 md:px-10">
 	{#if loading}
-		<div class="panel text-fg-faint px-5 py-12 text-center text-sm">Loading…</div>
+		<div class="panel px-5 py-6"><Skeleton variant="detail" rows={4} /></div>
 	{:else}
 		<NodeDetail {pubkey} nodes={allNodes} />
 	{/if}

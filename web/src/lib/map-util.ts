@@ -8,6 +8,19 @@ export function isLight(): boolean {
 	return document.documentElement.classList.contains('theme-light');
 }
 
+/** Cluster bubble + location-pin colours. The Cupertino themes take their
+ *  blue accent; every other theme keeps the original signal-teal. */
+export function clusterColors(): { fill: string; stroke: string; text: string; pin: string } {
+	const root = document.documentElement;
+	const t = root.dataset.theme;
+	if (t === 'apple' || t === 'apple-dark') {
+		// The accent is user-chosen (data-accent), so read the resolved token.
+		const a = getComputedStyle(root).getPropertyValue('--color-signal').trim() || '#0a84ff';
+		return { fill: a, stroke: t === 'apple' ? '#ffffff' : '#000000', text: '#ffffff', pin: a };
+	}
+	return { fill: '#159e8b', stroke: '#34e3c4', text: '#04140f', pin: '#34e3c4' };
+}
+
 /** Current --color-ink value (used as the node-dot stroke), with a dark fallback. */
 export function inkColor(): string {
 	return getComputedStyle(document.documentElement).getPropertyValue('--color-ink').trim() || '#070a0e';

@@ -56,6 +56,21 @@ const ROLE_LABELS: Record<string, string> = {
 	Observer: 'Observer'
 };
 
+// Short payload-type labels for compact badges (feed rows, PayloadTag).
+const PAYLOAD_ABBR: Record<string, string> = {
+	Advert: 'Adv',
+	TextMessage: 'DM',
+	GroupText: 'Grp Msg',
+	Request: 'Req',
+	Response: 'Resp',
+	Control: 'Ctrl',
+	AnonRequest: 'AnonRqst'
+};
+
+export function payloadAbbr(type: string): string {
+	return PAYLOAD_ABBR[type] ?? type;
+}
+
 export function roleColor(role: string): string {
 	return ROLE_COLORS[role] ?? 'var(--color-fg-faint)';
 }

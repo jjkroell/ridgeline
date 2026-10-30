@@ -7,6 +7,13 @@
 // cards below it are user-arrangeable.
 
 export type WidgetSize = 'full' | 'half';
+/** iOS-widget size a card is drawn at in the Cupertino theme (other themes ignore it). */
+export type WidgetShape = 'small' | 'medium' | 'large';
+export const SHAPES: { id: WidgetShape; label: string }[] = [
+	{ id: 'small', label: 'S' },
+	{ id: 'medium', label: 'M' },
+	{ id: 'large', label: 'L' }
+];
 
 export interface WidgetMeta {
 	id: string;
@@ -58,6 +65,7 @@ const KEY = 'ridgeline-overview-layout';
 interface Entry {
 	id: string;
 	visible: boolean;
+	shape?: WidgetShape;
 }
 
 function defaults(): Entry[] {
@@ -90,7 +98,8 @@ class Overview {
 		for (const s of saved) {
 			const e = s as Partial<Entry>;
 			if (e && typeof e.id === 'string' && META.has(e.id) && !seen.has(e.id)) {
-				out.push({ id: e.id, visible: e.visible !== false });
+				const shape = SHAPES.some((x) => x.id === e.shape) ? e.shape : undefined;
+				out.push({ id: e.id, visible: e.visible !== false, ...(shape ? { shape } : {}) });
 				seen.add(e.id);
 			}
 		}
@@ -110,6 +119,16 @@ class Overview {
 
 	isVisible(id: string): boolean {
 		return this.entries.find((e) => e.id === id)?.visible ?? false;
+	}
+
+	/** Cupertino widget size: the saved choice, else large for full-width cards. */
+	shapeOf(id: string): WidgetShape {
+		return this.entries.find((e) => e.id === id)?.shape ?? (META.get(id)?.size === 'full' ? 'large' : 'medium');
+	}
+
+	setShape(id: string, shape: WidgetShape) {
+		this.entries = this.entries.map((e) => (e.id === id ? { ...e, shape } : e));
+		this.#persist();
 	}
 
 	toggle(id: string) {

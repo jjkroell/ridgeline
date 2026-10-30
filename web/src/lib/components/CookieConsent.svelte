@@ -73,7 +73,7 @@
 			{:else}
 				<!-- Customize view: granular toggles. -->
 				<div class="flex flex-col gap-3">
-					<h2 class="font-display text-fg text-sm font-700 tracking-wide">COOKIE PREFERENCES</h2>
+					<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Cookie preferences</h2>
 					<label class="border-line/60 flex items-start gap-3 rounded-[var(--radius)] border px-3 py-2.5 opacity-80">
 						<input type="checkbox" checked disabled class="mt-0.5 accent-[var(--color-signal)]" />
 						<span class="min-w-0">

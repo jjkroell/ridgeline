@@ -2,6 +2,7 @@
 	import '../app.css';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
+	import { onNavigate } from '$app/navigation';
 	import { live } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import { timeMode } from '$lib/time-mode.svelte';
@@ -14,16 +15,37 @@
 	import { consent } from '$lib/consent.svelte';
 	import { env } from '$lib/env.svelte';
 	import DevBanner from '$lib/components/DevBanner.svelte';
+	import Logo from '$lib/components/Logo.svelte';
+	import CommandPalette from '$lib/components/CommandPalette.svelte';
+	import ContextMenu from '$lib/mobile/ContextMenu.svelte';
+	import Hud from '$lib/components/Hud.svelte';
+	import { consumeEdgeBack } from '$lib/mobile/edge-back';
 	import { syncAnalytics, trackWebGLOnce, analyticsInjected } from '$lib/analytics';
 	import AnnouncementModal from '$lib/components/AnnouncementModal.svelte';
 	import CookieConsent from '$lib/components/CookieConsent.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
-	import ThemePicker from '$lib/components/ThemePicker.svelte';
+	import ThemeButton from '$lib/components/ThemeButton.svelte';
 	import MeshRadio from '$lib/components/MeshRadio.svelte';
 	import { hasWebGL } from '$lib/webgl';
 
 	let { children } = $props();
+
+	// Cupertino: a short cross-fade between pages via the View Transitions
+	// API. Same-page navigations (filters, query changes) and Reduce Motion
+	// skip it; browsers without the API just navigate as before.
+	onNavigate((nav) => {
+		if (consumeEdgeBack()) return;
+		if (!theme.isApple || !document.startViewTransition) return;
+		if (nav.from?.url.pathname === nav.to?.url.pathname) return;
+		if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+		return new Promise((resolve) => {
+			document.startViewTransition(async () => {
+				resolve();
+				await nav.complete;
+			});
+		});
+	});
 
 	onMount(() => {
 		theme.init();
@@ -69,6 +91,9 @@
 	// from everyone else.
 	const nav = $derived(navItems.filter((item) => !item.adminOnly || auth.isAdmin));
 
+	let palette = $state<CommandPalette>();
+	const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+
 	function active(href: string, exact = false): boolean {
 		const p = page.url.pathname;
 		return exact ? p === href : p === href || p.startsWith(href + '/');
@@ -109,10 +134,14 @@
 <AnnouncementModal />
 <!-- Cookie-consent banner (self-guards on consent.open); shown on desktop + /m. -->
 <CookieConsent />
+<!-- Row actions (press and hold on /m, right-click on desktop) + the "Copied" pop-up. -->
+<ContextMenu />
+<Hud />
 <!-- The /m app layout mounts its own ConfirmDialog; only render one here on the
      desktop app so the confirmer singleton doesn't drive two stacked dialogs. -->
 {#if !isMobileApp}
 	<ConfirmDialog />
+	<CommandPalette bind:this={palette} pages={nav} />
 {/if}
 
 {#if isMobileApp}
@@ -121,45 +150,38 @@
 <div class="flex min-h-screen">
 	<!-- Sidebar -->
 	<aside
+		data-chrome
 		class="border-line/80 bg-ink-2/70 sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col border-r backdrop-blur-sm md:flex"
 	>
 		<a href="/" class="group flex items-center gap-3 px-5 pt-6 pb-5">
-			<svg viewBox="0 0 32 32" class="h-8 w-8" aria-hidden="true">
-				<path
-					d="M3 23 L11 11 L16 17 L22 7 L29 23"
-					fill="none"
-					stroke="var(--color-signal)"
-					stroke-width="2.2"
-					stroke-linejoin="round"
-					stroke-linecap="round"
-				/>
-				<path
-					d="M3 27 L11 17 L16 22 L22 14 L29 27"
-					fill="none"
-					stroke="var(--color-amber)"
-					stroke-width="1.4"
-					stroke-linejoin="round"
-					stroke-linecap="round"
-					opacity="0.6"
-				/>
-				<circle cx="22" cy="7" r="2.4" fill="var(--color-signal)" />
-			</svg>
+			<Logo class="h-8 w-8" />
 			<div class="leading-none">
 				<div class="font-display text-fg text-[1.05rem] font-900 tracking-tight">RIDGELINE</div>
 				<div class="label mt-1">MeshCore Observatory</div>
 			</div>
 		</a>
 
+		<button
+			onclick={() => palette?.show()}
+			class="border-line text-fg-faint hover:text-fg-dim hover:border-line-bright mx-3 flex items-center gap-2 rounded-[var(--radius)] border px-3 py-1.5 text-xs transition-colors"
+		>
+			<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
+			<span class="flex-1 text-left">Search</span>
+			<kbd class="font-sans text-[0.65rem]">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
+		</button>
+
 		<nav class="mt-3 flex flex-col gap-0.5 px-3">
 			{#each nav as item (item.href)}
 				{@const on = active(item.href, item.exact)}
 				<a
 					href={item.href}
+					data-nav-link
+					data-active={on}
 					class="group relative flex items-center gap-3 rounded-[var(--radius)] px-3 py-2.5 text-sm transition-colors
 						{on ? 'text-fg' : 'text-fg-dim hover:text-fg'}"
 				>
 					{#if on}
-						<span class="bg-signal absolute top-1/2 left-0 h-5 w-[2px] -translate-y-1/2 rounded-full"
+						<span data-nav-bar class="bg-signal absolute top-1/2 left-0 h-5 w-[2px] -translate-y-1/2 rounded-full"
 						></span>
 					{/if}
 					<svg
@@ -229,7 +251,8 @@
 					</a>
 				{/if}
 			</div>
-			<ThemePicker />
+			<!-- Theme picker opens on demand rather than filling the sidebar foot. -->
+			<div class="mt-2"><ThemeButton /></div>
 			<!-- Receiver status: live/offline, and what it is listening on. -->
 			<div class="border-line mt-3 border-t pt-3">
 				<div class="flex items-center gap-2">
@@ -253,9 +276,9 @@
 		<!-- Non-production banner (self-guards; only on a dev/staging instance). -->
 		<DevBanner />
 		<!-- Mobile top bar -->
-		<header class="border-line bg-ink-2/80 border-b backdrop-blur-sm md:hidden">
+		<header data-chrome class="border-line bg-ink-2/80 border-b backdrop-blur-sm md:hidden">
 			<div class="flex items-center gap-4 px-4 py-3">
-				<a href="/" class="font-display font-900 tracking-tight">RIDGELINE</a>
+				<a href="/" class="font-display flex items-center gap-2 font-900 tracking-tight"><Logo class="h-6 w-6" />RIDGELINE</a>
 				<button
 					onclick={() => (navOpen = !navOpen)}
 					class="border-line text-fg-dim hover:text-fg ml-auto -my-1 flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius)] border"
@@ -285,6 +308,7 @@
 								: 'text-fg-dim hover:text-fg'}">{item.label}</a
 						>
 					{/each}
+					<div class="col-span-2 px-1 pt-2"><ThemeButton /></div>
 					<MeshRadio variant="inline" class="col-span-2 px-3 pt-2" />
 				</nav>
 			{/if}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Seo from '$lib/components/Seo.svelte';
 	import { live, groupLive, type LiveGroup } from '$lib/live.svelte';
-	import { shortKey, fmtSnr, snrColor, roleColor } from '$lib/format';
+	import { shortKey, fmtSnr, snrColor, roleColor, payloadAbbr } from '$lib/format';
 	import { timeMode } from '$lib/time-mode.svelte';
 	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
 	import TimeModeToggle from '$lib/components/TimeModeToggle.svelte';
@@ -53,7 +53,7 @@
 			{#each groups as g (g.key)}
 				{@const col = roleColor(g.node?.role ?? '')}
 				<button onclick={() => (selected = g)} class="active:bg-line/40 flex w-full items-start gap-2.5 px-4 py-3 text-left">
-					<span class="mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[0.6rem] font-700" style="color:{col};background:color-mix(in srgb, {col} 12%, transparent)">{g.payloadType.slice(0, 4)}</span>
+					<span class="mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[0.6rem] font-700 whitespace-nowrap" style="color:{col};background:color-mix(in srgb, {col} 12%, transparent)">{payloadAbbr(g.payloadType)}</span>
 					<div class="min-w-0 flex-1">
 						<div class="flex items-center gap-1.5">
 							<span class="text-fg min-w-0 truncate text-sm font-medium">

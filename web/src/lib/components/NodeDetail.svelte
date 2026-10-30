@@ -8,7 +8,7 @@
 	import { api, type Node, type NodeAnalytics, type NodeHistoryEntry, type NodeObserverStat, type NodeActivity, type BlockEntry, type RFNeighbors } from '$lib/api';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
 	import { ensureHillshade } from '$lib/map-hillshade';
-	import { isLight } from '$lib/map-util';
+	import { isLight, clusterColors } from '$lib/map-util';
 	import { hasWebGL } from '$lib/webgl';
 	import LeafletInset from './LeafletInset.svelte';
 	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, fmtRadio, fmtAirtime, fmtClockDrift, clockDriftLevel } from '$lib/format';
@@ -19,6 +19,8 @@
 	import FavoriteStar from './FavoriteStar.svelte';
 	import Tooltip from './Tooltip.svelte';
 	import NodeAdmin from './NodeAdmin.svelte';
+	import ScrubReadout from './ScrubReadout.svelte';
+	import { scrub } from '$lib/scrub';
 
 	interface Props {
 		pubkey: string;
@@ -30,8 +32,10 @@
 		 * sparkline, relay scores or the observers/packets/history/neighbour lists.
 		 * Used by the modal; the full page links from it for depth. */
 		compact?: boolean;
+		/** Drawn in a side pane (iPad split view): one column at any window width. */
+		narrow?: boolean;
 	}
-	let { pubkey, nodes: nodesProp = undefined, heading = false, compact = false }: Props = $props();
+	let { pubkey, nodes: nodesProp = undefined, heading = false, compact = false, narrow = false }: Props = $props();
 
 	let node = $state<Node | null>(null);
 	let detail = $state<NodeAnalytics | null>(null);
@@ -98,6 +102,7 @@
 
 	// Weekday×hour activity heatmap (full page only).
 	let heatmap = $state<NodeActivity | null>(null);
+	let heatI = $state<number | null>(null); // scrubbed cell: day * 24 + hour
 	async function loadHeatmap() {
 		try {
 			heatmap = await api.nodeHeatmap(pubkey, 7);
@@ -296,7 +301,7 @@
 				// pass through so the page scrolls past it instead of the map moving.
 				interactive: false
 			});
-			marker = new maplibregl.Marker({ color: '#34e3c4' }).setLngLat([lng, lat]).addTo(map);
+			marker = new maplibregl.Marker({ color: clusterColors().pin }).setLngLat([lng, lat]).addTo(map);
 			const m = map;
 			// Terrain relief, matching the "Hillshade" default the full maps use — on
 			// a locked thumbnail the shading is what makes a ridge-top site read as a
@@ -348,7 +353,7 @@
 			<svg viewBox="0 0 24 24" class="text-coral h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
 			</svg>
-			<h2 class="font-display text-coral text-sm font-700 tracking-wide">QUARANTINED NODE</h2>
+			<h2 data-caps class="font-display text-coral text-sm font-700 tracking-wide uppercase">Quarantined node</h2>
 		</div>
 		<div class="px-5 py-6">
 			<p class="text-fg text-sm leading-relaxed">
@@ -410,9 +415,9 @@
 
 	<!-- Public key strip -->
 	<div class="mb-5 flex items-center gap-2">
-		<button onclick={copyKey} class="panel panel-hover flex flex-1 items-center gap-3 px-5 py-3 text-left">
-			<span class="label shrink-0">PUBKEY</span>
-			<span class="font-mono text-fg whitespace-nowrap text-[0.72rem] tracking-tight">{pubkey}</span>
+		<button onclick={copyKey} class="panel panel-hover flex min-w-0 flex-1 items-center gap-3 px-5 py-3 text-left">
+			<span class="label shrink-0">Pubkey</span>
+			<span class="font-mono text-fg min-w-0 truncate text-[0.72rem] tracking-tight">{pubkey}</span>
 			<span class="label ml-auto shrink-0 {copied ? '!text-signal' : ''}">{copied ? 'COPIED' : 'COPY'}</span>
 		</button>
 	</div>
@@ -482,7 +487,7 @@
 		/>
 	</div>
 
-	<div class="grid gap-5 {compact ? '' : 'lg:grid-cols-3'}">
+	<div class="grid gap-5 {compact || narrow ? '' : 'lg:grid-cols-3'}">
 		<!-- LEFT: hash, map, QR, overview, scores -->
 		<div class="space-y-4 lg:col-span-1">
 			<!-- Hash ID -->
@@ -666,22 +671,30 @@
 			<!-- Activity heatmap (weekday × hour) -->
 			<section class="panel">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
-					<h3 class="font-display text-fg text-sm font-700 tracking-wide">ACTIVITY HEATMAP</h3>
+					<h3 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Activity heatmap</h3>
 					<span class="label ml-auto normal-case">last 7d · UTC{heatmap ? ` · ${heatmap.total} pkt` : ''}</span>
 				</div>
 				{#if !heatmap || heatmap.total === 0}
 					<div class="text-fg-faint px-5 py-8 text-center text-sm">No activity in the last 7 days.</div>
 				{:else}
 					<div class="px-5 py-4">
-						<div class="flex flex-col gap-[3px]">
+						<div class="relative flex flex-col gap-[3px]" use:scrub={{ axis: 'xy', onpick: (i) => (heatI = i) }}>
+							{#if heatI != null}
+								{@const d = Math.floor(heatI / 24)}
+								{@const h = heatI % 24}
+								{@const n = heatmap.grid[d]?.[h] ?? 0}
+								<ScrubReadout at={((h + 0.5) / 24) * 100}><b>{n} packet{n === 1 ? '' : 's'}</b><span class="text-fg-faint"> · {DAY[d]} {h.toString().padStart(2, '0')}:00 UTC</span></ScrubReadout>
+							{/if}
 							{#each heatmap.grid as row, d (d)}
 								<div class="flex items-center gap-2">
 									<span class="font-mono text-fg-faint w-7 shrink-0 text-[0.58rem]">{DAY[d]}</span>
 									<div class="grid flex-1 gap-[2px]" style="grid-template-columns:repeat(24,1fr)">
 										{#each row as count, h (h)}
-											<Tooltip text="{DAY[d]} {h.toString().padStart(2, '0')}:00 UTC · {count} packet{count === 1 ? '' : 's'}" class="block w-full">
-												<div class="h-[13px] w-full rounded-[1px]" style={cellStyle(count, heatmap.max)}></div>
-											</Tooltip>
+											<div
+												data-scrub-i={d * 24 + h}
+												class="h-[13px] w-full rounded-[1px] {heatI === d * 24 + h ? 'ring-fg ring-2' : ''}"
+												style={cellStyle(count, heatmap.max)}
+											></div>
 										{/each}
 									</div>
 								</div>
@@ -702,7 +715,7 @@
 			     selectable range — adverts are ~30h apart, so 6h often shows none) -->
 			<section class="panel">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
-					<h3 class="font-display text-fg text-sm font-700 tracking-wide">HEARD BY</h3>
+					<h3 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Heard by</h3>
 					<span class="label tnum">{observers.length} observer{observers.length === 1 ? '' : 's'}</span>
 					<div class="ml-auto flex items-center gap-1">
 						{#each obsRanges as r (r.sec)}
@@ -745,7 +758,7 @@
 			<!-- Activity history (stored observations, on demand) -->
 			<section class="panel">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
-					<h3 class="font-display text-fg text-sm font-700 tracking-wide">ACTIVITY HISTORY</h3>
+					<h3 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Activity history</h3>
 					<div class="ml-auto flex items-center gap-1">
 						{#each ranges as r (r.sec)}
 							<button
@@ -783,7 +796,7 @@
 			{#if rf}
 				<section class="panel">
 					<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
-						<h3 class="font-display text-fg text-sm font-700 tracking-wide">RF NEIGHBORS</h3>
+						<h3 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">RF neighbors</h3>
 						<Tooltip text="Nodes heard directly over the air, from the neighbour table a repeater publishes over MQTT (openHop and some firmware builds). Measured links — unlike Neighbors below, which are inferred from packet paths. SNR is how well the reporting repeater hears the other node.">
 							<span class="text-fg-faint cursor-help text-xs">ⓘ</span>
 						</Tooltip>
@@ -827,7 +840,7 @@
 			<!-- Neighbors -->
 			<section class="panel">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
-					<h3 class="font-display text-fg text-sm font-700 tracking-wide">PATH NEIGHBORS</h3>
+					<h3 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Path neighbors</h3>
 					<span class="label ml-auto tnum">{detail?.neighbors.length ?? 0}</span>
 				</div>
 				{#if !detail || detail.neighbors.length === 0}

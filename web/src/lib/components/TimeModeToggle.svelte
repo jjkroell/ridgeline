@@ -16,6 +16,7 @@
 </script>
 
 <div
+	data-seg
 	class="border-line inline-flex shrink-0 items-center overflow-hidden rounded-[var(--radius)] border"
 	role="group"
 	aria-label="Timestamp format"

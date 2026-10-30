@@ -290,7 +290,7 @@
 
 			{#if adding}
 				<div class="border-line/70 space-y-4 border-b px-4 py-4">
-					<div class="bg-panel border-line flex overflow-hidden rounded-[var(--radius)] border text-xs" role="tablist" aria-label="Channel type">
+					<div data-seg class="bg-panel border-line flex overflow-hidden rounded-[var(--radius)] border text-xs" role="tablist" aria-label="Channel type">
 						{#each addKinds as k (k.id)}
 							<button
 								type="button"

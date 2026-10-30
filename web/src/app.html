@@ -11,6 +11,17 @@
 		<!-- PWA / installable mobile app (scope /m) -->
 		<link rel="manifest" href="/manifest.webmanifest" />
 		<link rel="apple-touch-icon" href="/icons/apple-touch-180.png" />
+		<!-- Launch screens for the installed iPhone app (one per screen size). -->
+		<link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/icons/splash/splash-750x1334.png" />
+		<link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/icons/splash/splash-828x1792.png" />
+		<link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/icons/splash/splash-1125x2436.png" />
+		<link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/icons/splash/splash-1170x2532.png" />
+		<link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/icons/splash/splash-1179x2556.png" />
+		<link rel="apple-touch-startup-image" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/icons/splash/splash-1206x2622.png" />
+		<link rel="apple-touch-startup-image" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/icons/splash/splash-1242x2688.png" />
+		<link rel="apple-touch-startup-image" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/icons/splash/splash-1284x2778.png" />
+		<link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/icons/splash/splash-1290x2796.png" />
+		<link rel="apple-touch-startup-image" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/icons/splash/splash-1320x2868.png" />
 		<meta name="mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -90,11 +101,17 @@
 			// purpose. `data-theme` picks the token block; `theme-light` marks a
 			// light base (read by map-util.isLight()).
 			try {
-				var LIGHT = { light: 1, mist: 1 };
-				var VALID = { dark: 1, slate: 1, graphite: 1, light: 1, mist: 1 };
+				var LIGHT = { light: 1, mist: 1, apple: 1 };
+				var VALID = { dark: 1, slate: 1, graphite: 1, light: 1, mist: 1, apple: 1, 'apple-dark': 1 };
 				var t = localStorage.getItem('ridgeline-theme');
+				if (t === 'apple-auto')
+					t = matchMedia('(prefers-color-scheme: dark)').matches ? 'apple-dark' : 'apple';
 				if (!t || !VALID[t]) t = 'dark';
 				document.documentElement.setAttribute('data-theme', t);
+				var a = localStorage.getItem('ridgeline-accent');
+				document.documentElement.setAttribute('data-accent', a || 'blue');
+				if (localStorage.getItem('ridgeline-solid') === '1')
+					document.documentElement.setAttribute('data-solid', '');
 				if (LIGHT[t]) document.documentElement.classList.add('theme-light');
 			} catch (e) {}
 		</script>

@@ -16,9 +16,10 @@
 			.sort((a, b) => (b.firstSeen ?? '').localeCompare(a.firstSeen ?? ''))
 			.slice(0, 7)
 	);
+	const newCount = $derived(nodes.filter((n) => n.firstSeen && Date.now() - +new Date(n.firstSeen) < WINDOW_MS).length);
 </script>
 
-<WidgetShell title={m.title} icon={m.icon} color="signal" href="{base}/nodes" linkLabel="All →">
+<WidgetShell title={m.title} icon={m.icon} color="signal" href="{base}/nodes" linkLabel="All →" stat={newCount} statLabel="first heard this week">
 	{#if fresh.length}
 		<div class="divide-line/50 divide-y">
 			{#each fresh as n (n.publicKey)}

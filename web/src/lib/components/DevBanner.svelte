@@ -8,12 +8,13 @@
 
 {#if env.isDev}
 	<div
-		class="bg-amber text-ink flex shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-0.5 px-3 py-1 text-center text-[0.72rem] leading-tight font-700"
+		data-dev-banner
+		class="bg-amber/12 text-amber border-amber/30 flex shrink-0 border-b flex-wrap items-center justify-center gap-x-2 gap-y-0.5 px-3 py-1 text-center text-[0.72rem] leading-tight font-700"
 		role="alert"
 		aria-live="polite"
 	>
 		<span
-			class="bg-ink/20 rounded px-1.5 py-0.5 text-[0.6rem] font-900 tracking-[0.15em] uppercase"
+			class="bg-amber text-ink rounded px-1.5 py-0.5 text-[0.6rem] font-900 tracking-[0.15em] uppercase"
 			>{env.label}</span
 		>
 		<span>Test environment — <strong class="font-900">not</strong> the live Ridgeline site. Data here

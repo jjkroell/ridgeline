@@ -7,8 +7,10 @@
 	import PwaInstall from '$lib/components/PwaInstall.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import DevBanner from '$lib/components/DevBanner.svelte';
-	import ThemePicker from '$lib/components/ThemePicker.svelte';
-	import MeshRadio from '$lib/components/MeshRadio.svelte';
+	import Logo from '$lib/components/Logo.svelte';
+	import ThemeButton from '$lib/components/ThemeButton.svelte';
+	import { edgeBack, needsEdgeBack } from '$lib/mobile/edge-back';
+	import { onMount } from 'svelte';
 
 	let { children } = $props();
 
@@ -19,6 +21,10 @@
 		if (history.length > 1) history.back();
 		else goto('/m/' + (page.url.pathname.split('/')[2] ?? ''));
 	}
+
+	// Home-screen iPhone app: no browser back gesture, so supply one.
+	let edgeOn = $state(false);
+	onMount(() => (edgeOn = needsEdgeBack()));
 
 	// Primary bottom-tab destinations (5). Secondary live in the "More" sheet.
 	const tabs = [
@@ -36,6 +42,7 @@
 		{ href: '/m/map', label: 'Map', icon: 'map', desc: 'Node locations & coverage' },
 		{ href: '/m/identity', label: 'Identity', icon: 'keys', desc: 'Collisions & key generator' },
 		{ href: '/m/observers', label: 'Observers', icon: 'observers', desc: 'Listening posts & telemetry' },
+		{ href: '/m/settings', label: 'Settings', icon: 'settings', desc: 'Theme, map style and display' },
 		{ href: '/m/admin', label: 'Admin', icon: 'admin', desc: 'Injection control (restricted)', adminOnly: true }
 	];
 	// Admin is the only restricted destination; hide its link from anyone who is
@@ -57,7 +64,8 @@
 		observers: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
 		admin: 'M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z',
 		keys: 'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3',
-		account: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0'
+		account: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
+		settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z'
 	};
 
 	function activeTab(href: string, exact = false): boolean {
@@ -81,12 +89,61 @@
 		if (p.startsWith('/m/observers')) return p === '/m/observers' ? 'Observers' : 'Observer';
 		if (p.startsWith('/m/admin')) return 'Admin';
 		if (p.startsWith('/m/account')) return 'Account';
+		if (p.startsWith('/m/settings')) return 'Settings';
 		if (p.startsWith('/m/login')) return auth.loggedIn ? 'Account' : 'Sign in';
 		return 'Ridgeline';
 	});
 
 	let moreOpen = $state(false);
+	// Bar heights, published as CSS vars so a theme can let content scroll
+	// beneath translucent bars (Cupertino); other themes ignore them.
+	let headerH = $state(0);
+	let navH = $state(0);
 	const anyMoreActive = $derived(more.some((m) => activeTab(m.href)));
+
+	// Cupertino large titles: list-style pages show the title big in the
+	// content and hand it to the bar once it scrolls away. Maps, detail pages
+	// and the full-height chat/topology views keep the compact bar title.
+	const LARGE = ['/m', '/m/nodes', '/m/live', '/m/analytics', '/m/observers', '/m/identity', '/m/hash-ids', '/m/account', '/m/admin', '/m/login', '/m/settings'];
+	const largeTitle = $derived(theme.isApple && LARGE.includes(page.url.pathname));
+	let mainEl = $state<HTMLElement>();
+	let scrolled = $state(false);
+	function onMainScroll() {
+		scrolled = (mainEl?.scrollTop ?? 0) > 32;
+	}
+	$effect(() => {
+		page.url.pathname;
+		queueMicrotask(onMainScroll);
+	});
+
+	// Pull to refresh on the list pages. Pages fetch in onMount, so a refresh
+	// re-mounts the page ({#key}) rather than threading a reload through each.
+	const PTR = ['/m', '/m/nodes', '/m/live', '/m/analytics', '/m/observers'];
+	const ptrOn = $derived(PTR.includes(page.url.pathname));
+	let refreshKey = $state(0);
+	let pull = $state(0);
+	let refreshing = $state(false);
+	let pullY0: number | null = null;
+	function ptrStart(e: TouchEvent) {
+		// A tucked-away search field takes the first pull (SearchField.svelte).
+		const tucked = mainEl?.querySelector('[data-pull-search][data-collapsed="true"]');
+		pullY0 = ptrOn && !refreshing && !tucked && (mainEl?.scrollTop ?? 1) <= 0 ? e.touches[0].clientY : null;
+	}
+	function ptrMove(e: TouchEvent) {
+		if (pullY0 == null) return;
+		const dy = e.touches[0].clientY - pullY0;
+		pull = dy > 0 && (mainEl?.scrollTop ?? 1) <= 0 ? Math.min(90, dy * 0.5) : 0;
+	}
+	function ptrEnd() {
+		if (pullY0 == null) return;
+		pullY0 = null;
+		if (pull >= 60) {
+			refreshing = true;
+			refreshKey++;
+			setTimeout(() => (refreshing = false), 800);
+		}
+		pull = 0;
+	}
 	// Close the sheet on navigation.
 	$effect(() => {
 		page.url.pathname;
@@ -94,11 +151,16 @@
 	});
 </script>
 
-<div class="bg-ink text-fg fixed inset-0 flex flex-col overflow-hidden">
+<div
+	class="bg-ink text-fg fixed inset-0 flex flex-col overflow-hidden"
+	style="--m-header-h:{headerH}px; --m-nav-h:{navH}px"
+>
 	<!-- Non-production banner (self-guards; only on a dev/staging instance). -->
 	<DevBanner />
 	<!-- App bar -->
 	<header
+		data-chrome
+		bind:offsetHeight={headerH}
 		class="border-line/70 bg-ink-2/85 z-20 flex shrink-0 items-center gap-3 border-b px-4 backdrop-blur-md"
 		style="padding-top:calc(env(safe-area-inset-top) + 0.6rem);padding-bottom:0.6rem"
 	>
@@ -107,12 +169,18 @@
 				<svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
 			</button>
 		{:else}
-			<svg viewBox="0 0 32 32" class="h-6 w-6 shrink-0" aria-hidden="true">
-				<path d="M3 23 11 11 16 17 22 7 29 23" fill="none" stroke="var(--color-signal)" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" />
-				<path d="M3 27 11 17 16 22 22 14 29 27" fill="none" stroke="var(--color-amber)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.6" />
-			</svg>
+			<Logo class="h-6 w-6 shrink-0" />
 		{/if}
-		<h1 class="font-display text-fg text-[1.15rem] font-900 tracking-tight">{title}</h1>
+		<!-- While the large title shows, it is the page heading; the bar copy is
+		     decorative until it fades in. -->
+		<svelte:element
+			this={largeTitle ? 'div' : 'h1'}
+			data-bar-title
+			data-collapsed={largeTitle && !scrolled}
+			class="font-display text-fg text-[1.15rem] font-900 tracking-tight"
+		>
+			{title}
+		</svelte:element>
 		<div class="ml-auto flex items-center gap-3">
 			<div class="flex items-center gap-1.5">
 				{#if live.connected}
@@ -123,30 +191,53 @@
 					<span class="label !text-coral !text-[0.6rem]">Off</span>
 				{/if}
 			</div>
-			<!-- Quick cycle; the full picker lives in the More sheet. The swatch
-			     previews the ACTIVE theme so the control describes itself. -->
-			<button
-				onclick={() => theme.cycle()}
-				aria-label="Next theme ({theme.def.label})"
-				class="p-1"
-			>
-				<span
-					class="grid h-5 w-5 place-items-center rounded-[var(--radius)] border"
-					style="background:{theme.def.swatch[0]}; border-color:{theme.def.swatch[1]}"
-				>
-					<span class="h-2 w-2 rounded-full" style="background:{theme.def.swatch[2]}"></span>
-				</span>
-			</button>
+			<!-- Opens the theme sheet (the full set also lives in More → Settings). -->
+			<ThemeButton variant="icon" />
 		</div>
 	</header>
 
 	<!-- Scrollable content (min-h-0 so flex-1 can shrink + scroll internally) -->
-	<main class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-		{@render children()}
+	<main
+		data-m-main
+		bind:this={mainEl}
+		use:edgeBack={{ enabled: () => edgeOn && isDetail, onback: goBack }}
+		onscroll={largeTitle ? onMainScroll : undefined}
+		ontouchstart={ptrStart}
+		ontouchmove={ptrMove}
+		ontouchend={ptrEnd}
+		class="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+	>
+		{#if pull > 0 || refreshing}
+			<div
+				class="pointer-events-none flex justify-center overflow-hidden"
+				style="height:{refreshing ? 44 : pull}px; transition:{pull ? 'none' : 'height 0.25s ease'}"
+				aria-hidden={!refreshing}
+				role="status"
+			>
+				<svg
+					viewBox="0 0 24 24"
+					class="text-fg-dim mt-2 h-6 w-6 {refreshing ? 'animate-spin' : ''}"
+					style="opacity:{refreshing ? 1 : Math.min(1, pull / 60)}; transform:rotate({pull * 4}deg)"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.2"
+					stroke-linecap="round"
+				>
+					<path d="M12 3a9 9 0 1 0 9 9" />
+				</svg>
+				<span class="sr-only">{refreshing ? 'Refreshing' : ''}</span>
+			</div>
+		{/if}
+		{#if largeTitle}<h1 data-large-title>{title}</h1>{/if}
+		{#key refreshKey}
+			{@render children()}
+		{/key}
 	</main>
 
 	<!-- Bottom tab bar -->
 	<nav
+		data-chrome
+		bind:offsetHeight={navH}
 		class="border-line/70 bg-ink-2/90 z-20 grid shrink-0 grid-cols-5 border-t backdrop-blur-md"
 		style="padding-bottom:env(safe-area-inset-bottom)"
 	>
@@ -154,13 +245,13 @@
 			{@const on = t.sheet ? moreOpen || anyMoreActive : activeTab(t.href, t.exact)}
 			{#if t.sheet}
 				<button onclick={() => (moreOpen = !moreOpen)} class="relative flex flex-col items-center gap-1 py-2.5">
-					{#if on}<span class="bg-signal absolute top-0 h-[2px] w-7 rounded-full"></span>{/if}
+					{#if on}<span data-nav-bar class="bg-signal absolute top-0 h-[2px] w-7 rounded-full"></span>{/if}
 					<svg viewBox="0 0 24 24" class="h-[22px] w-[22px] {on ? 'text-signal' : 'text-fg-faint'}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d={icons[t.icon]} /></svg>
 					<span class="text-[0.62rem] font-medium whitespace-nowrap {on ? 'text-signal' : 'text-fg-faint'}">{t.label}</span>
 				</button>
 			{:else}
 				<a href={t.href} class="relative flex flex-col items-center gap-1 py-2.5">
-					{#if on}<span class="bg-signal absolute top-0 h-[2px] w-7 rounded-full"></span>{/if}
+					{#if on}<span data-nav-bar class="bg-signal absolute top-0 h-[2px] w-7 rounded-full"></span>{/if}
 					<svg viewBox="0 0 24 24" class="h-[22px] w-[22px] {on ? 'text-signal' : 'text-fg-faint'}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d={icons[t.icon]} /></svg>
 					<span class="text-[0.62rem] font-medium whitespace-nowrap {on ? 'text-signal' : 'text-fg-faint'}">{t.label}</span>
 				</a>
@@ -178,7 +269,7 @@
 	{#if moreOpen}
 		<button class="absolute inset-0 z-30 bg-black/50" aria-label="Close menu" onclick={() => (moreOpen = false)}></button>
 		<div
-			class="border-line bg-ink-2 animate-sheet absolute inset-x-0 bottom-0 z-40 rounded-t-2xl border-t px-3 pt-2"
+			class="border-line bg-ink-2 animate-sheet absolute inset-x-0 bottom-0 z-40 max-h-[85dvh] overflow-y-auto rounded-t-2xl border-t px-3 pt-2"
 			style="padding-bottom:calc(env(safe-area-inset-bottom) + 0.75rem)"
 		>
 		<div class="bg-line mx-auto mb-3 mt-1 h-1 w-10 rounded-full"></div>
@@ -195,10 +286,6 @@
 					</span>
 				</a>
 			{/each}
-		</div>
-		<div class="border-line/70 mt-2 border-t px-3 pt-3">
-			<MeshRadio variant="inline" class="mb-3" />
-			<ThemePicker compact />
 		</div>
 	</div>
 {/if}

@@ -12,7 +12,7 @@
 <header class="flex flex-wrap items-end justify-between gap-4 px-6 py-6 md:px-10">
 	<div class="rise">
 		<div class="label mb-2 flex items-center gap-2">
-			<span class="bg-signal/70 inline-block h-px w-6"></span>
+			<span data-eyebrow-rule class="bg-signal/70 inline-block h-px w-6"></span>
 			{eyebrow}
 		</div>
 		<div class="flex items-center gap-3">
@@ -21,7 +21,7 @@
 		</div>
 	</div>
 	{#if children}
-		<div class="rise flex items-center gap-3" style="animation-delay:60ms">
+		<div class="rise flex flex-wrap items-center gap-3 *:whitespace-nowrap" style="animation-delay:60ms">
 			{@render children()}
 		</div>
 	{/if}

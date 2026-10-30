@@ -11,7 +11,7 @@
 	const claimed = $derived(nodes.filter((n) => n.claimed));
 </script>
 
-<WidgetShell title={m.title} icon={m.icon} color="signal" href="{base}/nodes" linkLabel="All →">
+<WidgetShell title={m.title} icon={m.icon} color="signal" href="{base}/nodes" linkLabel="All →" stat={claimed.length} statLabel="nodes with a verified owner">
 	{#if claimed.length}
 		<div class="divide-line/50 divide-y">
 			{#each claimed.slice(0, 7) as n (n.publicKey)}

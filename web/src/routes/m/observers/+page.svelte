@@ -5,9 +5,20 @@
 	import { ago, fmtNum, isFresh } from '$lib/format';
 	import StandbyBadge from '$lib/components/StandbyBadge.svelte';
 	import ObserverSetupModal from '$lib/components/ObserverSetupModal.svelte';
+	import { longpress, observerMenu } from '$lib/mobile/context-menu.svelte';
+	import SearchField from '$lib/mobile/SearchField.svelte';
 
 	let observers = $state<Observer[]>([]);
 	let showSetup = $state(false);
+	let query = $state('');
+
+	const shown = $derived.by(() => {
+		const q = query.trim().toLowerCase();
+		if (!q) return observers;
+		return observers.filter((o) =>
+			[o.name, o.id, o.region, o.publicKey].some((f) => f?.toLowerCase().includes(q))
+		);
+	});
 
 	async function refresh() {
 		try {
@@ -40,8 +51,11 @@
 {/if}
 
 <div class="px-4 py-4">
+	<SearchField bind:value={query} placeholder="Search observers" />
 	<div class="mb-2 flex items-center gap-2 px-1">
-		<div class="text-fg-faint font-mono text-[0.62rem]">{observers.length} listening posts</div>
+		<div class="text-fg-faint font-mono text-[0.62rem]">
+			{query ? `${shown.length} of ${observers.length}` : observers.length} listening posts
+		</div>
 		<button
 			onclick={() => (showSetup = true)}
 			class="border-signal/50 bg-signal/10 text-signal active:bg-signal/20 ml-auto rounded-full border px-3 py-1 font-mono text-[0.62rem]"
@@ -49,9 +63,12 @@
 		>
 	</div>
 	<div class="flex flex-col gap-3">
-		{#each observers as o (o.id)}
+		{#if query && shown.length === 0}
+			<p class="text-fg-dim px-1 py-8 text-center text-sm">No observers match “{query}”.</p>
+		{/if}
+		{#each shown as o (o.id)}
 			{@const reporting = isFresh(o.lastSeen)}
-			<a href="/m/observers/{encodeURIComponent(o.id)}" class="border-line/60 bg-panel active:bg-line/40 rounded-2xl border px-4 py-3.5">
+			<a href="/m/observers/{encodeURIComponent(o.id)}" use:longpress={() => observerMenu(o)} class="border-line/60 bg-panel active:bg-line/40 rounded-2xl border px-4 py-3.5">
 				<div class="flex items-center gap-2.5">
 					<span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background:{reporting ? 'var(--color-signal)' : 'var(--color-fg-faint)'}"></span>
 					<span class="text-fg min-w-0 flex-1 truncate text-sm font-600">{o.name ?? o.id}</span>

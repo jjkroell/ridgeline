@@ -156,7 +156,10 @@
 
 <Seo title="Channels" description="Decrypted MeshCore group chat." path="/m/channels" />
 
-<div class="px-4 py-4">
+<!-- In chat the page fills the space between the app bars exactly, so the
+     message list (pinned to its newest message) ends at the tab bar instead
+     of under it, whatever the banner/bar heights are. -->
+<div class="px-4 py-4 {pane === 'chat' && selected ? 'flex h-full flex-col' : ''}">
 	{#if pane === 'list'}
 		<div class="mb-3 flex items-center justify-between">
 			<span class="text-fg-faint font-mono text-[0.62rem]">{channels.list.length} channels · in this browser</span>
@@ -165,7 +168,7 @@
 
 		{#if adding}
 			<div class="border-line/60 bg-panel mb-3 space-y-4 rounded-2xl border p-4">
-				<div class="border-line flex rounded-full border p-0.5" role="tablist" aria-label="Channel type">
+				<div data-seg class="border-line flex rounded-full border p-0.5" role="tablist" aria-label="Channel type">
 					{#each addKinds as k (k.id)}
 						<button type="button" role="tab" aria-selected={addKind === k.id} onclick={() => (addKind = k.id)} class="flex-1 rounded-full py-1.5 text-xs font-600 {addKind === k.id ? 'bg-signal/15 text-signal' : 'text-fg-dim'}">{k.label}</button>
 					{/each}
@@ -234,7 +237,7 @@
 		{/if}
 	{:else if selected}
 		<!-- chat header -->
-		<div class="mb-3 flex items-center gap-2.5">
+		<div class="mb-3 flex shrink-0 items-center gap-2.5">
 			<button onclick={() => (pane = 'list')} aria-label="Back" class="text-fg-dim active:text-fg -ml-1 p-1">
 				<svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
 			</button>
@@ -247,7 +250,7 @@
 		</div>
 
 		<!-- messages -->
-		<div bind:this={scroller} onscroll={onScroll} class="space-y-2.5 overflow-y-auto" style="height:calc(100dvh - 11rem)">
+		<div bind:this={scroller} onscroll={onScroll} class="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain">
 			{#if loadingHistory && messages.length === 0}
 				<div class="text-fg-faint py-12 text-center text-sm">Loading messages…</div>
 			{:else if messages.length === 0}

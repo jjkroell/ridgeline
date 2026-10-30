@@ -441,7 +441,7 @@
 			{#if visibleBridges.length > 0}
 			<section class="panel rise mt-6">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
-					<h2 class="font-display text-fg text-sm font-700 tracking-wide">RF BRIDGE CANDIDATES</h2>
+					<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">RF bridge candidates</h2>
 					<span class="label normal-case text-fg-faint">nodes funnelling never-heard-direct traffic in</span>
 					<span class="label ml-auto tnum">{visibleBridges.length}</span>
 				</div>
@@ -571,7 +571,7 @@
 			{#if report.migrations.length > 0}
 				<section class="panel rise mt-6">
 					<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
-						<h2 class="font-display text-fg text-sm font-700 tracking-wide">MOVED BEHIND A BRIDGE</h2>
+						<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Moved behind a bridge</h2>
 						<span class="label normal-case text-fg-faint"
 							>nodes that stopped being heard directly and now arrive through a bridge</span
 						>
@@ -604,7 +604,7 @@
 			{#if (report.injectors?.length ?? 0) > 0}
 			<section class="panel rise mt-6">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
-					<h2 class="font-display text-fg text-sm font-700 tracking-wide">MQTT INJECTOR CANDIDATES</h2>
+					<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">MQTT injector candidates</h2>
 					<span class="label normal-case text-fg-faint">observers that are the sole source of nodes</span>
 					<span class="label ml-auto tnum">{report.injectors?.length ?? 0}</span>
 				</div>
@@ -657,7 +657,7 @@
 		{#if knownEntries.length > 0}
 			<section class="panel rise mt-6">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
-					<h2 class="font-display text-fg text-sm font-700 tracking-wide">KNOWN BRIDGES</h2>
+					<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Known bridges</h2>
 					<span class="label normal-case text-fg-faint"
 						>bridges you run on purpose — still detected and listed, nothing blocked</span
 					>
@@ -696,7 +696,7 @@
 		{#if blockedEntries.length > 0}
 		<section class="panel rise mt-6">
 			<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
-				<h2 class="font-display text-fg text-sm font-700 tracking-wide">BLOCKED</h2>
+				<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Blocked</h2>
 				<span class="label normal-case text-fg-faint">dropped at ingest and hidden from the site</span>
 				<span class="label ml-auto tnum">{blockedEntries.length}</span>
 			</div>
@@ -721,7 +721,7 @@
 		{#if dismissedEntries.length > 0}
 		<section class="panel rise mt-6">
 			<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
-				<h2 class="font-display text-fg text-sm font-700 tracking-wide">DISMISSED</h2>
+				<h2 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Dismissed</h2>
 				<span class="label normal-case text-fg-faint">confirmed not a bridge — excluded from detection, nothing is blocked</span>
 				<span class="label ml-auto tnum">{dismissedEntries.length}</span>
 			</div>
@@ -746,7 +746,7 @@
 		{#if purgedEntries.length > 0}
 			<section class="panel rise mt-6">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3.5">
-					<h2 class="font-display text-fg-dim text-sm font-700 tracking-wide">PURGED</h2>
+					<h2 data-caps class="font-display text-fg-dim text-sm font-700 tracking-wide uppercase">Purged</h2>
 					<span class="label normal-case text-fg-faint">deleted · still blocked so they can't re-ingest</span>
 					<span class="label ml-auto tnum">{purgedEntries.length}</span>
 				</div>

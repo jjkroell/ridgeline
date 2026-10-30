@@ -4,6 +4,13 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.5] — 2026-10-30
+
+### Changed
+- **The #sos info card says to add #sos in your own app or radio too.**
+  Ridgeline only shows the channel, so monitors need it in their MeshCore
+  app (a hashtag channel named `sos`) to post and get alerts.
+
 ## [v0.24.4] — 2026-10-30
 
 ### Added

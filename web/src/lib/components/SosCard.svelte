@@ -33,8 +33,10 @@
 				backup, not a replacement.
 			</p>
 			<p class="text-fg-dim mt-1.5 text-xs leading-relaxed">
-				<span class="text-fg font-600">Can you keep an eye on it?</span> Join #sos and send one — just one —
-				<span class="text-fg font-mono">test</span> message. You're listed as a monitor, so everyone can see how
+				<span class="text-fg font-600">Can you keep an eye on it?</span> Ridgeline only shows #sos — you can't
+				post or get alerts from here — so <span class="text-fg font-600">add #sos to your own MeshCore app or
+				radio too</span> (a hashtag channel named <span class="text-fg font-mono">sos</span>). Then send one —
+				just one — <span class="text-fg font-mono">test</span> message. You're listed as a monitor, so everyone can see how
 				many people are listening. Then <span class="text-fg font-600">leave notifications on for #sos</span> on
 				your radio or app, so a real call for help reaches you.
 			</p>

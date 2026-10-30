@@ -7,6 +7,7 @@
 // Shared by the desktop and mobile channel pages and the Channels widget.
 import { api, type ChannelMonitor } from './api';
 import { SOS_ID } from './channels.svelte';
+import { sosAlarm } from './sos-alarm.svelte';
 
 const INFO_KEY = 'ridgeline-sos-card';
 const ALERT_ACK_KEY = 'ridgeline-sos-alert-ack';
@@ -23,6 +24,8 @@ export function alertWord(text: string): boolean {
 	return ALERT_RE.test(text);
 }
 const MONITORS_KEY = 'ridgeline-sos-monitors';
+/** Only alerts this fresh ring the alarm (not ones found on load or reconnect). */
+const ALARM_FRESH_MS = 5 * 60_000;
 // How often an open page refreshes the roster; it changes only when someone
 // sends "test" or "unsub", so this is slow on purpose.
 const REFRESH_MS = 60_000;
@@ -104,7 +107,7 @@ class SOS {
 	/**
 	 * The server's view, for every page: an emergency word on #sos within the
 	 * window, newer than the last time this browser switched to #sos. Updated
-	 * by the roster poll (once a minute).
+	 * by the roster poll (once a minute) and at once by the live feed (noteLive).
 	 */
 	get flagged(): boolean {
 		return this.lastAlert > this.alertAckAt && this.now - this.lastAlert < ALERT_WINDOW_MS;
@@ -156,11 +159,33 @@ class SOS {
 		return channelId === SOS_ID && this.now - t > HIDE_AFTER_MS && monitorWord(text) !== null;
 	}
 
+	/**
+	 * A packet from the live feed: an emergency word on #sos flags the channel
+	 * at once, instead of on the next roster poll.
+	 */
+	noteLive(ev: { channel?: string; text?: string; sender?: string; messageHash: string; receivedAt: string }) {
+		if (ev.channel !== SOS_ID || !ev.text || !alertWord(ev.text)) return;
+		const t = +new Date(ev.receivedAt);
+		if (t > this.lastAlert) {
+			this.lastAlert = t;
+			this.now = Date.now();
+		}
+		this.#alarm(t, ev.messageHash, ev.sender, ev.text);
+	}
+
+	/** Ring the opt-in alarm for a fresh alert this browser hasn't acknowledged. */
+	#alarm(t: number, key: string, sender?: string, text?: string) {
+		if (t > this.alertAckAt && Date.now() - t < ALARM_FRESH_MS) sosAlarm.fire(key, sender, text);
+	}
+
 	async load() {
 		try {
 			const r = await api.sosMonitors();
 			this.monitors = r.monitors ?? [];
-			this.lastAlert = r.lastAlert ? +new Date(r.lastAlert) : 0;
+			const t = r.lastAlert ? +new Date(r.lastAlert) : 0;
+			// A newer alert than the last poll saw (and the live feed missed): ring.
+			if (this.loaded && t > this.lastAlert) this.#alarm(t, 'poll:' + t);
+			this.lastAlert = t;
 		} catch {
 			/* keep the last list */
 		} finally {

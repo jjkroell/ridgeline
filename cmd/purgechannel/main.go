@@ -32,6 +32,7 @@ func main() {
 	days := flag.Int("days", 60, "how far back to look")
 	backup := flag.String("backup", "", "write the deleted rows here as JSON (required with -apply)")
 	apply := flag.Bool("apply", false, "actually delete (default is a dry run)")
+	hashes := flag.String("hash", "", "only these message hashes (comma-separated; default: the whole channel)")
 	flag.Parse()
 	name := strings.TrimPrefix(*channel, "#")
 	if name == "" {
@@ -57,6 +58,19 @@ func main() {
 		fmt.Fprintln(os.Stderr, "scan:", err)
 		os.Exit(1)
 	}
+	if *hashes != "" {
+		keep := map[string]bool{}
+		for _, h := range strings.Split(*hashes, ",") {
+			keep[strings.TrimSpace(h)] = true
+		}
+		sel := obs[:0]
+		for _, o := range obs {
+			if keep[o.MessageHash] {
+				sel = append(sel, o)
+			}
+		}
+		obs = sel
+	}
 	msgs := map[string]store.ChannelObservation{}
 	for _, o := range obs {
 		if ex, ok := msgs[o.MessageHash]; !ok || o.ReceivedAt < ex.ReceivedAt {
@@ -64,7 +78,7 @@ func main() {
 		}
 	}
 	for _, o := range msgs {
-		fmt.Printf("%s  %-24.24s %s\n", o.ReceivedAt[:19], o.Sender, o.Message)
+		fmt.Printf("%s  %s  %-24.24s %s\n", o.ReceivedAt[:19], o.MessageHash, o.Sender, o.Message)
 	}
 	fmt.Printf("#%s: %d message(s), %d observation(s) in the last %d days (scan %s)\n",
 		name, len(msgs), len(obs), *days, time.Since(t0).Round(time.Millisecond))

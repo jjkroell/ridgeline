@@ -4,6 +4,22 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.8] — 2026-10-30
+
+### Added
+- **#sos alarm in the browser (opt-in).** Two switches, in the #sos info
+  card and on the phone Settings page: **Play a sound** (a short bell, also
+  in a background tab once a click has allowed audio) and **Show a
+  notification** (a system notification with the sender and message; asks
+  for permission; on phones it goes through the service worker, and tapping
+  it opens #sos). A **Test** button tries both. Off by default, saved per
+  browser; one alarm per transmission and at most one a minute, shared
+  across tabs. What's new lists it (no re-show).
+
+### Changed
+- **The #sos pulse starts the moment an alert arrives** on the live feed,
+  instead of on the next once-a-minute check.
+
 ## [v0.24.7] — 2026-10-30
 
 ### Added

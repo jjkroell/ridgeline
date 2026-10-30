@@ -6,6 +6,7 @@
 -->
 <script lang="ts">
 	import { sos } from '$lib/sos.svelte';
+	import SosAlarmPrefs from './SosAlarmPrefs.svelte';
 
 	let { mobile = false }: { mobile?: boolean } = $props();
 </script>
@@ -34,7 +35,7 @@
 			</p>
 			<p class="text-fg-dim mt-1.5 text-xs leading-relaxed">
 				<span class="text-fg font-600">Can you keep an eye on it?</span> Ridgeline only shows #sos — you can't
-				post or get alerts from here — so <span class="text-fg font-600">add #sos to your own MeshCore app or
+				post from here — so <span class="text-fg font-600">add #sos to your own MeshCore app or
 				radio too</span> (a hashtag channel named <span class="text-fg font-mono">sos</span>). Then send one —
 				just one — <span class="text-fg font-mono">test</span> message. You're listed as a monitor, so everyone can see how
 				many people are listening. Then <span class="text-fg font-600">leave notifications on for #sos</span> on
@@ -50,6 +51,12 @@
 				for help here: turn on #sos alerts under
 				<a href="{mobile ? '/m' : ''}/account#sos-alerts" class="text-coral hover:underline">Account</a>.
 			</p>
+			<div class="border-line/60 mt-2.5 border-t pt-2.5">
+				<p class="text-fg-dim mb-2 text-xs leading-relaxed">
+					<span class="text-fg font-600">Alerts in this browser.</span> When someone calls for help here:
+				</p>
+				<SosAlarmPrefs compact={mobile} />
+			</div>
 			<details class="group mt-1.5 text-xs">
 				<summary class="text-fg-dim hover:text-fg cursor-pointer list-none select-none">
 					<span class="inline-block transition-transform group-open:rotate-90" aria-hidden="true">›</span>

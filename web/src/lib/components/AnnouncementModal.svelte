@@ -26,6 +26,11 @@
 			icon: 'M3 6h18v12H3zM3 7l9 6 9-6',
 			title: 'Get an email when someone calls for help',
 			body: 'If you have a Ridgeline account, you can turn on #sos alert emails under Account → Account settings (on a phone, More → Settings → Account). When one of the words above is heard on #sos, Ridgeline emails you the message with a link to the channel. Messages that arrive close together come in one email, with at least 10 minutes between emails. Alerts are off unless you turn them on, your email address needs to be confirmed first, and you can turn them off again at any time.'
+		},
+		{
+			icon: 'M11 5L6 9H2v6h4l5 4zM15.5 8.5a5 5 0 010 7M19 5a10 10 0 010 14',
+			title: 'A sound and a notification, too',
+			body: 'While Ridgeline is open, it can also play a bell and show a system notification when someone calls for help on #sos. Turn either on in the #sos info card (on a phone, also under More → Settings), and press Test to hear it. They are off unless you turn them on, and the choice is saved in this browser only.'
 		}
 	];
 	const items: { icon: string; title: string; body: string }[] = [

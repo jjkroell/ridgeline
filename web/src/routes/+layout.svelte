@@ -8,6 +8,7 @@
 	import { timeMode } from '$lib/time-mode.svelte';
 	import { channels } from '$lib/channels.svelte';
 	import { sos } from '$lib/sos.svelte';
+	import { sosAlarm } from '$lib/sos-alarm.svelte';
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemap } from '$lib/basemap.svelte';
 	import { overview } from '$lib/overview.svelte';
@@ -61,9 +62,15 @@
 		announce.init();
 		env.init();
 		sos.init();
+		sosAlarm.init();
 	});
 	// #sos alert flag on every page (the Channels nav item pulses from it).
 	onMount(() => sos.watch());
+	// …and at once when the live feed brings one.
+	$effect(() => {
+		const ev = live.events[0];
+		if (ev) sos.noteLive(ev);
+	});
 
 	// Analytics is strictly consent-gated: inject Umami (and fire the once-per-
 	// session WebGL event) only after the visitor opts in. If they later withdraw

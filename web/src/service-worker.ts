@@ -107,3 +107,20 @@ sw.addEventListener('fetch', (event) => {
 		);
 	}
 });
+
+// A #sos alarm notification (sos-alarm.svelte.ts): focus an open Ridgeline
+// window on #sos, or open one.
+sw.addEventListener('notificationclick', (event) => {
+	event.notification.close();
+	const url = (event.notification.data as { url?: string } | null)?.url ?? '/';
+	event.waitUntil(
+		(async () => {
+			const wins = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
+			const win = wins[0] as WindowClient | undefined;
+			if (win) {
+				await win.focus();
+				await win.navigate(url).catch(() => {});
+			} else await sw.clients.openWindow(url);
+		})()
+	);
+});

@@ -11,6 +11,7 @@
 	import { favorites } from '$lib/favorites.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { env } from '$lib/env.svelte';
+	import SosAlarmPrefs from '$lib/components/SosAlarmPrefs.svelte';
 
 	const maps = BASEMAPS.filter((b) => !b.id.startsWith('local'));
 	const times = [
@@ -57,6 +58,14 @@
 		{/each}
 	</div>
 	<p class="text-fg-faint mt-2 mb-6 px-1 text-xs">How the live feed labels when each packet arrived.</p>
+
+	<h2 data-caps class="font-display text-fg-dim mb-2 px-1 text-xs font-700 tracking-wide uppercase">#sos alerts</h2>
+	<div class="border-line/60 bg-panel overflow-hidden rounded-2xl border px-4 py-3">
+		<SosAlarmPrefs />
+	</div>
+	<p class="text-fg-faint mt-2 mb-6 px-1 text-xs">
+		When an emergency word is heard on #sos. For alerts while Ridgeline is closed, turn on #sos alert emails under Account.
+	</p>
 
 	<h2 data-caps class="font-display text-fg-dim mb-2 px-1 text-xs font-700 tracking-wide uppercase">You</h2>
 	<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">

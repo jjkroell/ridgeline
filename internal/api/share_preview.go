@@ -266,10 +266,12 @@ func (s *Server) shareHandler(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "Preview unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		// Identity cards stay stable across new observations. Recheck HTML sooner
-		// so renames get a new revision URL; cache PNGs for a day. These URLs are
-		// not immutable: the endpoint still serves the current public identity.
-		cacheControl := "public, max-age=300, must-revalidate"
+		// Identity cards stay stable across new observations; cache PNGs for a
+		// day. These URLs are not immutable: the endpoint still serves the current
+		// public identity. HTML is revalidated on every load (the ETag keeps that
+		// cheap): it names the build's hashed CSS/JS, which a deploy deletes, and a
+		// cached copy left phones loading a stylesheet that no longer exists.
+		cacheControl := "no-cache"
 		if imageRequest {
 			cacheControl = "public, max-age=86400, must-revalidate"
 		}

@@ -49,6 +49,24 @@
 		});
 	});
 
+	// A page from an older build (restored from cache after a deploy) can name a
+	// stylesheet the server no longer has, and renders as bare unstyled text.
+	// app.css defines --radius on :root, so its absence means the CSS never
+	// arrived: refetch this page past every cache and reload, at most once a minute.
+	onMount(() => {
+		if (getComputedStyle(document.documentElement).getPropertyValue('--radius').trim()) return;
+		try {
+			const last = Number(sessionStorage.getItem('ridgeline-css-reload') ?? 0);
+			if (Date.now() - last < 60_000) return;
+			sessionStorage.setItem('ridgeline-css-reload', String(Date.now()));
+		} catch {
+			return; // no guard against a reload loop: leave it be
+		}
+		fetch(location.href, { cache: 'reload' })
+			.catch(() => {})
+			.finally(() => location.reload());
+	});
+
 	onMount(() => {
 		theme.init();
 		timeMode.init();

@@ -120,7 +120,7 @@
 			<ul class="flex flex-col gap-4">
 				{#each season.announce as item (item.title)}
 					<li class="flex items-start gap-3">
-						<span class="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg leading-none" style="background:color-mix(in srgb, {season.accent} 16%, transparent)" aria-hidden="true">{item.emoji}</span>
+						<span class="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg leading-none" style="background:color-mix(in srgb, {season.accent} 16%, transparent)" aria-hidden="true"><img src={seasonal.src(item.emoji)} alt="" class="h-5 w-5" /></span>
 						<div class="min-w-0">
 							<div class="text-fg text-sm font-600">{item.title}</div>
 							<div class="text-fg-dim mt-0.5 text-sm leading-relaxed">{item.body}</div>
@@ -201,7 +201,7 @@
 					onclick={trySeason}
 					class="rounded-[var(--radius)] border px-4 py-2 text-sm font-600 transition-[filter] hover:brightness-125"
 					style="border-color:color-mix(in srgb, {season.accent} 50%, transparent);color:{season.accent}"
-					>{season.tryLabel}</button
+					><img src={seasonal.src(season.emoji)} alt="" class="mr-1.5 inline h-4 w-4 align-[-0.15em]" />{season.tryLabel}</button
 				>
 			{/if}
 			{#if !onHarbour}

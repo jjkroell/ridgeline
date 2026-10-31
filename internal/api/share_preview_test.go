@@ -117,7 +117,7 @@ func TestSharePreviewInitialHTMLAndPNG(t *testing.T) {
 	if !strings.Contains(tags["og:image:alt"][0], key) || !strings.Contains(tags["twitter:image:alt"][0], key) {
 		t.Fatal("full public key missing from accessible image descriptions")
 	}
-	if rr.Header().Get("Cache-Control") != "public, max-age=300, must-revalidate" {
+	if rr.Header().Get("Cache-Control") != "no-cache" {
 		t.Fatal("document must revalidate before long-lived image cache")
 	}
 	imageURL, err := url.Parse(tags["og:image"][0])

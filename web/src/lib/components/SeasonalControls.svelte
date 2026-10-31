@@ -24,7 +24,7 @@
 				: 'border-line text-fg-dim hover:text-fg'}"
 			style={seasonal.on ? `border-color:color-mix(in srgb, ${s.accent} 60%, transparent);color:${s.accent}` : ''}
 		>
-			<span class="text-[0.85rem] leading-none" aria-hidden="true">{s.emoji}</span>
+			<img src={seasonal.src(s.emoji)} alt="" class="h-[0.95rem] w-[0.95rem]" />
 			<span>{seasonal.on ? `${s.label} on` : s.label}</span>
 		</button>
 	</Tooltip>
@@ -32,7 +32,7 @@
 		<div class="border-line/60 mt-2 space-y-0.5 border-t pt-2">
 			{#each s.legend as l (l.label)}
 				<div class="text-fg-dim flex items-center gap-1.5 text-[0.66rem]">
-					<span class="w-4 text-center text-[0.8rem] leading-none" aria-hidden="true">{l.icon}</span>{l.label}
+					<img src={seasonal.src(l.icon)} alt="" class="h-3.5 w-4 object-contain" />{l.label}
 				</div>
 			{/each}
 		</div>

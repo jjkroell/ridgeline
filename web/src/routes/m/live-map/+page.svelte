@@ -349,7 +349,7 @@
 				: 'text-fg-dim'}"
 			style={seasonal.on ? `border-color:color-mix(in srgb, ${ss.accent} 60%, transparent);color:${ss.accent}` : ''}
 		>
-			<span class="text-base leading-none {seasonal.on ? '' : 'opacity-60 grayscale'}" aria-hidden="true">{ss.emoji}</span>
+			<img src={seasonal.src(ss.emoji)} alt="" class="h-4 w-4 {seasonal.on ? '' : 'opacity-60 grayscale'}" />
 			{seasonal.on ? `${ss.short} on` : ss.short}
 		</button>
 	{/if}

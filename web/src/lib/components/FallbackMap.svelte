@@ -409,12 +409,10 @@
 				ctx.save();
 				ctx.translate(p.x, p.y);
 				ctx.rotate((Math.sin(now / 160 + i * 1.7) * 14 * Math.PI) / 180);
-				ctx.font = '20px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
-				ctx.textAlign = 'center';
-				ctx.textBaseline = 'middle';
 				ctx.shadowColor = 'rgba(0,0,0,0.55)';
 				ctx.shadowBlur = 3;
-				ctx.fillText(seasonal.icon(d.kind), 0, 1);
+				const pic = seasonal.picture(d.kind);
+				if (pic) ctx.drawImage(pic, -10, -10, 20, 20);
 				ctx.restore();
 				continue;
 			}

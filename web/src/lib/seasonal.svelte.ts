@@ -79,7 +79,7 @@ export const SEASONS: Season[] = [
 			{
 				emoji: '🎃',
 				title: 'Spooky packets on the live map',
-				body: 'Happy Halloween! On the live map, open Map Control and turn on Spooky packets (on a phone, tap the pumpkin at the bottom left). Every packet then flies across the map as a pumpkin, bat, ghost, witch, spider, web, skull or candy, one for each kind of packet, with a legend to tell them apart: 🎃 adverts, 🦇 channel messages, 👻 direct messages, 💀 requests. It is off unless you turn it on, and the choice is saved in this browser.'
+				body: 'Happy Halloween! On the live map, open Map Control and turn on Spooky packets (on a phone, tap the pumpkin at the bottom left). Every packet then flies across the map as a pumpkin, bat, ghost, witch, spider, web, skull or candy, one for each kind of packet, with a legend to tell them apart. It is off unless you turn it on, and the choice is saved in this browser.'
 			},
 			{
 				emoji: '⏱️',
@@ -87,7 +87,7 @@ export const SEASONS: Season[] = [
 				body: 'A new Speed slider in Map Control sets how fast packets travel, from a quarter speed (easy to follow each hop) up to three times faster. On a phone, tap the speed button next to the pumpkin to step through the speeds.'
 			}
 		],
-		tryLabel: '🎃 Try spooky packets'
+		tryLabel: 'Try spooky packets'
 	}
 ];
 
@@ -95,7 +95,14 @@ const KEY = 'ridgeline-livemap-season'; // id of the season this browser turned 
 const LEGACY_KEY = 'ridgeline-livemap-spooky'; // v0.24.34–35: '1' = Halloween on
 const PREVIEW_KEY = 'ridgeline-season-preview';
 
-const imageId = (icon: string) => 'season-' + [...icon].map((c) => c.codePointAt(0)!.toString(16)).join('-');
+const codepoints = (icon: string) => [...icon].map((c) => c.codePointAt(0)!.toString(16));
+const imageId = (icon: string) => 'season-' + codepoints(icon).join('-');
+
+/** Bundled picture of an emoji (static/seasonal, Noto Emoji). Emoji fonts vary
+ *  — some computers have none and draw plain black glyphs — so the icons are
+ *  pictures, not text. */
+const src = (icon: string) =>
+	'/seasonal/emoji_u' + codepoints(icon).filter((c) => c !== 'fe0f').join('_') + '.svg';
 
 // Drawn at 2× and registered with pixelRatio 2, so icons are 26 CSS px and sharp.
 const PX = 52;
@@ -105,6 +112,9 @@ class Seasonal {
 	#preview = $state('');
 	#enabled = $state('');
 	#loaded = false;
+	#pictures = new Map<string, HTMLImageElement>();
+	/** Bumped as each picture finishes loading, so canvas drawers redraw. */
+	pictures = $state(0);
 
 	/** The season in force now (or being previewed), else null. */
 	season = $derived.by((): Season | null => {
@@ -161,29 +171,79 @@ class Seasonal {
 		return imageId(this.icon(kind));
 	}
 
+	/** The bundled picture's URL, for <img>. */
+	src(icon: string): string {
+		return src(icon);
+	}
+
+	/** A payload type's picture once loaded (for canvas drawing), else null; starts the load. */
+	picture(kind: string | undefined): HTMLImageElement | null {
+		const icon = this.icon(kind);
+		if (!icon) return null;
+		const img = this.#load(icon);
+		return img.complete && img.naturalWidth > 0 ? img : null;
+	}
+
+	#load(icon: string): HTMLImageElement {
+		let img = this.#pictures.get(icon);
+		if (!img) {
+			img = new Image();
+			img.decoding = 'async';
+			img.onload = () => this.pictures++;
+			img.src = src(icon);
+			this.#pictures.set(icon, img);
+		}
+		return img;
+	}
+
 	/** Register the current season's icons as map images. A style swap drops
 	 *  images, so call this whenever the overlay layers are (re)added, and when
-	 *  the season changes. */
+	 *  the season changes. Pictures still loading are added when they arrive. */
 	ensureImages(map: maplibregl.Map) {
 		const s = this.season;
 		if (!s) return;
 		for (const icon of new Set([...Object.values(s.icons), s.other])) {
 			const id = imageId(icon);
 			if (map.hasImage(id)) continue;
-			const canvas = document.createElement('canvas');
-			canvas.width = canvas.height = PX;
-			const ctx = canvas.getContext('2d');
-			if (!ctx) continue;
-			ctx.textAlign = 'center';
-			ctx.textBaseline = 'middle';
-			ctx.font = `${PX * 0.78}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-			// A soft dark halo keeps light icons (ghost, web) readable on light basemaps.
-			ctx.shadowColor = 'rgba(0,0,0,0.55)';
-			ctx.shadowBlur = 4;
-			ctx.fillText(icon, PX / 2, PX / 2 + PX * 0.04);
-			map.addImage(id, ctx.getImageData(0, 0, PX, PX), { pixelRatio: 2 });
+			const img = this.#load(icon);
+			const add = (ok: boolean) => {
+				try {
+					if (map.hasImage(id)) return;
+					const data = raster(ok ? img : icon);
+					if (data) map.addImage(id, data, { pixelRatio: 2 });
+				} catch {
+					/* map gone or mid style swap; the next ensureImages call retries */
+				}
+			};
+			if (img.complete) add(img.naturalWidth > 0);
+			else {
+				img.addEventListener('load', () => add(true), { once: true });
+				img.addEventListener('error', () => add(false), { once: true });
+			}
 		}
 	}
+}
+
+/** One icon as map-image pixels: the bundled picture, or the emoji as text if
+ *  the picture failed to load. */
+function raster(from: HTMLImageElement | string): ImageData | null {
+	const canvas = document.createElement('canvas');
+	canvas.width = canvas.height = PX;
+	const ctx = canvas.getContext('2d');
+	if (!ctx) return null;
+	// A soft dark halo keeps light icons (ghost, web) readable on light basemaps.
+	ctx.shadowColor = 'rgba(0,0,0,0.55)';
+	ctx.shadowBlur = 4;
+	if (typeof from === 'string') {
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.font = `${PX * 0.78}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+		ctx.fillText(from, PX / 2, PX / 2 + PX * 0.04);
+	} else {
+		const pad = PX * 0.1;
+		ctx.drawImage(from, pad, pad, PX - 2 * pad, PX - 2 * pad);
+	}
+	return ctx.getImageData(0, 0, PX, PX);
 }
 
 export const seasonal = new Seasonal();

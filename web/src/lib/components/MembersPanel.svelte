@@ -1,5 +1,6 @@
 <script lang="ts">
-	// Registered-member management — promote/demote admins, block/unblock, remove —
+	// Registered-member management — promote/demote admins, verify an email by hand,
+	// block/unblock, remove —
 	// shared by the desktop (/admin) and mobile (/m/admin) consoles so the two stay
 	// in parity. Self-loading: it fetches the member list itself once admin status
 	// is confirmed, so host pages just drop it in. `compact` switches to the mobile
@@ -80,6 +81,22 @@
 		}
 	}
 
+	// For a member whose verification email never arrived (spam folder, bounce):
+	// they can sign in straight away.
+	async function verifyMember(u: AuthUser) {
+		memberBusyId = u.id;
+		membersError = '';
+		try {
+			await adminUsers.verify(auth.csrf, u.id);
+			await loadMembers();
+		} catch (e) {
+			membersError = String((e as Error).message ?? e);
+		} finally {
+			memberBusyId = null;
+		}
+	}
+	const unverified = $derived(members.filter((m) => !m.emailVerified).length);
+
 	async function removeMember(u: AuthUser) {
 		memberBusyId = u.id;
 		membersError = '';
@@ -124,6 +141,9 @@
 				MEMBERS
 			</h2>
 			<span class="label normal-case text-fg-faint">{members.length} registered</span>
+			{#if unverified}
+				<span class="label text-amber! normal-case">· {unverified} unverified</span>
+			{/if}
 		</button>
 		{#if open}
 			<button
@@ -151,6 +171,12 @@
 								>Owner</span
 							>
 						{/if}
+						{#if !m.emailVerified}
+							<span
+								class="bg-amber/15 text-amber rounded-full px-2 py-0.5 text-[0.62rem] font-600"
+								title="Hasn't confirmed their email, so can't sign in yet">Unverified</span
+							>
+						{/if}
 						{#if m.blocked}
 							<span class="bg-coral/15 text-coral rounded-full px-2 py-0.5 text-[0.62rem] font-600"
 								>Blocked</span
@@ -172,6 +198,16 @@
 				<!-- Moderation: never available for the owner or your own account. -->
 				{#if !m.isOwner && !self}
 					<div class="flex items-center gap-3">
+						{#if !m.emailVerified}
+							<button
+								onclick={() => verifyMember(m)}
+								disabled={memberBusyId === m.id}
+								title="Mark their email verified so they can sign in (their email never arrived)"
+								class="text-signal hover:text-signal/80 text-xs font-600 transition-colors disabled:opacity-50"
+							>
+								Verify email
+							</button>
+						{/if}
 						<button
 							onclick={() => setMemberBlocked(m, !m.blocked)}
 							disabled={memberBusyId === m.id}

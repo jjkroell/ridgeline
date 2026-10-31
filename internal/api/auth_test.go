@@ -265,3 +265,46 @@ func TestAdminModeration(t *testing.T) {
 		t.Errorf("deleted user login should be 401, got %d", resp.StatusCode)
 	}
 }
+
+func TestAdminVerifyUser(t *testing.T) {
+	st, base, done := newAuthEnv(t)
+	defer done()
+	owner := newClient(t, base)
+	owner.do("POST", "/api/auth/register",
+		map[string]string{"email": "owner@example.com", "password": "hunter2hunter2"}, false)
+
+	// With mail on, a new account would wait for its link; make one that is.
+	u, err := st.CreateUser("waiting@example.com", "x", "Waiting")
+	if err != nil || u.EmailVerified {
+		t.Fatalf("create unverified user: %v %v", err, u.EmailVerified)
+	}
+	token, err := st.CreateEmailVerification(u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Members can't; admins can.
+	member := newClient(t, base)
+	member.do("POST", "/api/auth/register",
+		map[string]string{"email": "member@example.com", "password": "hunter2hunter2"}, false)
+	if resp, _ := member.do("POST", "/api/admin/users/verify", map[string]any{"id": u.ID}, true); resp.StatusCode != 403 && resp.StatusCode != 401 {
+		t.Fatalf("non-admin verify: %d", resp.StatusCode)
+	}
+	if resp, _ := owner.do("POST", "/api/admin/users/verify", map[string]any{"id": u.ID}, true); resp.StatusCode != 200 {
+		t.Fatalf("admin verify: %d", resp.StatusCode)
+	}
+	got, _, _ := st.GetUserByID(u.ID)
+	if !got.EmailVerified {
+		t.Fatal("user should be verified")
+	}
+	if _, ok, _ := st.VerifyEmailToken(token); ok {
+		t.Error("the emailed link should be void after a manual verify")
+	}
+	// Again is a no-op; unknown id is 404.
+	if resp, _ := owner.do("POST", "/api/admin/users/verify", map[string]any{"id": u.ID}, true); resp.StatusCode != 200 {
+		t.Errorf("re-verify: %d", resp.StatusCode)
+	}
+	if resp, _ := owner.do("POST", "/api/admin/users/verify", map[string]any{"id": 9999}, true); resp.StatusCode != 404 {
+		t.Errorf("unknown user: %d", resp.StatusCode)
+	}
+}

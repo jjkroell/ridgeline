@@ -65,10 +65,15 @@ func (s *Store) VerifyEmailToken(token string) (User, bool, error) {
 	return s.GetUserByID(userID)
 }
 
-// MarkEmailVerified flags an account verified directly (used as a fallback when
-// email delivery is not configured, so accounts aren't stranded).
+// MarkEmailVerified flags an account verified directly: a fallback when email
+// delivery is not configured, so accounts aren't stranded, and an admin's manual
+// verify when the email never arrived. Like following the link, it voids the
+// account's outstanding verification links.
 func (s *Store) MarkEmailVerified(userID int64) error {
-	_, err := s.db.Exec(`UPDATE users SET email_verified = 1 WHERE id = ?`, userID)
+	if _, err := s.db.Exec(`UPDATE users SET email_verified = 1 WHERE id = ?`, userID); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`DELETE FROM email_verifications WHERE user_id = ?`, userID)
 	return err
 }
 

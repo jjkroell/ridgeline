@@ -495,6 +495,39 @@ func (s *Server) adminBlockUser(w http.ResponseWriter, r *http.Request, actor st
 	writeJSON(w, map[string]bool{"ok": true})
 }
 
+// adminVerifyUser marks an account's email verified by hand, for a member whose
+// verification email never arrived (spam folder, bounce). They can sign in at
+// once; their emailed link stops working.
+func (s *Server) adminVerifyUser(w http.ResponseWriter, r *http.Request, actor store.User) {
+	var req struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad request body")
+		return
+	}
+	if req.ID == 0 {
+		writeErr(w, http.StatusBadRequest, "user id required")
+		return
+	}
+	target, ok, err := s.store.GetUserByID(req.ID)
+	if err != nil {
+		s.fail(w, err)
+		return
+	} else if !ok {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if !target.EmailVerified {
+		if err := s.store.MarkEmailVerified(req.ID); err != nil {
+			s.fail(w, err)
+			return
+		}
+		s.log.Info("admin verified user email", "actor", actor.ID, "target", req.ID)
+	}
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
 // adminDeleteUser permanently removes an account and its sessions.
 func (s *Server) adminDeleteUser(w http.ResponseWriter, r *http.Request, actor store.User) {
 	var req struct {

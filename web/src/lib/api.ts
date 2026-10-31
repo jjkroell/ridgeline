@@ -1300,6 +1300,9 @@ export const adminUsers = {
       id,
       blocked,
     }),
+  /** Mark an account's email verified by hand (their email never arrived). */
+  verify: (csrf: string, id: number) =>
+    mutate<{ ok: boolean }>("/api/admin/users/verify", "POST", csrf, { id }),
   /** Permanently delete an account. */
   remove: (csrf: string, id: number) =>
     mutate<{ ok: boolean }>("/api/admin/users/delete", "POST", csrf, { id }),

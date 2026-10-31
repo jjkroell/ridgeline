@@ -468,22 +468,24 @@
 			>
 				<SpeedControl />
 				<ChimeControls />
-				<SeasonalControls />
 			</MapRoleFilter>
 			<BasemapSelector posClass={fbBanner ? 'top-16 right-3' : 'top-3 right-3'} />
+			<div class="pointer-events-none absolute {fbBanner ? 'top-16' : 'top-3'} left-1/2 z-10 flex w-[calc(100%-26rem)] min-w-[220px] -translate-x-1/2 justify-center">
+				<div class="pointer-events-auto"><SeasonalControls /></div>
+			</div>
 		{:else}
 		<div bind:this={mapEl} class="h-full w-full"></div>
 		<BasemapSelector />
 		<!-- Top-centre: the left (map control) and right (basemap) panels both
 		     expand downward when opened, so stacking under either collides. -->
-		<div data-map-center class="pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2">
+		<div data-map-center class="pointer-events-none absolute top-3 left-1/2 z-10 flex w-[calc(100%-26rem)] min-w-[220px] -translate-x-1/2 flex-col items-center gap-2">
 			<div class="pointer-events-auto"><CopyMapLink url={linkUrl} /></div>
+			<div class="pointer-events-auto"><SeasonalControls /></div>
 		</div>
 
 		<MapRoleFilter bind:selected={selectedRoles} title="Map Control" bind:open={mapCtrlOpen}>
 			<SpeedControl />
 			<ChimeControls />
-			<SeasonalControls />
 		</MapRoleFilter>
 		{/if}
 

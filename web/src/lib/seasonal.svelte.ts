@@ -79,7 +79,7 @@ export const SEASONS: Season[] = [
 			{
 				emoji: '🎃',
 				title: 'Spooky packets on the live map',
-				body: 'Happy Halloween! On the live map, open Map Control and turn on Spooky packets (on a phone, tap the pumpkin at the bottom left). Every packet then flies across the map as a pumpkin, bat, ghost, witch, spider, web, skull or candy, one for each kind of packet, with a legend to tell them apart. It is off unless you turn it on, and the choice is saved in this browser.'
+				body: 'Happy Halloween! On the live map, turn on Spooky packets at the top of the map (on a phone, tap the pumpkin at the bottom left). Every packet then flies across the map as a pumpkin, bat, ghost, witch, spider, web, skull or candy, one for each kind of packet, with a legend to tell them apart. It is off unless you turn it on, and the choice is saved in this browser.'
 			},
 			{
 				emoji: '⏱️',

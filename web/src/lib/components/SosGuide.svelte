@@ -212,7 +212,7 @@
 				KOD-BOT also listens on #sos. When it hears a trigger word it replies on #sos, addressed to you:
 			</p>
 			<p class="border-line text-fg bg-panel-2/40 rounded-[var(--radius)] border px-3 py-2 font-mono text-xs">
-				@[your name] *auto reply*&nbsp; An email was sent to users who have it enabled in Ridgeline.
+				@[your name] *auto reply*&nbsp; Email sent to Ridgeline alert users. Please reply with your location.
 			</p>
 			<ul class="text-fg-dim space-y-1.5">
 				<li class="flex gap-2">

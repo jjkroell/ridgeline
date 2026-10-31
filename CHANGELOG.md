@@ -4,6 +4,12 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.13] — 2026-10-30
+
+### Added
+- **The #sos guide shows how to see who's on the channel** in the MeshCore
+  app: open #sos, ⋮ → Channel Settings → Participants.
+
 ## [v0.24.12] — 2026-10-30
 
 ### Added

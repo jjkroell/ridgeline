@@ -3,7 +3,7 @@
 // on demand from the overview page. Bump CURRENT when there's something new to
 // announce and every visitor sees it once again.
 const STORAGE_KEY = 'ridgeline-announce-seen';
-export const CURRENT = '2026-10-sos-alert-emails';
+export const CURRENT = '2026-10-halloween-live-map';
 
 class Announce {
 	open = $state(false);

@@ -190,3 +190,54 @@ func TestSOSAlertTestMessages(t *testing.T) {
 		t.Fatalf("real alert after a tests-only batch: real=%d tests=%d", to("real@example.com"), to("tests@example.com"))
 	}
 }
+
+// A real call right after a test email doesn't wait out the 10-minute gap,
+// whether it arrives after the send or is already queued behind the gap; a
+// real email still holds back the next one.
+func TestSOSAlertRealSkipsGapAfterTest(t *testing.T) {
+	store.RegisterSOSChannel()
+	st, err := store.Open(filepath.Join(t.TempDir(), "api.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv := New(st, slog.New(slog.NewTextHandler(io.Discard, nil)), "test", "")
+	fm := &fakeMailer{base: "https://ridgeline.example"}
+	srv.SetMailer(fm)
+	srv.sosMail.coalesce, srv.sosMail.minGap = 50*time.Millisecond, 10*time.Second
+	st.SetSOSAlertHook(srv.NotifySOSAlert)
+
+	u, _ := st.CreateUser("jesse@example.com", "x", "Jesse")
+	st.SetSOSAlerts(u.ID, true)
+	st.SetSOSAlertTests(u.ID, true)
+
+	send := func(msg string) {
+		t.Helper()
+		p, raw := sosPacket(t, "Jesse", msg)
+		if err := st.Record(store.Observation{Packet: p, RawHex: raw, ObserverID: "obs", ReceivedAt: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	count := func() int { return len(fm.ofKind("sos-alert")) }
+
+	send("SOS test of the system")
+	time.Sleep(200 * time.Millisecond)
+	if count() != 1 {
+		t.Fatalf("test alert: %d emails, want 1", count())
+	}
+	send("SOS test again") // a test still waits out the gap…
+	time.Sleep(200 * time.Millisecond)
+	if count() != 1 {
+		t.Fatalf("second test inside the gap: %d emails, want 1", count())
+	}
+	send("SOS hurt on the trail") // …but a real call pulls the queued send forward
+	time.Sleep(200 * time.Millisecond)
+	if count() != 2 {
+		t.Fatalf("real alert queued behind a test gap: %d emails, want 2", count())
+	}
+	send("SOS second real call") // after a real email the gap holds
+	time.Sleep(200 * time.Millisecond)
+	if count() != 2 {
+		t.Fatalf("real alert inside a real gap: %d emails, want still 2", count())
+	}
+}

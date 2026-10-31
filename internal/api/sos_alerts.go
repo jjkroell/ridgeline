@@ -19,6 +19,8 @@ import (
 // alerts are batched: the first waits sosAlertCoalesce for others to join it,
 // and after a send the next waits until sosAlertMinGap has passed, carrying
 // everything heard meanwhile. A burst of messages is a few emails, not dozens.
+// The gap after an email that held only test messages doesn't hold back a
+// real call: that goes out after the usual 30 s.
 const (
 	sosAlertCoalesce = 30 * time.Second
 	sosAlertMinGap   = 10 * time.Minute
@@ -34,8 +36,10 @@ type sosNotifier struct {
 	pending  []store.SOSAlertMsg
 	timer    *time.Timer
 	lastSent time.Time
-	coalesce time.Duration
-	minGap   time.Duration
+	// lastTests: the last email held only test messages.
+	lastTests bool
+	coalesce  time.Duration
+	minGap    time.Duration
 }
 
 // NotifySOSAlert queues a newly heard #sos alert for the opted-in accounts.
@@ -48,11 +52,17 @@ func (s *Server) NotifySOSAlert(m store.SOSAlertMsg) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.pending = append(n.pending, m)
+	urgent := n.lastTests && !sosTestRe.MatchString(m.Message)
 	if n.timer != nil {
-		return // a send is already scheduled; this message rides along
+		// A send is already scheduled; this message rides along. A real call
+		// queued behind a tests-only gap pulls the send forward instead.
+		if urgent && n.timer.Stop() {
+			n.timer = time.AfterFunc(n.coalesce, s.flushSOSAlerts)
+		}
+		return
 	}
 	wait := n.coalesce
-	if gap := time.Until(n.lastSent.Add(n.minGap)); gap > wait {
+	if gap := time.Until(n.lastSent.Add(n.minGap)); gap > wait && !urgent {
 		wait = gap
 	}
 	n.timer = time.AfterFunc(wait, s.flushSOSAlerts)
@@ -63,8 +73,15 @@ func (s *Server) flushSOSAlerts() {
 	n := &s.sosMail
 	n.mu.Lock()
 	batch := n.pending
-	prevSent := n.lastSent
+	prevSent, prevTests := n.lastSent, n.lastTests
 	n.pending, n.timer, n.lastSent = nil, nil, time.Now()
+	n.lastTests = true
+	for _, m := range batch {
+		if !sosTestRe.MatchString(m.Message) {
+			n.lastTests = false
+			break
+		}
+	}
 	n.mu.Unlock()
 	if len(batch) == 0 {
 		return
@@ -107,7 +124,7 @@ func (s *Server) flushSOSAlerts() {
 		// Only test messages, and nobody wanted those: no email went out, so
 		// a real call right after shouldn't wait out the gap.
 		n.mu.Lock()
-		n.lastSent = prevSent
+		n.lastSent, n.lastTests = prevSent, prevTests
 		if n.timer != nil && n.timer.Stop() {
 			// A message arrived meanwhile and was scheduled behind the gap.
 			n.timer = time.AfterFunc(n.coalesce, s.flushSOSAlerts)

@@ -16,12 +16,21 @@ class Auth {
 	 *  the claimed badge show YOUR nodes in a distinct colour from others'. */
 	myClaims = $state<Set<string>>(new Set());
 
+	/** Bumped by every sign-in/out, so a slower /me probe can't undo one. */
+	#generation = 0;
+
 	async init() {
+		const gen = this.#generation;
 		try {
 			const r = await authApi.me();
-			this.user = r.user;
-			this.csrf = r.csrfToken ?? '';
-			this.unseenShares = r.unseenShares ?? 0;
+			// A page that signs in on load (the emailed verify link) can finish
+			// before this probe, which went out without the new session cookie
+			// and would report signed out.
+			if (gen === this.#generation) {
+				this.user = r.user;
+				this.csrf = r.csrfToken ?? '';
+				this.unseenShares = r.unseenShares ?? 0;
+			}
 		} catch {
 			// Offline or server error — treat as signed out; UI stays usable.
 		}
@@ -130,6 +139,7 @@ class Auth {
 			await authApi.logout();
 		} finally {
 			purgeApiCache();
+			this.#generation++;
 			this.user = null;
 			this.csrf = '';
 			this.unseenShares = 0;
@@ -143,6 +153,7 @@ class Auth {
 	async deleteAccount(password: string) {
 		await account.deleteAccount(this.csrf, password);
 		purgeApiCache();
+		this.#generation++;
 		this.user = null;
 		this.csrf = '';
 		this.unseenShares = 0;
@@ -151,6 +162,7 @@ class Auth {
 
 	#adopt(r: { user: AuthUser | null; csrfToken?: string; unseenShares?: number }) {
 		purgeApiCache(); // nothing from a previous account survives a sign-in
+		this.#generation++;
 		this.user = r.user;
 		this.csrf = r.csrfToken ?? '';
 		this.unseenShares = r.unseenShares ?? 0;

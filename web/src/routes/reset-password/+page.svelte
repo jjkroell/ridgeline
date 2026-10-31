@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto, replaceState } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { auth } from '$lib/auth.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -15,8 +15,10 @@
 	onMount(() => {
 		token = page.url.searchParams.get('token') ?? '';
 		// Drop the single-use token from the address bar before analytics (or
-		// anything else that reads the URL) can record it.
-		if (token) replaceState(page.url.pathname, {});
+		// anything else that reads the URL) can record it. The browser's own
+		// replaceState, not SvelteKit's: on a fresh load (the emailed link) this
+		// runs before the router has started, and SvelteKit's throws.
+		if (token) history.replaceState(history.state, '', page.url.pathname);
 		if (!token) phase = 'missing';
 	});
 

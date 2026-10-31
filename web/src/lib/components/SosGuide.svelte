@@ -105,7 +105,8 @@
 				<div class="border-line rounded-[var(--radius)] border px-4 py-3">
 					<div class="label">1 · You send</div>
 					<p class="text-fg-dim mt-1">
-						You post on #sos from your radio or app, e.g.
+						You post on #sos from your radio or app (using a
+						<a href="#triggers" class="text-coral hover:underline">trigger word</a>), e.g.
 						<span class="text-fg font-mono">SOS twisted ankle at the Elk Lake trailhead, need help getting out</span>.
 					</p>
 					<p

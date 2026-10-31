@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,10 @@ const (
 	sosAlertMinGap   = 10 * time.Minute
 	sosAlertMaxShown = 20 // messages listed in one email; the rest are counted
 )
+
+// sosTestRe marks an alert that says it's a test ("SOS test of the auto
+// reply"). Those go only to accounts that opted in to test messages.
+var sosTestRe = regexp.MustCompile(`(?i)\btest(s|ing|ed)?\b`)
 
 type sosNotifier struct {
 	mu       sync.Mutex
@@ -58,6 +63,7 @@ func (s *Server) flushSOSAlerts() {
 	n := &s.sosMail
 	n.mu.Lock()
 	batch := n.pending
+	prevSent := n.lastSent
 	n.pending, n.timer, n.lastSent = nil, nil, time.Now()
 	n.mu.Unlock()
 	if len(batch) == 0 {
@@ -71,11 +77,45 @@ func (s *Server) flushSOSAlerts() {
 	if len(users) == 0 {
 		return
 	}
-	subject, text, body := s.sosAlertEmail(batch)
-	for _, u := range users {
-		s.mail.SendAsync("sos-alert", u.Email, subject, text, body)
+	// Accounts that didn't opt in to test messages get the batch without them,
+	// or nothing if that's all it held.
+	var real []store.SOSAlertMsg
+	for _, m := range batch {
+		if !sosTestRe.MatchString(m.Message) {
+			real = append(real, m)
+		}
 	}
-	s.log.Info("sos alert emails sent", "messages", len(batch), "recipients", len(users))
+	var all, noTests *[3]string
+	sent := 0
+	for _, u := range users {
+		msgs, cached := batch, &all
+		if !u.SOSAlertTests {
+			msgs, cached = real, &noTests
+		}
+		if len(msgs) == 0 {
+			continue
+		}
+		if *cached == nil {
+			subject, text, body := s.sosAlertEmail(msgs)
+			*cached = &[3]string{subject, text, body}
+		}
+		e := *cached
+		s.mail.SendAsync("sos-alert", u.Email, e[0], e[1], e[2])
+		sent++
+	}
+	if sent == 0 {
+		// Only test messages, and nobody wanted those: no email went out, so
+		// a real call right after shouldn't wait out the gap.
+		n.mu.Lock()
+		n.lastSent = prevSent
+		if n.timer != nil && n.timer.Stop() {
+			// A message arrived meanwhile and was scheduled behind the gap.
+			n.timer = time.AfterFunc(n.coalesce, s.flushSOSAlerts)
+		}
+		n.mu.Unlock()
+		return
+	}
+	s.log.Info("sos alert emails sent", "messages", len(batch), "tests", len(batch)-len(real), "recipients", sent)
 }
 
 // sosAlertEmail renders one alert email for a batch (oldest first).
@@ -144,18 +184,28 @@ You're receiving this because you turned on #sos alert emails. Turn them off und
 	return subject, text, body
 }
 
-// accountSOSAlerts turns the caller's #sos alert emails on or off.
+// accountSOSAlerts turns the caller's #sos alert emails on or off, and
+// whether they include test messages. Either field may be sent alone.
 func (s *Server) accountSOSAlerts(w http.ResponseWriter, r *http.Request, user store.User) {
 	var req struct {
-		Enabled bool `json:"enabled"`
+		Enabled *bool `json:"enabled"`
+		Tests   *bool `json:"tests"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || (req.Enabled == nil && req.Tests == nil) {
 		writeErr(w, http.StatusBadRequest, "bad request body")
 		return
 	}
-	if err := s.store.SetSOSAlerts(user.ID, req.Enabled); err != nil {
-		s.fail(w, err)
-		return
+	if req.Enabled != nil {
+		if err := s.store.SetSOSAlerts(user.ID, *req.Enabled); err != nil {
+			s.fail(w, err)
+			return
+		}
+	}
+	if req.Tests != nil {
+		if err := s.store.SetSOSAlertTests(user.ID, *req.Tests); err != nil {
+			s.fail(w, err)
+			return
+		}
 	}
 	s.returnUpdatedUser(w, user.ID)
 }

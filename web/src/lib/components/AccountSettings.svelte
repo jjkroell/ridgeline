@@ -46,6 +46,21 @@
 		}
 	}
 
+	async function toggleSOSTests(e: Event) {
+		const box = e.currentTarget as HTMLInputElement;
+		sosBusy = true;
+		sosMsg = '';
+		try {
+			await auth.setSOSAlertTests(box.checked);
+			sosMsg = box.checked ? 'Test messages included.' : 'Test messages left out.';
+		} catch (err) {
+			box.checked = !box.checked;
+			sosMsg = String((err as Error).message ?? err);
+		} finally {
+			sosBusy = false;
+		}
+	}
+
 	// Email
 	let newEmail = $state('');
 	let emailPw = $state('');
@@ -159,6 +174,25 @@
 				</span>
 			</span>
 		</label>
+		{#if u?.sosAlerts}
+			<label class="mt-2.5 flex cursor-pointer items-start gap-3 pl-7" for="acct-sos-tests">
+				<input
+					id="acct-sos-tests"
+					type="checkbox"
+					checked={u?.sosAlertTests ?? false}
+					disabled={sosBusy}
+					onchange={toggleSOSTests}
+					class="accent-coral mt-0.5 h-4 w-4 shrink-0"
+				/>
+				<span class="min-w-0">
+					<span class="text-fg block text-sm font-600">Include test messages</span>
+					<span class="text-fg-faint mt-0.5 block text-xs leading-relaxed">
+						Also email me when the message says it's a test — “SOS test”, “testing” — like the ones people send
+						to try #sos. Off: only real calls.
+					</span>
+				</span>
+			</label>
+		{/if}
 		{#if sosMsg}<p class="text-signal mt-1.5 pl-7 text-xs">{sosMsg}</p>{/if}
 	</div>
 

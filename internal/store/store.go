@@ -108,7 +108,8 @@ CREATE TABLE IF NOT EXISTS users (
 	protected     INTEGER NOT NULL DEFAULT 0, -- the initial/owner admin: cannot be demoted/blocked/removed
 	created_at    TEXT NOT NULL,
 	last_login    TEXT,
-	sos_alerts    INTEGER NOT NULL DEFAULT 0 -- opted in to #sos alert emails
+	sos_alerts    INTEGER NOT NULL DEFAULT 0, -- opted in to #sos alert emails
+	sos_alert_tests INTEGER NOT NULL DEFAULT 0 -- …including messages that say they're a test
 );
 
 -- sessions are server-side so they can be revoked. token_hash is the SHA-256 of
@@ -530,6 +531,9 @@ func Open(path string) (*Store, error) {
 	db.Exec(`ALTER TABLE users ADD COLUMN protected INTEGER NOT NULL DEFAULT 0`)
 	// #sos alert emails are opt-in: every existing account starts off.
 	db.Exec(`ALTER TABLE users ADD COLUMN sos_alerts INTEGER NOT NULL DEFAULT 0`)
+	// Test messages on #sos ("SOS test…") are left out of those emails unless
+	// the account opts in to them too.
+	db.Exec(`ALTER TABLE users ADD COLUMN sos_alert_tests INTEGER NOT NULL DEFAULT 0`)
 	// Email verification: new accounts must confirm their address before logging
 	// in. Accounts that predate this feature are grandfathered as verified on the
 	// one-time column add, so nobody is locked out.

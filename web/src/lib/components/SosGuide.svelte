@@ -171,7 +171,8 @@
 						on #sos alerts under <a href="{m}/account#sos-alerts" class="text-coral hover:underline">Account</a>
 						(needs a verified email). It works while Ridgeline is closed. The first email waits about 30 seconds so
 						messages sent together arrive as one; after that, at most one email every 10 minutes, carrying
-						everything heard in between.</span
+						everything heard in between. Messages that say they're a test ("SOS test…") are left out unless you
+						tick <span class="text-fg">Include test messages</span> there.</span
 					>
 				</li>
 			</ul>

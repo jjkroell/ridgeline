@@ -32,6 +32,9 @@ type User struct {
 	// SOSAlerts opts the account in to an email when an emergency word is
 	// heard on #sos (see api/sos_alerts.go). Off unless the user turns it on.
 	SOSAlerts bool `json:"sosAlerts"`
+	// SOSAlertTests also emails #sos alerts that say they're a test ("SOS
+	// test…"); off by default, so subscribers only hear about real calls.
+	SOSAlertTests bool `json:"sosAlertTests"`
 }
 
 // Session is a server-side login session keyed by the SHA-256 of the cookie
@@ -95,7 +98,7 @@ func (s *Store) GetUserByEmail(email string) (User, bool, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	return s.scanUser(s.db.QueryRow(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
-		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts
+		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests
 		FROM users WHERE email = ?`, email))
 }
 
@@ -103,14 +106,14 @@ func (s *Store) GetUserByEmail(email string) (User, bool, error) {
 func (s *Store) GetUserByID(id int64) (User, bool, error) {
 	return s.scanUser(s.db.QueryRow(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
-		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts
+		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests
 		FROM users WHERE id = ?`, id))
 }
 
 func (s *Store) scanUser(row *sql.Row) (User, bool, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin,
-		&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin, &u.EmailVerified, &u.SOSAlerts)
+		&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin, &u.EmailVerified, &u.SOSAlerts, &u.SOSAlertTests)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, false, nil
 	}
@@ -131,7 +134,7 @@ func (s *Store) SetUserLastLogin(id int64) error {
 func (s *Store) ListUsers() ([]User, error) {
 	rows, err := s.db.Query(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
-		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts
+		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests
 		FROM users ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -141,7 +144,7 @@ func (s *Store) ListUsers() ([]User, error) {
 	for rows.Next() {
 		var u User
 		if err := rows.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin,
-			&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin, &u.EmailVerified, &u.SOSAlerts); err != nil {
+			&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin, &u.EmailVerified, &u.SOSAlerts, &u.SOSAlertTests); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -197,11 +200,18 @@ func (s *Store) SetSOSAlerts(id int64, on bool) error {
 	return err
 }
 
+// SetSOSAlertTests chooses whether an account's #sos alert emails include
+// test messages.
+func (s *Store) SetSOSAlertTests(id int64, on bool) error {
+	_, err := s.db.Exec(`UPDATE users SET sos_alert_tests = ? WHERE id = ?`, boolInt(on), id)
+	return err
+}
+
 // SOSAlertRecipients returns the accounts to email about a #sos alert: opted
 // in, address verified, not blocked.
 func (s *Store) SOSAlertRecipients() ([]User, error) {
 	rows, err := s.db.Query(`
-		SELECT id, email, COALESCE(display_name,'') FROM users
+		SELECT id, email, COALESCE(display_name,''), sos_alert_tests FROM users
 		WHERE sos_alerts = 1 AND email_verified = 1 AND blocked = 0`)
 	if err != nil {
 		return nil, err
@@ -210,7 +220,7 @@ func (s *Store) SOSAlertRecipients() ([]User, error) {
 	var out []User
 	for rows.Next() {
 		u := User{SOSAlerts: true, EmailVerified: true}
-		if err := rows.Scan(&u.ID, &u.Email, &u.DisplayName); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.DisplayName, &u.SOSAlertTests); err != nil {
 			return nil, err
 		}
 		out = append(out, u)

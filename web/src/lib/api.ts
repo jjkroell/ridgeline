@@ -825,6 +825,8 @@ export interface AuthUser {
   emailVerified: boolean;
   /** Opted in to an email when an emergency word is heard on #sos. */
   sosAlerts: boolean;
+  /** …including #sos messages that say they're a test. */
+  sosAlertTests: boolean;
   createdAt: string;
   lastLogin?: string;
 }
@@ -915,6 +917,9 @@ export const account = {
   /** Turn #sos alert emails on or off; returns the updated account. */
   setSOSAlerts: (csrf: string, enabled: boolean) =>
     mutate<AuthUser>("/api/account/sos-alerts", "PUT", csrf, { enabled }),
+  /** Include #sos test messages in those emails; returns the updated account. */
+  setSOSAlertTests: (csrf: string, tests: boolean) =>
+    mutate<AuthUser>("/api/account/sos-alerts", "PUT", csrf, { tests }),
   /** Change password after re-authenticating with the current one. */
   changePassword: (
     csrf: string,

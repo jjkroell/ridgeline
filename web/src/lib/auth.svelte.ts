@@ -110,6 +110,10 @@ class Auth {
 		this.user = await account.setSOSAlerts(this.csrf, enabled);
 	}
 
+	async setSOSAlertTests(tests: boolean) {
+		this.user = await account.setSOSAlertTests(this.csrf, tests);
+	}
+
 	/** Change password (re-auth with the current one). Session stays valid. */
 	async changePassword(currentPassword: string, newPassword: string) {
 		await account.changePassword(this.csrf, currentPassword, newPassword);

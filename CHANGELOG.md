@@ -4,6 +4,18 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.14] — 2026-10-30
+
+### Added
+- **"Include test messages"** under Account → #sos alert emails (off by
+  default): a #sos alert whose message also says test/tests/testing/tested
+  ("SOS test of the auto reply") is emailed only to accounts that tick it.
+  Others get the batch without it, or nothing if it held only tests; a
+  tests-only batch nobody wanted doesn't start the 10-minute gap. Pulses and
+  browser alerts are unchanged. New column `users.sos_alert_tests`;
+  `PUT /api/account/sos-alerts` takes `enabled` and/or `tests`. Noted in the
+  /sos guide.
+
 ## [v0.24.13] — 2026-10-30
 
 ### Added

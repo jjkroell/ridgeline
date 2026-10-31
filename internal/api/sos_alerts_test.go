@@ -125,3 +125,68 @@ func TestSOSAlertEmails(t *testing.T) {
 		t.Fatalf("opted-out account still mailed: %d emails", n)
 	}
 }
+
+// Alerts that say they're a test reach only accounts opted in to tests, and a
+// batch of nothing but tests doesn't hold up the next real call.
+func TestSOSAlertTestMessages(t *testing.T) {
+	store.RegisterSOSChannel()
+	st, err := store.Open(filepath.Join(t.TempDir(), "api.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv := New(st, slog.New(slog.NewTextHandler(io.Discard, nil)), "test", "")
+	fm := &fakeMailer{base: "https://ridgeline.example"}
+	srv.SetMailer(fm)
+	srv.sosMail.coalesce, srv.sosMail.minGap = 50*time.Millisecond, 10*time.Second
+	st.SetSOSAlertHook(srv.NotifySOSAlert)
+
+	real, _ := st.CreateUser("real@example.com", "x", "Real") // first user: verified
+	tester, _ := st.CreateUser("tests@example.com", "x", "Tester")
+	st.MarkEmailVerified(tester.ID)
+	st.SetSOSAlerts(real.ID, true)
+	st.SetSOSAlerts(tester.ID, true)
+	st.SetSOSAlertTests(tester.ID, true)
+	if u, _, _ := st.GetUserByID(tester.ID); !u.SOSAlertTests {
+		t.Fatal("sosAlertTests not stored")
+	}
+
+	send := func(msg string) {
+		t.Helper()
+		p, raw := sosPacket(t, "Jesse", msg)
+		if err := st.Record(store.Observation{Packet: p, RawHex: raw, ObserverID: "obs", ReceivedAt: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	to := func(addr string) (n int) {
+		for _, m := range fm.ofKind("sos-alert") {
+			if m.to == addr {
+				n++
+			}
+		}
+		return
+	}
+
+	send("Sos testing bot auto reply")
+	time.Sleep(200 * time.Millisecond)
+	if to("tests@example.com") != 1 || to("real@example.com") != 0 {
+		t.Fatalf("test alert: tests=%d real=%d, want 1 and 0", to("tests@example.com"), to("real@example.com"))
+	}
+
+	// The tester's email started the gap, so the next waits; reset the gap to
+	// check a tests-only batch on its own.
+	srv.sosMail.mu.Lock()
+	srv.sosMail.lastSent = time.Time{}
+	srv.sosMail.mu.Unlock()
+	st.SetSOSAlertTests(tester.ID, false)
+	send("another SOS test")
+	time.Sleep(200 * time.Millisecond)
+	if n := len(fm.ofKind("sos-alert")); n != 1 {
+		t.Fatalf("tests-only batch with no takers sent %d emails, want still 1", n)
+	}
+	send("SOS stuck on the ridge") // real: must not wait out a 10 s gap
+	time.Sleep(200 * time.Millisecond)
+	if to("real@example.com") != 1 || to("tests@example.com") != 2 {
+		t.Fatalf("real alert after a tests-only batch: real=%d tests=%d", to("real@example.com"), to("tests@example.com"))
+	}
+}

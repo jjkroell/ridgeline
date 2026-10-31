@@ -20,7 +20,7 @@
 	import { live, hashColor } from '$lib/live.svelte';
 	import { PulseEngine } from '$lib/live-pulse';
 	import { chime } from '$lib/live-audio.svelte';
-	import { spooky, spookyIcon } from '$lib/spooky.svelte';
+	import { seasonal } from '$lib/seasonal.svelte';
 	import { liveSpeed } from '$lib/live-speed.svelte';
 	import { basemap } from '$lib/basemap.svelte';
 	import { leafletBasemap } from '$lib/leaflet-basemap';
@@ -393,7 +393,7 @@
 			ctx.stroke();
 		}
 
-		// Travelling head: a glow halo under a white dot (or a Halloween icon).
+		// Travelling head: a glow halo under a white dot (or the season's icon).
 		for (const [i, d] of out.dots.entries()) {
 			const p = px(d.at);
 			ctx.globalAlpha = 0.5;
@@ -405,7 +405,7 @@
 			ctx.fill();
 			ctx.shadowBlur = 0;
 			ctx.globalAlpha = 1;
-			if (spooky.on) {
+			if (seasonal.on) {
 				ctx.save();
 				ctx.translate(p.x, p.y);
 				ctx.rotate((Math.sin(now / 160 + i * 1.7) * 14 * Math.PI) / 180);
@@ -414,7 +414,7 @@
 				ctx.textBaseline = 'middle';
 				ctx.shadowColor = 'rgba(0,0,0,0.55)';
 				ctx.shadowBlur = 3;
-				ctx.fillText(spookyIcon(d.kind), 0, 1);
+				ctx.fillText(seasonal.icon(d.kind), 0, 1);
 				ctx.restore();
 				continue;
 			}
@@ -431,7 +431,7 @@
 
 	onMount(() => {
 		if (audio) chime.load();
-		spooky.load();
+		seasonal.load();
 		liveSpeed.load();
 		let destroyed = false;
 		(async () => {

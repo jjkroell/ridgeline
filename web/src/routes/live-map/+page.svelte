@@ -32,10 +32,10 @@
 	import NodeInspector from '$lib/components/NodeInspector.svelte';
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
 	import ChimeControls from '$lib/components/ChimeControls.svelte';
-	import SpookyControls from '$lib/components/SpookyControls.svelte';
+	import SeasonalControls from '$lib/components/SeasonalControls.svelte';
 	import SpeedControl from '$lib/components/SpeedControl.svelte';
 	import { liveSpeed } from '$lib/live-speed.svelte';
-	import { spooky, spookyImageId, ensureSpookyImages } from '$lib/spooky.svelte';
+	import { seasonal } from '$lib/seasonal.svelte';
 	import { chime } from '$lib/live-audio.svelte';
 	import { hasWebGL } from '$lib/webgl';
 
@@ -127,7 +127,7 @@
 				type: 'Feature',
 				geometry: { type: 'Point', coordinates: d.at },
 				// icon + rot drive the Halloween heads: each wobbles on its own phase.
-				properties: { color: d.color, icon: spookyImageId(d.kind), rot: Math.sin(now / 160 + i * 1.7) * 14 }
+				properties: { color: d.color, icon: seasonal.imageId(d.kind), rot: Math.sin(now / 160 + i * 1.7) * 14 }
 			})) as Feature[]
 		});
 		(map.getSource('pulse-rings') as maplibregl.GeoJSONSource)?.setData({
@@ -302,10 +302,9 @@
 				'circle-stroke-color': ['get', 'color']
 			}
 		});
-		// Halloween heads: the comet travels as a pumpkin/bat/ghost… instead of the dot.
-		ensureSpookyImages(map);
+		// Seasonal heads: the comet travels as the season's icon (pumpkin, bat…) instead of the dot.
 		map.addLayer({
-			id: 'pulse-spooky',
+			id: 'pulse-season',
 			type: 'symbol',
 			source: 'pulse-dots',
 			layout: {
@@ -316,18 +315,20 @@
 				'icon-ignore-placement': true
 			}
 		});
-		applySpooky();
+		applySeason();
 	}
 
-	// Swap the comet head between the plain dot and the Halloween icon.
-	function applySpooky() {
-		if (!map?.getLayer('pulse-spooky')) return;
-		map.setLayoutProperty('pulse-spooky', 'visibility', spooky.on ? 'visible' : 'none');
-		map.setLayoutProperty('pulse-dots', 'visibility', spooky.on ? 'none' : 'visible');
+	// Swap the comet head between the plain dot and the season's icon.
+	function applySeason() {
+		if (!map?.getLayer('pulse-season')) return;
+		if (seasonal.on) seasonal.ensureImages(map);
+		map.setLayoutProperty('pulse-season', 'visibility', seasonal.on ? 'visible' : 'none');
+		map.setLayoutProperty('pulse-dots', 'visibility', seasonal.on ? 'none' : 'visible');
 	}
 	$effect(() => {
-		void spooky.on;
-		applySpooky();
+		void seasonal.on;
+		void seasonal.season;
+		applySeason();
 	});
 
 	// Interaction handlers — bound once. MapLibre keeps layer-id listeners across
@@ -373,7 +374,7 @@
 		// Restores sound on/off + tuning; if sound was left on it arms the
 		// gesture unlock the browser requires before audio can start.
 		chime.load();
-		spooky.load();
+		seasonal.load();
 		liveSpeed.load();
 
 		basemap.init();
@@ -467,7 +468,7 @@
 			>
 				<SpeedControl />
 				<ChimeControls />
-				<SpookyControls />
+				<SeasonalControls />
 			</MapRoleFilter>
 			<BasemapSelector posClass={fbBanner ? 'top-16 right-3' : 'top-3 right-3'} />
 		{:else}
@@ -482,7 +483,7 @@
 		<MapRoleFilter bind:selected={selectedRoles} title="Map Control" bind:open={mapCtrlOpen}>
 			<SpeedControl />
 			<ChimeControls />
-			<SpookyControls />
+			<SeasonalControls />
 		</MapRoleFilter>
 		{/if}
 

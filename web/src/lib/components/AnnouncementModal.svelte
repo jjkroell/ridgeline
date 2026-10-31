@@ -3,26 +3,17 @@
 	import { announce } from '$lib/announce.svelte';
 	import { theme } from '$lib/theme.svelte';
 	import { goto } from '$app/navigation';
-	import { spooky } from '$lib/spooky.svelte';
+	import { onMount } from 'svelte';
+	import { seasonal } from '$lib/seasonal.svelte';
 
-	// Each entry is one new capability, in user-facing terms. The newest
-	// release's items lead (orange for Halloween), then #sos (red); `items`
-	// below are the previous release's, kept under an "Earlier this week" label.
-	const halloween: { emoji: string; title: string; body: string }[] = [
-		{
-			emoji: '🎃',
-			title: 'Spooky packets on the live map',
-			body: 'Happy Halloween! On the live map, open Map Control and turn on Spooky packets (on a phone, tap the pumpkin at the bottom left). Every packet then flies across the map as a pumpkin, bat, ghost, witch, spider, web, skull or candy, one for each kind of packet, with a legend to tell them apart: 🎃 adverts, 🦇 channel messages, 👻 direct messages, 💀 requests. It is off unless you turn it on, and the choice is saved in this browser.'
-		},
-		{
-			emoji: '⏱️',
-			title: 'Slow the packets down, or speed them up',
-			body: 'A new Speed slider in Map Control sets how fast packets travel, from a quarter speed (easy to follow each hop) up to three times faster. On a phone, tap the speed button next to the pumpkin to step through the speeds.'
-		}
-	];
-	function trySpooky() {
-		spooky.load();
-		if (!spooky.on) spooky.toggle();
+	// Each entry is one new capability, in user-facing terms. While a season is
+	// in force its own items lead (see $lib/seasonal.svelte; they vanish when it
+	// ends), then the newest release's (red for #sos); `items` below are the
+	// previous release's, kept under an "Earlier this week" label.
+	onMount(() => seasonal.load());
+	const season = $derived(seasonal.season);
+	function trySeason() {
+		if (!seasonal.on) seasonal.toggle();
 		announce.close();
 		goto('/live-map');
 	}
@@ -125,10 +116,11 @@
 		</div>
 
 		<div class="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+			{#if season}
 			<ul class="flex flex-col gap-4">
-				{#each halloween as item (item.title)}
+				{#each season.announce as item (item.title)}
 					<li class="flex items-start gap-3">
-						<span class="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg leading-none" style="background:color-mix(in srgb, #ff7a1a 16%, transparent)" aria-hidden="true">{item.emoji}</span>
+						<span class="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg leading-none" style="background:color-mix(in srgb, {season.accent} 16%, transparent)" aria-hidden="true">{item.emoji}</span>
 						<div class="min-w-0">
 							<div class="text-fg text-sm font-600">{item.title}</div>
 							<div class="text-fg-dim mt-0.5 text-sm leading-relaxed">{item.body}</div>
@@ -140,6 +132,7 @@
 			<div class="border-line/60 mt-5 mb-4 flex items-center gap-3 border-t pt-4">
 				<span class="label" data-caps>Also new this week: #sos</span>
 			</div>
+			{/if}
 
 			<ul class="flex flex-col gap-4">
 				{#each latest as item (item.title)}
@@ -203,11 +196,14 @@
 				onclick={() => announce.close()}
 				class="text-coral hover:brightness-125 text-sm font-600 transition-[filter]">Open #sos</a
 			>
-			<button
-				onclick={trySpooky}
-				class="rounded-[var(--radius)] border border-[#ff7a1a]/50 px-4 py-2 text-sm font-600 text-[#ff8c33] transition-colors hover:bg-[#ff7a1a]/15"
-				>🎃 Try spooky packets</button
-			>
+			{#if season}
+				<button
+					onclick={trySeason}
+					class="rounded-[var(--radius)] border px-4 py-2 text-sm font-600 transition-[filter] hover:brightness-125"
+					style="border-color:color-mix(in srgb, {season.accent} 50%, transparent);color:{season.accent}"
+					>{season.tryLabel}</button
+				>
+			{/if}
 			{#if !onHarbour}
 				<button
 					onclick={tryIt}

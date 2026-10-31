@@ -24,7 +24,7 @@
 	import { hasWebGL } from '$lib/webgl';
 	import NodeSheet from '$lib/mobile/NodeSheet.svelte';
 	import LivePill from '$lib/components/LivePill.svelte';
-	import { spooky, spookyImageId, ensureSpookyImages } from '$lib/spooky.svelte';
+	import { seasonal } from '$lib/seasonal.svelte';
 	import { liveSpeed, speedLabel } from '$lib/live-speed.svelte';
 
 	let mapEl: HTMLDivElement;
@@ -114,12 +114,12 @@
 				return {
 					type: 'Feature',
 					geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-					// icon/s/rot: the Halloween icon that pops at each hop, growing as it fades.
+					// icon/s/rot: the season's icon that pops at each hop, growing as it fades.
 					properties: {
 						color: p.color,
 						r: 4 + age * 22,
 						o: Math.max(0, 1 - age),
-						icon: spookyImageId(p.kind),
+						icon: seasonal.imageId(p.kind),
 						s: 0.55 + Math.min(1, age * 3) * 0.6,
 						rot: Math.sin(now / 160 + p.lng * 40) * 14
 					}
@@ -191,14 +191,14 @@
 			// have no stroke by default, so the ring is added only where it means something.
 			paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 2.5, 11, 5], 'circle-color': ['get', 'color'], 'circle-opacity': 0.85, 'circle-stroke-color': SEGMENT_COLOR, 'circle-stroke-width': ['case', ['get', 'offSegment'], 1.5, 0] }
 		});
-		// Halloween mode: a pumpkin/bat/ghost… pops up at each node as the packet reaches it.
-		ensureSpookyImages(map);
+		// Seasonal theme: the season's icon (pumpkin, bat…) pops up at each node as the packet reaches it.
+		if (seasonal.on) seasonal.ensureImages(map);
 		map.addLayer({
-			id: 'pulse-spooky', type: 'symbol', source: 'pulses',
+			id: 'pulse-season', type: 'symbol', source: 'pulses',
 			layout: {
 				'icon-image': ['get', 'icon'], 'icon-size': ['get', 's'], 'icon-rotate': ['get', 'rot'],
 				'icon-rotation-alignment': 'viewport', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
-				visibility: spooky.on ? 'visible' : 'none'
+				visibility: seasonal.on ? 'visible' : 'none'
 			},
 			paint: { 'icon-opacity': ['get', 'o'] }
 		});
@@ -264,12 +264,15 @@
 	}
 
 	$effect(() => {
-		const on = spooky.on;
-		if (map?.getLayer('pulse-spooky')) map.setLayoutProperty('pulse-spooky', 'visibility', on ? 'visible' : 'none');
+		const on = seasonal.on;
+		void seasonal.season;
+		if (!map?.getLayer('pulse-season')) return;
+		if (on) seasonal.ensureImages(map);
+		map.setLayoutProperty('pulse-season', 'visibility', on ? 'visible' : 'none');
 	});
 
 	onMount(() => {
-		spooky.load();
+		seasonal.load();
 		liveSpeed.load();
 		basemap.init();
 		if (incoming.basemap) basemap.preview(incoming.basemap);
@@ -323,7 +326,7 @@
 	</div>
 	<BasemapSelector compact posClass="top-14 left-3" />
 	{/if}
-	<!-- Bottom-left: packet speed (tap to step ¼× … 3×) and the Halloween toggle. -->
+	<!-- Bottom-left: packet speed (tap to step ¼× … 3×) and the seasonal theme toggle (only in season). -->
 	<div class="absolute bottom-3 left-3 z-20 flex gap-2">
 	<button
 		onclick={() => liveSpeed.cycle()}
@@ -335,17 +338,21 @@
 		<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 13l4-4" /><path d="M3.5 17a9 9 0 1 1 17 0" /></svg>
 		<span class="tnum">{speedLabel(liveSpeed.value)}</span>
 	</button>
-	<button
-		onclick={() => spooky.toggle()}
-		aria-pressed={spooky.on}
-		aria-label={spooky.on ? 'Turn off spooky packets' : 'Turn on spooky packets'}
-		class="border-line/60 bg-ink-2/85 flex h-10 items-center gap-1.5 rounded-full border px-3 text-xs font-medium shadow-lg backdrop-blur-md transition-colors {spooky.on
-			? 'border-[#ff7a1a]/60 text-[#ff8c33]'
-			: 'text-fg-dim'}"
-	>
-		<span class="text-base leading-none {spooky.on ? '' : 'opacity-60 grayscale'}" aria-hidden="true">🎃</span>
-		{spooky.on ? 'Spooky on' : 'Spooky'}
-	</button>
+	{#if seasonal.season}
+		{@const ss = seasonal.season}
+		<button
+			onclick={() => seasonal.toggle()}
+			aria-pressed={seasonal.on}
+			aria-label={seasonal.on ? `Turn off ${ss.label.toLowerCase()}` : `Turn on ${ss.label.toLowerCase()}`}
+			class="border-line/60 bg-ink-2/85 flex h-10 items-center gap-1.5 rounded-full border px-3 text-xs font-medium shadow-lg backdrop-blur-md transition-colors {seasonal.on
+				? ''
+				: 'text-fg-dim'}"
+			style={seasonal.on ? `border-color:color-mix(in srgb, ${ss.accent} 60%, transparent);color:${ss.accent}` : ''}
+		>
+			<span class="text-base leading-none {seasonal.on ? '' : 'opacity-60 grayscale'}" aria-hidden="true">{ss.emoji}</span>
+			{seasonal.on ? `${ss.short} on` : ss.short}
+		</button>
+	{/if}
 	</div>
 	{#if sheetNode}
 		<NodeSheet node={sheetNode} onclose={() => (sheetNode = null)} />

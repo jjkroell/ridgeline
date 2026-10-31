@@ -89,7 +89,7 @@
 			</ol>
 			<p class="text-fg-dim">
 				Send <span class="text-fg font-mono">unsub</span> to come off the list. Ridgeline hides test and unsub
-				messages after 5 minutes; your name stays on the list. See
+				messages after 5 minutes; a hidden test still keeps you on the list. See
 				<a href="#cleanup" class="text-coral hover:underline">clean-up</a> for how long other messages stay.
 			</p>
 			<p class="text-fg-dim">
@@ -258,7 +258,8 @@
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>
 					<span><span class="text-fg font-mono">test</span> and <span class="text-fg font-mono">unsub</span>
-						after <span class="text-fg">5 minutes</span> (your name stays on the monitoring list)</span>
+						after <span class="text-fg">5 minutes</span>. Hiding a test doesn't take you off the monitoring list;
+						only sending <span class="text-fg font-mono">unsub</span> removes your name.</span>
 				</li>
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>

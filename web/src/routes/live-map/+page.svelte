@@ -33,6 +33,7 @@
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
 	import ChimeControls from '$lib/components/ChimeControls.svelte';
 	import SeasonalControls from '$lib/components/SeasonalControls.svelte';
+	import SeasonSnow from '$lib/components/SeasonSnow.svelte';
 	import SpeedControl from '$lib/components/SpeedControl.svelte';
 	import { liveSpeed } from '$lib/live-speed.svelte';
 	import { seasonal } from '$lib/seasonal.svelte';
@@ -447,6 +448,7 @@
 <div class="px-6 py-6 md:px-10">
 	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
 		<NodeInspector pubkey={nodeKey} onclose={() => (nodeKey = null)} />
+		<SeasonSnow />
 		{#if !webglOk}
 			<FallbackMap
 				nodes={located}

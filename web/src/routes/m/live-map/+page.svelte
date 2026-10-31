@@ -24,6 +24,7 @@
 	import { hasWebGL } from '$lib/webgl';
 	import NodeSheet from '$lib/mobile/NodeSheet.svelte';
 	import LivePill from '$lib/components/LivePill.svelte';
+	import SeasonSnow from '$lib/components/SeasonSnow.svelte';
 	import { seasonal } from '$lib/seasonal.svelte';
 	import { liveSpeed, speedLabel } from '$lib/live-speed.svelte';
 
@@ -307,6 +308,7 @@
 <Seo title="Live Map" description="Packets on the map as they arrive." path="/m/live-map" />
 
 <div class="relative h-full w-full">
+	<SeasonSnow />
 	{#if !webglOk}
 		<FallbackMap
 			nodes={nodes}

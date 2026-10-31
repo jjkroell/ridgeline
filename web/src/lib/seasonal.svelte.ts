@@ -45,6 +45,8 @@ export interface Season {
 	/** What's new items shown while the season is on, and the button that turns it on. */
 	announce: SeasonItem[];
 	tryLabel: string;
+	/** Light snowfall over the live maps while the theme is on. */
+	snow?: boolean;
 	/** Still being designed: never in force by date; preview only for admins / on dev. */
 	draft?: boolean;
 }
@@ -136,7 +138,8 @@ export const SEASONS: Season[] = [
 				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Every packet then flies across the map as a tree, bell, present, Santa, reindeer, snowflake, snowman or cookie, one for each kind of packet, with a legend to tell them apart. It is off unless you turn it on, and the choice is saved in this browser.'
 			}
 		],
-		tryLabel: 'Try festive packets'
+		tryLabel: 'Try festive packets',
+		snow: true
 	}
 ];
 

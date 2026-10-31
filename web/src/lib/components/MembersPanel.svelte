@@ -42,9 +42,14 @@
 	let memberBusyId = $state<number | null>(null);
 	let confirmDeleteId = $state<number | null>(null);
 
-	/** Full local date and time, for the hover on a "since …" stamp. */
-	function stamp(iso?: string): string {
-		return iso ? new Date(iso).toLocaleString() : 'Not recorded';
+	/** Hover for a read-only #sos setting: when it last changed, local
+	 *  YY/MM/DD HH:MM. None before changes were recorded (v0.24.31). */
+	function changedAt(iso?: string): string | undefined {
+		if (!iso) return undefined;
+		const d = new Date(iso);
+		if (Number.isNaN(d.getTime())) return undefined;
+		const p = (n: number) => String(n).padStart(2, '0');
+		return `${p(d.getFullYear() % 100)}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 	}
 
 	async function loadMembers() {
@@ -129,6 +134,27 @@
 	});
 </script>
 
+<!-- The member's own #sos email settings: read-only here, hover for when they
+     last changed. Beside Admin on desktop; under the email on a phone. -->
+{#snippet sosPills(m: AuthUser)}
+	<div class="flex items-center gap-1.5">
+		<span
+			class="rounded-full px-2 py-0.5 text-[0.62rem] font-600 {m.sosAlerts
+				? 'bg-coral/15 text-coral'
+				: 'bg-line/50 text-fg-faint'}"
+			title={changedAt(m.sosAlertsAt)}
+			>#sos {m.sosAlerts ? 'on' : 'off'}</span
+		>
+		<span
+			class="rounded-full px-2 py-0.5 text-[0.62rem] font-600 {m.sosAlerts && m.sosAlertTests
+				? 'bg-violet/15 text-violet'
+				: 'bg-line/50 text-fg-faint'}"
+			title={changedAt(m.sosAlertTestsAt)}
+			>tests {m.sosAlertTests ? 'on' : 'off'}</span
+		>
+	</div>
+{/snippet}
+
 <section class={shell}>
 	<div class="border-line/70 flex items-center gap-2.5 {open ? 'border-b' : ''} {head}">
 		<!-- The whole header is the toggle; Refresh sits outside it so hitting
@@ -189,18 +215,9 @@
 						{/if}
 					</div>
 					<div class="text-fg-faint truncate text-xs">{m.email} · joined {ago(m.createdAt)}</div>
-					{#if m.sosAlerts || m.sosAlertsAt}
-						<div class="text-fg-faint truncate text-xs">
-							#sos emails <span title={stamp(m.sosAlertsAt)}
-								>{m.sosAlerts ? 'on' : 'off'}{m.sosAlertsAt ? ` since ${ago(m.sosAlertsAt)}` : ''}</span
-							>{#if m.sosAlerts}{' · '}tests <span title={stamp(m.sosAlertTestsAt)}
-									>{m.sosAlertTests ? 'on' : 'off'}{m.sosAlertTestsAt
-										? ` since ${ago(m.sosAlertTestsAt)}`
-										: ''}</span
-								>{/if}
-						</div>
-					{/if}
+					{#if compact}<div class="mt-1.5">{@render sosPills(m)}</div>{/if}
 				</div>
+				{#if !compact}{@render sosPills(m)}{/if}
 				<label class="text-fg-dim flex items-center gap-1.5 text-xs">
 					<input
 						type="checkbox"

@@ -1,9 +1,10 @@
 // The permanent #sos channel's alert flag (an emergency word there pulses the
 // #sos row and the Channels nav item until the viewer switches to #sos), its two cards — what the channel is for (info) and
 // who monitors it — each either open or minimized to a pill beside the channel
-// name, per browser. Also the roster from the server, and the rule that keeps
+// name, per browser. Also the roster from the server, and the rules that keep
 // the chat clean: "test" / "unsub" housekeeping messages are hidden from the
-// #sos chat five minutes after they are heard (the sender stays listed).
+// #sos chat five minutes after they are heard (the sender stays listed), calls
+// for help after 12 hours, everything else after 3.
 // Shared by the desktop and mobile channel pages and the Channels widget.
 import { api, type ChannelMonitor } from './api';
 import { SOS_ID } from './channels.svelte';
@@ -40,6 +41,10 @@ const ALARM_FRESH_MS = 5 * 60_000;
 const REFRESH_MS = 60_000;
 /** A housekeeping message stays in the #sos chat this long, then is hidden. */
 export const HIDE_AFTER_MS = 5 * 60_000;
+/** Any other #sos message stays this long, then is hidden. */
+export const CHAT_HIDE_MS = 3 * 60 * 60_000;
+/** A call for help (an emergency word, not a reply) stays as long as its alert. */
+export const ALERT_HIDE_MS = ALERT_WINDOW_MS;
 
 /**
  * Classifies a channel message by its first word, in any case, trailing
@@ -207,11 +212,14 @@ class SOS {
 	}
 
 	/**
-	 * Whether a decrypted message is hidden from the chat: a #sos test/unsub
-	 * heard (t, epoch ms) more than five minutes ago.
+	 * Whether a decrypted message is hidden from the chat, by its age (t, epoch
+	 * ms) on #sos: a test/unsub after five minutes, a call for help after 12
+	 * hours (its alert window), anything else — replies included — after 3.
 	 */
 	hidden(channelId: string, text: string, t: number): boolean {
-		return channelId === SOS_ID && this.now - t > HIDE_AFTER_MS && monitorWord(text) !== null;
+		if (channelId !== SOS_ID) return false;
+		const limit = monitorWord(text) !== null ? HIDE_AFTER_MS : alertWord(text) ? ALERT_HIDE_MS : CHAT_HIDE_MS;
+		return this.now - t > limit;
 	}
 
 	/**

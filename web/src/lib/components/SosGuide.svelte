@@ -10,7 +10,8 @@
 	//     bot's contrib/sos_ack plugin in jjkroell/meshcore-bot)
 	//   - pulse window 12 h (SOSAlertWindow / ALERT_WINDOW_MS)
 	//   - emails: 30 s batch, then at most one per 10 min (api/sos_alerts.go)
-	//   - test/unsub hidden after 5 min (HIDE_AFTER_MS)
+	//   - chat clean-up: test/unsub hidden after 5 min, calls for help after
+	//     12 h, everything else after 3 h (sos.svelte.ts hidden())
 	//   - a message opening with an @-mention never alerts (sosReplyRe)
 	//   - monthly test: KOD-BOT [Scheduled_Messages] `0 9 1 * *` on the bot Pi
 	//   - map ring: lib/sos-map.ts (12 h, name match, hide per browser, admin resolve)
@@ -87,7 +88,9 @@
 			</ol>
 			<p class="text-fg-dim">
 				Send <span class="text-fg font-mono">unsub</span> to come off the list. To keep the channel clean,
-				Ridgeline hides test and unsub messages after 5 minutes; your name stays on the list. They have already
+				Ridgeline hides test and unsub messages after 5 minutes; your name stays on the list. Other messages
+				clear from Ridgeline's #sos after 3 hours, and calls for help (with a
+				<a href="#triggers" class="text-coral hover:underline">trigger word</a>) after 12. They have already
 				gone out over the radio, so other apps may still show them.
 			</p>
 			<p class="text-fg-dim">

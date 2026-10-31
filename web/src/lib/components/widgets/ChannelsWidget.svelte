@@ -41,7 +41,7 @@
 				if (c.hashByte !== hb) continue;
 				const d = decryptGroupText(ev.payloadRaw, c.keyHex);
 				if (!d) continue;
-				// #sos test/unsub housekeeping drops out after five minutes, as in the chat.
+				// #sos messages drop out on the chat's schedule (sos.hidden).
 				if (sos.hidden(c.id, d.text, +new Date(ev.receivedAt))) break;
 				if (!seen.has(ev.messageHash)) {
 					seen.set(ev.messageHash, {

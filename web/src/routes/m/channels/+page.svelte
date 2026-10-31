@@ -285,7 +285,9 @@
 			{#if loadingHistory && messages.length === 0}
 				<div class="text-fg-faint py-12 text-center text-sm">Loading messages…</div>
 			{:else if messages.length === 0}
-				<div class="text-fg-faint py-12 text-center text-sm">No messages on this channel in the last 6h.</div>
+				<div class="text-fg-faint py-12 text-center text-sm">{selectedId === SOS_ID
+						? 'Nothing on #sos right now. Messages clear after 3 hours, calls for help after 12.'
+						: 'No messages on this channel in the last 24h.'}</div>
 			{:else}
 				{#each messages as m (m.hash)}
 					<div class="border-line/60 bg-panel rounded-2xl border px-3.5 py-2.5">

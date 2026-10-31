@@ -21,7 +21,8 @@ import (
 // message starting with the word "test" is listed as a monitor, so the list
 // says who has shown they are listening rather than who signed up somewhere;
 // one starting with "unsub" (or "unsubscribe") takes them off it again. The
-// web UI hides both kinds of message from the #sos chat after five minutes.
+// web UI hides both kinds of message from the #sos chat after five minutes
+// (other messages after 3 hours, calls for help after 12; sos.svelte.ts).
 // The sender is the name the message carries — MeshCore group text is not
 // signed per sender, so the list is a courtesy roster, not an identity proof.
 const SOSChannel = "sos"

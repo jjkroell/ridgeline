@@ -108,6 +108,17 @@
 						You post on #sos from your radio or app, e.g.
 						<span class="text-fg font-mono">SOS twisted ankle at the Elk Lake trailhead, need help getting out</span>.
 					</p>
+					<p
+						data-sos-include
+						class="text-fg mt-2.5 flex gap-2 rounded-[var(--radius)] px-3 py-2"
+						style="background:color-mix(in srgb, var(--color-coral) 12%, transparent); border:1px solid color-mix(in srgb, var(--color-coral) 40%, transparent)"
+					>
+						<svg viewBox="0 0 24 24" class="text-coral mt-0.5 h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></svg>
+						<span>
+							<span class="text-coral font-600">Always include</span> where you need help — a place name,
+							trail, road or coordinates — and what kind of help you're asking for.
+						</span>
+					</p>
 				</div>
 				<div class="text-fg-faint pl-6" aria-hidden="true">↓</div>
 				<div class="border-line rounded-[var(--radius)] border px-4 py-3">

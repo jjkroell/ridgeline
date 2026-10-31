@@ -1321,3 +1321,29 @@ export const adminUsers = {
   remove: (csrf: string, id: number) =>
     mutate<{ ok: boolean }>("/api/admin/users/delete", "POST", csrf, { id }),
 };
+
+/** One email handed to the SMTP relay (admin email log). */
+export interface EmailLogEntry {
+  id: number;
+  sentAt: string;
+  /** sos-alert, verification, password-reset, note, contact */
+  kind: string;
+  recipient: string;
+  subject: string;
+  /** The relay's refusal; absent when it accepted the email. */
+  error?: string;
+}
+
+export const adminEmailLog = {
+  /** Newest first, 100 at a time; pass the last id seen as `before` for more. */
+  list: (opts: { kind?: string; q?: string; before?: number } = {}) => {
+    const p = new URLSearchParams();
+    if (opts.kind) p.set("kind", opts.kind);
+    if (opts.q) p.set("q", opts.q);
+    if (opts.before) p.set("before", String(opts.before));
+    const qs = p.toString();
+    return get<{ entries: EmailLogEntry[]; more: boolean }>(
+      "/api/admin/email-log" + (qs ? "?" + qs : ""),
+    );
+  },
+};

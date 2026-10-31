@@ -6,6 +6,7 @@
 	import { admin, type InjectionReport, type BlockEntry, type BridgeCandidate, type InjectorCandidate } from '$lib/api';
 	import { purgeCascade, roleColor, skippedNote } from '$lib/format';
 	import MembersPanel from '$lib/components/MembersPanel.svelte';
+	import EmailLogPanel from '$lib/components/EmailLogPanel.svelte';
 	import KnownBridgePicker from '$lib/components/KnownBridgePicker.svelte';
 
 	// Gated by the signed-in account's is_admin flag (no static token). Bounce
@@ -358,6 +359,7 @@
 
 		<div class="mt-5">
 			<MembersPanel compact />
+			<EmailLogPanel compact />
 		</div>
 </div>
 

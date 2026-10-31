@@ -74,3 +74,30 @@ func TestLogEmail(t *testing.T) {
 		t.Fatalf("prune: %d %v", pruned, err)
 	}
 }
+
+func TestListEmailLog(t *testing.T) {
+	st := testStore(t)
+	for i, to := range []string{"a@x.com", "b@y.com", "a@x.com", "c@x.com"} {
+		kind := "sos-alert"
+		if i == 1 {
+			kind = "verification"
+		}
+		if err := st.LogEmail(kind, to, "s", nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	all, more, err := st.ListEmailLog("", "", 0, 3)
+	if err != nil || len(all) != 3 || !more || all[0].Recipient != "c@x.com" {
+		t.Fatalf("first page: %+v more=%v err=%v", all, more, err)
+	}
+	rest, more, _ := st.ListEmailLog("", "", all[2].ID, 3)
+	if len(rest) != 1 || more || rest[0].Recipient != "a@x.com" {
+		t.Fatalf("second page: %+v more=%v", rest, more)
+	}
+	if got, _, _ := st.ListEmailLog("verification", "", 0, 10); len(got) != 1 || got[0].Recipient != "b@y.com" {
+		t.Fatalf("kind filter: %+v", got)
+	}
+	if got, _, _ := st.ListEmailLog("", "A@X", 0, 10); len(got) != 2 {
+		t.Fatalf("recipient search: %+v", got)
+	}
+}

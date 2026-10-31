@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/mail"
+	"strconv"
 	"strings"
 	"time"
 
@@ -397,6 +398,19 @@ func (s *Server) adminListUsers(w http.ResponseWriter, _ *http.Request, _ store.
 		return
 	}
 	writeJSON(w, users)
+}
+
+// adminEmailLog pages through the email send log for the admin console:
+// ?kind= one kind, ?q= part of a recipient, ?before= an id to continue past.
+func (s *Server) adminEmailLog(w http.ResponseWriter, r *http.Request, _ store.User) {
+	qs := r.URL.Query()
+	before, _ := strconv.ParseInt(qs.Get("before"), 10, 64)
+	entries, more, err := s.store.ListEmailLog(qs.Get("kind"), qs.Get("q"), before, 100)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"entries": entries, "more": more})
 }
 
 // adminSetUserFlags grants/revokes a user's admin rights. Claiming is universal

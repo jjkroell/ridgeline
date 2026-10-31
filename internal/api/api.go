@@ -284,6 +284,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/admin/mqtt-auth", s.requireAdminUser(s.adminMQTTAuth))
 	mux.HandleFunc("GET /api/admin/users", s.requireAdminUser(s.adminListUsers))
+	mux.HandleFunc("GET /api/admin/email-log", s.requireAdminUser(s.adminEmailLog))
 	mux.HandleFunc("POST /api/admin/users/flags", s.requireAdminUser(s.adminSetUserFlags))
 	mux.HandleFunc("POST /api/admin/users/block", s.requireAdminUser(s.adminBlockUser))
 	mux.HandleFunc("POST /api/admin/users/verify", s.requireAdminUser(s.adminVerifyUser))

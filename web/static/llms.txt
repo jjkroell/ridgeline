@@ -13,6 +13,7 @@ MeshCore is an off-grid, long-range text-messaging mesh built on low-cost LoRa r
 - [Live signal map](https://ridgeline.ve7kod.ca/live-map)
 - [Live packet feed](https://ridgeline.ve7kod.ca/live)
 - [Network analytics](https://ridgeline.ve7kod.ca/analytics)
+- [The #sos emergency channel](https://ridgeline.ve7kod.ca/sos): how to join and monitor #sos, the trigger words, and what happens to a call for help (alerts, emails, auto reply)
 - [Channels](https://ridgeline.ve7kod.ca/channels), including #sos, the mesh's permanent emergency channel
 - [Observers](https://ridgeline.ve7kod.ca/observers): the receive-only stations feeding Ridgeline
 

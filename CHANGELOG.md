@@ -4,6 +4,16 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.12] — 2026-10-30
+
+### Added
+- **The #sos guide at `/sos`** (and `/m/sos`): what #sos is for, how to join
+  and monitor it, what happens to a message sent on it (monitors' radios,
+  Ridgeline's alerts, the KOD-BOT auto reply), Ridgeline's three alerts with
+  their timings, and the trigger words — with words that don't count.
+  Prerendered like /about, in the sitemap and llms.txt, and linked from the
+  #sos info card.
+
 ## [v0.24.11] — 2026-10-30
 
 ### Added

@@ -48,6 +48,8 @@
 			<p class="text-fg-dim mt-1.5 text-xs leading-relaxed">
 				Ridgeline can alert you too — a sound, a notification or an email: see
 				<button type="button" onclick={() => sos.setCard('alerts', true)} class="text-coral hover:underline">Alerts</button>.
+				How it all fits together, and the trigger words:
+				<a href="{mobile ? '/m' : ''}/sos" class="text-coral hover:underline">the #sos guide</a>.
 			</p>
 			<details class="group mt-1.5 text-xs">
 				<summary class="text-fg-dim hover:text-fg cursor-pointer list-none select-none">

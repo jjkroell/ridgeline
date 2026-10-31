@@ -134,6 +134,7 @@ var seoSections = map[string]seoSection{
 var seoStaticPages = []struct{ Path, Freq, Priority string }{
 	{"/about", "monthly", "0.9"},
 	{"/hash-ids", "monthly", "0.8"},
+	{"/sos", "monthly", "0.8"},
 }
 
 // seoNav is the crawl summary's link list, the same set as app.html's.
@@ -147,6 +148,7 @@ var seoNav = [][2]string{
 	{"/channels", "Channels"},
 	{"/observers", "Observer receivers"},
 	{"/hash-ids", "Multi-byte hash IDs"},
+	{"/sos", "The #sos emergency channel"},
 }
 
 // seoDoc is the crawler-facing part of a page: the head's title and

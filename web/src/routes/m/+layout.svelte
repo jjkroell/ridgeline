@@ -86,6 +86,7 @@
 		if (p.startsWith('/m/analytics')) return 'Analytics';
 		if (p.startsWith('/m/topology')) return 'Topology';
 		if (p.startsWith('/m/channels')) return 'Channels';
+		if (p.startsWith('/m/sos')) return '#sos';
 		if (p.startsWith('/m/identity')) return 'Node Identity';
 		if (p.startsWith('/m/observers')) return p === '/m/observers' ? 'Observers' : 'Observer';
 		if (p.startsWith('/m/admin')) return 'Admin';
@@ -105,7 +106,7 @@
 	// Cupertino large titles: list-style pages show the title big in the
 	// content and hand it to the bar once it scrolls away. Maps, detail pages
 	// and the full-height chat/topology views keep the compact bar title.
-	const LARGE = ['/m', '/m/nodes', '/m/live', '/m/analytics', '/m/observers', '/m/identity', '/m/hash-ids', '/m/account', '/m/admin', '/m/login', '/m/settings'];
+	const LARGE = ['/m', '/m/nodes', '/m/live', '/m/analytics', '/m/observers', '/m/identity', '/m/hash-ids', '/m/sos', '/m/account', '/m/admin', '/m/login', '/m/settings'];
 	const largeTitle = $derived(theme.isApple && LARGE.includes(page.url.pathname));
 	let mainEl = $state<HTMLElement>();
 	let scrolled = $state(false);

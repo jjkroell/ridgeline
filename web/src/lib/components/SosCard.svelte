@@ -1,13 +1,21 @@
 <!--
-  The permanent #sos channel's info card: what the channel is for and how to
-  join or leave its monitor list. Sits above the #sos messages; minimizing it
-  leaves an Info pill (SosPill kind="info") beside the channel name. The names
-  themselves are in SosMonitors.
+  The permanent #sos channel's info card: what the channel is for, 911 first,
+  and the way into the #sos guide (/sos), which has the rest — joining,
+  monitoring, alerts, the auto reply and the trigger words. Sits above the #sos
+  messages; minimizing it leaves a Guide pill (SosPill kind="info") beside the
+  channel name. The monitor names are in SosMonitors.
 -->
 <script lang="ts">
 	import { sos } from '$lib/sos.svelte';
 
 	let { mobile = false }: { mobile?: boolean } = $props();
+	const guide = $derived(`${mobile ? '/m' : ''}/sos`);
+	const links = [
+		{ hash: 'join', label: 'Join & monitor' },
+		{ hash: 'alerts', label: 'Alerts' },
+		{ hash: 'bot', label: 'Auto reply' },
+		{ hash: 'triggers', label: 'Trigger words' }
+	];
 </script>
 
 <section
@@ -30,44 +38,22 @@
 			</p>
 			<p class="text-fg-dim mt-1.5 text-xs leading-relaxed">
 				In a life-threatening emergency call <span class="text-fg font-600">911</span> first; the mesh is a
-				backup, not a replacement.
+				backup, not a replacement. Ridgeline only shows #sos — to post or keep watch, add it to your own MeshCore
+				app or radio.
 			</p>
-			<p class="text-fg-dim mt-1.5 text-xs leading-relaxed">
-				<span class="text-fg font-600">Can you keep an eye on it?</span> Ridgeline only shows #sos — you can't
-				post from here — so <span class="text-fg font-600">add #sos to your own MeshCore app or
-				radio too</span> (a hashtag channel named <span class="text-fg font-mono">sos</span>). Then send one —
-				just one — <span class="text-fg font-mono">test</span> message. You're listed as a monitor, so everyone can see how
-				many people are listening. Then <span class="text-fg font-600">leave notifications on for #sos</span> on
-				your radio or app, so a real call for help reaches you.
-			</p>
-			<p class="text-fg-dim mt-1.5 text-xs leading-relaxed">
-				Send <span class="text-fg font-mono">unsub</span> to come off the list. To keep the channel clean, test
-				and unsub messages are removed from the chat here after 5 minutes — your name stays on the list. (They
-				have already gone out over the radio, so other apps may still show them.)
-			</p>
-			<p class="text-fg-dim mt-1.5 text-xs leading-relaxed">
-				Ridgeline can alert you too — a sound, a notification or an email: see
-				<button type="button" onclick={() => sos.setCard('alerts', true)} class="text-coral hover:underline">Alerts</button>.
-				How it all fits together, and the trigger words:
-				<a href="{mobile ? '/m' : ''}/sos" class="text-coral hover:underline">the #sos guide</a>.
-			</p>
-			<details class="group mt-1.5 text-xs">
-				<summary class="text-fg-dim hover:text-fg cursor-pointer list-none select-none">
-					<span class="inline-block transition-transform group-open:rotate-90" aria-hidden="true">›</span>
-					Why a separate channel?
-				</summary>
-				<div class="text-fg-dim mt-1 space-y-1.5 pl-3 leading-relaxed">
-					<p>
-						<span class="text-fg font-600">Why not Public?</span> A call for help can get lost in the chatter
-						there, and many people have Public notifications set to mentions only. #sos stays quiet, so every
-						message on it is worth a notification.
-					</p>
-					<p>
-						<span class="text-fg font-600">Why not #emergency?</span> #emergency is for emergencies that affect
-						everyone, like an earthquake. #sos is for one person or group who needs help. Join #emergency too.
-					</p>
-				</div>
-			</details>
+			<div class="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+				<a
+					href={guide}
+					class="text-coral inline-flex items-center gap-1.5 rounded-[var(--radius)] px-2 py-0.5 font-600 transition-[filter] hover:brightness-125"
+					style="background:color-mix(in srgb, var(--color-coral) 12%, transparent); border:1px solid color-mix(in srgb, var(--color-coral) 35%, transparent)"
+				>
+					<svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z" /><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5" /></svg>
+					How #sos works
+				</a>
+				{#each links as l (l.hash)}
+					<a href="{guide}#{l.hash}" class="text-fg-dim hover:text-coral transition-colors">{l.label}</a>
+				{/each}
+			</div>
 		</div>
 		<button
 			onclick={() => sos.setCard('info', false)}

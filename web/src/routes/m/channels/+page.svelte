@@ -6,7 +6,6 @@
 	import { sos } from '$lib/sos.svelte';
 	import SosCard from '$lib/components/SosCard.svelte';
 	import SosPill from '$lib/components/SosPill.svelte';
-	import SosGuideLink from '$lib/components/SosGuideLink.svelte';
 	import SosAlerts from '$lib/components/SosAlerts.svelte';
 	import SosMonitors from '$lib/components/SosMonitors.svelte';
 	import { decryptGroupText } from '$lib/channel-crypto';
@@ -267,7 +266,6 @@
 					{#if sos.infoMinimized}<SosPill kind="info" compact />{/if}
 					{#if sos.monitorsMinimized}<SosPill kind="monitors" compact />{/if}
 					{#if sos.alertsMinimized}<SosPill kind="alerts" compact />{/if}
-					<SosGuideLink compact />
 				{/if}
 			</div>
 			<span class="text-fg-faint font-mono text-[0.62rem]"><span class="text-signal tnum">{messages.length}</span> msgs</span>

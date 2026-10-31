@@ -8,9 +8,8 @@
 // legend and announce items, and bump CURRENT in announce.svelte.ts so the
 // What's new modal auto-opens again. Preview one outside its dates with
 // ?season=<id> on any page (kept for the browser tab; ?season=none clears it).
-// A season marked `draft` never starts from its dates on production, and only
-// admins can preview it there; dev shows it in place of the dated season.
-// Drop `draft` to launch it.
+// A season marked `draft` never starts from its dates, and only admins (or
+// anyone on dev) can preview it with ?season=<id> — drop `draft` to launch it.
 //
 // Shared by /live-map (SeasonalControls in Map Control), /m/live-map (the
 // button at the bottom left), the WebGL-free fallback and AnnouncementModal.
@@ -100,7 +99,7 @@ export const SEASONS: Season[] = [
 	},
 	{
 		id: 'christmas',
-		draft: true, // ⏳ design in progress — not offered to users yet
+		draft: true, // ✔ approved 2026-10-31, set aside: drop this line (and bump announce CURRENT) to launch for the holidays
 		from: '2026-12-01T08:00:00Z', // midnight Pacific (PST) on Dec 1
 		until: '2027-01-02T08:00:00Z', // through New Year's Day
 		name: 'Christmas',
@@ -173,12 +172,6 @@ class Seasonal {
 		if (this.#preview) {
 			const p = SEASONS.find((s) => s.id === this.#preview);
 			if (p && (!p.draft || auth.isAdmin || env.isDev)) return p;
-		}
-		// Dev shows the season being designed in place of the dated one, so it can
-		// be tried end to end; production only ever sees dated, non-draft seasons.
-		if (env.isDev) {
-			const d = SEASONS.find((s) => s.draft);
-			if (d) return d;
 		}
 		const now = this.#now;
 		return SEASONS.find((s) => !s.draft && now >= Date.parse(s.from) && now < Date.parse(s.until)) ?? null;

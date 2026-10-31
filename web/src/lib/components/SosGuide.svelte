@@ -12,6 +12,7 @@
 	//   - emails: 30 s batch, then at most one per 10 min (api/sos_alerts.go)
 	//   - test/unsub hidden after 5 min (HIDE_AFTER_MS)
 	//   - a message opening with an @-mention never alerts (sosReplyRe)
+	//   - monthly test: KOD-BOT [Scheduled_Messages] `0 9 1 * *` on the bot Pi
 	let { compact = false }: { compact?: boolean } = $props();
 	const m = $derived(compact ? '/m' : '');
 
@@ -177,6 +178,15 @@
 					>
 				</li>
 			</ul>
+			<p id="monthly-test" class="text-fg-dim scroll-mt-24">
+				<span class="text-fg">Monthly test.</span> At <span class="text-fg">9:00 AM Pacific on the 1st of every
+				month</span>, KOD-BOT sends a test on #sos:
+				<span class="text-fg font-mono">SOS test message. no emergency in progress</span>. It sets off the alerts
+				like a real call, to check the whole chain still works end to end — the mesh, Ridgeline's observers, the
+				pulse, notifications and email. There's nothing to do. The email goes only to accounts with
+				<span class="text-fg">Include test messages</span> on, so turn that on if you want to confirm your alerts
+				reach you.
+			</p>
 		</section>
 
 		<section id="bot" class="scroll-mt-24 space-y-2">

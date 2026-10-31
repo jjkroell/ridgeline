@@ -10,8 +10,8 @@
 	//     bot's contrib/sos_ack plugin in jjkroell/meshcore-bot)
 	//   - pulse window 12 h (SOSAlertWindow / ALERT_WINDOW_MS)
 	//   - emails: 30 s batch, then at most one per 10 min (api/sos_alerts.go)
-	//   - chat clean-up: test/unsub hidden after 5 min, calls for help after
-	//     12 h, everything else after 3 h (sos.svelte.ts hidden())
+	//   - chat clean-up (#cleanup): test/unsub hidden after 5 min, calls for
+	//     help after 12 h, everything else after 3 h (sos.svelte.ts hidden())
 	//   - a message opening with an @-mention never alerts (sosReplyRe)
 	//   - monthly test: KOD-BOT [Scheduled_Messages] `0 9 1 * *` on the bot Pi
 	//   - map ring: lib/sos-map.ts (12 h, name match, hide per browser, admin resolve)
@@ -24,6 +24,7 @@
 		{ id: 'flow', label: 'Message flow' },
 		{ id: 'alerts', label: 'Ridgeline alerts' },
 		{ id: 'bot', label: 'Auto reply' },
+		{ id: 'cleanup', label: 'Clean-up' },
 		{ id: 'triggers', label: 'Trigger words' }
 	];
 
@@ -87,11 +88,9 @@
 				</li>
 			</ol>
 			<p class="text-fg-dim">
-				Send <span class="text-fg font-mono">unsub</span> to come off the list. To keep the channel clean,
-				Ridgeline hides test and unsub messages after 5 minutes; your name stays on the list. Other messages
-				clear from Ridgeline's #sos after 3 hours, and calls for help (with a
-				<a href="#triggers" class="text-coral hover:underline">trigger word</a>) after 12. They have already
-				gone out over the radio, so other apps may still show them.
+				Send <span class="text-fg font-mono">unsub</span> to come off the list. Ridgeline hides test and unsub
+				messages after 5 minutes; your name stays on the list. See
+				<a href="#cleanup" class="text-coral hover:underline">clean-up</a> for how long other messages stay.
 			</p>
 			<p class="text-fg-dim">
 				<span class="text-fg">Who's on the channel?</span> In the MeshCore app, open #sos, tap
@@ -250,6 +249,32 @@
 					>
 				</li>
 			</ul>
+		</section>
+
+		<section id="cleanup" class="scroll-mt-24 space-y-2">
+			<h2 class="font-display text-fg text-base font-700">Clean-up</h2>
+			<p class="text-fg-dim">To keep #sos easy to read, Ridgeline clears messages from its #sos view as they age:</p>
+			<ul class="text-fg-dim space-y-1.5">
+				<li class="flex gap-2">
+					<span class="text-coral shrink-0">·</span>
+					<span><span class="text-fg font-mono">test</span> and <span class="text-fg font-mono">unsub</span>
+						after <span class="text-fg">5 minutes</span> (your name stays on the monitoring list)</span>
+				</li>
+				<li class="flex gap-2">
+					<span class="text-coral shrink-0">·</span>
+					<span>Calls for help (with a <a href="#triggers" class="text-coral hover:underline">trigger word</a>)
+						after <span class="text-fg">12 hours</span>, the same as the alert</span>
+				</li>
+				<li class="flex gap-2">
+					<span class="text-coral shrink-0">·</span>
+					<span>Everything else, including KOD-BOT's replies, after <span class="text-fg">3 hours</span></span>
+				</li>
+			</ul>
+			<p class="text-fg-dim">
+				This only tidies Ridgeline's view. The messages have already gone out over the radio, so they
+				<span class="text-fg">stay in the MeshCore app</span> and on every other radio that heard them, until
+				you delete them there.
+			</p>
 		</section>
 
 		<section id="triggers" class="scroll-mt-24 space-y-2">

@@ -101,8 +101,7 @@ export const SEASONS: Season[] = [
 	},
 	{
 		id: 'christmas',
-		draft: true, // ✔ approved 2026-10-31, set aside: launch it with Admin → Seasonal themes (bump announce CURRENT for What's new)
-		from: '2026-12-01T00:00:00-07:00', // midnight in BC on Dec 1
+		from: '2026-12-11T00:00:00-07:00', // midnight in BC on Dec 11, two weeks before Christmas
 		until: '2027-01-02T00:00:00-07:00', // through New Year's Day
 		name: 'Christmas',
 		label: 'Festive packets',

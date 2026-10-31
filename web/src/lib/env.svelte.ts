@@ -12,6 +12,8 @@ class Env {
 	/** The admin's seasonal-theme switch: null = none set (follow each theme's
 	 *  dates), 'none' = all off, else the one theme id turned on. */
 	season = $state<string | null>(null);
+	/** /api/health has answered (or failed): `season` is final for this load. */
+	loaded = $state(false);
 	#started = false;
 
 	async init() {
@@ -29,6 +31,7 @@ class Env {
 			// Health unreachable — assume a normal instance; never show the banner
 			// on a transient error.
 		}
+		this.loaded = true;
 	}
 
 	/** A non-production instance that should carry a visible banner. */

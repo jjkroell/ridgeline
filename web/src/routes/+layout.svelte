@@ -14,6 +14,7 @@
 	import { overview } from '$lib/overview.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { announce } from '$lib/announce.svelte';
+	import { seasonal } from '$lib/seasonal.svelte';
 	import { consent } from '$lib/consent.svelte';
 	import { env } from '$lib/env.svelte';
 	import DevBanner from '$lib/components/DevBanner.svelte';
@@ -81,6 +82,13 @@
 		env.init();
 		sos.init();
 		sosAlarm.init();
+	});
+	// A seasonal theme starting (by date or the admin switch) opens What's new
+	// once per season. Waits for /api/health, which carries the admin's switch.
+	onMount(() => seasonal.load());
+	$effect(() => {
+		const id = env.loaded ? seasonal.scheduled?.id : undefined;
+		if (id) announce.season(id);
 	});
 	// #sos alert flag on every page (the Channels nav item pulses from it).
 	onMount(() => sos.watch());

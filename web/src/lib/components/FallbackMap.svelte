@@ -20,6 +20,8 @@
 	import { live, hashColor } from '$lib/live.svelte';
 	import { PulseEngine } from '$lib/live-pulse';
 	import { chime } from '$lib/live-audio.svelte';
+	import { spooky, spookyIcon } from '$lib/spooky.svelte';
+	import { liveSpeed } from '$lib/live-speed.svelte';
 	import { basemap } from '$lib/basemap.svelte';
 	import { leafletBasemap } from '$lib/leaflet-basemap';
 
@@ -352,7 +354,8 @@
 		if (!ctx) return;
 		const size = map.getSize();
 		ctx.clearRect(0, 0, size.x, size.y);
-		const out = engine.frame(performance.now());
+		const now = performance.now();
+		const out = engine.frame(now);
 		// Soft wind-chime as each pulse reaches a node (same seed as the MapLibre map).
 		if (audio) for (const at of out.arrivals) chime.play(Math.round((at[0] + at[1]) * 100));
 		// Project an engine [lon,lat] to a container pixel.
@@ -390,8 +393,8 @@
 			ctx.stroke();
 		}
 
-		// Travelling head: a glow halo under a white dot.
-		for (const d of out.dots) {
+		// Travelling head: a glow halo under a white dot (or a Halloween icon).
+		for (const [i, d] of out.dots.entries()) {
 			const p = px(d.at);
 			ctx.globalAlpha = 0.5;
 			ctx.fillStyle = d.color;
@@ -402,6 +405,19 @@
 			ctx.fill();
 			ctx.shadowBlur = 0;
 			ctx.globalAlpha = 1;
+			if (spooky.on) {
+				ctx.save();
+				ctx.translate(p.x, p.y);
+				ctx.rotate((Math.sin(now / 160 + i * 1.7) * 14 * Math.PI) / 180);
+				ctx.font = '20px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+				ctx.textAlign = 'center';
+				ctx.textBaseline = 'middle';
+				ctx.shadowColor = 'rgba(0,0,0,0.55)';
+				ctx.shadowBlur = 3;
+				ctx.fillText(spookyIcon(d.kind), 0, 1);
+				ctx.restore();
+				continue;
+			}
 			ctx.fillStyle = '#ffffff';
 			ctx.strokeStyle = d.color;
 			ctx.lineWidth = 2;
@@ -415,6 +431,8 @@
 
 	onMount(() => {
 		if (audio) chime.load();
+		spooky.load();
+		liveSpeed.load();
 		let destroyed = false;
 		(async () => {
 			// CSS first so controls/tiles are styled the moment the map appears.
@@ -465,7 +483,7 @@
 			map.on('zoomend', renderMarkers);
 
 			if (liveMode) {
-				engine = new PulseEngine((ev) => hashColor(ev.messageHash));
+				engine = new PulseEngine((ev) => hashColor(ev.messageHash), () => liveSpeed.value);
 				pulseCanvas = document.createElement('canvas');
 				pulseCanvas.style.cssText =
 					'position:absolute;inset:0;pointer-events:none;z-index:400';

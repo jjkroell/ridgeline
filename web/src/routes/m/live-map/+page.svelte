@@ -24,6 +24,8 @@
 	import { hasWebGL } from '$lib/webgl';
 	import NodeSheet from '$lib/mobile/NodeSheet.svelte';
 	import LivePill from '$lib/components/LivePill.svelte';
+	import { spooky, spookyImageId, ensureSpookyImages } from '$lib/spooky.svelte';
+	import { liveSpeed, speedLabel } from '$lib/live-speed.svelte';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -80,12 +82,13 @@
 	}
 
 	// active pulses: a node coord + colour + start time
-	type Pulse = { lng: number; lat: number; color: string; start: number };
+	// dur: PULSE_MS / TRAIL_MS scaled by the speed setting when the packet arrived.
+	type Pulse = { lng: number; lat: number; color: string; kind: string; start: number; dur: number };
 	let pulses: Pulse[] = [];
 	const PULSE_MS = 1600;
 
 	// active trails: the polyline through a packet's resolved path hops, fading out.
-	type Trail = { coords: [number, number][]; color: string; start: number };
+	type Trail = { coords: [number, number][]; color: string; start: number; dur: number };
 	let trails: Trail[] = [];
 	const TRAIL_MS = 2600;
 
@@ -93,7 +96,7 @@
 		return {
 			type: 'FeatureCollection',
 			features: trails.map((t) => {
-				const age = (now - t.start) / TRAIL_MS; // 0..1
+				const age = (now - t.start) / t.dur; // 0..1
 				return {
 					type: 'Feature',
 					geometry: { type: 'LineString', coordinates: t.coords },
@@ -107,11 +110,19 @@
 		return {
 			type: 'FeatureCollection',
 			features: pulses.map((p) => {
-				const age = (now - p.start) / PULSE_MS; // 0..1
+				const age = (now - p.start) / p.dur; // 0..1
 				return {
 					type: 'Feature',
 					geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-					properties: { color: p.color, r: 4 + age * 22, o: Math.max(0, 1 - age) }
+					// icon/s/rot: the Halloween icon that pops at each hop, growing as it fades.
+					properties: {
+						color: p.color,
+						r: 4 + age * 22,
+						o: Math.max(0, 1 - age),
+						icon: spookyImageId(p.kind),
+						s: 0.55 + Math.min(1, age * 3) * 0.6,
+						rot: Math.sin(now / 160 + p.lng * 40) * 14
+					}
 				};
 			})
 		};
@@ -123,22 +134,23 @@
 		// Packets flag there); keeps the propagation colours consistent app-wide.
 		const color = hashColor(ev.messageHash);
 		const now = performance.now();
+		const speed = liveSpeed.value || 1;
 		const coords: [number, number][] = [];
 		ev.path.forEach((hop, i) => {
 			const c = resolveHop(hop);
 			if (c) {
 				coords.push(c);
-				pulses.push({ lng: c[0], lat: c[1], color, start: now + i * 180 });
+				pulses.push({ lng: c[0], lat: c[1], color, kind: ev.payloadType, start: now + (i * 180) / speed, dur: PULSE_MS / speed });
 			}
 		});
-		if (coords.length >= 2) trails.push({ coords, color, start: now });
+		if (coords.length >= 2) trails.push({ coords, color, start: now, dur: TRAIL_MS / speed });
 	}
 
 	let raf = 0;
 	function frame() {
 		const now = performance.now();
-		pulses = pulses.filter((p) => now - p.start < PULSE_MS);
-		trails = trails.filter((t) => now - t.start < TRAIL_MS);
+		pulses = pulses.filter((p) => now - p.start < p.dur);
+		trails = trails.filter((t) => now - t.start < t.dur);
 		pulseCount = pulses.length;
 		(map?.getSource('pulses') as maplibregl.GeoJSONSource | undefined)?.setData(pulseFeatures(now));
 		(map?.getSource('trails') as maplibregl.GeoJSONSource | undefined)?.setData(trailFeatures(now));
@@ -178,6 +190,17 @@
 			// Role stays the fill; a node beyond a bridge gets a violet ring. These dots
 			// have no stroke by default, so the ring is added only where it means something.
 			paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 2.5, 11, 5], 'circle-color': ['get', 'color'], 'circle-opacity': 0.85, 'circle-stroke-color': SEGMENT_COLOR, 'circle-stroke-width': ['case', ['get', 'offSegment'], 1.5, 0] }
+		});
+		// Halloween mode: a pumpkin/bat/ghost… pops up at each node as the packet reaches it.
+		ensureSpookyImages(map);
+		map.addLayer({
+			id: 'pulse-spooky', type: 'symbol', source: 'pulses',
+			layout: {
+				'icon-image': ['get', 'icon'], 'icon-size': ['get', 's'], 'icon-rotate': ['get', 'rot'],
+				'icon-rotation-alignment': 'viewport', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
+				visibility: spooky.on ? 'visible' : 'none'
+			},
+			paint: { 'icon-opacity': ['get', 'o'] }
 		});
 		// Transparent, larger hit target so the small dots are tappable on a phone.
 		map.addLayer({
@@ -240,7 +263,14 @@
 		}
 	}
 
+	$effect(() => {
+		const on = spooky.on;
+		if (map?.getLayer('pulse-spooky')) map.setLayoutProperty('pulse-spooky', 'visibility', on ? 'visible' : 'none');
+	});
+
 	onMount(() => {
+		spooky.load();
+		liveSpeed.load();
 		basemap.init();
 		if (incoming.basemap) basemap.preview(incoming.basemap);
 		webglOk = hasWebGL();
@@ -293,6 +323,30 @@
 	</div>
 	<BasemapSelector compact posClass="top-14 left-3" />
 	{/if}
+	<!-- Bottom-left: packet speed (tap to step ¼× … 3×) and the Halloween toggle. -->
+	<div class="absolute bottom-3 left-3 z-20 flex gap-2">
+	<button
+		onclick={() => liveSpeed.cycle()}
+		aria-label="Packet speed {speedLabel(liveSpeed.value)}, tap to change"
+		class="border-line/60 bg-ink-2/85 flex h-10 items-center gap-1.5 rounded-full border px-3 text-xs font-medium shadow-lg backdrop-blur-md {liveSpeed.value === 1
+			? 'text-fg-dim'
+			: 'text-signal'}"
+	>
+		<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 13l4-4" /><path d="M3.5 17a9 9 0 1 1 17 0" /></svg>
+		<span class="tnum">{speedLabel(liveSpeed.value)}</span>
+	</button>
+	<button
+		onclick={() => spooky.toggle()}
+		aria-pressed={spooky.on}
+		aria-label={spooky.on ? 'Turn off spooky packets' : 'Turn on spooky packets'}
+		class="border-line/60 bg-ink-2/85 flex h-10 items-center gap-1.5 rounded-full border px-3 text-xs font-medium shadow-lg backdrop-blur-md transition-colors {spooky.on
+			? 'border-[#ff7a1a]/60 text-[#ff8c33]'
+			: 'text-fg-dim'}"
+	>
+		<span class="text-base leading-none {spooky.on ? '' : 'opacity-60 grayscale'}" aria-hidden="true">🎃</span>
+		{spooky.on ? 'Spooky on' : 'Spooky'}
+	</button>
+	</div>
 	{#if sheetNode}
 		<NodeSheet node={sheetNode} onclose={() => (sheetNode = null)} />
 	{/if}

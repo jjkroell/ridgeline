@@ -106,6 +106,7 @@ interface Anim {
 	seglen: number[]; // cumulative length at each vertex
 	total: number;
 	color: string;
+	kind: string; // payload type, so a renderer can pick a per-type head (Halloween icons)
 	born: number;
 	dur: number;
 	uncertain: boolean;
@@ -128,9 +129,14 @@ export interface PulseRing {
 	o: number; // opacity
 	color: string;
 }
+export interface PulseDot {
+	at: LngLat;
+	color: string;
+	kind: string; // payload type of the packet this comet carries
+}
 export interface PulseFrame {
 	lines: PulseLine[];
-	dots: { at: LngLat; color: string }[];
+	dots: PulseDot[];
 	rings: PulseRing[];
 	count: number; // active comets (for the on-screen counter)
 	arrivals: LngLat[]; // nodes the dot reached this frame (for audio)
@@ -144,14 +150,17 @@ export class PulseEngine {
 	// spreading in real time rather than dumping every branch at once.
 	private fired = new Map<string, number>();
 	private colorFor: (ev: LiveEvent) => string;
+	private speed: () => number;
 
 	// colorFor picks a comet's colour from its event — keyed on the message hash
 	// so the pulse matches its Recent Packets row (see hashColor in live.svelte).
-	constructor(colorFor: (ev: LiveEvent) => string) {
+	// speed is the travel-speed multiplier (the Speed slider), read per new comet.
+	constructor(colorFor: (ev: LiveEvent) => string, speed: () => number = () => 1) {
 		this.colorFor = colorFor;
+		this.speed = speed;
 	}
 
-	private addAnim(pts: LngLat[], color: string, uncertain: boolean) {
+	private addAnim(pts: LngLat[], color: string, kind: string, uncertain: boolean) {
 		const seglen = [0];
 		for (let i = 1; i < pts.length; i++) {
 			const dx = pts[i][0] - pts[i - 1][0],
@@ -160,8 +169,8 @@ export class PulseEngine {
 		}
 		const total = seglen[seglen.length - 1];
 		const born = performance.now();
-		const dur = 900 + pts.length * 280;
-		this.anims.push({ pts, seglen, total, color, born, dur, uncertain });
+		const dur = (900 + pts.length * 280) / (this.speed() || 1);
+		this.anims.push({ pts, seglen, total, color, kind, born, dur, uncertain });
 		if (this.anims.length > 60) this.anims.shift();
 
 		for (let i = 0; i < pts.length; i++) {
@@ -186,7 +195,7 @@ export class PulseEngine {
 			if (this.fired.has(key)) continue;
 			this.fired.set(key, now);
 			const { pts, uncertain } = resolvePath(located, ev.path);
-			if (pts.length >= 2) this.addAnim(pts, this.colorFor(ev), uncertain);
+			if (pts.length >= 2) this.addAnim(pts, this.colorFor(ev), ev.payloadType, uncertain);
 		}
 		const cutoff = now - 90000;
 		for (const [k, t] of this.fired) if (t < cutoff) this.fired.delete(k);
@@ -226,7 +235,7 @@ export class PulseEngine {
 	// just reached (caller may play a sound per arrival).
 	frame(now: number): PulseFrame {
 		const lines: PulseLine[] = [];
-		const dots: { at: LngLat; color: string }[] = [];
+		const dots: PulseDot[] = [];
 		this.anims = this.anims.filter((a) => now - a.born < a.dur + FADE);
 		for (const a of this.anims) {
 			const age = now - a.born;
@@ -235,7 +244,7 @@ export class PulseEngine {
 			const opacity = age < a.dur ? base : base * (1 - (age - a.dur) / FADE);
 			const trail = this.trailCoords(a, travel);
 			if (trail.length >= 2) lines.push({ coords: trail, color: a.color, opacity });
-			if (age < a.dur) dots.push({ at: this.along(a, travel), color: a.color });
+			if (age < a.dur) dots.push({ at: this.along(a, travel), color: a.color, kind: a.kind });
 		}
 
 		const rings: PulseRing[] = [];

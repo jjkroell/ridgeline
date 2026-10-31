@@ -32,6 +32,10 @@
 	import NodeInspector from '$lib/components/NodeInspector.svelte';
 	import FallbackMap from '$lib/components/FallbackMap.svelte';
 	import ChimeControls from '$lib/components/ChimeControls.svelte';
+	import SpookyControls from '$lib/components/SpookyControls.svelte';
+	import SpeedControl from '$lib/components/SpeedControl.svelte';
+	import { liveSpeed } from '$lib/live-speed.svelte';
+	import { spooky, spookyImageId, ensureSpookyImages } from '$lib/spooky.svelte';
 	import { chime } from '$lib/live-audio.svelte';
 	import { hasWebGL } from '$lib/webgl';
 
@@ -92,7 +96,7 @@
 	// animation onto a 2-D canvas; here we just feed its output into MapLibre.
 	// Comets are coloured per message hash so each pulse matches the colour flag
 	// on its Recent Packets row below.
-	const engine = new PulseEngine((ev) => hashColor(ev.messageHash));
+	const engine = new PulseEngine((ev) => hashColor(ev.messageHash), () => liveSpeed.value);
 
 	// Pulse each newly-seen header path as it arrives.
 	$effect(() => {
@@ -106,7 +110,8 @@
 			requestAnimationFrame(frame);
 			return;
 		}
-		const out = engine.frame(performance.now());
+		const now = performance.now();
+		const out = engine.frame(now);
 
 		(map.getSource('pulse-lines') as maplibregl.GeoJSONSource)?.setData({
 			type: 'FeatureCollection',
@@ -118,10 +123,11 @@
 		});
 		(map.getSource('pulse-dots') as maplibregl.GeoJSONSource)?.setData({
 			type: 'FeatureCollection',
-			features: out.dots.map((d) => ({
+			features: out.dots.map((d, i) => ({
 				type: 'Feature',
 				geometry: { type: 'Point', coordinates: d.at },
-				properties: { color: d.color }
+				// icon + rot drive the Halloween heads: each wobbles on its own phase.
+				properties: { color: d.color, icon: spookyImageId(d.kind), rot: Math.sin(now / 160 + i * 1.7) * 14 }
 			})) as Feature[]
 		});
 		(map.getSource('pulse-rings') as maplibregl.GeoJSONSource)?.setData({
@@ -296,8 +302,33 @@
 				'circle-stroke-color': ['get', 'color']
 			}
 		});
-
+		// Halloween heads: the comet travels as a pumpkin/bat/ghost… instead of the dot.
+		ensureSpookyImages(map);
+		map.addLayer({
+			id: 'pulse-spooky',
+			type: 'symbol',
+			source: 'pulse-dots',
+			layout: {
+				'icon-image': ['get', 'icon'],
+				'icon-rotate': ['get', 'rot'],
+				'icon-rotation-alignment': 'viewport',
+				'icon-allow-overlap': true,
+				'icon-ignore-placement': true
+			}
+		});
+		applySpooky();
 	}
+
+	// Swap the comet head between the plain dot and the Halloween icon.
+	function applySpooky() {
+		if (!map?.getLayer('pulse-spooky')) return;
+		map.setLayoutProperty('pulse-spooky', 'visibility', spooky.on ? 'visible' : 'none');
+		map.setLayoutProperty('pulse-dots', 'visibility', spooky.on ? 'none' : 'visible');
+	}
+	$effect(() => {
+		void spooky.on;
+		applySpooky();
+	});
 
 	// Interaction handlers — bound once. MapLibre keeps layer-id listeners across
 	// removeLayer/addLayer, so they survive a basemap style swap.
@@ -342,6 +373,8 @@
 		// Restores sound on/off + tuning; if sound was left on it arms the
 		// gesture unlock the browser requires before audio can start.
 		chime.load();
+		spooky.load();
+		liveSpeed.load();
 
 		basemap.init();
 		if (incoming.basemap) basemap.preview(incoming.basemap);
@@ -432,7 +465,9 @@
 				bind:open={mapCtrlOpen}
 				pos={fbBanner ? 'top-16' : 'top-3'}
 			>
+				<SpeedControl />
 				<ChimeControls />
+				<SpookyControls />
 			</MapRoleFilter>
 			<BasemapSelector posClass={fbBanner ? 'top-16 right-3' : 'top-3 right-3'} />
 		{:else}
@@ -445,7 +480,9 @@
 		</div>
 
 		<MapRoleFilter bind:selected={selectedRoles} title="Map Control" bind:open={mapCtrlOpen}>
+			<SpeedControl />
 			<ChimeControls />
+			<SpookyControls />
 		</MapRoleFilter>
 		{/if}
 

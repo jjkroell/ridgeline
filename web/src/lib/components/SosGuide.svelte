@@ -13,6 +13,7 @@
 	//   - test/unsub hidden after 5 min (HIDE_AFTER_MS)
 	//   - a message opening with an @-mention never alerts (sosReplyRe)
 	//   - monthly test: KOD-BOT [Scheduled_Messages] `0 9 1 * *` on the bot Pi
+	//   - map ring: lib/sos-map.ts (12 h, name match, hide per browser, admin resolve)
 	let { compact = false }: { compact?: boolean } = $props();
 	const m = $derived(compact ? '/m' : '');
 
@@ -157,6 +158,19 @@
 						the #sos row, for everyone, until you open #sos (or for 12 hours). No setting needed.</span
 					>
 				</li>
+				<li id="map-ring" class="flex scroll-mt-24 gap-2">
+					<span class="text-coral shrink-0">·</span>
+					<span
+						><span class="text-fg">A red ring on the maps</span> (<a href="{m}/map" class="text-coral hover:underline">Map</a>
+						and <a href="{m}/live-map" class="text-coral hover:underline">Live Map</a>), pulsing over the sender's node
+						and labelled <span class="text-fg font-mono">SOS · name</span>, for 12 hours. It only appears if their radio
+						shares its location in its adverts, and it sits at the last position the radio advertised, not a live GPS
+						fix. Opening #sos doesn't clear it. Tap the label to open #sos or <span class="text-fg">hide it on your
+						map</span>; an admin can mark it <span class="text-fg">resolved</span>, which clears it for everyone. A new
+						alert from that person brings it back. <span class="text-fg">So responders can find you, turn on location
+						sharing in your MeshCore app or radio.</span></span
+					>
+				</li>
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>
 					<span
@@ -183,7 +197,7 @@
 				month</span>, KOD-BOT sends a test on #sos:
 				<span class="text-fg font-mono">SOS test message. no emergency in progress</span>. It sets off the alerts
 				like a real call, to check the whole chain still works end to end — the mesh, Ridgeline's observers, the
-				pulse, notifications and email. There's nothing to do. The email goes only to accounts with
+				pulse, the map ring, notifications and email. There's nothing to do. The email goes only to accounts with
 				<span class="text-fg">Include test messages</span> on, so turn that on if you want to confirm your alerts
 				reach you.
 			</p>

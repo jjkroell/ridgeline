@@ -8,10 +8,14 @@
 // legend and announce items, and bump CURRENT in announce.svelte.ts so the
 // What's new modal auto-opens again. Preview one outside its dates with
 // ?season=<id> on any page (kept for the browser tab; ?season=none clears it).
+// A season marked `draft` never starts from its dates, and only admins (or
+// anyone on dev) can preview it — drop `draft` to launch it.
 //
 // Shared by /live-map (SeasonalControls in Map Control), /m/live-map (the
 // button at the bottom left), the WebGL-free fallback and AnnouncementModal.
 import type maplibregl from 'maplibre-gl';
+import { auth } from './auth.svelte';
+import { env } from './env.svelte';
 
 export interface SeasonItem {
 	emoji: string;
@@ -40,6 +44,8 @@ export interface Season {
 	/** What's new items shown while the season is on, and the button that turns it on. */
 	announce: SeasonItem[];
 	tryLabel: string;
+	/** Still being designed: never in force by date; preview only for admins / on dev. */
+	draft?: boolean;
 }
 
 export const SEASONS: Season[] = [
@@ -88,6 +94,48 @@ export const SEASONS: Season[] = [
 			}
 		],
 		tryLabel: 'Try spooky packets'
+	},
+	{
+		id: 'christmas',
+		draft: true, // ⏳ design in progress — not offered to users yet
+		from: '2026-12-01T08:00:00Z', // midnight Pacific (PST) on Dec 1
+		until: '2027-01-02T08:00:00Z', // through New Year's Day
+		name: 'Christmas',
+		label: 'Festive packets',
+		short: 'Festive',
+		emoji: '🎄',
+		accent: '#e5484d',
+		tip: 'Packets travel as trees, bells, presents, Santa and reindeer',
+		icons: {
+			Advert: '🎄',
+			GroupText: '🔔',
+			TextMessage: '🎁',
+			Trace: '🎅',
+			Ack: '❄️',
+			Path: '🦌',
+			Request: '⛄',
+			AnonRequest: '⛄',
+			Response: '⛄'
+		},
+		other: '🍪',
+		legend: [
+			{ icon: '🎄', label: 'Advert' },
+			{ icon: '🔔', label: 'Channel' },
+			{ icon: '🎁', label: 'Direct' },
+			{ icon: '🎅', label: 'Trace' },
+			{ icon: '❄️', label: 'Ack' },
+			{ icon: '🦌', label: 'Path' },
+			{ icon: '⛄', label: 'Req / Resp' },
+			{ icon: '🍪', label: 'Other' }
+		],
+		announce: [
+			{
+				emoji: '🎄',
+				title: 'Festive packets on the live map',
+				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Every packet then flies across the map as a tree, bell, present, Santa, reindeer, snowflake, snowman or cookie, one for each kind of packet, with a legend to tell them apart. It is off unless you turn it on, and the choice is saved in this browser.'
+			}
+		],
+		tryLabel: 'Try festive packets'
 	}
 ];
 
@@ -118,9 +166,12 @@ class Seasonal {
 
 	/** The season in force now (or being previewed), else null. */
 	season = $derived.by((): Season | null => {
-		if (this.#preview) return SEASONS.find((s) => s.id === this.#preview) ?? null;
+		if (this.#preview) {
+			const p = SEASONS.find((s) => s.id === this.#preview);
+			if (p && (!p.draft || auth.isAdmin || env.isDev)) return p;
+		}
 		const now = this.#now;
-		return SEASONS.find((s) => now >= Date.parse(s.from) && now < Date.parse(s.until)) ?? null;
+		return SEASONS.find((s) => !s.draft && now >= Date.parse(s.from) && now < Date.parse(s.until)) ?? null;
 	});
 
 	/** Themed icons showing: a season is in force and this browser turned it on. */

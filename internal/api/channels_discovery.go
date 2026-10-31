@@ -58,6 +58,24 @@ func (s *Server) adminResolveSOS(w http.ResponseWriter, r *http.Request, actor s
 	writeJSON(w, map[string]bool{"ok": true})
 }
 
+// adminSetSeason sets the live map's seasonal theme for everyone: one theme
+// id (only one is ever on), "none", or "" to follow each theme's dates.
+func (s *Server) adminSetSeason(w http.ResponseWriter, r *http.Request, actor store.User) {
+	var req struct {
+		Season string `json:"season"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad request body")
+		return
+	}
+	if err := s.store.SetSeason(req.Season, actor.ID, time.Now()); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid season")
+		return
+	}
+	s.log.Info("admin set season", "actor", actor.ID, "season", req.Season)
+	writeJSON(w, map[string]string{"season": req.Season})
+}
+
 // channelCandidateCreate records a submitted hashtag name to try and kicks an
 // immediate discovery pass. The name is only a candidate — it is listed only if
 // it later decrypts real traffic, so submitting a wrong name reveals nothing and

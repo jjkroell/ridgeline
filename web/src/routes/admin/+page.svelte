@@ -13,6 +13,7 @@
 	import { ago, purgeCascade, roleColor, roleLabel, skippedNote } from '$lib/format';
 	import MembersPanel from '$lib/components/MembersPanel.svelte';
 	import EmailLogPanel from '$lib/components/EmailLogPanel.svelte';
+	import SeasonsPanel from '$lib/components/SeasonsPanel.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import WindowToggle from '$lib/components/WindowToggle.svelte';
 	import KnownBridgePicker from '$lib/components/KnownBridgePicker.svelte';
@@ -778,6 +779,7 @@
 
 		<MembersPanel />
 		<EmailLogPanel />
+		<SeasonsPanel />
 	{/if}
 </div>
 

@@ -1300,6 +1300,13 @@ export const adminSos = {
     mutate<{ ok: boolean }>("/api/admin/sos/resolve", "POST", csrf, { sender }),
 };
 
+/** Admin: the live map's seasonal theme for everyone — one theme id, "none",
+ *  or "" to follow each theme's own dates. */
+export const adminSeason = {
+  set: (csrf: string, season: string) =>
+    mutate<{ season: string }>("/api/admin/season", "POST", csrf, { season }),
+};
+
 export const adminUsers = {
   list: () => get<AuthUser[]>("/api/admin/users"),
   /** Grant/revoke admin. (Claiming is universal, so there's no can-claim flag.) */

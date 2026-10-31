@@ -9,6 +9,9 @@ class Env {
 	/** The mesh's single radio preset ("freq,bw,sf,cr"), or '' when the server
 	 *  has none or several configured. Shown site-wide by MeshRadio. */
 	meshRadio = $state('');
+	/** The admin's seasonal-theme switch: null = none set (follow each theme's
+	 *  dates), 'none' = all off, else the one theme id turned on. */
+	season = $state<string | null>(null);
 	#started = false;
 
 	async init() {
@@ -20,6 +23,7 @@ class Env {
 				const j = await r.json();
 				this.environment = typeof j.environment === 'string' ? j.environment : '';
 				this.meshRadio = typeof j.meshRadio === 'string' ? j.meshRadio : '';
+				this.season = typeof j.season === 'string' && j.season ? j.season : null;
 			}
 		} catch {
 			// Health unreachable — assume a normal instance; never show the banner

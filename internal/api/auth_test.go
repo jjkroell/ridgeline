@@ -329,3 +329,40 @@ func TestAdminResolveSOS(t *testing.T) {
 		t.Fatalf("admin resolve: %d", resp.StatusCode)
 	}
 }
+
+// The seasonal-theme switch is admin-only, validated, and served to everyone
+// on /api/health (absent while following the calendar).
+func TestAdminSetSeason(t *testing.T) {
+	_, base, done := newAuthEnv(t)
+	defer done()
+	owner := newClient(t, base)
+	owner.do("POST", "/api/auth/register",
+		map[string]string{"email": "owner@example.com", "password": "hunter2hunter2"}, false)
+	member := newClient(t, base)
+	member.do("POST", "/api/auth/register",
+		map[string]string{"email": "member@example.com", "password": "hunter2hunter2"}, false)
+
+	health := func() string {
+		t.Helper()
+		_, body := member.do("GET", "/api/health", nil, false)
+		v, _ := body["season"].(string)
+		return v
+	}
+	if resp, _ := member.do("POST", "/api/admin/season", map[string]any{"season": "christmas"}, true); resp.StatusCode != 403 && resp.StatusCode != 401 {
+		t.Fatalf("non-admin set: %d", resp.StatusCode)
+	}
+	if resp, _ := owner.do("POST", "/api/admin/season", map[string]any{"season": "Bad Id"}, true); resp.StatusCode != 400 {
+		t.Fatalf("bad id: %d", resp.StatusCode)
+	}
+	if health() != "" {
+		t.Fatal("season set before any admin choice")
+	}
+	for _, v := range []string{"christmas", "none", ""} {
+		if resp, _ := owner.do("POST", "/api/admin/season", map[string]any{"season": v}, true); resp.StatusCode != 200 {
+			t.Fatalf("admin set %q: %d", v, resp.StatusCode)
+		}
+		if got := health(); got != v {
+			t.Fatalf("health season = %q, want %q", got, v)
+		}
+	}
+}

@@ -9,7 +9,9 @@
 // What's new modal auto-opens again. Preview one outside its dates with
 // ?season=<id> on any page (kept for the browser tab; ?season=none clears it).
 // A season marked `draft` never starts from its dates, and only admins (or
-// anyone on dev) can preview it with ?season=<id> — drop `draft` to launch it.
+// anyone on dev) can preview it with ?season=<id>. The admin panel's Seasonal
+// themes switch overrides the dates entirely: one theme on (draft or not), or
+// all off; "Follow the calendar" hands control back to the dates.
 //
 // Shared by /live-map (SeasonalControls in Map Control), /m/live-map (the
 // button at the bottom left), the WebGL-free fallback and AnnouncementModal.
@@ -53,8 +55,8 @@ export interface Season {
 export const SEASONS: Season[] = [
 	{
 		id: 'halloween',
-		from: '2026-10-24T07:00:00Z',
-		until: '2026-11-01T20:00:00Z', // noon Pacific (PST) on Nov 1
+		from: '2026-10-24T00:00:00-07:00',
+		until: '2026-11-01T12:00:00-07:00', // noon in BC on Nov 1 (BC stays on UTC−7 year-round from Nov 2026)
 		name: 'Halloween',
 		label: 'Spooky packets',
 		short: 'Spooky',
@@ -99,9 +101,9 @@ export const SEASONS: Season[] = [
 	},
 	{
 		id: 'christmas',
-		draft: true, // ✔ approved 2026-10-31, set aside: drop this line (and bump announce CURRENT) to launch for the holidays
-		from: '2026-12-01T08:00:00Z', // midnight Pacific (PST) on Dec 1
-		until: '2027-01-02T08:00:00Z', // through New Year's Day
+		draft: true, // ✔ approved 2026-10-31, set aside: launch it with Admin → Seasonal themes (bump announce CURRENT for What's new)
+		from: '2026-12-01T00:00:00-07:00', // midnight in BC on Dec 1
+		until: '2027-01-02T00:00:00-07:00', // through New Year's Day
 		name: 'Christmas',
 		label: 'Festive packets',
 		short: 'Festive',
@@ -173,6 +175,14 @@ class Seasonal {
 			const p = SEASONS.find((s) => s.id === this.#preview);
 			if (p && (!p.draft || auth.isAdmin || env.isDev)) return p;
 		}
+		return this.scheduled;
+	});
+
+	/** The season the site offers now, ignoring any preview: the admin's switch
+	 *  (Admin → Seasonal themes) when set, else the dated, non-draft one. */
+	scheduled = $derived.by((): Season | null => {
+		if (env.season === 'none') return null;
+		if (env.season) return SEASONS.find((s) => s.id === env.season) ?? null;
 		const now = this.#now;
 		return SEASONS.find((s) => !s.draft && now >= Date.parse(s.from) && now < Date.parse(s.until)) ?? null;
 	});

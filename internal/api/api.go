@@ -289,6 +289,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/users/block", s.requireAdminUser(s.adminBlockUser))
 	mux.HandleFunc("POST /api/admin/users/verify", s.requireAdminUser(s.adminVerifyUser))
 	mux.HandleFunc("POST /api/admin/sos/resolve", s.requireAdminUser(s.adminResolveSOS))
+	mux.HandleFunc("POST /api/admin/season", s.requireAdminUser(s.adminSetSeason))
 	mux.HandleFunc("POST /api/admin/users/delete", s.requireAdminUser(s.adminDeleteUser))
 	mux.HandleFunc("GET /api/admin/detect", s.requireAdminUser(s.adminDetect))
 	mux.HandleFunc("GET /api/admin/blocklist", s.requireAdminUser(s.adminBlocklist))
@@ -478,6 +479,10 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	// (see store.MeshRadio). In memory, like the rest of health: no DB access.
 	if r := s.store.MeshRadio(); r != "" {
 		h["meshRadio"] = r
+	}
+	// The admin's seasonal-theme switch (store.Season); absent = follow dates.
+	if v := s.store.Season(); v != store.SeasonAuto {
+		h["season"] = v
 	}
 	writeJSON(w, h)
 }

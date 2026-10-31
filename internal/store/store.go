@@ -318,6 +318,14 @@ CREATE TABLE IF NOT EXISTS sos_resolved (
 	resolved_at TEXT NOT NULL,             -- server time (RFC3339); alerts up to it are cleared
 	user_id     INTEGER NOT NULL DEFAULT 0 -- the admin who cleared it
 );
+-- Site-wide switches an admin sets from the admin panel (e.g. the live map's
+-- seasonal theme). A few rows, read once at open and kept in memory.
+CREATE TABLE IF NOT EXISTS site_settings (
+	key        TEXT PRIMARY KEY,
+	value      TEXT NOT NULL,
+	updated_at TEXT NOT NULL,             -- server time (RFC3339)
+	user_id    INTEGER NOT NULL DEFAULT 0 -- the admin who set it
+);
 -- Every email handed to the SMTP relay, and whether it took it: who was sent
 -- what, and when. Kept a year (PruneEmailLog).
 CREATE TABLE IF NOT EXISTS email_log (
@@ -426,6 +434,10 @@ type Store struct {
 	sosLastAlert string            // newest #sos message with an emergency word (RFC3339)
 	sosAlerts    []SOSAlertSender  // who sent the alerts in the last SOSAlertWindow (the maps ring them)
 	sosResolved  map[string]string // sender → when an admin cleared their ring (RFC3339)
+
+	// season is the admin's seasonal-theme switch (site_settings "season"):
+	// "" = none chosen, follow each theme's dates; "none" = all off; else a theme id.
+	season atomic.Value // string
 	sosAlertHook func(SOSAlertMsg)
 }
 
@@ -639,6 +651,10 @@ func Open(path string) (*Store, error) {
 	if err := s.loadSOSResolved(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("store: load sos resolved: %w", err)
+	}
+	if err := s.loadSeason(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: load season: %w", err)
 	}
 	// One-time repair of radio values a far-side receiver wrote onto near-side
 	// nodes back when any hop count could set one. Needs the blocklist loaded

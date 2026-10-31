@@ -19,9 +19,13 @@ export const ALERT_WINDOW_MS = 12 * 60 * 60_000;
 // internal/store/sos.go — keep the two in step.
 const ALERT_RE = /(?<![#\w])(sos|emergency|mayday|911|threat|life)(?!\w)|\bneed(s)? help\b|\bhelp me\b/i;
 
-/** Whether a message mentions an emergency word. */
+// A message opening with an @-mention is a reply, not a new call for help
+// (store.sosReplyRe).
+const REPLY_RE = /^\s*@\[/;
+
+/** Whether a message is a call for help: an emergency word, and not a reply. */
 export function alertWord(text: string): boolean {
-	return ALERT_RE.test(text);
+	return ALERT_RE.test(text) && !REPLY_RE.test(text);
 }
 const MONITORS_KEY = 'ridgeline-sos-monitors';
 const ALERTS_KEY = 'ridgeline-sos-alerts-card';

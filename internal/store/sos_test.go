@@ -166,8 +166,12 @@ func TestSOSAlertWords(t *testing.T) {
 		"thanks for the help":     false,
 		"sosa":                    false,
 		"test":                    false,
+		// Replies (opening with an @-mention) never alert; a mention later does.
+		"@[Dave] what's your emergency?":   false,
+		" @[Dave] got your SOS, on my way": false,
+		"SOS at the lake, @[Mike] is hurt": true,
 	} {
-		if got := sosAlertRe.MatchString(msg); got != want {
+		if got := sosAlertText(msg); got != want {
 			t.Errorf("alert(%q) = %v, want %v", msg, got, want)
 		}
 	}

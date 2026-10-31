@@ -11,6 +11,7 @@
 	//   - pulse window 12 h (SOSAlertWindow / ALERT_WINDOW_MS)
 	//   - emails: 30 s batch, then at most one per 10 min (api/sos_alerts.go)
 	//   - test/unsub hidden after 5 min (HIDE_AFTER_MS)
+	//   - a message opening with an @-mention never alerts (sosReplyRe)
 	let { compact = false }: { compact?: boolean } = $props();
 	const m = $derived(compact ? '/m' : '');
 
@@ -193,7 +194,8 @@
 				</li>
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>
-					<span>One reply per person per minute, so repeated calls don't flood the channel.</span>
+					<span>One reply per person per minute, so repeated calls don't flood the channel. Replies that start with an
+						@-mention get none.</span>
 				</li>
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>
@@ -232,6 +234,15 @@
 			<p class="text-fg-faint text-xs">
 				"#sos" on its own is the channel's name, and a bare "help" doesn't count, so "thanks for the help" stays
 				quiet. A message without a trigger word still goes to everyone on #sos — it just raises no alert.
+			</p>
+			<p class="text-fg-dim">
+				<span class="text-fg">Replies don't count either.</span> A message that <span class="text-fg">starts with an
+				@-mention</span> — <span class="text-fg font-mono">@[Dave] what's your emergency?</span> — is part of a
+				conversation, not a new call, so it raises no alert, sends no email and gets no auto reply, even with a
+				trigger word in it. So when you <span class="text-fg">call for help, don't start with someone's name</span>:
+				write <span class="text-fg font-mono">SOS at the lake, @[Mike] is hurt</span>, not
+				<span class="text-fg font-mono">@[Mike] SOS at the lake</span>. And when you reply to a call, start with
+				their @-mention so the channel doesn't alert again.
 			</p>
 		</section>
 	</div>

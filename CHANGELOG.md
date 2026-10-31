@@ -4,6 +4,21 @@ Notable changes to Ridgeline. This project follows
 [Semantic Versioning](https://semver.org/); tagging began at v0.1.0 (earlier
 history lives in the git log).
 
+## [v0.24.15] — 2026-10-30
+
+### Changed
+- **Replies on #sos don't alert.** A #sos message that starts with an
+  @-mention ("@[Dave] what's your emergency?") is a reply, not a new call: no
+  pulse, browser alert or email, even with a trigger word. A mention later in
+  the message still alerts. (`store.sosAlertText` / `sosReplyRe`, mirrored by
+  `REPLY_RE` in sos.svelte.ts and the KOD-BOT SosAck plugin.) The /sos guide
+  explains it: don't start a call for help with someone's name; start replies
+  with theirs.
+
+### Added
+- **Guide pill in the #sos channel header** (book icon on phones) linking to
+  the /sos guide.
+
 ## [v0.24.14] — 2026-10-30
 
 ### Added

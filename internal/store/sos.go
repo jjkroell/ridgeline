@@ -86,6 +86,18 @@ func monitorWord(msg string) monitorKind {
 // lookbehind, so the '#' and word-boundary tests on the left are a group.
 var sosAlertRe = regexp.MustCompile(`(?i)(?:^|[^#\w])(?:sos|emergency|mayday|911|threat|life)(?:\W|$)|\bneeds? help\b|\bhelp me\b`)
 
+// sosReplyRe matches a message that opens with an @-mention ("@[Dave] on my
+// way"): a reply in a conversation, not a new call for help, so it raises no
+// alert even when it uses an emergency word. Mirrored by REPLY_RE in
+// sos.svelte.ts (and the KOD-BOT SosAck plugin).
+var sosReplyRe = regexp.MustCompile(`^\s*@\[`)
+
+// sosAlertText reports whether a #sos message body is a call for help: an
+// emergency word, and not a reply to someone.
+func sosAlertText(msg string) bool {
+	return sosAlertRe.MatchString(msg) && !sosReplyRe.MatchString(msg)
+}
+
 // SOSAlertWindow is how far back an alert keeps the #sos channel flagged in
 // the UI (the channel row and the Channels nav item pulse), unless the viewer
 // opens #sos first. The client applies it; the server reports the newest alert.
@@ -94,7 +106,7 @@ const SOSAlertWindow = 12 * time.Hour
 // isSOSAlert reports whether a decrypted #sos message carries an emergency word.
 func isSOSAlert(p *meshcore.Packet) bool {
 	return p != nil && p.GroupText != nil && p.GroupText.Decrypted &&
-		p.GroupText.Channel == SOSChannel && sosAlertRe.MatchString(p.GroupText.Message)
+		p.GroupText.Channel == SOSChannel && sosAlertText(p.GroupText.Message)
 }
 
 // SOSAlertMsg is a newly heard #sos message carrying an emergency word, handed

@@ -8,8 +8,9 @@
 // legend and announce items, and bump CURRENT in announce.svelte.ts so the
 // What's new modal auto-opens again. Preview one outside its dates with
 // ?season=<id> on any page (kept for the browser tab; ?season=none clears it).
-// A season marked `draft` never starts from its dates, and only admins (or
-// anyone on dev) can preview it — drop `draft` to launch it.
+// A season marked `draft` never starts from its dates on production, and only
+// admins can preview it there; dev shows it in place of the dated season.
+// Drop `draft` to launch it.
 //
 // Shared by /live-map (SeasonalControls in Map Control), /m/live-map (the
 // button at the bottom left), the WebGL-free fallback and AnnouncementModal.
@@ -169,6 +170,12 @@ class Seasonal {
 		if (this.#preview) {
 			const p = SEASONS.find((s) => s.id === this.#preview);
 			if (p && (!p.draft || auth.isAdmin || env.isDev)) return p;
+		}
+		// Dev shows the season being designed in place of the dated one, so it can
+		// be tried end to end; production only ever sees dated, non-draft seasons.
+		if (env.isDev) {
+			const d = SEASONS.find((s) => s.draft);
+			if (d) return d;
 		}
 		const now = this.#now;
 		return SEASONS.find((s) => !s.draft && now >= Date.parse(s.from) && now < Date.parse(s.until)) ?? null;

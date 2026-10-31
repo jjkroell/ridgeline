@@ -106,8 +106,10 @@
 					<div class="label">1 · You send</div>
 					<p class="text-fg-dim mt-1">
 						You post on #sos from your radio or app (using a
-						<a href="#triggers" class="text-coral hover:underline">trigger word</a>), e.g.
-						<span class="text-fg font-mono">SOS twisted ankle at the Elk Lake trailhead, need help getting out</span>.
+						<a href="#triggers" class="text-coral hover:underline">trigger word</a>), for example:
+					</p>
+					<p class="border-line text-fg bg-panel-2/40 mt-2 rounded-[var(--radius)] border px-3 py-2 font-mono text-xs">
+						SOS twisted ankle at the Elk Lake trailhead, need help getting out
 					</p>
 					<p
 						data-sos-include

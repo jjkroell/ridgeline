@@ -4,6 +4,8 @@
 	import { replaceState } from '$app/navigation';
 	import Seo from '$lib/components/Seo.svelte';
 	import maplibregl from 'maplibre-gl';
+	import { sosSpots, SosRings } from '$lib/sos-map';
+	import { sos } from '$lib/sos.svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import type { Feature, FeatureCollection } from 'geojson';
 	import { api, type Node } from '$lib/api';
@@ -35,6 +37,9 @@
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
+	// Pulsing red rings over the nodes of recent #sos alert senders.
+	let sosRings = $state<SosRings | null>(null);
+	$effect(() => sosRings?.update(sosSpots(located, sos.ringAlerts)));
 	let webglOk = $state(true);
 	let fbBanner = $state(true); // WebGL-free banner open? (offsets the Map Control panel below it)
 	let ready = false;
@@ -359,6 +364,7 @@
 			attributionControl: { compact: true }
 		});
 		map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
+		sosRings = new SosRings(map);
 		map.on('load', () => {
 			map?.resize();
 			if (basemapHasHillshade(currentBasemap)) ensureHillshade(map!, basemapLight);

@@ -128,13 +128,96 @@ func (s *Store) SetSOSAlertHook(fn func(SOSAlertMsg)) {
 	s.sosMu.Unlock()
 }
 
-// noteSOSAlert remembers the newest #sos alert time (RFC3339).
-func (s *Store) noteSOSAlert(at string) {
+// SOSAlertSender is who sent a #sos alert and when (RFC3339), newest per
+// sender. The maps put a pulsing ring on that sender's node, if it has a
+// position; the name is all a channel message carries, so the client matches it.
+type SOSAlertSender struct {
+	Sender string `json:"sender"`
+	At     string `json:"at"`
+}
+
+// noteSOSAlert remembers the newest #sos alert time (RFC3339) and who sent it.
+func (s *Store) noteSOSAlert(at, sender string) {
 	s.sosMu.Lock()
 	if at > s.sosLastAlert {
 		s.sosLastAlert = at
 	}
+	if sender = strings.TrimSpace(sender); sender != "" {
+		found := false
+		for i := range s.sosAlerts {
+			if s.sosAlerts[i].Sender == sender {
+				found = true
+				if at > s.sosAlerts[i].At {
+					s.sosAlerts[i].At = at
+				}
+			}
+		}
+		if !found {
+			s.sosAlerts = append(s.sosAlerts, SOSAlertSender{Sender: sender, At: at})
+		}
+	}
 	s.sosMu.Unlock()
+}
+
+// SOSAlertSenders returns who sent #sos alerts within SOSAlertWindow of now,
+// newest first, leaving out alerts an admin has since resolved. Served from
+// memory; older entries are dropped as it goes.
+func (s *Store) SOSAlertSenders(now time.Time) []SOSAlertSender {
+	cutoff := now.UTC().Add(-SOSAlertWindow).Format(time.RFC3339Nano)
+	s.sosMu.Lock()
+	defer s.sosMu.Unlock()
+	kept := s.sosAlerts[:0]
+	for _, a := range s.sosAlerts {
+		if a.At >= cutoff {
+			kept = append(kept, a)
+		}
+	}
+	s.sosAlerts = kept
+	var out []SOSAlertSender
+	for _, a := range kept {
+		if a.At > s.sosResolved[a.Sender] {
+			out = append(out, a)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].At > out[j].At })
+	return out
+}
+
+// ResolveSOSAlert clears the map ring for sender's alerts for everyone (an
+// admin's "resolved"). A later alert from them rings again.
+func (s *Store) ResolveSOSAlert(sender string, userID int64, now time.Time) error {
+	sender = strings.TrimSpace(sender)
+	at := now.UTC().Format(time.RFC3339Nano)
+	if _, err := s.db.Exec(`INSERT INTO sos_resolved (sender, resolved_at, user_id) VALUES (?, ?, ?)
+		ON CONFLICT(sender) DO UPDATE SET resolved_at = excluded.resolved_at, user_id = excluded.user_id`,
+		sender, at, userID); err != nil {
+		return err
+	}
+	s.sosMu.Lock()
+	s.sosResolved[sender] = at
+	s.sosMu.Unlock()
+	return nil
+}
+
+// loadSOSResolved fills the resolved map at open (a handful of rows).
+func (s *Store) loadSOSResolved() error {
+	rows, err := s.db.Query(`SELECT sender, resolved_at FROM sos_resolved`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	m := map[string]string{}
+	for rows.Next() {
+		var sender, at string
+		if err := rows.Scan(&sender, &at); err != nil {
+			return err
+		}
+		m[sender] = at
+	}
+	s.sosMu.Lock()
+	s.sosResolved = m
+	s.sosMu.Unlock()
+	return rows.Err()
 }
 
 // SOSLastAlert returns when the newest #sos alert was heard ("" if none since
@@ -145,11 +228,11 @@ func (s *Store) SOSLastAlert() string {
 	return s.sosLastAlert
 }
 
-// LoadSOSAlert finds the newest #sos alert in the last SOSAlertWindow, so the
-// flag survives a restart. Runs every boot: twelve hourly batches over
-// idx_obs_received (~a few thousand GroupText rows), newest hour first,
-// stopping at the first hour that has one. Live ingest may note a newer alert
-// meanwhile; noteSOSAlert keeps the max.
+// LoadSOSAlert finds the #sos alerts in the last SOSAlertWindow — the newest
+// time and who sent them — so the flag and the map rings survive a restart.
+// Runs every boot: twelve hourly batches over idx_obs_received (~a few
+// thousand GroupText rows each), each its own short query so ingest isn't held
+// up. Live ingest may note a newer alert meanwhile; noteSOSAlert keeps the max.
 func (s *Store) LoadSOSAlert(ctx context.Context, now time.Time) error {
 	end := now.UTC()
 	for to := end; to.After(end.Add(-SOSAlertWindow)); to = to.Add(-time.Hour) {
@@ -163,27 +246,19 @@ func (s *Store) LoadSOSAlert(ctx context.Context, now time.Time) error {
 		if err != nil {
 			return err
 		}
-		newest := ""
 		for rows.Next() {
 			var raw, at string
 			if err := rows.Scan(&raw, &at); err != nil {
 				rows.Close()
 				return err
 			}
-			if at <= newest {
-				continue
-			}
 			if p, err := meshcore.DecodeHex(raw); err == nil && isSOSAlert(p) {
-				newest = at
+				s.noteSOSAlert(at, p.GroupText.Sender)
 			}
 		}
 		rows.Close()
 		if err := rows.Err(); err != nil {
 			return err
-		}
-		if newest != "" {
-			s.noteSOSAlert(newest)
-			return nil
 		}
 	}
 	return nil

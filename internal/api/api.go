@@ -287,6 +287,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/users/flags", s.requireAdminUser(s.adminSetUserFlags))
 	mux.HandleFunc("POST /api/admin/users/block", s.requireAdminUser(s.adminBlockUser))
 	mux.HandleFunc("POST /api/admin/users/verify", s.requireAdminUser(s.adminVerifyUser))
+	mux.HandleFunc("POST /api/admin/sos/resolve", s.requireAdminUser(s.adminResolveSOS))
 	mux.HandleFunc("POST /api/admin/users/delete", s.requireAdminUser(s.adminDeleteUser))
 	mux.HandleFunc("GET /api/admin/detect", s.requireAdminUser(s.adminDetect))
 	mux.HandleFunc("GET /api/admin/blocklist", s.requireAdminUser(s.adminBlocklist))

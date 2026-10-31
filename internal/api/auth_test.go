@@ -308,3 +308,24 @@ func TestAdminVerifyUser(t *testing.T) {
 		t.Errorf("unknown user: %d", resp.StatusCode)
 	}
 }
+
+func TestAdminResolveSOS(t *testing.T) {
+	_, base, done := newAuthEnv(t)
+	defer done()
+	owner := newClient(t, base)
+	owner.do("POST", "/api/auth/register",
+		map[string]string{"email": "owner@example.com", "password": "hunter2hunter2"}, false)
+	member := newClient(t, base)
+	member.do("POST", "/api/auth/register",
+		map[string]string{"email": "member@example.com", "password": "hunter2hunter2"}, false)
+
+	if resp, _ := member.do("POST", "/api/admin/sos/resolve", map[string]any{"sender": "Hiker"}, true); resp.StatusCode != 403 && resp.StatusCode != 401 {
+		t.Fatalf("non-admin resolve: %d", resp.StatusCode)
+	}
+	if resp, _ := owner.do("POST", "/api/admin/sos/resolve", map[string]any{"sender": " "}, true); resp.StatusCode != 400 {
+		t.Fatalf("blank sender: %d", resp.StatusCode)
+	}
+	if resp, _ := owner.do("POST", "/api/admin/sos/resolve", map[string]any{"sender": "Hiker"}, true); resp.StatusCode != 200 {
+		t.Fatalf("admin resolve: %d", resp.StatusCode)
+	}
+}

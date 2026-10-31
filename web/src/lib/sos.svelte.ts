@@ -29,6 +29,8 @@ export function alertWord(text: string): boolean {
 }
 const MONITORS_KEY = 'ridgeline-sos-monitors';
 const ALERTS_KEY = 'ridgeline-sos-alerts-card';
+/** Map rings this browser hid: sender → the alert time hidden (epoch ms). */
+const RING_HIDE_KEY = 'ridgeline-sos-ring-hidden';
 /** The three #sos cards; at most one is open, the rest are pills. */
 export type SosCardKind = 'info' | 'monitors' | 'alerts';
 /** Only alerts this fresh ring the alarm (not ones found on load or reconnect). */
@@ -82,6 +84,10 @@ class SOS {
 	monitors = $state<ChannelMonitor[]>([]);
 	/** Newest #sos alert the server heard (epoch ms; 0 = none in 12 h). */
 	lastAlert = $state(0);
+	/** Who sent #sos alerts and when (epoch ms), newest per sender — for the map rings. */
+	alertSenders = $state<{ sender: string; at: number }[]>([]);
+	/** Rings hidden on this browser's maps: sender → newest alert time hidden. */
+	ringHidden = $state<Record<string, number>>({});
 	loaded = $state(false);
 	/** Newest #sos alert this browser has seen by opening the channel (epoch ms). */
 	alertAckAt = $state(0);
@@ -102,6 +108,11 @@ class SOS {
 		// One card open at a time (older saves could have two).
 		if (!this.infoMinimized) this.monitorsMinimized = this.alertsMinimized = true;
 		else if (!this.monitorsMinimized) this.alertsMinimized = true;
+		try {
+			this.ringHidden = JSON.parse(localStorage.getItem(RING_HIDE_KEY) || '{}') || {};
+		} catch {
+			/* storage unavailable or garbled — show every ring */
+		}
 		try {
 			this.alertAckAt = Number(localStorage.getItem(ALERT_ACK_KEY)) || 0;
 		} catch {
@@ -142,6 +153,31 @@ class SOS {
 			if (alertWord(m.text)) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Alert senders within the window, for the map rings. Unlike the channel
+	 * pulse, opening #sos doesn't clear them: the map is where you look for
+	 * where help is needed, for as long as the alert is fresh.
+	 */
+	get ringAlerts(): { sender: string; at: number }[] {
+		return this.alertSenders.filter(
+			(a) => this.now - a.at < ALERT_WINDOW_MS && !((this.ringHidden[a.sender] ?? 0) >= a.at)
+		);
+	}
+
+	/** Hide a sender's ring on this browser's maps, until they send a newer alert. */
+	hideRing(sender: string, at: number) {
+		const now = Date.now();
+		const kept = Object.fromEntries(
+			Object.entries(this.ringHidden).filter(([, t]) => now - t < ALERT_WINDOW_MS)
+		);
+		this.ringHidden = { ...kept, [sender]: at };
+		try {
+			localStorage.setItem(RING_HIDE_KEY, JSON.stringify(this.ringHidden));
+		} catch {
+			/* storage unavailable — hidden until reload */
+		}
 	}
 
 	/** Clear the pulse: the user switched to #sos, so everything heard until now is seen. */
@@ -186,6 +222,10 @@ class SOS {
 			this.lastAlert = t;
 			this.now = Date.now();
 		}
+		const sender = ev.sender?.trim();
+		const prev = sender ? this.alertSenders.find((a) => a.sender === sender) : undefined;
+		if (sender && (!prev || t > prev.at))
+			this.alertSenders = [{ sender, at: t }, ...this.alertSenders.filter((a) => a.sender !== sender)];
 		this.#alarm(t, ev.messageHash, ev.sender, ev.text);
 	}
 
@@ -202,6 +242,7 @@ class SOS {
 			// A newer alert than the last poll saw (and the live feed missed): ring.
 			if (this.loaded && t > this.lastAlert) this.#alarm(t, 'poll:' + t);
 			this.lastAlert = t;
+			this.alertSenders = (r.alerts ?? []).map((a) => ({ sender: a.sender, at: +new Date(a.at) }));
 		} catch {
 			/* keep the last list */
 		} finally {

@@ -209,6 +209,79 @@ func TestSOSLastAlert(t *testing.T) {
 	}
 }
 
+// The maps ring the node of whoever sent a #sos alert in the last 12 hours:
+// newest per sender, newest first, survives a restart, ages out of the window.
+func TestSOSAlertSenders(t *testing.T) {
+	RegisterSOSChannel()
+	st := testStore(t)
+	key := meshcore.DeriveHashtagKey(SOSChannel)
+	now := time.Now().UTC()
+	at := func(d time.Duration) string { return now.Add(-d).Format(time.RFC3339Nano) }
+
+	recordRaw(t, st, groupTextRaw(t, key, "Hiker", "SOS rolled ankle"), now.Add(-5*time.Hour))
+	recordRaw(t, st, groupTextRaw(t, key, "Paddler", "mayday off Race Rocks"), now.Add(-2*time.Hour))
+	recordRaw(t, st, groupTextRaw(t, key, "Hiker", "still need help"), now.Add(-time.Hour))
+	recordRaw(t, st, groupTextRaw(t, key, "Helper", "@[Hiker] SOS team on the way"), now.Add(-30*time.Minute))
+	recordRaw(t, st, groupTextRaw(t, key, "Chatty", "anyone around"), now.Add(-20*time.Minute))
+	want := []SOSAlertSender{{"Hiker", at(time.Hour)}, {"Paddler", at(2 * time.Hour)}}
+	check := func(label string, got []SOSAlertSender) {
+		t.Helper()
+		if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+			t.Fatalf("%s: %+v, want %+v", label, got, want)
+		}
+	}
+	check("live", st.SOSAlertSenders(now))
+
+	st.sosAlerts = nil // as after a restart
+	if err := st.LoadSOSAlert(context.Background(), now); err != nil {
+		t.Fatal(err)
+	}
+	check("loaded", st.SOSAlertSenders(now))
+
+	if got := st.SOSAlertSenders(now.Add(10*time.Hour + 30*time.Minute)); len(got) != 1 || got[0].Sender != "Hiker" {
+		t.Fatalf("after 10.5 h: %+v", got)
+	}
+	if got := st.SOSAlertSenders(now.Add(11*time.Hour + 30*time.Minute)); len(got) != 0 {
+		t.Fatalf("after 11.5 h: %+v", got)
+	}
+}
+
+// An admin's "resolved" clears a sender's ring for everyone, survives a
+// restart, and a later alert from them rings again.
+func TestSOSResolve(t *testing.T) {
+	RegisterSOSChannel()
+	st := testStore(t)
+	key := meshcore.DeriveHashtagKey(SOSChannel)
+	now := time.Now().UTC()
+	recordRaw(t, st, groupTextRaw(t, key, "Hiker", "SOS rolled ankle"), now.Add(-time.Hour))
+	recordRaw(t, st, groupTextRaw(t, key, "Paddler", "mayday"), now.Add(-time.Hour))
+
+	if err := st.ResolveSOSAlert("Hiker", 1, now); err != nil {
+		t.Fatal(err)
+	}
+	names := func() []string {
+		var out []string
+		for _, a := range st.SOSAlertSenders(time.Now()) {
+			out = append(out, a.Sender)
+		}
+		return out
+	}
+	if got := names(); len(got) != 1 || got[0] != "Paddler" {
+		t.Fatalf("after resolve: %v", got)
+	}
+	st.sosResolved = nil
+	if err := st.loadSOSResolved(); err != nil {
+		t.Fatal(err)
+	}
+	if got := names(); len(got) != 1 || got[0] != "Paddler" {
+		t.Fatalf("after reload: %v", got)
+	}
+	recordRaw(t, st, groupTextRaw(t, key, "Hiker", "SOS again, worse"), now.Add(time.Minute))
+	if got := names(); len(got) != 2 || got[0] != "Hiker" {
+		t.Fatalf("new alert should ring again: %v", got)
+	}
+}
+
 // Purging a channel removes its observations (every observer's copy) and
 // nothing else; the monitor roster survives.
 func TestPurgeChannelKeepsRoster(t *testing.T) {

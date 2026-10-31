@@ -717,6 +717,8 @@ export interface SOSRoster {
   monitors: ChannelMonitor[];
   /** When the newest #sos message with an emergency word was heard ("" if none in 12 h). */
   lastAlert?: string;
+  /** Who sent #sos alerts in the last 12 h, newest first (the maps ring their nodes). */
+  alerts?: { sender: string; at: string }[];
 }
 
 export const api = {
@@ -1286,6 +1288,13 @@ export const locationShares = {
 };
 
 /** Admin member management (session-admin gated). */
+/** Admin: mark a #sos alert resolved — clears the map ring on the sender's
+ *  node for everyone until they send another alert. */
+export const adminSos = {
+  resolve: (csrf: string, sender: string) =>
+    mutate<{ ok: boolean }>("/api/admin/sos/resolve", "POST", csrf, { sender }),
+};
+
 export const adminUsers = {
   list: () => get<AuthUser[]>("/api/admin/users"),
   /** Grant/revoke admin. (Claiming is universal, so there's no can-claim flag.) */

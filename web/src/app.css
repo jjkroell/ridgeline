@@ -1166,3 +1166,126 @@ html[data-solid] [data-cm-backdrop] {
 		left: 50%;
 	}
 }
+
+/* #sos alert ring on the maps (lib/sos-map.ts): two red rings expand from the
+   sender's node, half a cycle apart, over a solid core. Same red on every theme
+   so it reads as an alert. Clicks pass through to the node dot beneath. */
+.sos-ring {
+	position: relative;
+	width: 0;
+	height: 0;
+	pointer-events: none;
+	z-index: 2;
+}
+.sos-ring span,
+.sos-ring b {
+	position: absolute;
+	left: -10px;
+	top: -10px;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+}
+.sos-ring span {
+	border: 2.5px solid #ff3b30;
+	animation: sos-ring 2s ease-out infinite;
+}
+.sos-ring span + span {
+	animation-delay: 1s;
+}
+.sos-ring b {
+	border: 2.5px solid #ff3b30;
+	box-shadow: 0 0 10px rgb(255 59 48 / 0.7);
+}
+.sos-ring button {
+	position: absolute;
+	top: 14px;
+	left: 0;
+	transform: translateX(-50%);
+	white-space: nowrap;
+	font: 600 10px/1 ui-sans-serif, system-ui, sans-serif;
+	letter-spacing: 0.02em;
+	color: #fff;
+	background: #d70015;
+	border-radius: 999px;
+	padding: 4px 7px;
+	box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+	pointer-events: auto;
+	cursor: pointer;
+}
+.sos-ring button:hover {
+	background: #ff3b30;
+}
+/* The popup the label opens: open #sos, hide on this map, admin resolve. */
+.maplibregl-popup.sos-popup .maplibregl-popup-content {
+	background: var(--color-ink-2);
+	border: 1px solid color-mix(in srgb, #ff3b30 45%, var(--color-line-bright));
+	color: var(--color-fg-dim);
+	border-radius: var(--radius);
+	padding: 10px 12px;
+	font-size: 0.75rem;
+	line-height: 1.4;
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+}
+.maplibregl-popup.sos-popup .maplibregl-popup-tip {
+	display: none;
+}
+.maplibregl-popup.sos-popup .maplibregl-popup-close-button {
+	color: var(--color-fg-faint);
+	padding: 0 6px;
+}
+.sos-popup-title {
+	color: #ff453a;
+	font-weight: 700;
+	padding-right: 14px;
+}
+.sos-popup-meta {
+	margin-top: 2px;
+}
+.sos-popup-actions {
+	display: flex;
+	gap: 12px;
+	margin-top: 8px;
+}
+.sos-popup-actions a,
+.sos-popup-actions button {
+	color: var(--color-fg);
+	font-weight: 600;
+}
+.sos-popup-actions a:hover,
+.sos-popup-actions button:hover {
+	color: #ff453a;
+}
+.sos-popup-resolve {
+	display: block;
+	width: 100%;
+	margin-top: 8px;
+	padding: 5px 8px;
+	border-radius: var(--radius);
+	background: rgb(255 59 48 / 0.14);
+	border: 1px solid rgb(255 59 48 / 0.45);
+	color: #ff453a;
+	font-weight: 600;
+}
+.sos-popup-resolve:hover {
+	background: rgb(255 59 48 / 0.24);
+}
+.sos-popup-resolve:disabled {
+	opacity: 0.5;
+}
+@keyframes sos-ring {
+	from {
+		transform: scale(1);
+		opacity: 0.95;
+	}
+	to {
+		transform: scale(4);
+		opacity: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.sos-ring span {
+		animation: none;
+		opacity: 0;
+	}
+}

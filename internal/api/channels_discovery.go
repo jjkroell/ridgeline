@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/jjkroell/ridgeline/internal/store"
 )
@@ -33,7 +35,26 @@ func (s *Server) channelsSOS(w http.ResponseWriter, _ *http.Request) {
 		"channel":   "#" + store.SOSChannel,
 		"monitors":  s.store.SOSMonitors(),
 		"lastAlert": s.store.SOSLastAlert(),
+		"alerts":    s.store.SOSAlertSenders(time.Now()),
 	})
+}
+
+// adminResolveSOS clears the map ring on a #sos sender's node for everyone,
+// e.g. once they're safe. A new alert from them rings again.
+func (s *Server) adminResolveSOS(w http.ResponseWriter, r *http.Request, actor store.User) {
+	var req struct {
+		Sender string `json:"sender"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Sender) == "" {
+		writeErr(w, http.StatusBadRequest, "sender required")
+		return
+	}
+	if err := s.store.ResolveSOSAlert(req.Sender, actor.ID, time.Now()); err != nil {
+		s.fail(w, err)
+		return
+	}
+	s.log.Info("admin resolved sos alert", "actor", actor.ID, "sender", req.Sender)
+	writeJSON(w, map[string]bool{"ok": true})
 }
 
 // channelCandidateCreate records a submitted hashtag name to try and kicks an

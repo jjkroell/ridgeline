@@ -309,6 +309,13 @@ CREATE TABLE IF NOT EXISTS channel_monitor_backfills (
 	channel TEXT PRIMARY KEY,
 	done_at TEXT NOT NULL
 );
+-- #sos alerts an admin marked resolved: the map ring on that sender's node goes
+-- for everyone, until they send a new alert. One row per sender name.
+CREATE TABLE IF NOT EXISTS sos_resolved (
+	sender      TEXT PRIMARY KEY,
+	resolved_at TEXT NOT NULL,             -- server time (RFC3339); alerts up to it are cleared
+	user_id     INTEGER NOT NULL DEFAULT 0 -- the admin who cleared it
+);
 
 `
 
@@ -393,7 +400,9 @@ type Store struct {
 	sosMu        sync.RWMutex
 	sosMonitors  map[string]*ChannelMonitor
 	sosLastHash  map[string]string
-	sosLastAlert string // newest #sos message with an emergency word (RFC3339)
+	sosLastAlert string            // newest #sos message with an emergency word (RFC3339)
+	sosAlerts    []SOSAlertSender  // who sent the alerts in the last SOSAlertWindow (the maps ring them)
+	sosResolved  map[string]string // sender → when an admin cleared their ring (RFC3339)
 	sosAlertHook func(SOSAlertMsg)
 }
 
@@ -600,6 +609,10 @@ func Open(path string) (*Store, error) {
 	if err := s.loadSOSMonitors(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("store: load sos monitors: %w", err)
+	}
+	if err := s.loadSOSResolved(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: load sos resolved: %w", err)
 	}
 	// One-time repair of radio values a far-side receiver wrote onto near-side
 	// nodes back when any hop count could set one. Needs the blocklist loaded
@@ -974,7 +987,7 @@ func (s *Store) Record(o Observation) error {
 		s.noteMonitor(sosKind, sosSender, p.MessageHash, ts)
 	}
 	if sosAlert {
-		s.noteSOSAlert(ts)
+		s.noteSOSAlert(ts, p.GroupText.Sender)
 		if sosAlertNew {
 			s.sosMu.RLock()
 			hook := s.sosAlertHook

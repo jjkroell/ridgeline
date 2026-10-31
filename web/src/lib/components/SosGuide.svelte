@@ -9,7 +9,8 @@
 	//   - trigger words: store.sosAlertRe / sos.svelte.ts ALERT_RE (and the
 	//     bot's contrib/sos_ack plugin in jjkroell/meshcore-bot)
 	//   - pulse window 12 h (SOSAlertWindow / ALERT_WINDOW_MS)
-	//   - emails: 30 s batch, then at most one per 10 min (api/sos_alerts.go)
+	//   - emails: 30 s batch, then at most one per 10 min, except a real call after a
+	//     tests-only email (api/sos_alerts.go)
 	//   - chat clean-up (#cleanup): test/unsub hidden after 5 min, calls for
 	//     help after 12 h, everything else after 3 h (sos.svelte.ts hidden())
 	//   - a message opening with an @-mention never alerts (sosReplyRe)
@@ -206,8 +207,9 @@
 						on #sos alerts under <a href="{m}/account#sos-alerts" class="text-coral hover:underline">Account</a>
 						(needs a verified email). It works while Ridgeline is closed. The first email waits about 30 seconds so
 						messages sent together arrive as one; after that, at most one email every 10 minutes, carrying
-						everything heard in between. Messages that say they're a test ("SOS test…") are left out unless you
-						tick <span class="text-fg">Include test messages</span> there.</span
+						everything heard in between. A real call right after a test email doesn't wait out those 10 minutes.
+						Messages that say they're a test ("SOS test…") are left out unless you tick
+						<span class="text-fg">Include test messages</span> there.</span
 					>
 				</li>
 			</ul>

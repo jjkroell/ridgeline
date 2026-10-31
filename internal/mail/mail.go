@@ -22,7 +22,14 @@ import (
 type Mailer struct {
 	cfg config.Email
 	log *slog.Logger
+	// onResult, if set, hears the outcome of every SendAsync (see OnResult).
+	onResult func(kind, to, subject string, err error)
 }
+
+// OnResult registers fn to be called after each SendAsync attempt with the
+// relay's verdict (nil err: accepted), e.g. to keep a send log. Set it before
+// the first send.
+func (m *Mailer) OnResult(fn func(kind, to, subject string, err error)) { m.onResult = fn }
 
 // New returns a Mailer for the given email config. It is always non-nil; when
 // cfg is not Enabled(), Send/SendAsync are no-ops (a warning is logged once).
@@ -58,7 +65,11 @@ func (m *Mailer) SendAsync(what, to, subject, text, html string) {
 		return
 	}
 	go func() {
-		if err := m.Send(to, subject, text, html); err != nil {
+		err := m.Send(to, subject, text, html)
+		if m.onResult != nil {
+			m.onResult(what, to, subject, err)
+		}
+		if err != nil {
 			m.log.Error("email send failed", "kind", what, "to", to, "err", err)
 			return
 		}

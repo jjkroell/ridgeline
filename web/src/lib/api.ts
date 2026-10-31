@@ -831,6 +831,9 @@ export interface AuthUser {
   sosAlerts: boolean;
   /** …including #sos messages that say they're a test. */
   sosAlertTests: boolean;
+  /** When sosAlerts / sosAlertTests last changed (absent: never recorded). */
+  sosAlertsAt?: string;
+  sosAlertTestsAt?: string;
   createdAt: string;
   lastLogin?: string;
 }

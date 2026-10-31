@@ -207,5 +207,18 @@ func (s *Server) accountSOSAlerts(w http.ResponseWriter, r *http.Request, user s
 			return
 		}
 	}
+	s.log.Info("sos alert settings", "id", user.ID, "email", user.Email,
+		"enabled", fmtOptBool(req.Enabled), "tests", fmtOptBool(req.Tests))
 	s.returnUpdatedUser(w, user.ID)
+}
+
+// fmtOptBool renders an optional setting for logs: on, off, or "-" if unsent.
+func fmtOptBool(b *bool) string {
+	switch {
+	case b == nil:
+		return "-"
+	case *b:
+		return "on"
+	}
+	return "off"
 }

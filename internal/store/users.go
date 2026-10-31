@@ -35,6 +35,10 @@ type User struct {
 	// SOSAlertTests also emails #sos alerts that say they're a test ("SOS
 	// test…"); off by default, so subscribers only hear about real calls.
 	SOSAlertTests bool `json:"sosAlertTests"`
+	// When SOSAlerts / SOSAlertTests last changed; empty if never (or before
+	// changes were recorded).
+	SOSAlertsAt     string `json:"sosAlertsAt,omitempty"`
+	SOSAlertTestsAt string `json:"sosAlertTestsAt,omitempty"`
 }
 
 // Session is a server-side login session keyed by the SHA-256 of the cookie
@@ -98,7 +102,8 @@ func (s *Store) GetUserByEmail(email string) (User, bool, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	return s.scanUser(s.db.QueryRow(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
-		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests
+		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests,
+		       sos_alerts_at, sos_alert_tests_at
 		FROM users WHERE email = ?`, email))
 }
 
@@ -106,14 +111,16 @@ func (s *Store) GetUserByEmail(email string) (User, bool, error) {
 func (s *Store) GetUserByID(id int64) (User, bool, error) {
 	return s.scanUser(s.db.QueryRow(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
-		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests
+		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests,
+		       sos_alerts_at, sos_alert_tests_at
 		FROM users WHERE id = ?`, id))
 }
 
 func (s *Store) scanUser(row *sql.Row) (User, bool, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin,
-		&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin, &u.EmailVerified, &u.SOSAlerts, &u.SOSAlertTests)
+		&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin, &u.EmailVerified, &u.SOSAlerts, &u.SOSAlertTests,
+		&u.SOSAlertsAt, &u.SOSAlertTestsAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, false, nil
 	}
@@ -134,7 +141,8 @@ func (s *Store) SetUserLastLogin(id int64) error {
 func (s *Store) ListUsers() ([]User, error) {
 	rows, err := s.db.Query(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
-		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests
+		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests,
+		       sos_alerts_at, sos_alert_tests_at
 		FROM users ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -144,7 +152,8 @@ func (s *Store) ListUsers() ([]User, error) {
 	for rows.Next() {
 		var u User
 		if err := rows.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin,
-			&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin, &u.EmailVerified, &u.SOSAlerts, &u.SOSAlertTests); err != nil {
+			&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin, &u.EmailVerified, &u.SOSAlerts, &u.SOSAlertTests,
+			&u.SOSAlertsAt, &u.SOSAlertTestsAt); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -196,15 +205,41 @@ func (s *Store) SearchUsersByName(q string, excludeID int64, limit int) ([]UserB
 
 // SetSOSAlerts turns an account's #sos alert emails on or off.
 func (s *Store) SetSOSAlerts(id int64, on bool) error {
-	_, err := s.db.Exec(`UPDATE users SET sos_alerts = ? WHERE id = ?`, boolInt(on), id)
-	return err
+	return s.setSOSAlertSetting(id, "alerts", on)
 }
 
 // SetSOSAlertTests chooses whether an account's #sos alert emails include
 // test messages.
 func (s *Store) SetSOSAlertTests(id int64, on bool) error {
-	_, err := s.db.Exec(`UPDATE users SET sos_alert_tests = ? WHERE id = ?`, boolInt(on), id)
-	return err
+	return s.setSOSAlertSetting(id, "tests", on)
+}
+
+// setSOSAlertSetting stores one #sos alert setting. A real change also stamps
+// the account's *_at column and adds a sos_alert_changes row; re-saving the
+// same value leaves both alone.
+func (s *Store) setSOSAlertSetting(id int64, setting string, on bool) error {
+	col, atCol := "sos_alerts", "sos_alerts_at"
+	if setting == "tests" {
+		col, atCol = "sos_alert_tests", "sos_alert_tests_at"
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(`UPDATE users SET `+col+` = ?, `+atCol+` = ? WHERE id = ? AND `+col+` <> ?`,
+		boolInt(on), now, id, boolInt(on))
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		if _, err := tx.Exec(`INSERT INTO sos_alert_changes (user_id, setting, value, changed_at)
+			VALUES (?, ?, ?, ?)`, id, setting, boolInt(on), now); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // SOSAlertRecipients returns the accounts to email about a #sos alert: opted

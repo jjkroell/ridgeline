@@ -202,7 +202,13 @@ func run(log *slog.Logger, configPath string, configRequired bool) error {
 
 	// Outbound transactional email (verification + note notifications). Disabled
 	// gracefully when no relay is configured.
-	apiServer.SetMailer(mail.New(cfg.Email, log))
+	mailer := mail.New(cfg.Email, log)
+	mailer.OnResult(func(kind, to, subject string, err error) {
+		if lerr := st.LogEmail(kind, to, subject, err); lerr != nil {
+			log.Warn("email log", "err", lerr)
+		}
+	})
+	apiServer.SetMailer(mailer)
 	// Where the public contact form delivers. Empty leaves that endpoint
 	// answering 503, which is the right default for an instance nobody has
 	// pointed at a mailbox.
@@ -515,6 +521,11 @@ func runClaimPrune(ctx context.Context, st *store.Store, log *slog.Logger) {
 			log.Warn("password-reset prune", "err", err)
 		} else if n > 0 {
 			log.Info("password-reset prune: removed expired tokens", "rows", n)
+		}
+		if n, err := st.PruneEmailLog(); err != nil {
+			log.Warn("email-log prune", "err", err)
+		} else if n > 0 {
+			log.Info("email-log prune: removed rows older than a year", "rows", n)
 		}
 	}
 	prune()

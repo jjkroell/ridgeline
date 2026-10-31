@@ -42,6 +42,11 @@
 	let memberBusyId = $state<number | null>(null);
 	let confirmDeleteId = $state<number | null>(null);
 
+	/** Full local date and time, for the hover on a "since …" stamp. */
+	function stamp(iso?: string): string {
+		return iso ? new Date(iso).toLocaleString() : 'Not recorded';
+	}
+
 	async function loadMembers() {
 		if (!auth.isAdmin) return;
 		loadingMembers = true;
@@ -184,6 +189,17 @@
 						{/if}
 					</div>
 					<div class="text-fg-faint truncate text-xs">{m.email} · joined {ago(m.createdAt)}</div>
+					{#if m.sosAlerts || m.sosAlertsAt}
+						<div class="text-fg-faint truncate text-xs">
+							#sos emails <span title={stamp(m.sosAlertsAt)}
+								>{m.sosAlerts ? 'on' : 'off'}{m.sosAlertsAt ? ` since ${ago(m.sosAlertsAt)}` : ''}</span
+							>{#if m.sosAlerts}{' · '}tests <span title={stamp(m.sosAlertTestsAt)}
+									>{m.sosAlertTests ? 'on' : 'off'}{m.sosAlertTestsAt
+										? ` since ${ago(m.sosAlertTestsAt)}`
+										: ''}</span
+								>{/if}
+						</div>
+					{/if}
 				</div>
 				<label class="text-fg-dim flex items-center gap-1.5 text-xs">
 					<input

@@ -109,7 +109,9 @@ CREATE TABLE IF NOT EXISTS users (
 	created_at    TEXT NOT NULL,
 	last_login    TEXT,
 	sos_alerts    INTEGER NOT NULL DEFAULT 0, -- opted in to #sos alert emails
-	sos_alert_tests INTEGER NOT NULL DEFAULT 0 -- …including messages that say they're a test
+	sos_alert_tests INTEGER NOT NULL DEFAULT 0, -- …including messages that say they're a test
+	sos_alerts_at TEXT NOT NULL DEFAULT '',     -- when sos_alerts last changed
+	sos_alert_tests_at TEXT NOT NULL DEFAULT '' -- when sos_alert_tests last changed
 );
 
 -- sessions are server-side so they can be revoked. token_hash is the SHA-256 of
@@ -316,6 +318,27 @@ CREATE TABLE IF NOT EXISTS sos_resolved (
 	resolved_at TEXT NOT NULL,             -- server time (RFC3339); alerts up to it are cleared
 	user_id     INTEGER NOT NULL DEFAULT 0 -- the admin who cleared it
 );
+-- Every email handed to the SMTP relay, and whether it took it: who was sent
+-- what, and when. Kept a year (PruneEmailLog).
+CREATE TABLE IF NOT EXISTS email_log (
+	id        INTEGER PRIMARY KEY AUTOINCREMENT,
+	sent_at   TEXT NOT NULL,               -- server time (RFC3339)
+	kind      TEXT NOT NULL,               -- verification, sos-alert, note, …
+	recipient TEXT NOT NULL,
+	subject   TEXT NOT NULL,
+	error     TEXT NOT NULL DEFAULT ''     -- empty: the relay accepted it
+);
+CREATE INDEX IF NOT EXISTS email_log_sent ON email_log(sent_at);
+-- Each change to an account's #sos alert-email settings, so "who was signed
+-- up when that alert went out" has an answer. One row per actual change.
+CREATE TABLE IF NOT EXISTS sos_alert_changes (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	user_id    INTEGER NOT NULL,
+	setting    TEXT NOT NULL,              -- 'alerts' or 'tests'
+	value      INTEGER NOT NULL,           -- 1 on, 0 off
+	changed_at TEXT NOT NULL               -- server time (RFC3339)
+);
+CREATE INDEX IF NOT EXISTS sos_alert_changes_user ON sos_alert_changes(user_id);
 
 `
 
@@ -543,6 +566,9 @@ func Open(path string) (*Store, error) {
 	// Test messages on #sos ("SOS test…") are left out of those emails unless
 	// the account opts in to them too.
 	db.Exec(`ALTER TABLE users ADD COLUMN sos_alert_tests INTEGER NOT NULL DEFAULT 0`)
+	// When each of those was last changed (empty: never, or before this was kept).
+	db.Exec(`ALTER TABLE users ADD COLUMN sos_alerts_at TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE users ADD COLUMN sos_alert_tests_at TEXT NOT NULL DEFAULT ''`)
 	// Email verification: new accounts must confirm their address before logging
 	// in. Accounts that predate this feature are grandfathered as verified on the
 	// one-time column add, so nobody is locked out.

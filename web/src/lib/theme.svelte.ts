@@ -96,7 +96,8 @@ const BY_ID = new Map(THEMES.map((t) => [t.id, t]));
 const KEY = 'ridgeline-theme';
 const ACCENT_KEY = 'ridgeline-accent';
 const SOLID_KEY = 'ridgeline-solid';
-const DEFAULT: ThemeId = 'dark';
+// Harbour Dark since v0.24.19; anyone who picked a theme keeps theirs.
+const DEFAULT: ThemeId = 'apple-dark';
 
 /** Accepts anything from storage; falls back to the default. Pre-existing
  *  installs hold 'dark' or 'light', both of which are still valid ids. */

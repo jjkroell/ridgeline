@@ -36,6 +36,7 @@ func (s *Server) channelsSOS(w http.ResponseWriter, _ *http.Request) {
 		"monitors":  s.store.SOSMonitors(),
 		"lastAlert": s.store.SOSLastAlert(),
 		"alerts":    s.store.SOSAlertSenders(time.Now()),
+		"clearedAt": s.store.SOSAlertsClearedAt(),
 	})
 }
 

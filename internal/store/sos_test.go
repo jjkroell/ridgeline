@@ -282,6 +282,38 @@ func TestSOSResolve(t *testing.T) {
 	}
 }
 
+// Resolving every open alert stops the channel pulse (lastAlert) for
+// everyone; one still open keeps it going; a new alert starts it again.
+func TestSOSResolveStopsPulse(t *testing.T) {
+	RegisterSOSChannel()
+	st := testStore(t)
+	key := meshcore.DeriveHashtagKey(SOSChannel)
+	now := time.Now().UTC()
+	at := func(d time.Duration) string { return now.Add(d).Format(time.RFC3339Nano) }
+	recordRaw(t, st, groupTextRaw(t, key, "Paddler", "mayday"), now.Add(-2*time.Hour))
+	recordRaw(t, st, groupTextRaw(t, key, "Hiker", "SOS rolled ankle"), now.Add(-time.Hour))
+
+	if err := st.ResolveSOSAlert("Hiker", 1, now); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := st.SOSLastAlert(), at(-2*time.Hour); got != want {
+		t.Fatalf("one still open: lastAlert = %q, want the Paddler's %q", got, want)
+	}
+	if got, want := st.SOSAlertsClearedAt(), at(-time.Hour); got != want {
+		t.Fatalf("clearedAt = %q, want %q", got, want)
+	}
+	if err := st.ResolveSOSAlert("Paddler", 1, now); err != nil {
+		t.Fatal(err)
+	}
+	if got := st.SOSLastAlert(); got != "" {
+		t.Fatalf("all resolved: lastAlert = %q, want none", got)
+	}
+	recordRaw(t, st, groupTextRaw(t, key, "Hiker", "SOS again"), now.Add(time.Minute))
+	if got, want := st.SOSLastAlert(), at(time.Minute); got != want {
+		t.Fatalf("new alert: lastAlert = %q, want %q", got, want)
+	}
+}
+
 // Purging a channel removes its observations (every observer's copy) and
 // nothing else; the monitor roster survives.
 func TestPurgeChannelKeepsRoster(t *testing.T) {

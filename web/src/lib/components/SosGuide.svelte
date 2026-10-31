@@ -76,11 +76,13 @@
 					In your MeshCore app or radio, add a hashtag channel named <span class="text-fg font-mono">sos</span>.
 				</li>
 				<li>
-					Send one — just one — <span class="text-fg font-mono">test</span> message on it. You're listed as a
-					monitor on Ridgeline's #sos page, so everyone can see how many people are listening.
+					Send a single message <span class="text-fg font-mono">'Test'</span> from your companion to the channel. If
+					Ridgeline hears your message, your username is added to the
+					<span class="text-fg">monitoring</span> list on its #sos page.
 				</li>
 				<li>
-					<span class="text-fg">Leave notifications on for #sos</span>, so a real call reaches you.
+					Enable notifications in your MeshCore app for <span class="text-fg font-mono">#sos</span> to ensure you
+					are alerted in real time.
 				</li>
 			</ol>
 			<p class="text-fg-dim">
@@ -155,7 +157,8 @@
 					<span class="text-coral shrink-0">·</span>
 					<span
 						><span class="text-fg">A red pulse</span> on <span class="text-fg">Channels</span> in the menu and on
-						the #sos row, for everyone, until you open #sos (or for 12 hours). No setting needed.</span
+						the #sos row, for everyone, until you open #sos (or for 12 hours, or until an admin marks the alert
+							resolved). No setting needed.</span
 					>
 				</li>
 				<li id="map-ring" class="flex scroll-mt-24 gap-2">
@@ -166,7 +169,7 @@
 						and labelled <span class="text-fg font-mono">SOS · name</span>, for 12 hours. It only appears if their radio
 						shares its location in its adverts, and it sits at the last position the radio advertised, not a live GPS
 						fix. Opening #sos doesn't clear it. Tap the label to open #sos or <span class="text-fg">hide it on your
-						map</span>; an admin can mark it <span class="text-fg">resolved</span>, which clears it for everyone. A new
+						map</span>; an admin can mark it <span class="text-fg">resolved</span>, which clears it, and the red pulse, for everyone. A new
 						alert from that person brings it back. <span class="text-fg">So responders can find you, turn on location
 						sharing in your MeshCore app or radio.</span></span
 					>

@@ -719,6 +719,8 @@ export interface SOSRoster {
   lastAlert?: string;
   /** Who sent #sos alerts in the last 12 h, newest first (the maps ring their nodes). */
   alerts?: { sender: string; at: string }[];
+  /** Newest alert an admin marked resolved ("" if none); lastAlert already leaves resolved ones out. */
+  clearedAt?: string;
 }
 
 export const api = {

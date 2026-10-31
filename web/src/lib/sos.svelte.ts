@@ -86,6 +86,8 @@ class SOS {
 	lastAlert = $state(0);
 	/** Who sent #sos alerts and when (epoch ms), newest per sender — for the map rings. */
 	alertSenders = $state<{ sender: string; at: number }[]>([]);
+	/** Newest alert an admin resolved (epoch ms): the page's own messages up to it don't pulse. */
+	clearedAt = $state(0);
 	/** Rings hidden on this browser's maps: sender → newest alert time hidden. */
 	ringHidden = $state<Record<string, number>>({});
 	loaded = $state(false);
@@ -142,14 +144,15 @@ class SOS {
 	 * Whether the #sos row should pulse: the server's flag, or (instantly, from
 	 * the page's own decoded messages — a newest-last list of {text, t}) a
 	 * message there within the window that mentions an emergency word, newer
-	 * than the last time this browser switched to #sos.
+	 * than the last time this browser switched to #sos and than any alert an
+	 * admin has resolved.
 	 */
 	alerting(msgs: { text: string; t: number }[] | undefined): boolean {
 		if (this.flagged) return true;
 		if (!msgs) return false;
 		for (let i = msgs.length - 1; i >= 0; i--) {
 			const m = msgs[i];
-			if (m.t <= this.alertAckAt || this.now - m.t > ALERT_WINDOW_MS) return false;
+			if (m.t <= this.alertAckAt || m.t <= this.clearedAt || this.now - m.t > ALERT_WINDOW_MS) return false;
 			if (alertWord(m.text)) return true;
 		}
 		return false;
@@ -243,6 +246,7 @@ class SOS {
 			if (this.loaded && t > this.lastAlert) this.#alarm(t, 'poll:' + t);
 			this.lastAlert = t;
 			this.alertSenders = (r.alerts ?? []).map((a) => ({ sender: a.sender, at: +new Date(a.at) }));
+			this.clearedAt = r.clearedAt ? +new Date(r.clearedAt) : 0;
 		} catch {
 			/* keep the last list */
 		} finally {

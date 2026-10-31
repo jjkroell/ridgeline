@@ -220,12 +220,42 @@ func (s *Store) loadSOSResolved() error {
 	return rows.Err()
 }
 
-// SOSLastAlert returns when the newest #sos alert was heard ("" if none since
-// startup's scan). Served from memory.
+// SOSLastAlert returns when the newest #sos alert still in need of attention
+// was heard ("" if none since startup's scan): an alert an admin has resolved
+// no longer counts, so resolving everyone's alerts stops the channel pulse for
+// everyone. Served from memory.
 func (s *Store) SOSLastAlert() string {
 	s.sosMu.RLock()
 	defer s.sosMu.RUnlock()
-	return s.sosLastAlert
+	newest, open := "", ""
+	for _, a := range s.sosAlerts {
+		newest = max(newest, a.At)
+		if a.At > s.sosResolved[a.Sender] {
+			open = max(open, a.At)
+		}
+	}
+	// sosAlerts holds the newest alert per named sender, so it covers
+	// sosLastAlert unless that alert had no sender name — which can't be
+	// resolved, so it keeps counting.
+	if newest != s.sosLastAlert {
+		return s.sosLastAlert
+	}
+	return open
+}
+
+// SOSAlertsClearedAt returns the newest alert time an admin has resolved (""
+// if none). The client's own instant check of the #sos messages it holds
+// stops there, so a resolved alert doesn't pulse again from the page's copy.
+func (s *Store) SOSAlertsClearedAt() string {
+	s.sosMu.RLock()
+	defer s.sosMu.RUnlock()
+	cleared := ""
+	for _, a := range s.sosAlerts {
+		if a.At <= s.sosResolved[a.Sender] {
+			cleared = max(cleared, a.At)
+		}
+	}
+	return cleared
 }
 
 // LoadSOSAlert finds the #sos alerts in the last SOSAlertWindow — the newest

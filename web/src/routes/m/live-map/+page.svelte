@@ -27,6 +27,7 @@
 	import SeasonSnow from '$lib/components/SeasonSnow.svelte';
 	import { seasonal } from '$lib/seasonal.svelte';
 	import { liveSpeed, speedLabel } from '$lib/live-speed.svelte';
+	import { PulseEngine } from '$lib/live-pulse';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -84,7 +85,7 @@
 
 	// active pulses: a node coord + colour + start time
 	// dur: PULSE_MS / TRAIL_MS scaled by the speed setting when the packet arrived.
-	type Pulse = { lng: number; lat: number; color: string; kind: string; start: number; dur: number };
+	type Pulse = { lng: number; lat: number; color: string; start: number; dur: number };
 	let pulses: Pulse[] = [];
 	const PULSE_MS = 1600;
 
@@ -119,15 +120,7 @@
 				return {
 					type: 'Feature',
 					geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-					// icon/s/rot: the season's icon that pops at each hop, growing as it fades.
-					properties: {
-						color: p.color,
-						r: 4 + age * 22,
-						o: Math.max(0, 1 - age),
-						icon: seasonal.imageId(p.kind),
-						s: Math.max(0.1, 0.55 + Math.min(1, age * 3) * 0.6),
-						rot: Math.sin(now / 160 + p.lng * 40) * 14
-					}
+					properties: { color: p.color, r: 4 + age * 22, o: Math.max(0, 1 - age) }
 				};
 			})
 		};
@@ -145,7 +138,7 @@
 			const c = resolveHop(hop);
 			if (c) {
 				coords.push(c);
-				pulses.push({ lng: c[0], lat: c[1], color, kind: ev.payloadType, start: now + (i * 180) / speed, dur: PULSE_MS / speed });
+				pulses.push({ lng: c[0], lat: c[1], color, start: now + (i * 180) / speed, dur: PULSE_MS / speed });
 			}
 		});
 		if (coords.length >= 2) trails.push({ coords, color, start: now, dur: TRAIL_MS / speed });
@@ -159,7 +152,26 @@
 		pulseCount = pulses.length;
 		(map?.getSource('pulses') as maplibregl.GeoJSONSource | undefined)?.setData(pulseFeatures(now));
 		(map?.getSource('trails') as maplibregl.GeoJSONSource | undefined)?.setData(trailFeatures(now));
+		if (seasonal.on) (map?.getSource('season-heads') as maplibregl.GeoJSONSource | undefined)?.setData(seasonFeatures(now));
 		raf = requestAnimationFrame(frame);
+	}
+
+	// Seasonal theme: the season's icon (pumpkin, bat…) travels along each path,
+	// the same comet heads as the desktop live map (shared PulseEngine).
+	const engine = new PulseEngine((ev) => hashColor(ev.messageHash), () => liveSpeed.value);
+	$effect(() => {
+		void live.events.length;
+		if (seasonal.on) engine.ingest(live.events, nodes);
+	});
+	function seasonFeatures(now: number): FeatureCollection {
+		return {
+			type: 'FeatureCollection',
+			features: engine.frame(now).dots.map((d, i) => ({
+				type: 'Feature',
+				geometry: { type: 'Point', coordinates: d.at },
+				properties: { icon: seasonal.imageId(d.kind), rot: Math.sin(now / 160 + i * 1.7) * 14 }
+			}))
+		};
 	}
 
 	// watch the live store for new events
@@ -181,6 +193,7 @@
 		map.addSource('nodes', { type: 'geojson', data: nodeFeatures() });
 		map.addSource('pulses', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
 		map.addSource('trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+		map.addSource('season-heads', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
 		map.addLayer({
 			id: 'pulse-lines', type: 'line', source: 'trails',
 			layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -196,16 +209,15 @@
 			// have no stroke by default, so the ring is added only where it means something.
 			paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 2.5, 11, 5], 'circle-color': ['get', 'color'], 'circle-opacity': 0.85, 'circle-stroke-color': SEGMENT_COLOR, 'circle-stroke-width': ['case', ['get', 'offSegment'], 1.5, 0] }
 		});
-		// Seasonal theme: the season's icon (pumpkin, bat…) pops up at each node as the packet reaches it.
+		// Seasonal theme: the season's icon (pumpkin, bat…) travels along each packet's path.
 		if (seasonal.on) seasonal.ensureImages(map);
 		map.addLayer({
-			id: 'pulse-season', type: 'symbol', source: 'pulses',
+			id: 'pulse-season', type: 'symbol', source: 'season-heads',
 			layout: {
-				'icon-image': ['get', 'icon'], 'icon-size': ['get', 's'], 'icon-rotate': ['get', 'rot'],
+				'icon-image': ['get', 'icon'], 'icon-rotate': ['get', 'rot'],
 				'icon-rotation-alignment': 'viewport', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
 				visibility: seasonal.on ? 'visible' : 'none'
-			},
-			paint: { 'icon-opacity': ['get', 'o'] }
+			}
 		});
 		// Transparent, larger hit target so the small dots are tappable on a phone.
 		map.addLayer({

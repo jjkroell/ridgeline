@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { serverNow } from '$lib/server-clock.svelte';
 	import { onDestroy } from 'svelte';
 	import { claims, type ClaimStatus } from '$lib/api';
 	import { auth } from '$lib/auth.svelte';
@@ -143,7 +144,7 @@
 
 	function expiresIn(iso?: string): string {
 		if (!iso) return '';
-		const ms = new Date(iso).getTime() - Date.now();
+		const ms = new Date(iso).getTime() - serverNow();
 		if (ms <= 0) return 'expired';
 		const m = Math.round(ms / 60000);
 		return m >= 1 ? `~${m} min` : '<1 min';

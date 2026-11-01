@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { serverNow } from '$lib/server-clock.svelte';
 	import { onMount } from 'svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { page } from '$app/state';
@@ -31,7 +32,7 @@
 	// The feed shows the last hour of traffic by default.
 	const WINDOW_MS = 60 * 60 * 1000;
 	const inWindow = (events: typeof live.events) => {
-		const cutoff = Date.now() - WINDOW_MS;
+		const cutoff = serverNow() - WINDOW_MS;
 		return events.filter((e) => +new Date(e.receivedAt) >= cutoff);
 	};
 	// Troubleshooting filter: narrow the feed to UNSCOPED floods, the packets a

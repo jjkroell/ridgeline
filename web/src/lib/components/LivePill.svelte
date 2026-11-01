@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { serverNow } from '$lib/server-clock.svelte';
 	// Live map status capsule. At rest it shows how busy the mesh is right
 	// now (transmissions in the last minute) and who was heard last; tap it
 	// and it opens out, like the Dynamic Island, into the last quarter hour
@@ -27,7 +28,7 @@
 		'Packets heard across the mesh in the last minute (each transmission counts once, however many observers heard it), and the last node that named itself. Click for the past 15 minutes and the latest packets.';
 
 	const MINUTES = 15;
-	let now = $state(Date.now());
+	let now = $state(serverNow());
 	let open = $state(false);
 	let pillEl = $state<HTMLElement>();
 	// The bar under the pointer (or finger, dragged along them): its minute
@@ -50,7 +51,7 @@
 		if (open && pillEl && !pillEl.contains(e.target as Node)) open = false;
 	}
 	onMount(() => {
-		const t = setInterval(() => (now = Date.now()), 1000);
+		const t = setInterval(() => (now = serverNow()), 1000);
 		return () => clearInterval(t);
 	});
 

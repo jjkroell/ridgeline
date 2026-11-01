@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { serverNow } from '$lib/server-clock.svelte';
 	import WidgetShell from './WidgetShell.svelte';
 	import { overview } from '$lib/overview.svelte';
 	import { live, groupLive, type LiveGroup } from '$lib/live.svelte';
@@ -12,7 +13,7 @@
 	const groups = $derived(groupLive(live.events));
 	let selected = $state<LiveGroup | null>(null);
 	// Packets in the last minute; live.events is the rolling buffer the feed shows.
-	const perMin = $derived(live.events.filter((e) => Date.now() - +new Date(e.receivedAt) < 60_000).length);
+	const perMin = $derived(live.events.filter((e) => serverNow() - +new Date(e.receivedAt) < 60_000).length);
 </script>
 
 <WidgetShell title={m.title} icon={m.icon} href="{base}/live" linkLabel="View all →" stat={perMin} statLabel="packets in the last minute">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { serverNow } from '$lib/server-clock.svelte';
 	import WidgetShell from './WidgetShell.svelte';
 	import WidgetNodeRow from './WidgetNodeRow.svelte';
 	import { overview } from '$lib/overview.svelte';
@@ -10,7 +11,7 @@
 	const lastHour = $derived(
 		nodes.filter((n) => {
 			const t = lastHeard(n);
-			return !!t && Date.now() - +new Date(t) < 3_600_000;
+			return !!t && serverNow() - +new Date(t) < 3_600_000;
 		}).length
 	);
 </script>

@@ -78,11 +78,22 @@ sw.addEventListener('fetch', (event) => {
 						(await caches.open(CACHE)).put(req, res.clone());
 					return res;
 				} catch {
+					// Mark a cached answer as such (with when it was fetched), so the
+					// page can say it is showing saved data instead of passing it off
+					// as live — see $lib/server-clock.
 					const cached = await caches.match(req);
-					if (cached) return cached;
+					if (cached) {
+						const headers = new Headers(cached.headers);
+						headers.set('x-ridgeline-cached', cached.headers.get('date') ?? '');
+						return new Response(cached.body, {
+							status: cached.status,
+							statusText: cached.statusText,
+							headers
+						});
+					}
 					return new Response(JSON.stringify({ error: 'offline' }), {
 						status: 503,
-						headers: { 'content-type': 'application/json' }
+						headers: { 'content-type': 'application/json', 'x-ridgeline-offline': '1' }
 					});
 				}
 			})()

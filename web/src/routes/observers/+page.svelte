@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { api, type Observer, type ObserverCoverage } from '$lib/api';
-	import { ago, fmtNum, skewColor, fmtSkew, isFresh } from '$lib/format';
+	import { ago, fmtNum, skewColor, fmtSkew, isReporting } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
 	import StandbyBadge from '$lib/components/StandbyBadge.svelte';
@@ -123,8 +123,8 @@
 							{:else if o.standbySince}
 								<StandbyBadge observer={o} compact />
 							{:else}
-								<span class="label {isFresh(o.lastSeen) ? '!text-signal' : '!text-fg-faint'}">
-									{isFresh(o.lastSeen) ? 'Reporting' : 'Silent'}
+								<span class="label {isReporting(o) ? '!text-signal' : '!text-fg-faint'}">
+									{isReporting(o) ? 'Reporting' : 'Silent'}
 								</span>
 							{/if}
 							<!-- Marks an observer that has moved to the authenticated broker.

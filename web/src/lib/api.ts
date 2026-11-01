@@ -1,4 +1,5 @@
 // Typed client for the ridgelined REST API.
+import { serverClock } from "./server-clock.svelte";
 
 export interface Stats {
   nodes: number;
@@ -120,6 +121,9 @@ export interface Observer {
    *  its own node key. Absent means it never has — i.e. it is still publishing
    *  to the anonymous broker and has yet to migrate. */
   jwtAuthAt?: string;
+  /** Heard within the last 5 minutes, judged by the server's clock. Absent
+   *  only from an older server; isReporting() falls back to lastSeen then. */
+  reporting?: boolean;
 }
 
 export interface Observation {
@@ -455,7 +459,15 @@ export interface ObserverTelemetry {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(path, { headers: { accept: "application/json" } });
+  const sentAt = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(path, { headers: { accept: "application/json" } });
+  } catch (e) {
+    serverClock.failed();
+    throw e;
+  }
+  serverClock.note(res, sentAt);
   if (!res.ok) throw new Error(`${path}: ${res.status}`);
   return res.json() as Promise<T>;
 }

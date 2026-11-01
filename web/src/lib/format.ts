@@ -1,4 +1,5 @@
 // Display helpers shared across the UI.
+import { serverNow } from './server-clock.svelte';
 
 export type StatusTier = 'online' | 'idle' | 'offline' | 'unknown';
 export interface NodeStatus {
@@ -29,12 +30,12 @@ export function nodeStatus(n: Activity): NodeStatus {
 	const times: number[] = [];
 	for (const t of [n.lastSeen, n.lastRelayed, n.lastObserved]) {
 		if (t) {
-			const ms = new Date(t).getTime();
+			const ms = parseTime(t);
 			if (!Number.isNaN(ms)) times.push(ms);
 		}
 	}
 	if (!times.length) return { label: 'Unknown', color: 'var(--color-fg-faint)', tier: 'unknown' };
-	const age = Date.now() - Math.max(...times);
+	const age = serverNow() - Math.max(...times);
 	if (age < 6 * HOUR) return { label: 'Online', color: 'var(--color-signal)', tier: 'online' };
 	if (age < 33 * HOUR) return { label: 'Idle', color: 'var(--color-amber)', tier: 'idle' };
 	return { label: 'Offline', color: 'var(--color-coral)', tier: 'offline' };
@@ -88,14 +89,14 @@ export function shortKey(key: string, head = 4, tail = 2): string {
 
 /** Compact relative time, e.g. "12s", "4m", "3h", "2d". */
 export function ago(iso?: string): string {
-	return agoFrom(iso, Date.now());
+	return agoFrom(iso, serverNow());
 }
 
 /** ago() against an explicit "now", so a caller holding a reactive clock can
  *  make the label tick instead of freezing at whatever render produced it. */
 export function agoFrom(iso: string | undefined, now: number): string {
 	if (!iso) return '—';
-	const then = new Date(iso).getTime();
+	const then = parseTime(iso);
 	if (Number.isNaN(then)) return '—';
 	const s = Math.max(0, (now - then) / 1000);
 	if (s < 60) return `${Math.floor(s)}s`;
@@ -184,9 +185,23 @@ export function fmtMeshRadio(r?: string): string {
 	return parts.join(' · ');
 }
 
-/** True when a timestamp is within the last 5 minutes (an observer "reporting"). */
+/** True when a timestamp is within the last 5 minutes. For an observer's
+ *  Reporting/Silent use isReporting(), which trusts the server's verdict. */
 export function isFresh(iso?: string): boolean {
-	return !!iso && Date.now() - new Date(iso).getTime() < 5 * 60 * 1000;
+	return !!iso && serverNow() - parseTime(iso) < 5 * 60 * 1000;
+}
+
+/** An observer's Reporting/Silent state. The server decides it against its own
+ *  clock; lastSeen is only the fallback for a response from an older server. */
+export function isReporting(o: { reporting?: boolean; lastSeen?: string }): boolean {
+	return o.reporting ?? isFresh(o.lastSeen);
+}
+
+/** Parse a server timestamp to ms (NaN if unreadable). The API sends Go's
+ *  nanosecond precision ("…:28.838232779Z"); trim the fraction to milliseconds
+ *  first, since not every browser's Date parser takes more than three digits. */
+export function parseTime(iso: string): number {
+	return new Date(iso.replace(/(\.\d{3})\d+/, '$1')).getTime();
 }
 
 /** Summarise the user-authored data a node purge cascaded, e.g. "1 claim, 3 notes".

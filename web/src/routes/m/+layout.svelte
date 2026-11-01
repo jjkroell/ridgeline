@@ -8,6 +8,7 @@
 	import PwaInstall from '$lib/components/PwaInstall.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import DevBanner from '$lib/components/DevBanner.svelte';
+	import OfflineBanner from '$lib/components/OfflineBanner.svelte';
 	import Logo from '$lib/components/Logo.svelte';
 	import ThemeButton from '$lib/components/ThemeButton.svelte';
 	import { edgeBack, needsEdgeBack } from '$lib/mobile/edge-back';
@@ -159,6 +160,7 @@
 >
 	<!-- Non-production banner (self-guards; only on a dev/staging instance). -->
 	<DevBanner />
+	<OfflineBanner />
 	<!-- App bar -->
 	<header
 		data-chrome

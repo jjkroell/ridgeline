@@ -1,5 +1,6 @@
 // Reactive WebSocket connection to /api/live. Exposes a rolling buffer of the
 // most recent live events plus connection state, as Svelte 5 runes.
+import { serverNow } from '$lib/server-clock.svelte';
 import { api, type LiveEvent, type LiveNode } from './api';
 
 // Keep roughly the last hour of events in the rolling buffer. The live feed
@@ -94,7 +95,7 @@ class LiveFeed {
 	#tally(e: LiveEvent) {
 		if (this.#hashMinute.has(e.messageHash)) return;
 		const m = Math.floor(+new Date(e.receivedAt) / 60_000);
-		const oldest = Math.floor(Date.now() / 60_000) - KEEP_MINUTES;
+		const oldest = Math.floor(serverNow() / 60_000) - KEEP_MINUTES;
 		if (m < oldest) return;
 		this.#hashMinute.set(e.messageHash, m);
 		this.perMinute[m] = (this.perMinute[m] ?? 0) + 1;
@@ -122,7 +123,7 @@ class LiveFeed {
 		this.#hydrating = true;
 		try {
 			const recent = await api.recent(3600);
-			const cutoff = Date.now() - RETAIN_MS;
+			const cutoff = serverNow() - RETAIN_MS;
 			const seed = recent.filter((e) => +new Date(e.receivedAt) >= cutoff);
 			// Anything already in the buffer wins; add only what's missing, keyed by
 			// observer+hash+time. Re-sorted newest-first so backfilled events land in
@@ -161,7 +162,7 @@ class LiveFeed {
 			try {
 				const ev = JSON.parse(e.data) as LiveEvent;
 				this.#tally(ev);
-				const cutoff = Date.now() - RETAIN_MS;
+				const cutoff = serverNow() - RETAIN_MS;
 				this.events = [ev, ...this.events]
 					.filter((x) => +new Date(x.receivedAt) >= cutoff)
 					.slice(0, MAX_EVENTS);

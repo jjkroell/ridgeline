@@ -4,7 +4,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { api, type Observer, type ObserverAnalytics, type ObserverTelemetry, type ObserverStatus } from '$lib/api';
-	import { ago, fmtNum, skewColor, fmtSkew, snrColor, roleColor, roleLabel, isFresh } from '$lib/format';
+	import { ago, fmtNum, skewColor, fmtSkew, snrColor, roleColor, roleLabel, isReporting } from '$lib/format';
 	import Sparkline from '$lib/components/Sparkline.svelte';
 	import { scrub } from '$lib/scrub';
 	import ScrubReadout from '$lib/components/ScrubReadout.svelte';
@@ -101,7 +101,7 @@
 	{:else}
 		<!-- heading -->
 		<div class="mb-3 flex items-center gap-2.5">
-			<span class="h-2.5 w-2.5 rounded-full" style="background:{isFresh(observer.lastSeen) ? 'var(--color-signal)' : 'var(--color-fg-faint)'}"></span>
+			<span class="h-2.5 w-2.5 rounded-full" style="background:{isReporting(observer) ? 'var(--color-signal)' : 'var(--color-fg-faint)'}"></span>
 			<h1 class="text-fg min-w-0 flex-1 truncate text-lg font-700">{observer.name ?? observer.id}</h1>
 			{#if observer.standbySince}
 				<StandbyBadge {observer} compact />

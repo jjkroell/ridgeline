@@ -382,6 +382,25 @@ type Observer struct {
 	// grace period without ever saying what radio it was on. The second is not a
 	// wrong answer but no answer, and it is the one worth chasing.
 	RadioQuarantineReason string `json:"radioQuarantineReason,omitempty"`
+	// Reporting is true when the observer was heard within ObserverFreshWindow,
+	// judged by THIS server's clock. The page used to work it out in the browser
+	// against the viewer's own clock, so a device running an hour fast (missed
+	// DST change, wrong time zone) saw every observer as Silent.
+	Reporting bool `json:"reporting"`
+}
+
+// ObserverFreshWindow is how recently an observer must have been heard to
+// count as reporting.
+const ObserverFreshWindow = 5 * time.Minute
+
+// observerReporting reports whether lastSeen falls within ObserverFreshWindow
+// of now. An unparseable or empty timestamp is not reporting.
+func observerReporting(lastSeen string, now time.Time) bool {
+	t, err := time.Parse(time.RFC3339Nano, lastSeen)
+	if err != nil {
+		return false
+	}
+	return now.Sub(t) < ObserverFreshWindow
 }
 
 // ObserverStatus is an observer's latest self-reported device telemetry, parsed
@@ -465,7 +484,9 @@ func (s *Store) listObservers() ([]Observer, error) {
 	// Discard counts live in memory, so they are joined in after the query.
 	dropped := s.StandbyDropped()
 	refused := s.RadioQuarantineDropped()
+	now := time.Now()
 	for i := range out {
+		out[i].Reporting = observerReporting(out[i].LastSeen, now)
 		if out[i].StandbySince != "" {
 			out[i].StandbyDropped = dropped[out[i].ID]
 		}

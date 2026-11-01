@@ -7,7 +7,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { confirmer } from '$lib/confirm.svelte';
 	import { api, admin, type Observer, type ObserverAnalytics, type ObserverStatus, type ObserverTelemetry } from '$lib/api';
-	import { ago, fmtNum, skewColor, fmtSkew, snrColor, roleColor, roleLabel, isFresh } from '$lib/format';
+	import { ago, fmtNum, skewColor, fmtSkew, snrColor, roleColor, roleLabel, isReporting } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
 	import BarRow from '$lib/components/BarRow.svelte';
@@ -184,8 +184,8 @@
 <PageHeader eyebrow="Listening Post" title={observer?.name ?? id}>
 	<div class="flex items-center gap-3">
 		{#if observer}
-			<Tooltip text={isFresh(observer.lastSeen) ? 'reporting' : 'silent'}>
-				<span class="h-2 w-2 rounded-full" style="background:{isFresh(observer.lastSeen) ? 'var(--color-signal)' : 'var(--color-fg-faint)'}"></span>
+			<Tooltip text={isReporting(observer) ? 'reporting' : 'silent'}>
+				<span class="h-2 w-2 rounded-full" style="background:{isReporting(observer) ? 'var(--color-signal)' : 'var(--color-fg-faint)'}"></span>
 			</Tooltip>
 		{/if}
 		<StandbyBadge {observer} compact />
@@ -413,7 +413,7 @@
 
 		<!-- Seen facts -->
 		<div class="panel rise divide-line/40 mt-6 divide-y" style="animation-delay:320ms">
-			{#each [{ k: 'Status', v: isFresh(observer.lastSeen) ? 'Reporting' : 'Silent', c: isFresh(observer.lastSeen) ? 'var(--color-signal)' : 'var(--color-fg-faint)' }, { k: 'Region', v: observer.region || data?.region || '—' }, { k: 'First seen', v: ago(observer.firstSeen) + ' ago' }, { k: 'Last heard', v: ago(observer.lastSeen) + ' ago' }, { k: 'Packets (all-time)', v: fmtNum(observer.packetCount) }] as f (f.k)}
+			{#each [{ k: 'Status', v: isReporting(observer) ? 'Reporting' : 'Silent', c: isReporting(observer) ? 'var(--color-signal)' : 'var(--color-fg-faint)' }, { k: 'Region', v: observer.region || data?.region || '—' }, { k: 'First seen', v: ago(observer.firstSeen) + ' ago' }, { k: 'Last heard', v: ago(observer.lastSeen) + ' ago' }, { k: 'Packets (all-time)', v: fmtNum(observer.packetCount) }] as f (f.k)}
 				<div class="flex items-center justify-between px-5 py-2.5">
 					<span class="label normal-case">{f.k}</span>
 					<span class="font-mono text-sm tnum" style="color:{f.c ?? 'var(--color-fg)'}">{f.v}</span>

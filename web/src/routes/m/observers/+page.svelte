@@ -2,7 +2,7 @@
 	import Seo from '$lib/components/Seo.svelte';
 	import { onMount } from 'svelte';
 	import { api, type Observer } from '$lib/api';
-	import { ago, fmtNum, isFresh } from '$lib/format';
+	import { ago, fmtNum, isReporting } from '$lib/format';
 	import StandbyBadge from '$lib/components/StandbyBadge.svelte';
 	import ObserverSetupModal from '$lib/components/ObserverSetupModal.svelte';
 	import { longpress, observerMenu } from '$lib/mobile/context-menu.svelte';
@@ -67,7 +67,7 @@
 			<p class="text-fg-dim px-1 py-8 text-center text-sm">No observers match “{query}”.</p>
 		{/if}
 		{#each shown as o (o.id)}
-			{@const reporting = isFresh(o.lastSeen)}
+			{@const reporting = isReporting(o)}
 			<a href="/m/observers/{encodeURIComponent(o.id)}" use:longpress={() => observerMenu(o)} class="border-line/60 bg-panel active:bg-line/40 rounded-2xl border px-4 py-3.5">
 				<div class="flex items-center gap-2.5">
 					<span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background:{reporting ? 'var(--color-signal)' : 'var(--color-fg-faint)'}"></span>

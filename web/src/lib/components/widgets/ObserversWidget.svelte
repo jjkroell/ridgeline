@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { serverNow } from '$lib/server-clock.svelte';
 	import { onMount } from 'svelte';
 	import WidgetShell from './WidgetShell.svelte';
 	import { overview } from '$lib/overview.svelte';
@@ -25,7 +26,7 @@
 
 	// Heard within 15 min = online (observers report frequently).
 	function online(o: Observer): boolean {
-		return o.lastSeen ? Date.now() - +new Date(o.lastSeen) < 15 * 60 * 1000 : false;
+		return o.lastSeen ? serverNow() - +new Date(o.lastSeen) < 15 * 60 * 1000 : false;
 	}
 	const sorted = $derived([...observers].sort((a, b) => (b.lastSeen ?? '').localeCompare(a.lastSeen ?? '')));
 	const onlineCount = $derived(observers.filter(online).length);

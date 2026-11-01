@@ -18,6 +18,7 @@
 	import { consent } from '$lib/consent.svelte';
 	import { env } from '$lib/env.svelte';
 	import DevBanner from '$lib/components/DevBanner.svelte';
+	import OfflineBanner from '$lib/components/OfflineBanner.svelte';
 	import Logo from '$lib/components/Logo.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import ContextMenu from '$lib/mobile/ContextMenu.svelte';
@@ -314,6 +315,7 @@
 	<div class="flex min-w-0 flex-1 flex-col">
 		<!-- Non-production banner (self-guards; only on a dev/staging instance). -->
 		<DevBanner />
+		<OfflineBanner />
 		<!-- Mobile top bar -->
 		<header data-chrome class="border-line bg-ink-2/80 border-b backdrop-blur-sm md:hidden">
 			<div class="flex items-center gap-4 px-4 py-3">

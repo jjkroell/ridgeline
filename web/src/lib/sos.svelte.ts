@@ -6,6 +6,7 @@
 // #sos chat five minutes after they are heard (the sender stays listed), calls
 // for help after 12 hours, everything else after 3.
 // Shared by the desktop and mobile channel pages and the Channels widget.
+import { serverNow } from '$lib/server-clock.svelte';
 import { api, type ChannelMonitor } from './api';
 import { SOS_ID } from './channels.svelte';
 import { sosAlarm } from './sos-alarm.svelte';
@@ -99,7 +100,7 @@ class SOS {
 	/** Newest #sos alert this browser has seen by opening the channel (epoch ms). */
 	alertAckAt = $state(0);
 	/** Clock for the five-minute hide; ticks while a page watches. */
-	now = $state(Date.now());
+	now = $state(serverNow());
 	#inited = false;
 	#timers: ReturnType<typeof setInterval>[] = [];
 	#users = 0;
@@ -176,7 +177,7 @@ class SOS {
 
 	/** Hide a sender's ring on this browser's maps, until they send a newer alert. */
 	hideRing(sender: string, at: number) {
-		const now = Date.now();
+		const now = serverNow();
 		const kept = Object.fromEntries(
 			Object.entries(this.ringHidden).filter(([, t]) => now - t < ALERT_WINDOW_MS)
 		);
@@ -191,7 +192,7 @@ class SOS {
 	/** Clear the pulse: the user switched to #sos, so everything heard until now is seen. */
 	ackAlert() {
 		// max(): the server's clock stamps lastAlert; never leave it ahead of the ack.
-		this.alertAckAt = Math.max(Date.now(), this.lastAlert);
+		this.alertAckAt = Math.max(serverNow(), this.lastAlert);
 		try {
 			localStorage.setItem(ALERT_ACK_KEY, String(this.alertAckAt));
 		} catch {
@@ -231,7 +232,7 @@ class SOS {
 		const t = +new Date(ev.receivedAt);
 		if (t > this.lastAlert) {
 			this.lastAlert = t;
-			this.now = Date.now();
+			this.now = serverNow();
 		}
 		const sender = ev.sender?.trim();
 		const prev = sender ? this.alertSenders.find((a) => a.sender === sender) : undefined;
@@ -242,7 +243,7 @@ class SOS {
 
 	/** Ring the opt-in alarm for a fresh alert this browser hasn't acknowledged. */
 	#alarm(t: number, key: string, sender?: string, text?: string) {
-		if (t > this.alertAckAt && Date.now() - t < ALARM_FRESH_MS) sosAlarm.fire(key, sender, text);
+		if (t > this.alertAckAt && serverNow() - t < ALARM_FRESH_MS) sosAlarm.fire(key, sender, text);
 	}
 
 	async load() {
@@ -265,11 +266,11 @@ class SOS {
 	/** Keep the roster and the clock fresh while a page shows them; returns the stop function. */
 	watch(): () => void {
 		if (this.#users++ === 0) {
-			this.now = Date.now();
+			this.now = serverNow();
 			this.load();
 			this.#timers = [
 				setInterval(() => this.load(), REFRESH_MS),
-				setInterval(() => (this.now = Date.now()), 15_000)
+				setInterval(() => (this.now = serverNow()), 15_000)
 			];
 		}
 		return () => {

@@ -110,8 +110,12 @@
 	function pulseFeatures(now: number): FeatureCollection {
 		return {
 			type: 'FeatureCollection',
-			features: pulses.map((p) => {
-				const age = (now - p.start) / p.dur; // 0..1
+			// Later hops are scheduled in the future (start > now); skip them until
+			// the packet arrives. Drawn early they had a negative age → a negative
+			// icon-size, which MapLibre packs as an unsigned int → a ~500× icon
+			// smeared over the whole map for a frame (the seasonal "flashing").
+			features: pulses.filter((p) => now >= p.start).map((p) => {
+				const age = Math.min(1, (now - p.start) / p.dur); // 0..1
 				return {
 					type: 'Feature',
 					geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
@@ -121,7 +125,7 @@
 						r: 4 + age * 22,
 						o: Math.max(0, 1 - age),
 						icon: seasonal.imageId(p.kind),
-						s: 0.55 + Math.min(1, age * 3) * 0.6,
+						s: Math.max(0.1, 0.55 + Math.min(1, age * 3) * 0.6),
 						rot: Math.sin(now / 160 + p.lng * 40) * 14
 					}
 				};

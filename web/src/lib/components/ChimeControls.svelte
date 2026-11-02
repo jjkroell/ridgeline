@@ -70,11 +70,11 @@
 		<div>
 			<div class="label mb-1">Tune</div>
 			<button
-				onclick={() => chime.preview(seasonal.sound('GroupText'))}
+				onclick={() => chime.preview({ tune: 'jingle', ho: true })}
 				class="border-signal/50 text-signal flex w-full items-center justify-center gap-1.5 rounded-[var(--radius)] border px-1.5 py-1 text-[0.66rem] font-medium"
 				><img src={seasonal.src('🔔')} alt="" class="h-3.5 w-3.5" />Jingle Bells</button
 			>
-			<div class="text-fg-faint mt-1 text-[0.6rem] leading-snug">A note per hop and a Ho! as Santa lands. The chords come back when {seasonal.season?.label ?? 'the theme'} is off.</div>
+			<div class="text-fg-faint mt-1 text-[0.6rem] leading-snug">A note per hop and a Ho! as Santa's sleigh lands (at most every 5 s). Click to hear both. The chords come back when {seasonal.season?.label ?? 'the theme'} is off.</div>
 		</div>
 		{:else}
 		<div>

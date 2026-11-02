@@ -256,9 +256,10 @@ class LiveChime {
 		}
 	}
 
-	// One jolly "Ho!": a breathy h, then a low voice on an "o" vowel — a buzzy
-	// sawtooth sliding down ~125→95 Hz through two vowel formants (≈500 and
-	// 850 Hz) — that swells and fades over half a second.
+	// One jolly "Ho!": a breathy h, then a deep voice on an "o" vowel — a buzzy
+	// sawtooth sliding down ~150→110 Hz through the vowel's formants (≈500,
+	// 850 and a little 2.4 kHz for presence, so laptop speakers that can't
+	// play the low voice still carry it) — swelling and fading over ~0.55 s.
 	#ho(ctx: AudioContext, out: AudioNode) {
 		const t = ctx.currentTime;
 		const h = ctx.createBufferSource();
@@ -269,7 +270,7 @@ class LiveChime {
 		hf.Q.value = 0.8;
 		const hg = ctx.createGain();
 		hg.gain.setValueAtTime(0, t);
-		hg.gain.linearRampToValueAtTime(0.05, t + 0.03);
+		hg.gain.linearRampToValueAtTime(0.09, t + 0.03);
 		hg.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
 		h.connect(hf).connect(hg).connect(out);
 		h.start(t);
@@ -278,20 +279,21 @@ class LiveChime {
 		const v = t + 0.06;
 		const osc = ctx.createOscillator();
 		osc.type = 'sawtooth';
-		osc.frequency.setValueAtTime(125, v);
-		osc.frequency.exponentialRampToValueAtTime(95, v + 0.45);
+		osc.frequency.setValueAtTime(150, v);
+		osc.frequency.exponentialRampToValueAtTime(110, v + 0.5);
 		const vg = ctx.createGain();
 		vg.gain.setValueAtTime(0, v);
-		vg.gain.linearRampToValueAtTime(0.5, v + 0.05);
-		vg.gain.setValueAtTime(0.5, v + 0.25);
-		vg.gain.exponentialRampToValueAtTime(0.0001, v + 0.5);
+		vg.gain.linearRampToValueAtTime(1, v + 0.05);
+		vg.gain.setValueAtTime(1, v + 0.3);
+		vg.gain.exponentialRampToValueAtTime(0.0001, v + 0.55);
 		const lp = ctx.createBiquadFilter(); // soften the buzz
 		lp.type = 'lowpass';
-		lp.frequency.value = 1400;
+		lp.frequency.value = 3000;
 		osc.connect(vg).connect(lp);
 		for (const [f, q, level] of [
-			[500, 6, 0.5],
-			[850, 8, 0.25]
+			[500, 5, 0.9],
+			[850, 6, 0.5],
+			[2400, 4, 0.12]
 		]) {
 			const bp = ctx.createBiquadFilter();
 			bp.type = 'bandpass';
@@ -302,7 +304,7 @@ class LiveChime {
 			lp.connect(bp).connect(g).connect(out);
 		}
 		osc.start(v);
-		osc.stop(v + 0.55);
+		osc.stop(v + 0.6);
 	}
 
 	#noiseBuf: AudioBuffer | null = null;
@@ -322,6 +324,7 @@ class LiveChime {
 		if (!this.on) return;
 		this.ensure();
 		this.#lastTickAt = -Infinity;
+		this.#lastHoAt = -Infinity;
 		this.play(Math.floor(Math.random() * this.scale.length), season);
 	}
 }

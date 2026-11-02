@@ -36,10 +36,10 @@ const JINGLE = [
 export interface SeasonSound {
 	/** Play the season's tune ('jingle' = Jingle Bells on sleigh bells) instead of the wind chime. */
 	tune?: 'jingle';
-	/** A single "Ho!" as Santa lands (rate-limited, see HO_GAP_MS). */
+	/** Santa's "ho ho ho" as his sleigh lands (at most once a minute, see HO_GAP_MS). */
 	ho?: boolean;
 }
-const HO_GAP_MS = 5000; // repeaters are hit constantly: at most one "Ho!" per 5 s
+const HO_GAP_MS = 60_000; // sleighs land constantly: at most one "ho ho ho" a minute
 
 class LiveChime {
 	on = $state(false);
@@ -58,7 +58,7 @@ class LiveChime {
 	#tuneAt = 0; // index of the next Jingle Bells note
 	#tuneLast = 0; // when the last note played (the tune restarts after a pause)
 	#lastHoAt = -Infinity;
-	#previewing = false; // preview(): wait for the Ho! clip to load rather than skip it
+	#previewing = false; // preview(): wait for the ho ho ho clip to load rather than skip it
 	#loaded = false;
 	#armed = false;
 
@@ -257,15 +257,14 @@ class LiveChime {
 		}
 	}
 
-	// Santa's "Ho!": one recorded ho (static/seasonal/ho.mp3, cut from a
-	// "ho ho ho" clip), fetched and decoded the first time it's wanted. If it
+	// Santa's "ho ho ho" (static/seasonal/hohoho.mp3, a recorded clip), fetched and decoded the first time it's wanted. If it
 	// isn't ready yet it's skipped this time — or, for a preview, played as
 	// soon as it arrives.
 	#hoBuf: AudioBuffer | null = null;
 	#hoLoad: Promise<AudioBuffer | null> | null = null;
 
 	#loadHo(ctx: AudioContext): Promise<AudioBuffer | null> {
-		this.#hoLoad ??= fetch('/seasonal/ho.mp3')
+		this.#hoLoad ??= fetch('/seasonal/hohoho.mp3')
 			.then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
 			.then((data) => ctx.decodeAudioData(data))
 			.then((buf) => (this.#hoBuf = buf))

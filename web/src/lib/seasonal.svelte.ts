@@ -141,7 +141,7 @@ export const SEASONS: Season[] = [
 			{
 				emoji: '🎄',
 				title: 'Festive packets on the live map',
-				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Adverts then fly from node to node as Santa\'s sleigh, pulled by a reindeer, or as a Christmas tree, and the other kinds of packets as a snowman, present, Santa, star, snowflake, bell or cookie, one for each kind of packet, with a legend to tell them apart. On a computer, turn on Sound in Map Control and each hop plays the next note of Jingle Bells, with a Ho! as Santa lands. It is off unless you turn it on, and the choice is saved in this browser.'
+				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Adverts then fly from node to node as Santa\'s sleigh, pulled by a reindeer, or as a Christmas tree, and the other kinds of packets as a snowman, present, Santa, star, snowflake, bell or cookie, one for each kind of packet, with a legend to tell them apart. On a computer, turn on Sound in Map Control and each hop plays the next note of Jingle Bells, with a ho ho ho from Santa as his sleigh lands. It is off unless you turn it on, and the choice is saved in this browser.'
 			}
 		],
 		tryLabel: 'Try festive packets',
@@ -262,7 +262,7 @@ class Seasonal {
 	}
 
 	/** The chime's seasonal sound for a comet reaching a node (live-audio play()):
-	 *  the season's tune, plus a "Ho!" when it's Santa's sleigh. Undefined = the
+	 *  the season's tune, plus Santa's "ho ho ho" when it's his sleigh. Undefined = the
 	 *  normal wind chime. */
 	sound(kind: string | undefined, n = 0): { tune?: 'jingle'; ho?: boolean } | undefined {
 		if (!this.on) return undefined;

@@ -51,6 +51,8 @@ export interface Season {
 	tryLabel: string;
 	/** The live-map chime's seasonal sound ('jingle' = Jingle Bells on sleigh bells). */
 	tune?: 'jingle';
+	/** Santa's recorded "ho ho ho" when any packet reaches a node, at most once a minute. */
+	ho?: boolean;
 	/** Light snowfall over the live maps while the theme is on. */
 	snow?: boolean;
 	/** Still being designed: never in force by date; preview only for admins / on dev. */
@@ -141,11 +143,12 @@ export const SEASONS: Season[] = [
 			{
 				emoji: '🎄',
 				title: 'Festive packets on the live map',
-				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Adverts then fly from node to node as Santa\'s sleigh, pulled by a reindeer, or as a Christmas tree, and the other kinds of packets as a snowman, present, Santa, star, snowflake, bell or cookie, one for each kind of packet, with a legend to tell them apart. On a computer, turn on Sound in Map Control and each hop plays the next note of Jingle Bells, with a ho ho ho from Santa as his sleigh lands. It is off unless you turn it on, and the choice is saved in this browser.'
+				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Adverts then fly from node to node as Santa\'s sleigh, pulled by a reindeer, or as a Christmas tree, and the other kinds of packets as a snowman, present, Santa, star, snowflake, bell or cookie, one for each kind of packet, with a legend to tell them apart. On a computer, turn on Sound in Map Control and each hop plays the next note of Jingle Bells, with a ho ho ho from Santa once a minute as packets arrive. It is off unless you turn it on, and the choice is saved in this browser.'
 			}
 		],
 		tryLabel: 'Try festive packets',
 		tune: 'jingle',
+		ho: true,
 		snow: true
 	}
 ];
@@ -158,9 +161,9 @@ const PREVIEW_KEY = 'ridgeline-season-preview';
  *  season uses in `icons`. `w`×`h` is the size on the map in CSS px (emoji
  *  icons are 26); `faces: 'left'` art is mirrored while the packet heads east,
  *  so it always faces the way it travels. */
-const CUSTOM: Record<string, { file: string; w: number; h: number; faces?: 'left' | 'right'; ho?: boolean }> = {
+const CUSTOM: Record<string, { file: string; w: number; h: number; faces?: 'left' | 'right' }> = {
 	// Reindeer pulling Santa's sleigh (Noto deer + sled + Santa), drawn big.
-	sleigh: { file: '/seasonal/sleigh.svg', w: 64, h: 32, faces: 'left', ho: true }
+	sleigh: { file: '/seasonal/sleigh.svg', w: 64, h: 32, faces: 'left' }
 };
 
 const codepoints = (icon: string) => [...icon].map((c) => c.codePointAt(0)!.toString(16));
@@ -262,12 +265,12 @@ class Seasonal {
 	}
 
 	/** The chime's seasonal sound for a comet reaching a node (live-audio play()):
-	 *  the season's tune, plus Santa's "ho ho ho" when it's his sleigh. Undefined = the
+	 *  the season's tune, plus Santa's "ho ho ho" (any packet; the chime limits it to once a minute). Undefined = the
 	 *  normal wind chime. */
 	sound(kind: string | undefined, n = 0): { tune?: 'jingle'; ho?: boolean } | undefined {
 		if (!this.on) return undefined;
 		const tune = this.season?.tune;
-		const ho = !!CUSTOM[this.icon(kind, n)]?.ho;
+		const ho = !!this.season?.ho;
 		return tune || ho ? { tune, ho } : undefined;
 	}
 

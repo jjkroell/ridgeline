@@ -36,10 +36,10 @@ const JINGLE = [
 export interface SeasonSound {
 	/** Play the season's tune ('jingle' = Jingle Bells on sleigh bells) instead of the wind chime. */
 	tune?: 'jingle';
-	/** Santa's "ho ho ho" as his sleigh lands (at most once a minute, see HO_GAP_MS). */
+	/** Santa's "ho ho ho" as a packet reaches a node (at most once a minute, see HO_GAP_MS). */
 	ho?: boolean;
 }
-const HO_GAP_MS = 60_000; // sleighs land constantly: at most one "ho ho ho" a minute
+const HO_GAP_MS = 60_000; // packets arrive constantly: at most one "ho ho ho" a minute
 
 class LiveChime {
 	on = $state(false);

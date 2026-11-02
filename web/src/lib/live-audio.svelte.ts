@@ -221,8 +221,9 @@ class LiveChime {
 	#bell(ctx: AudioContext, out: AudioNode, freq: number) {
 		const t = ctx.currentTime;
 		for (const p of [
-			{ ratio: 1, peak: 0.07, decay: 0.9 },
-			{ ratio: 2.76, peak: 0.022, decay: 0.35 },
+			// Ring sets how long the bell sounds: Short 0.5 s, Med 0.9 s, Long 1.6 s.
+			{ ratio: 1, peak: 0.07, decay: this.ringDecay * 0.5 },
+			{ ratio: 2.76, peak: 0.022, decay: Math.min(0.5, this.ringDecay * 0.2) },
 			{ ratio: 5.4, peak: 0.01, decay: 0.15 }
 		]) {
 			const osc = ctx.createOscillator();

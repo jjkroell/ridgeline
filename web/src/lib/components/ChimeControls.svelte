@@ -13,6 +13,9 @@
 
 	onMount(() => chime.load());
 
+	// A seasonal tune (Jingle Bells at Christmas) replaces the chords while it's on.
+	const festive = $derived(seasonal.sound('GroupText')?.tune === 'jingle');
+
 	function toggle() {
 		chime.ensure(); // within this click gesture so the browser allows audio
 		chime.toggle();
@@ -63,6 +66,17 @@
 				class="accent-signal h-1 w-full cursor-pointer"
 			/>
 		</div>
+		{#if festive}
+		<div>
+			<div class="label mb-1">Tune</div>
+			<button
+				onclick={() => chime.preview(seasonal.sound('GroupText'))}
+				class="border-signal/50 text-signal flex w-full items-center justify-center gap-1.5 rounded-[var(--radius)] border px-1.5 py-1 text-[0.66rem] font-medium"
+				><img src={seasonal.src('🔔')} alt="" class="h-3.5 w-3.5" />Jingle Bells</button
+			>
+			<div class="text-fg-faint mt-1 text-[0.6rem] leading-snug">A note per hop and a Ho! as Santa lands. The chords come back when {seasonal.season?.label ?? 'the theme'} is off.</div>
+		</div>
+		{:else}
 		<div>
 			<div class="label mb-1">Chord</div>
 			<div class="grid grid-cols-2 gap-1">
@@ -80,6 +94,7 @@
 				{/each}
 			</div>
 		</div>
+		{/if}
 		<div>
 			<div class="label mb-1">Ring</div>
 			<div class="grid grid-cols-3 gap-1">

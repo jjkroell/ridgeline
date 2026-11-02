@@ -408,11 +408,11 @@
 			if (seasonal.on) {
 				ctx.save();
 				ctx.translate(p.x, p.y);
-				ctx.rotate((Math.sin(now / 160 + i * 1.7) * seasonal.wobble(d.kind) * Math.PI) / 180);
+				ctx.rotate((Math.sin(now / 160 + i * 1.7) * seasonal.wobble(d.kind, d.n) * Math.PI) / 180);
 				ctx.shadowColor = 'rgba(0,0,0,0.55)';
 				ctx.shadowBlur = 3;
-				const pic = seasonal.picture(d.kind);
-				const sz = seasonal.drawSize(d.kind, d.dx);
+				const pic = seasonal.picture(d.kind, d.n);
+				const sz = seasonal.drawSize(d.kind, d.dx, d.n);
 				if (sz.mirror) ctx.scale(-1, 1);
 				if (pic) ctx.drawImage(pic, -sz.w / 2, -sz.h / 2, sz.w, sz.h);
 				ctx.restore();

@@ -36,7 +36,7 @@
 			<div class="border-line/60 flex flex-wrap justify-center gap-x-3 gap-y-1 border-t px-3 py-1.5">
 				{#each s.legend as l (l.label)}
 					<span class="text-fg-dim flex items-center gap-1 text-[0.66rem] whitespace-nowrap">
-						<img src={seasonal.src(l.icon)} alt="" class="h-3.5 w-auto object-contain" />{l.label}
+						<img src={seasonal.src(l.icon)} alt="" class="h-3.5 w-auto object-contain" />{#if l.alt}<img src={seasonal.src(l.alt)} alt="" class="h-3.5 w-auto object-contain" />{/if}{l.label}
 					</span>
 				{/each}
 			</div>

@@ -41,8 +41,11 @@ export interface Season {
 	tip: string;
 	/** Icon per payload type (names as PayloadTag knows them); `other` for the rest. */
 	icons: Record<string, string>;
+	/** Every second packet of these payload types shows this icon instead
+	 *  (e.g. only half the adverts fly as the big sleigh). */
+	alternate?: Record<string, string>;
 	other: string;
-	legend: { icon: string; label: string }[];
+	legend: { icon: string; alt?: string; label: string }[];
 	/** What's new items shown while the season is on, and the button that turns it on. */
 	announce: SeasonItem[];
 	tryLabel: string;
@@ -108,7 +111,7 @@ export const SEASONS: Season[] = [
 		short: 'Festive',
 		emoji: '🎄',
 		accent: '#e5484d',
-		tip: "Adverts fly node to node as Santa's sleigh; other packets as bells, presents, Santa, stars and snowmen",
+		tip: "Adverts fly node to node as Santa's sleigh or a tree; other packets as bells, presents, Santa, stars and snowmen",
 		icons: {
 			Advert: 'sleigh',
 			GroupText: '🔔',
@@ -120,9 +123,10 @@ export const SEASONS: Season[] = [
 			AnonRequest: '⛄',
 			Response: '⛄'
 		},
+		alternate: { Advert: '🎄' }, // every 2nd advert is a tree, so fewer sleighs pile up
 		other: '🍪',
 		legend: [
-			{ icon: 'sleigh', label: 'Advert' },
+			{ icon: 'sleigh', alt: '🎄', label: 'Advert' },
 			{ icon: '🔔', label: 'Channel' },
 			{ icon: '🎁', label: 'Direct' },
 			{ icon: '🎅', label: 'Trace' },
@@ -135,7 +139,7 @@ export const SEASONS: Season[] = [
 			{
 				emoji: '🎄',
 				title: 'Festive packets on the live map',
-				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Every advert then flies from node to node as Santa\'s sleigh, pulled by a reindeer, and every other packet as a bell, present, Santa, star, snowflake, snowman or cookie, one for each kind of packet, with a legend to tell them apart. It is off unless you turn it on, and the choice is saved in this browser.'
+				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Adverts then fly from node to node as Santa\'s sleigh, pulled by a reindeer, or as a Christmas tree, and the other kinds of packets as a bell, present, Santa, star, snowflake, snowman or cookie, one for each kind of packet, with a legend to tell them apart. It is off unless you turn it on, and the choice is saved in this browser.'
 			}
 		],
 		tryLabel: 'Try festive packets',
@@ -153,7 +157,7 @@ const PREVIEW_KEY = 'ridgeline-season-preview';
  *  so it always faces the way it travels. */
 const CUSTOM: Record<string, { file: string; w: number; h: number; faces?: 'left' | 'right' }> = {
 	// Reindeer pulling Santa's sleigh (Noto deer + sled + Santa), drawn big.
-	sleigh: { file: '/seasonal/sleigh.svg', w: 84, h: 42, faces: 'left' }
+	sleigh: { file: '/seasonal/sleigh.svg', w: 64, h: 32, faces: 'left' }
 };
 
 const codepoints = (icon: string) => [...icon].map((c) => c.codePointAt(0)!.toString(16));
@@ -233,17 +237,19 @@ class Seasonal {
 		}
 	}
 
-	/** The current season's icon for a payload type. */
-	icon(kind: string | undefined): string {
+	/** The current season's icon for a payload type. `n` numbers the packets of
+	 *  that type (PulseDot.n): odd ones take the season's `alternate` icon. */
+	icon(kind: string | undefined, n = 0): string {
 		const s = this.season;
 		if (!s) return '';
+		if (kind && n % 2 === 1 && s.alternate?.[kind]) return s.alternate[kind];
 		return (kind && s.icons[kind]) || s.other;
 	}
 
 	/** MapLibre image id for a payload type's icon (see ensureImages). `dx` is
 	 *  the packet's eastward movement, so one-sided art can face its way. */
-	imageId(kind: string | undefined, dx = 0): string {
-		const icon = this.icon(kind);
+	imageId(kind: string | undefined, dx = 0, n = 0): string {
+		const icon = this.icon(kind, n);
 		return imageId(icon) + (this.#mirrored(icon, dx) ? MIRROR : '');
 	}
 
@@ -253,13 +259,13 @@ class Seasonal {
 	}
 
 	/** How far an icon rocks side to side, in degrees: the sleigh just bobs. */
-	wobble(kind: string | undefined): number {
-		return CUSTOM[this.icon(kind)] ? 5 : 14;
+	wobble(kind: string | undefined, n = 0): number {
+		return CUSTOM[this.icon(kind, n)] ? 5 : 14;
 	}
 
 	/** Size and mirroring for canvas drawing (the WebGL-free fallback map). */
-	drawSize(kind: string | undefined, dx = 0): { w: number; h: number; mirror: boolean } {
-		const icon = this.icon(kind);
+	drawSize(kind: string | undefined, dx = 0, n = 0): { w: number; h: number; mirror: boolean } {
+		const icon = this.icon(kind, n);
 		const c = CUSTOM[icon];
 		return { w: c ? c.w * 0.8 : 20, h: c ? c.h * 0.8 : 20, mirror: this.#mirrored(icon, dx) };
 	}
@@ -270,8 +276,8 @@ class Seasonal {
 	}
 
 	/** A payload type's picture once loaded (for canvas drawing), else null; starts the load. */
-	picture(kind: string | undefined): HTMLImageElement | null {
-		const icon = this.icon(kind);
+	picture(kind: string | undefined, n = 0): HTMLImageElement | null {
+		const icon = this.icon(kind, n);
 		if (!icon) return null;
 		const img = this.#load(icon);
 		return img.complete && img.naturalWidth > 0 ? img : null;
@@ -295,7 +301,7 @@ class Seasonal {
 	ensureImages(map: maplibregl.Map) {
 		const s = this.season;
 		if (!s) return;
-		for (const icon of new Set([...Object.values(s.icons), s.other])) {
+		for (const icon of new Set([...Object.values(s.icons), ...Object.values(s.alternate ?? {}), s.other])) {
 			const id = imageId(icon);
 			const custom = CUSTOM[icon];
 			if (map.hasImage(id)) continue;

@@ -108,6 +108,7 @@ interface Anim {
 	total: number;
 	color: string;
 	kind: string; // payload type, so a renderer can pick a per-type head (Halloween icons)
+	n: number; // this comet's number among comets of its kind (seasonal alternate icons)
 	born: number;
 	dur: number;
 	uncertain: boolean;
@@ -135,6 +136,7 @@ export interface PulseDot {
 	color: string;
 	kind: string; // payload type of the packet this comet carries
 	dx: number; // eastward movement right now (+ east, − west), so a head can face its way
+	n: number; // the comet's number among comets of its kind (0, 1, 2…)
 }
 export interface PulseFrame {
 	lines: PulseLine[];
@@ -153,6 +155,7 @@ export class PulseEngine {
 	private fired = new Map<string, number>();
 	private colorFor: (ev: LiveEvent) => string;
 	private speed: () => number;
+	private kindCount = new Map<string, number>();
 
 	// colorFor picks a comet's colour from its event — keyed on the message hash
 	// so the pulse matches its Recent Packets row (see hashColor in live.svelte).
@@ -172,7 +175,9 @@ export class PulseEngine {
 		const total = seglen[seglen.length - 1];
 		const born = performance.now();
 		const dur = (900 + pts.length * 280) / (this.speed() || 1);
-		this.anims.push({ pts, seglen, total, color, kind, born, dur, uncertain });
+		const n = this.kindCount.get(kind) ?? 0;
+		this.kindCount.set(kind, n + 1);
+		this.anims.push({ pts, seglen, total, color, kind, n, born, dur, uncertain });
 		if (this.anims.length > 60) this.anims.shift();
 
 		for (let i = 0; i < pts.length; i++) {
@@ -249,7 +254,7 @@ export class PulseEngine {
 			if (age < a.dur) {
 				const at = this.along(a, travel);
 				const dx = this.along(a, Math.min(1, travel + 0.02))[0] - this.along(a, Math.max(0, travel - 0.02))[0];
-				dots.push({ at, color: a.color, kind: a.kind, dx });
+				dots.push({ at, color: a.color, kind: a.kind, dx, n: a.n });
 			}
 		}
 

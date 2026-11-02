@@ -19,6 +19,7 @@
 		class="border-line bg-ink-2/85 flex max-w-full flex-col items-center rounded-[var(--radius)] border shadow-lg backdrop-blur-md"
 		style={seasonal.on ? `border-color:color-mix(in srgb, ${s.accent} 45%, transparent)` : ''}
 	>
+		<div class="flex items-center">
 		<Tooltip text={seasonal.on ? 'Back to plain packet dots' : s.tip}>
 			<button
 				onclick={() => seasonal.toggle()}
@@ -32,6 +33,22 @@
 				<span>{seasonal.on ? `${s.label} on` : s.label}</span>
 			</button>
 		</Tooltip>
+		{#if seasonal.hasSnow}
+			<span class="bg-line/70 h-4 w-px" aria-hidden="true"></span>
+			<Tooltip text={seasonal.snowing ? 'Stop the snow' : 'Let it snow on the map'}>
+				<button
+					onclick={() => seasonal.toggleSnow()}
+					aria-pressed={seasonal.snowing}
+					class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors {seasonal.snowing
+						? 'text-fg'
+						: 'text-fg-dim hover:text-fg'}"
+				>
+					<img src={seasonal.src('❄️')} alt="" class="h-4 w-4 {seasonal.snowing ? '' : 'opacity-70 grayscale'}" />
+					<span>{seasonal.snowing ? 'Snow on' : 'Snow'}</span>
+				</button>
+			</Tooltip>
+		{/if}
+		</div>
 		{#if seasonal.on}
 			<div class="border-line/60 flex flex-wrap justify-center gap-x-3 gap-y-1 border-t px-3 py-1.5">
 				{#each s.legend as l (l.label)}

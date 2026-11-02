@@ -370,6 +370,19 @@
 			<img src={seasonal.src(ss.emoji)} alt="" class="h-4 w-4 {seasonal.on ? '' : 'opacity-60 grayscale'}" />
 			{seasonal.on ? `${ss.short} on` : ss.short}
 		</button>
+		{#if seasonal.hasSnow}
+			<button
+				onclick={() => seasonal.toggleSnow()}
+				aria-pressed={seasonal.snowing}
+				aria-label={seasonal.snowing ? 'Stop the snow' : 'Let it snow'}
+				class="border-line/60 bg-ink-2/85 flex h-10 items-center gap-1.5 rounded-full border px-3 text-xs font-medium shadow-lg backdrop-blur-md transition-colors {seasonal.snowing
+					? 'text-fg'
+					: 'text-fg-dim'}"
+			>
+				<img src={seasonal.src('❄️')} alt="" class="h-4 w-4 {seasonal.snowing ? '' : 'opacity-60 grayscale'}" />
+				{seasonal.snowing ? 'Snow on' : 'Snow'}
+			</button>
+		{/if}
 	{/if}
 	</div>
 	{#if sheetNode}

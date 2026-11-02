@@ -1,6 +1,7 @@
 <!--
   Light snowfall over a live map, while a season with `snow` is in force and
-  turned on (see $lib/seasonal.svelte). A click-through canvas filling the
+  the viewer's Snow switch is on (seasonal.snowing — independent of the
+  themed packets; see $lib/seasonal.svelte). A click-through canvas filling the
   nearest positioned ancestor, under the map's controls (z-10). Skipped for
   prefers-reduced-motion; the animation stops whenever it is not showing.
 -->
@@ -8,7 +9,7 @@
 	import { seasonal } from '$lib/seasonal.svelte';
 
 	let canvas = $state<HTMLCanvasElement>();
-	const show = $derived(seasonal.on && !!seasonal.season?.snow);
+	const show = $derived(seasonal.snowing);
 
 	interface Flake {
 		x: number;

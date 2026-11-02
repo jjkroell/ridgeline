@@ -144,7 +144,7 @@ export const SEASONS: Season[] = [
 			{
 				emoji: '🎄',
 				title: 'Festive packets on the live map',
-				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Adverts then fly from node to node as Santa\'s sleigh, pulled by a reindeer, or as a Christmas tree, and the other kinds of packets as a snowman, present, Santa, star, snowflake, bell or cookie, one for each kind of packet, with a legend to tell them apart. On a computer, turn on Sound in Map Control and each hop plays the next note of Jingle Bells, with a ho ho ho from Santa once a minute as packets arrive. It is off unless you turn it on, and the choice is saved in this browser.'
+				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Adverts then fly from node to node as Santa\'s sleigh, pulled by a reindeer, or as a Christmas tree, and the other kinds of packets as a snowman, present, Santa, star, snowflake, bell or cookie, one for each kind of packet, with a legend to tell them apart. On a computer, turn on Sound in Map Control and each hop plays the next note of Jingle Bells, with a ho ho ho from Santa once a minute as packets arrive. Festive packets are off unless you turn them on. Light snow falls over the live map too, with its own Snow switch beside them to stop it; both choices are saved in this browser.'
 			}
 		],
 		tryLabel: 'Try festive packets',
@@ -157,6 +157,7 @@ export const SEASONS: Season[] = [
 const KEY = 'ridgeline-livemap-season'; // id of the season this browser turned on
 const LEGACY_KEY = 'ridgeline-livemap-spooky'; // v0.24.34–35: '1' = Halloween on
 const PREVIEW_KEY = 'ridgeline-season-preview';
+const SNOW_KEY = 'ridgeline-livemap-snow'; // '0' = this browser turned the snowfall off
 
 /** Icons that are our own pictures rather than one emoji, keyed by the name a
  *  season uses in `icons`. `w`×`h` is the size on the map in CSS px (emoji
@@ -185,6 +186,7 @@ class Seasonal {
 	#now = $state(Date.now());
 	#preview = $state('');
 	#enabled = $state('');
+	#snowOff = $state(false);
 	#loaded = false;
 	#pictures = new Map<string, HTMLImageElement>();
 	/** Bumped as each picture finishes loading, so canvas drawers redraw. */
@@ -215,6 +217,26 @@ class Seasonal {
 		return !!this.season && this.#enabled === this.season.id;
 	}
 
+	/** The season has snowfall (Christmas), so the live map offers a Snow switch. */
+	get hasSnow(): boolean {
+		return !!this.season?.snow;
+	}
+
+	/** Snow falling over the live maps: on by default in a snowy season, and
+	 *  independent of the themed packets, so either can be on without the other. */
+	get snowing(): boolean {
+		return this.hasSnow && !this.#snowOff;
+	}
+
+	toggleSnow() {
+		this.#snowOff = !this.#snowOff;
+		try {
+			localStorage.setItem(SNOW_KEY, this.#snowOff ? '0' : '1');
+		} catch {
+			/* not remembered, still toggles */
+		}
+	}
+
 	load() {
 		if (this.#loaded || typeof window === 'undefined') return;
 		this.#loaded = true;
@@ -229,6 +251,7 @@ class Seasonal {
 		}
 		try {
 			this.#enabled = localStorage.getItem(KEY) ?? (localStorage.getItem(LEGACY_KEY) === '1' ? 'halloween' : '');
+			this.#snowOff = localStorage.getItem(SNOW_KEY) === '0';
 		} catch {
 			/* storage blocked: stays off */
 		}

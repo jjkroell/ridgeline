@@ -58,6 +58,7 @@ class LiveChime {
 	#tuneAt = 0; // index of the next Jingle Bells note
 	#tuneLast = 0; // when the last note played (the tune restarts after a pause)
 	#lastHoAt = -Infinity;
+	#previewing = false; // preview(): wait for the Ho! clip to load rather than skip it
 	#loaded = false;
 	#armed = false;
 
@@ -182,7 +183,7 @@ class LiveChime {
 		const wall = performance.now();
 		if (season?.ho && wall - this.#lastHoAt >= HO_GAP_MS) {
 			this.#lastHoAt = wall;
-			this.#ho(this.#actx, this.#master);
+			this.#ho(this.#actx, this.#master, this.#previewing);
 		}
 		if (season?.tune === 'jingle') {
 			if (wall - this.#lastTickAt < 150) return; // keep the tune legible
@@ -256,55 +257,37 @@ class LiveChime {
 		}
 	}
 
-	// One jolly "Ho!": a breathy h, then a deep voice on an "o" vowel — a buzzy
-	// sawtooth sliding down ~150→110 Hz through the vowel's formants (≈500,
-	// 850 and a little 2.4 kHz for presence, so laptop speakers that can't
-	// play the low voice still carry it) — swelling and fading over ~0.55 s.
-	#ho(ctx: AudioContext, out: AudioNode) {
-		const t = ctx.currentTime;
-		const h = ctx.createBufferSource();
-		h.buffer = this.#noise(ctx);
-		const hf = ctx.createBiquadFilter();
-		hf.type = 'bandpass';
-		hf.frequency.value = 1200;
-		hf.Q.value = 0.8;
-		const hg = ctx.createGain();
-		hg.gain.setValueAtTime(0, t);
-		hg.gain.linearRampToValueAtTime(0.09, t + 0.03);
-		hg.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-		h.connect(hf).connect(hg).connect(out);
-		h.start(t);
-		h.stop(t + 0.15);
+	// Santa's "Ho!": one recorded ho (static/seasonal/ho.mp3, cut from a
+	// "ho ho ho" clip), fetched and decoded the first time it's wanted. If it
+	// isn't ready yet it's skipped this time — or, for a preview, played as
+	// soon as it arrives.
+	#hoBuf: AudioBuffer | null = null;
+	#hoLoad: Promise<AudioBuffer | null> | null = null;
 
-		const v = t + 0.06;
-		const osc = ctx.createOscillator();
-		osc.type = 'sawtooth';
-		osc.frequency.setValueAtTime(150, v);
-		osc.frequency.exponentialRampToValueAtTime(110, v + 0.5);
-		const vg = ctx.createGain();
-		vg.gain.setValueAtTime(0, v);
-		vg.gain.linearRampToValueAtTime(1, v + 0.05);
-		vg.gain.setValueAtTime(1, v + 0.3);
-		vg.gain.exponentialRampToValueAtTime(0.0001, v + 0.55);
-		const lp = ctx.createBiquadFilter(); // soften the buzz
-		lp.type = 'lowpass';
-		lp.frequency.value = 3000;
-		osc.connect(vg).connect(lp);
-		for (const [f, q, level] of [
-			[500, 5, 0.9],
-			[850, 6, 0.5],
-			[2400, 4, 0.12]
-		]) {
-			const bp = ctx.createBiquadFilter();
-			bp.type = 'bandpass';
-			bp.frequency.value = f;
-			bp.Q.value = q;
+	#loadHo(ctx: AudioContext): Promise<AudioBuffer | null> {
+		this.#hoLoad ??= fetch('/seasonal/ho.mp3')
+			.then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+			.then((data) => ctx.decodeAudioData(data))
+			.then((buf) => (this.#hoBuf = buf))
+			.catch(() => {
+				this.#hoLoad = null; // try again next time
+				return null;
+			});
+		return this.#hoLoad;
+	}
+
+	#ho(ctx: AudioContext, out: AudioNode, waitForLoad = false) {
+		const start = (buf: AudioBuffer) => {
+			const src = ctx.createBufferSource();
+			src.buffer = buf;
 			const g = ctx.createGain();
-			g.gain.value = level;
-			lp.connect(bp).connect(g).connect(out);
-		}
-		osc.start(v);
-		osc.stop(v + 0.6);
+			g.gain.value = 0.35; // the clip peaks at -3 dB; this sits it just above the bells
+			src.connect(g).connect(out);
+			src.start();
+		};
+		if (this.#hoBuf) return start(this.#hoBuf);
+		const loading = this.#loadHo(ctx);
+		if (waitForLoad) void loading.then((buf) => buf && start(buf));
 	}
 
 	#noiseBuf: AudioBuffer | null = null;
@@ -325,7 +308,9 @@ class LiveChime {
 		this.ensure();
 		this.#lastTickAt = -Infinity;
 		this.#lastHoAt = -Infinity;
+		this.#previewing = true;
 		this.play(Math.floor(Math.random() * this.scale.length), season);
+		this.#previewing = false;
 	}
 }
 

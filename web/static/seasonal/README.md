@@ -13,3 +13,7 @@ pictures — reindeer U+1F98C, sled U+1F6F7 and Santa U+1F385 — inlined as nes
 <svg>s (ids prefixed so they can't clash) plus two drawn reins; same licence.
 It faces LEFT; `CUSTOM` in lib/seasonal.svelte.ts sets its map size and mirrors
 it while the packet heads east.
+
+ho.mp3 (Christmas: played as Santa's sleigh lands) is one "ho" cut from a
+"ho ho ho" clip Jesse supplied (2026-11-01): 0.97–1.80 s of hohoho.mp3, mono,
+15 ms fade-in, 130 ms fade-out, peak normalised to −3 dB, 96 kb/s.

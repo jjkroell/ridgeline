@@ -8,8 +8,9 @@
 // legend and announce items, and bump CURRENT in announce.svelte.ts so the
 // What's new modal auto-opens again. Preview one outside its dates with
 // ?season=<id> on any page (kept for the browser tab; ?season=none clears it).
-// A season marked `draft` never starts from its dates, and only admins (or
-// anyone on dev) can preview it with ?season=<id>. The admin panel's Seasonal
+// A season marked `draft` never starts from its dates. Only admins (or anyone
+// on dev) can preview a season with ?season=<id>; everyone else gets a season
+// only from its dates or the admin switch. The admin panel's Seasonal
 // themes switch overrides the dates entirely: one theme on (draft or not), or
 // all off; "Follow the calendar" hands control back to the dates.
 //
@@ -193,7 +194,9 @@ class Seasonal {
 	season = $derived.by((): Season | null => {
 		if (this.#preview) {
 			const p = SEASONS.find((s) => s.id === this.#preview);
-			if (p && (!p.draft || auth.isAdmin || env.isDev)) return p;
+			// Previews are for admins and dev only: on prod a season reaches
+			// visitors only by its dates or the admin switch.
+			if (p && (auth.isAdmin || env.isDev)) return p;
 		}
 		return this.scheduled;
 	});

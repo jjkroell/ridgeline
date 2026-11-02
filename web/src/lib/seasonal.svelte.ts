@@ -49,6 +49,8 @@ export interface Season {
 	/** What's new items shown while the season is on, and the button that turns it on. */
 	announce: SeasonItem[];
 	tryLabel: string;
+	/** The live-map chime's seasonal sound ('jingle' = Jingle Bells on sleigh bells). */
+	tune?: 'jingle';
 	/** Light snowfall over the live maps while the theme is on. */
 	snow?: boolean;
 	/** Still being designed: never in force by date; preview only for admins / on dev. */
@@ -111,38 +113,39 @@ export const SEASONS: Season[] = [
 		short: 'Festive',
 		emoji: '🎄',
 		accent: '#e5484d',
-		tip: "Adverts fly node to node as Santa's sleigh or a tree; other packets as bells, presents, Santa, stars and snowmen",
+		tip: "Adverts fly node to node as Santa's sleigh or a tree; other packets as snowmen, presents, Santa, stars and bells",
 		icons: {
 			Advert: 'sleigh',
-			GroupText: '🔔',
+			GroupText: '⛄',
 			TextMessage: '🎁',
 			Trace: '🎅',
 			Ack: '❄️',
 			Path: '⭐',
-			Request: '⛄',
-			AnonRequest: '⛄',
-			Response: '⛄'
+			Request: '🔔',
+			AnonRequest: '🔔',
+			Response: '🔔'
 		},
 		alternate: { Advert: '🎄' }, // every 2nd advert is a tree, so fewer sleighs pile up
 		other: '🍪',
 		legend: [
 			{ icon: 'sleigh', alt: '🎄', label: 'Advert' },
-			{ icon: '🔔', label: 'Channel' },
+			{ icon: '⛄', label: 'Channel' },
 			{ icon: '🎁', label: 'Direct' },
 			{ icon: '🎅', label: 'Trace' },
 			{ icon: '❄️', label: 'Ack' },
 			{ icon: '⭐', label: 'Path' },
-			{ icon: '⛄', label: 'Req / Resp' },
+			{ icon: '🔔', label: 'Req / Resp' },
 			{ icon: '🍪', label: 'Other' }
 		],
 		announce: [
 			{
 				emoji: '🎄',
 				title: 'Festive packets on the live map',
-				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Adverts then fly from node to node as Santa\'s sleigh, pulled by a reindeer, or as a Christmas tree, and the other kinds of packets as a bell, present, Santa, star, snowflake, snowman or cookie, one for each kind of packet, with a legend to tell them apart. It is off unless you turn it on, and the choice is saved in this browser.'
+				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Adverts then fly from node to node as Santa\'s sleigh, pulled by a reindeer, or as a Christmas tree, and the other kinds of packets as a snowman, present, Santa, star, snowflake, bell or cookie, one for each kind of packet, with a legend to tell them apart. On a computer, turn on Sound in Map Control and each hop plays the next note of Jingle Bells, with a Ho! as Santa lands. It is off unless you turn it on, and the choice is saved in this browser.'
 			}
 		],
 		tryLabel: 'Try festive packets',
+		tune: 'jingle',
 		snow: true
 	}
 ];
@@ -155,9 +158,9 @@ const PREVIEW_KEY = 'ridgeline-season-preview';
  *  season uses in `icons`. `w`×`h` is the size on the map in CSS px (emoji
  *  icons are 26); `faces: 'left'` art is mirrored while the packet heads east,
  *  so it always faces the way it travels. */
-const CUSTOM: Record<string, { file: string; w: number; h: number; faces?: 'left' | 'right' }> = {
+const CUSTOM: Record<string, { file: string; w: number; h: number; faces?: 'left' | 'right'; ho?: boolean }> = {
 	// Reindeer pulling Santa's sleigh (Noto deer + sled + Santa), drawn big.
-	sleigh: { file: '/seasonal/sleigh.svg', w: 64, h: 32, faces: 'left' }
+	sleigh: { file: '/seasonal/sleigh.svg', w: 64, h: 32, faces: 'left', ho: true }
 };
 
 const codepoints = (icon: string) => [...icon].map((c) => c.codePointAt(0)!.toString(16));
@@ -256,6 +259,16 @@ class Seasonal {
 	#mirrored(icon: string, dx: number): boolean {
 		const faces = CUSTOM[icon]?.faces;
 		return (faces === 'left' && dx > 0) || (faces === 'right' && dx < 0);
+	}
+
+	/** The chime's seasonal sound for a comet reaching a node (live-audio play()):
+	 *  the season's tune, plus a "Ho!" when it's Santa's sleigh. Undefined = the
+	 *  normal wind chime. */
+	sound(kind: string | undefined, n = 0): { tune?: 'jingle'; ho?: boolean } | undefined {
+		if (!this.on) return undefined;
+		const tune = this.season?.tune;
+		const ho = !!CUSTOM[this.icon(kind, n)]?.ho;
+		return tune || ho ? { tune, ho } : undefined;
 	}
 
 	/** How far an icon rocks side to side, in degrees: the sleigh just bobs. */

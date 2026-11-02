@@ -21,6 +21,26 @@ export const RINGS: { id: string; label: string; decay: number }[] = [
 	{ id: 'long', label: 'Long', decay: 3.2 }
 ];
 
+// Jingle Bells (public domain, J. Pierpont 1857), one note per node reached
+// while a season with `sound: 'jingle'` is on. Hz, an octave up so it rings
+// like a bell: E5 G5 C5 D5 F5.
+const E = 659.25, G = 783.99, C = 523.25, D = 587.33, F = 698.46;
+const JINGLE = [
+	E, E, E, E, E, E, E, G, C, D, E,
+	F, F, F, F, F, E, E, E, E, D, D, E, D, G,
+	E, E, E, E, E, E, E, G, C, D, E,
+	F, F, F, F, F, E, E, E, G, G, F, D, C
+];
+
+/** Extra sounds a seasonal theme layers onto the chime. */
+export interface SeasonSound {
+	/** Play the season's tune ('jingle' = Jingle Bells on sleigh bells) instead of the wind chime. */
+	tune?: 'jingle';
+	/** A single "Ho!" as Santa lands (rate-limited, see HO_GAP_MS). */
+	ho?: boolean;
+}
+const HO_GAP_MS = 5000; // repeaters are hit constantly: at most one "Ho!" per 5 s
+
 class LiveChime {
 	on = $state(false);
 	volume = $state(0.4); // master gain, 0..0.8
@@ -34,7 +54,10 @@ class LiveChime {
 
 	#actx: AudioContext | null = null;
 	#master: GainNode | null = null;
-	#lastTickAt = 0;
+	#lastTickAt = -Infinity;
+	#tuneAt = 0; // index of the next Jingle Bells note
+	#tuneLast = 0; // when the last note played (the tune restarts after a pause)
+	#lastHoAt = -Infinity;
 	#loaded = false;
 	#armed = false;
 
@@ -151,12 +174,25 @@ class LiveChime {
 	// A soft tubular-chime hit: a fundamental that rings out slowly plus a quieter
 	// inharmonic partial (≈2.76×, a real wind chime's ratio) that shimmers and fades
 	// fast. Soft attack, long tail. `seed` picks a scale note so nodes differ.
-	play(seed: number) {
+	play(seed: number, season?: SeasonSound) {
 		if (!this.on || !this.#actx || !this.#master) return;
 		// While suspended the audio clock is frozen, so anything scheduled now
 		// would all fire at once when it resumes. Drop chimes until it runs.
 		if (this.#actx.state !== 'running') return;
 		const wall = performance.now();
+		if (season?.ho && wall - this.#lastHoAt >= HO_GAP_MS) {
+			this.#lastHoAt = wall;
+			this.#ho(this.#actx, this.#master);
+		}
+		if (season?.tune === 'jingle') {
+			if (wall - this.#lastTickAt < 150) return; // keep the tune legible
+			this.#lastTickAt = wall;
+			if (wall - this.#tuneLast > 8000) this.#tuneAt = 0; // quiet for a while: start from the top
+			this.#tuneLast = wall;
+			this.#bell(this.#actx, this.#master, JINGLE[this.#tuneAt]);
+			this.#tuneAt = (this.#tuneAt + 1) % JINGLE.length;
+			return;
+		}
 		if (wall - this.#lastTickAt < 120) return; // sparse, gentle trickle — chimes don't rush
 		this.#lastTickAt = wall;
 		const t = this.#actx.currentTime;
@@ -180,13 +216,112 @@ class LiveChime {
 		}
 	}
 
+	// A bright handbell note with a little sleigh-bell shake on top: a short
+	// fundamental, two inharmonic partials, then three tiny high noise "jingles".
+	#bell(ctx: AudioContext, out: AudioNode, freq: number) {
+		const t = ctx.currentTime;
+		for (const p of [
+			{ ratio: 1, peak: 0.07, decay: 0.9 },
+			{ ratio: 2.76, peak: 0.022, decay: 0.35 },
+			{ ratio: 5.4, peak: 0.01, decay: 0.15 }
+		]) {
+			const osc = ctx.createOscillator();
+			const g = ctx.createGain();
+			osc.type = 'sine';
+			osc.frequency.value = freq * p.ratio;
+			g.gain.setValueAtTime(0, t);
+			g.gain.linearRampToValueAtTime(p.peak, t + 0.005);
+			g.gain.exponentialRampToValueAtTime(0.0001, t + p.decay);
+			osc.connect(g).connect(out);
+			osc.start(t);
+			osc.stop(t + p.decay + 0.05);
+		}
+		const noise = this.#noise(ctx);
+		for (let i = 0; i < 3; i++) {
+			const at = t + i * 0.035 + Math.random() * 0.01;
+			const src = ctx.createBufferSource();
+			src.buffer = noise;
+			const bp = ctx.createBiquadFilter();
+			bp.type = 'bandpass';
+			bp.frequency.value = 6000 + Math.random() * 2500;
+			bp.Q.value = 8;
+			const g = ctx.createGain();
+			g.gain.setValueAtTime(0, at);
+			g.gain.linearRampToValueAtTime(0.05, at + 0.003);
+			g.gain.exponentialRampToValueAtTime(0.0001, at + 0.09);
+			src.connect(bp).connect(g).connect(out);
+			src.start(at);
+			src.stop(at + 0.1);
+		}
+	}
+
+	// One jolly "Ho!": a breathy h, then a low voice on an "o" vowel — a buzzy
+	// sawtooth sliding down ~125→95 Hz through two vowel formants (≈500 and
+	// 850 Hz) — that swells and fades over half a second.
+	#ho(ctx: AudioContext, out: AudioNode) {
+		const t = ctx.currentTime;
+		const h = ctx.createBufferSource();
+		h.buffer = this.#noise(ctx);
+		const hf = ctx.createBiquadFilter();
+		hf.type = 'bandpass';
+		hf.frequency.value = 1200;
+		hf.Q.value = 0.8;
+		const hg = ctx.createGain();
+		hg.gain.setValueAtTime(0, t);
+		hg.gain.linearRampToValueAtTime(0.05, t + 0.03);
+		hg.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+		h.connect(hf).connect(hg).connect(out);
+		h.start(t);
+		h.stop(t + 0.15);
+
+		const v = t + 0.06;
+		const osc = ctx.createOscillator();
+		osc.type = 'sawtooth';
+		osc.frequency.setValueAtTime(125, v);
+		osc.frequency.exponentialRampToValueAtTime(95, v + 0.45);
+		const vg = ctx.createGain();
+		vg.gain.setValueAtTime(0, v);
+		vg.gain.linearRampToValueAtTime(0.5, v + 0.05);
+		vg.gain.setValueAtTime(0.5, v + 0.25);
+		vg.gain.exponentialRampToValueAtTime(0.0001, v + 0.5);
+		const lp = ctx.createBiquadFilter(); // soften the buzz
+		lp.type = 'lowpass';
+		lp.frequency.value = 1400;
+		osc.connect(vg).connect(lp);
+		for (const [f, q, level] of [
+			[500, 6, 0.5],
+			[850, 8, 0.25]
+		]) {
+			const bp = ctx.createBiquadFilter();
+			bp.type = 'bandpass';
+			bp.frequency.value = f;
+			bp.Q.value = q;
+			const g = ctx.createGain();
+			g.gain.value = level;
+			lp.connect(bp).connect(g).connect(out);
+		}
+		osc.start(v);
+		osc.stop(v + 0.55);
+	}
+
+	#noiseBuf: AudioBuffer | null = null;
+	#noise(ctx: AudioContext): AudioBuffer {
+		if (!this.#noiseBuf || this.#noiseBuf.sampleRate !== ctx.sampleRate) {
+			const b = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.2), ctx.sampleRate);
+			const d = b.getChannelData(0);
+			for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+			this.#noiseBuf = b;
+		}
+		return this.#noiseBuf;
+	}
+
 	// Play a sample chime immediately (bypasses the trickle throttle) so a tuning
 	// change is audible right away.
-	preview() {
+	preview(season?: SeasonSound) {
 		if (!this.on) return;
 		this.ensure();
-		this.#lastTickAt = 0;
-		this.play(Math.floor(Math.random() * this.scale.length));
+		this.#lastTickAt = -Infinity;
+		this.play(Math.floor(Math.random() * this.scale.length), season);
 	}
 }
 

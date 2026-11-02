@@ -117,6 +117,8 @@ interface Ripple {
 	at: LngLat;
 	born: number; // when the dot reaches this node (may be in the future)
 	color: string;
+	kind: string; // the comet's payload type and number (for seasonal sounds)
+	n: number;
 	played?: boolean; // ripple has begun (emitted as an arrival once)
 }
 
@@ -138,12 +140,17 @@ export interface PulseDot {
 	dx: number; // eastward movement right now (+ east, − west), so a head can face its way
 	n: number; // the comet's number among comets of its kind (0, 1, 2…)
 }
+export interface PulseArrival {
+	at: LngLat;
+	kind: string; // payload type of the comet that arrived
+	n: number; // that comet's number among its kind (PulseDot.n)
+}
 export interface PulseFrame {
 	lines: PulseLine[];
 	dots: PulseDot[];
 	rings: PulseRing[];
 	count: number; // active comets (for the on-screen counter)
-	arrivals: LngLat[]; // nodes the dot reached this frame (for audio)
+	arrivals: PulseArrival[]; // nodes a dot reached this frame (for audio)
 }
 
 export class PulseEngine {
@@ -184,7 +191,9 @@ export class PulseEngine {
 			this.ripples.push({
 				at: pts[i],
 				born: born + (total > 0 ? seglen[i] / total : 0) * dur,
-				color
+				color,
+				kind,
+				n
 			});
 		}
 		if (this.ripples.length > 500) this.ripples.splice(0, this.ripples.length - 500);
@@ -259,14 +268,14 @@ export class PulseEngine {
 		}
 
 		const rings: PulseRing[] = [];
-		const arrivals: LngLat[] = [];
+		const arrivals: PulseArrival[] = [];
 		this.ripples = this.ripples.filter((r) => now - r.born < RIPPLE_DUR);
 		for (const r of this.ripples) {
 			const age = now - r.born;
 			if (age < 0) continue; // scheduled but not yet reached
 			if (!r.played) {
 				r.played = true;
-				arrivals.push(r.at);
+				arrivals.push({ at: r.at, kind: r.kind, n: r.n });
 			}
 			const t = age / RIPPLE_DUR;
 			rings.push({ at: r.at, r: 3 + t * 11, o: 0.85 * (1 - t), color: r.color });

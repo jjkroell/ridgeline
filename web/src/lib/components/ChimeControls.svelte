@@ -9,6 +9,7 @@
 	import { onMount } from 'svelte';
 	import { chime, CHORDS, RINGS } from '$lib/live-audio.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
+	import { seasonal } from '$lib/seasonal.svelte';
 
 	onMount(() => chime.load());
 
@@ -20,7 +21,7 @@
 
 <div class="label mb-1">Audio</div>
 <Tooltip
-	text={chime.on ? 'Mute node chimes' : 'Play a soft wind chime as pulses reach nodes'}
+	text={chime.on ? 'Mute node chimes' : seasonal.sound('GroupText')?.tune === 'jingle' ? 'Play Jingle Bells as pulses reach nodes (and a Ho! as Santa lands)' : 'Play a soft wind chime as pulses reach nodes'}
 	class="block w-full"
 >
 <button
@@ -58,7 +59,7 @@
 				step="0.05"
 				value={chime.volume}
 				oninput={(e) => chime.setVolume(+e.currentTarget.value)}
-				onchange={() => chime.preview()}
+				onchange={() => chime.preview(seasonal.sound('GroupText'))}
 				class="accent-signal h-1 w-full cursor-pointer"
 			/>
 		</div>
@@ -69,7 +70,7 @@
 					<button
 						onclick={() => {
 							chime.setChord(c.id);
-							chime.preview();
+							chime.preview(seasonal.sound('GroupText'));
 						}}
 						class="rounded-[var(--radius)] border px-1.5 py-1 text-[0.66rem] font-medium transition-colors {chime.chordId ===
 						c.id
@@ -86,7 +87,7 @@
 					<button
 						onclick={() => {
 							chime.setRing(r.id);
-							chime.preview();
+							chime.preview(seasonal.sound('GroupText'));
 						}}
 						class="rounded-[var(--radius)] border px-0.5 py-1 text-center text-[0.66rem] font-medium transition-colors {chime.ringId ===
 						r.id

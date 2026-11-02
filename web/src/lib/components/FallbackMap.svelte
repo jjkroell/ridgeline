@@ -357,7 +357,7 @@
 		const now = performance.now();
 		const out = engine.frame(now);
 		// Soft wind-chime as each pulse reaches a node (same seed as the MapLibre map).
-		if (audio) for (const at of out.arrivals) chime.play(Math.round((at[0] + at[1]) * 100));
+		if (audio) for (const a of out.arrivals) chime.play(Math.round((a.at[0] + a.at[1]) * 100), seasonal.sound(a.kind, a.n));
 		// Project an engine [lon,lat] to a container pixel.
 		const px = (c: [number, number]) => map.latLngToContainerPoint([c[1], c[0]]);
 

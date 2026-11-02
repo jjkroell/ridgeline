@@ -141,7 +141,7 @@
 		});
 
 		// Chime once as the dot reaches each node (shared engine: $lib/live-audio).
-		if (chime.on) for (const at of out.arrivals) chime.play(Math.round((at[0] + at[1]) * 100));
+		if (chime.on) for (const a of out.arrivals) chime.play(Math.round((a.at[0] + a.at[1]) * 100), seasonal.sound(a.kind, a.n));
 
 		animCount = out.count;
 		requestAnimationFrame(frame);

@@ -108,26 +108,26 @@ export const SEASONS: Season[] = [
 		short: 'Festive',
 		emoji: '🎄',
 		accent: '#e5484d',
-		tip: 'Packets travel as trees, bells, presents, Santa and reindeer',
+		tip: "Adverts fly node to node as Santa's sleigh; other packets as bells, presents, Santa, stars and snowmen",
 		icons: {
-			Advert: '🎄',
+			Advert: 'sleigh',
 			GroupText: '🔔',
 			TextMessage: '🎁',
 			Trace: '🎅',
 			Ack: '❄️',
-			Path: '🦌',
+			Path: '⭐',
 			Request: '⛄',
 			AnonRequest: '⛄',
 			Response: '⛄'
 		},
 		other: '🍪',
 		legend: [
-			{ icon: '🎄', label: 'Advert' },
+			{ icon: 'sleigh', label: 'Advert' },
 			{ icon: '🔔', label: 'Channel' },
 			{ icon: '🎁', label: 'Direct' },
 			{ icon: '🎅', label: 'Trace' },
 			{ icon: '❄️', label: 'Ack' },
-			{ icon: '🦌', label: 'Path' },
+			{ icon: '⭐', label: 'Path' },
 			{ icon: '⛄', label: 'Req / Resp' },
 			{ icon: '🍪', label: 'Other' }
 		],
@@ -135,7 +135,7 @@ export const SEASONS: Season[] = [
 			{
 				emoji: '🎄',
 				title: 'Festive packets on the live map',
-				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Every packet then flies across the map as a tree, bell, present, Santa, reindeer, snowflake, snowman or cookie, one for each kind of packet, with a legend to tell them apart. It is off unless you turn it on, and the choice is saved in this browser.'
+				body: 'Happy holidays! On the live map, turn on Festive packets at the top of the map (on a phone, tap the tree at the bottom left). Every advert then flies from node to node as Santa\'s sleigh, pulled by a reindeer, and every other packet as a bell, present, Santa, star, snowflake, snowman or cookie, one for each kind of packet, with a legend to tell them apart. It is off unless you turn it on, and the choice is saved in this browser.'
 			}
 		],
 		tryLabel: 'Try festive packets',
@@ -147,13 +147,24 @@ const KEY = 'ridgeline-livemap-season'; // id of the season this browser turned 
 const LEGACY_KEY = 'ridgeline-livemap-spooky'; // v0.24.34–35: '1' = Halloween on
 const PREVIEW_KEY = 'ridgeline-season-preview';
 
+/** Icons that are our own pictures rather than one emoji, keyed by the name a
+ *  season uses in `icons`. `w`×`h` is the size on the map in CSS px (emoji
+ *  icons are 26); `faces: 'left'` art is mirrored while the packet heads east,
+ *  so it always faces the way it travels. */
+const CUSTOM: Record<string, { file: string; w: number; h: number; faces?: 'left' | 'right' }> = {
+	// Reindeer pulling Santa's sleigh (Noto deer + sled + Santa), drawn big.
+	sleigh: { file: '/seasonal/sleigh.svg', w: 84, h: 42, faces: 'left' }
+};
+
 const codepoints = (icon: string) => [...icon].map((c) => c.codePointAt(0)!.toString(16));
-const imageId = (icon: string) => 'season-' + codepoints(icon).join('-');
+const imageId = (icon: string) => 'season-' + (CUSTOM[icon] ? icon : codepoints(icon).join('-'));
+const MIRROR = '-mirror';
 
 /** Bundled picture of an emoji (static/seasonal, Noto Emoji). Emoji fonts vary
  *  — some computers have none and draw plain black glyphs — so the icons are
  *  pictures, not text. */
 const src = (icon: string) =>
+	CUSTOM[icon]?.file ??
 	'/seasonal/emoji_u' + codepoints(icon).filter((c) => c !== 'fe0f').join('_') + '.svg';
 
 // Drawn at 2× and registered with pixelRatio 2, so icons are 26 CSS px and sharp.
@@ -229,9 +240,28 @@ class Seasonal {
 		return (kind && s.icons[kind]) || s.other;
 	}
 
-	/** MapLibre image id for a payload type's icon (see ensureImages). */
-	imageId(kind: string | undefined): string {
-		return imageId(this.icon(kind));
+	/** MapLibre image id for a payload type's icon (see ensureImages). `dx` is
+	 *  the packet's eastward movement, so one-sided art can face its way. */
+	imageId(kind: string | undefined, dx = 0): string {
+		const icon = this.icon(kind);
+		return imageId(icon) + (this.#mirrored(icon, dx) ? MIRROR : '');
+	}
+
+	#mirrored(icon: string, dx: number): boolean {
+		const faces = CUSTOM[icon]?.faces;
+		return (faces === 'left' && dx > 0) || (faces === 'right' && dx < 0);
+	}
+
+	/** How far an icon rocks side to side, in degrees: the sleigh just bobs. */
+	wobble(kind: string | undefined): number {
+		return CUSTOM[this.icon(kind)] ? 5 : 14;
+	}
+
+	/** Size and mirroring for canvas drawing (the WebGL-free fallback map). */
+	drawSize(kind: string | undefined, dx = 0): { w: number; h: number; mirror: boolean } {
+		const icon = this.icon(kind);
+		const c = CUSTOM[icon];
+		return { w: c ? c.w * 0.8 : 20, h: c ? c.h * 0.8 : 20, mirror: this.#mirrored(icon, dx) };
 	}
 
 	/** The bundled picture's URL, for <img>. */
@@ -267,13 +297,18 @@ class Seasonal {
 		if (!s) return;
 		for (const icon of new Set([...Object.values(s.icons), s.other])) {
 			const id = imageId(icon);
+			const custom = CUSTOM[icon];
 			if (map.hasImage(id)) continue;
 			const img = this.#load(icon);
 			const add = (ok: boolean) => {
 				try {
 					if (map.hasImage(id)) return;
-					const data = raster(ok ? img : icon);
+					const data = raster(ok ? img : icon, custom);
 					if (data) map.addImage(id, data, { pixelRatio: 2 });
+					if (custom?.faces) {
+						const flipped = raster(ok ? img : icon, custom, true);
+						if (flipped && !map.hasImage(id + MIRROR)) map.addImage(id + MIRROR, flipped, { pixelRatio: 2 });
+					}
 				} catch {
 					/* map gone or mid style swap; the next ensureImages call retries */
 				}
@@ -289,11 +324,18 @@ class Seasonal {
 
 /** One icon as map-image pixels: the bundled picture, or the emoji as text if
  *  the picture failed to load. */
-function raster(from: HTMLImageElement | string): ImageData | null {
+function raster(from: HTMLImageElement | string, custom?: { w: number; h: number }, mirror = false): ImageData | null {
+	const W = custom ? custom.w * 2 : PX,
+		H = custom ? custom.h * 2 : PX;
 	const canvas = document.createElement('canvas');
-	canvas.width = canvas.height = PX;
+	canvas.width = W;
+	canvas.height = H;
 	const ctx = canvas.getContext('2d');
 	if (!ctx) return null;
+	if (mirror) {
+		ctx.translate(W, 0);
+		ctx.scale(-1, 1);
+	}
 	// A soft dark halo keeps light icons (ghost, web) readable on light basemaps.
 	ctx.shadowColor = 'rgba(0,0,0,0.55)';
 	ctx.shadowBlur = 4;
@@ -301,12 +343,12 @@ function raster(from: HTMLImageElement | string): ImageData | null {
 		ctx.textAlign = 'center';
 		ctx.textBaseline = 'middle';
 		ctx.font = `${PX * 0.78}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-		ctx.fillText(from, PX / 2, PX / 2 + PX * 0.04);
+		ctx.fillText(custom ? '🦌🛷' : from, W / 2, H / 2 + H * 0.04);
 	} else {
-		const pad = PX * 0.1;
-		ctx.drawImage(from, pad, pad, PX - 2 * pad, PX - 2 * pad);
+		const pad = Math.min(W, H) * 0.1;
+		ctx.drawImage(from, pad, pad, W - 2 * pad, H - 2 * pad);
 	}
-	return ctx.getImageData(0, 0, PX, PX);
+	return ctx.getImageData(0, 0, W, H);
 }
 
 export const seasonal = new Seasonal();

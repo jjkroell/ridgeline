@@ -128,7 +128,7 @@
 				type: 'Feature',
 				geometry: { type: 'Point', coordinates: d.at },
 				// icon + rot drive the Halloween heads: each wobbles on its own phase.
-				properties: { color: d.color, icon: seasonal.imageId(d.kind), rot: Math.sin(now / 160 + i * 1.7) * 14 }
+				properties: { color: d.color, icon: seasonal.imageId(d.kind, d.dx), rot: Math.sin(now / 160 + i * 1.7) * seasonal.wobble(d.kind) }
 			})) as Feature[]
 		});
 		(map.getSource('pulse-rings') as maplibregl.GeoJSONSource)?.setData({

@@ -7,3 +7,9 @@ tag so Firefox can draw them onto a canvas.
 To add icons for a new season: fetch 2D/svg/emoji_u<codepoints>.svg from the
 repo above (codepoints joined by "_", without fe0f), then add
 width="128" height="128" to its <svg> tag.
+
+sleigh.svg (Christmas adverts) is our own composite of three Noto Emoji
+pictures — reindeer U+1F98C, sled U+1F6F7 and Santa U+1F385 — inlined as nested
+<svg>s (ids prefixed so they can't clash) plus two drawn reins; same licence.
+It faces LEFT; `CUSTOM` in lib/seasonal.svelte.ts sets its map size and mirrors
+it while the packet heads east.

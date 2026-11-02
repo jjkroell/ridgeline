@@ -134,6 +134,7 @@ export interface PulseDot {
 	at: LngLat;
 	color: string;
 	kind: string; // payload type of the packet this comet carries
+	dx: number; // eastward movement right now (+ east, − west), so a head can face its way
 }
 export interface PulseFrame {
 	lines: PulseLine[];
@@ -245,7 +246,11 @@ export class PulseEngine {
 			const opacity = age < a.dur ? base : base * (1 - (age - a.dur) / FADE);
 			const trail = this.trailCoords(a, travel);
 			if (trail.length >= 2) lines.push({ coords: trail, color: a.color, opacity });
-			if (age < a.dur) dots.push({ at: this.along(a, travel), color: a.color, kind: a.kind });
+			if (age < a.dur) {
+				const at = this.along(a, travel);
+				const dx = this.along(a, Math.min(1, travel + 0.02))[0] - this.along(a, Math.max(0, travel - 0.02))[0];
+				dots.push({ at, color: a.color, kind: a.kind, dx });
+			}
 		}
 
 		const rings: PulseRing[] = [];

@@ -169,7 +169,7 @@
 			features: engine.frame(now).dots.map((d, i) => ({
 				type: 'Feature',
 				geometry: { type: 'Point', coordinates: d.at },
-				properties: { icon: seasonal.imageId(d.kind), rot: Math.sin(now / 160 + i * 1.7) * 14 }
+				properties: { icon: seasonal.imageId(d.kind, d.dx), rot: Math.sin(now / 160 + i * 1.7) * seasonal.wobble(d.kind) }
 			}))
 		};
 	}

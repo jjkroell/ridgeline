@@ -728,7 +728,7 @@ export const CHANNEL_SOURCES = [
   {
     id: 'wordlist',
     label: 'Word search',
-    color: 'text-sky/70',
+    color: 'text-channel-search/70',
     help: 'Found by trying common words as channel names until one decrypted real traffic.',
   },
   {

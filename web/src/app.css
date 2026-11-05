@@ -24,6 +24,9 @@
 	--color-coral: #ff6b6b;
 	--color-violet: #a78bfa;
 	--color-sky: #5b9dff;
+	/* The channel legend's word-search fuchsia: its own colour, so no theme or
+	   Harbour accent can make it match another legend colour. */
+	--color-channel-search: #f26fc4;
 	--color-lime: #6ee7a8;
 
 	/* Node-role colors (consistent with the MeshCore ecosystem) */
@@ -321,6 +324,9 @@ html[data-theme='apple-dark'][data-accent='graphite'] { --color-signal: #98989d;
    blur into the first, so it switches to the text colour. */
 html:is([data-theme='apple'], [data-theme='apple-dark'])[data-accent='orange'] {
 	--logo-b: var(--color-fg);
+}
+html.theme-light {
+	--color-channel-search: #c2259a;
 }
 html:is([data-theme='apple'], [data-theme='apple-dark']):not([data-accent='blue']) {
 	--color-signal-deep: color-mix(in srgb, var(--color-signal) 78%, black);

@@ -361,12 +361,13 @@
 								</div>
 								<div class="flex flex-wrap gap-1.5">
 									{#each discoverableNew as d (d.name)}
-										<button
-											type="button"
-											onclick={() => addDiscovered(d.name)}
-											title="Add #{d.name} to your channels. {channelSourceTitle(d)}"
-											class="text-fg-dim hover:border-signal/50 hover:text-signal border-line rounded-[var(--radius)] border px-2 py-1 font-mono text-xs transition-colors"
-										>+ <span class={channelSourceColor(d.source)}>#{d.name}</span></button>
+										<Tooltip text="Add #{d.name} to your channels. {channelSourceTitle(d)}">
+											<button
+												type="button"
+												onclick={() => addDiscovered(d.name)}
+												class="text-fg-dim hover:border-signal/50 hover:text-signal border-line rounded-[var(--radius)] border px-2 py-1 font-mono text-xs transition-colors"
+											>+ <span class={channelSourceColor(d.source)}>#{d.name}</span></button>
+										</Tooltip>
 									{/each}
 								</div>
 							{/if}

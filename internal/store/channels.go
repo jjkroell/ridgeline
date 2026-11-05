@@ -3,6 +3,7 @@ package store
 import (
 	_ "embed"
 	"encoding/hex"
+	"errors"
 	"regexp"
 	"strings"
 	"time"
@@ -32,7 +33,14 @@ const (
 
 	ChannelPending   = "pending"
 	ChannelConfirmed = "confirmed"
+	// ChannelRemoved is an admin's "don't list this". The row stays so discovery
+	// can't simply find the name again on its next pass.
+	ChannelRemoved = "removed"
 )
+
+// ErrChannelNotRemovable is returned for a channel that isn't confirmed (or
+// removed, when restoring), and for the permanent #sos channel.
+var ErrChannelNotRemovable = errors.New("channel can't be changed")
 
 // normalizeChannelName trims a submitted name to what the firmware actually
 // hashes: no leading '#', no surrounding space, and at most 31 bytes (the on-air
@@ -92,6 +100,9 @@ func (s *Store) confirmChannel(name, keyHex, source string) error {
 	if source == "" {
 		source = ChannelSourceConfig
 	}
+	if s.channelRemoved(name) {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -132,6 +143,76 @@ func (s *Store) confirmChannel(name, keyHex, source string) error {
 	return nil
 }
 
+// RemoveChannel takes a confirmed channel off the list and stops decoding it.
+// It stays removed until RestoreChannel, however much traffic is heard on it.
+func (s *Store) RemoveChannel(name string) error {
+	if name == SOSChannel {
+		return ErrChannelNotRemovable
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, err := s.db.Exec(`UPDATE channel_candidates SET status = ? WHERE name = ? AND status = ?`,
+		ChannelRemoved, name, ChannelConfirmed)
+	if err != nil {
+		return err
+	}
+	if n, _ := r.RowsAffected(); n == 0 {
+		return ErrChannelNotRemovable
+	}
+	s.chanMu.Lock()
+	defer s.chanMu.Unlock()
+	kept := make([]ChannelCandidate, 0, len(s.confirmedChans))
+	for _, c := range s.confirmedChans {
+		if c.Name != name {
+			kept = append(kept, c)
+		}
+	}
+	s.confirmedChans = kept
+	s.removedChans[name] = true
+	meshcore.UnregisterChannel(name)
+	return nil
+}
+
+// RestoreChannel puts a removed channel back on the confirmed list as it was.
+func (s *Store) RestoreChannel(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, err := s.db.Exec(`UPDATE channel_candidates SET status = ? WHERE name = ? AND status = ?`,
+		ChannelConfirmed, name, ChannelRemoved)
+	if err != nil {
+		return err
+	}
+	if n, _ := r.RowsAffected(); n == 0 {
+		return ErrChannelNotRemovable
+	}
+	c := ChannelCandidate{Status: ChannelConfirmed}
+	if err := s.db.QueryRow(`
+		SELECT name, source, COALESCE(key_hex,''), first_added, COALESCE(confirmed_at,'')
+		FROM channel_candidates WHERE name = ?`, name).
+		Scan(&c.Name, &c.Source, &c.KeyHex, &c.FirstAdded, &c.ConfirmedAt); err != nil {
+		return err
+	}
+	s.chanMu.Lock()
+	defer s.chanMu.Unlock()
+	delete(s.removedChans, name)
+	s.confirmedChans = append(s.confirmedChans, c)
+	if key, err := hex.DecodeString(c.KeyHex); err == nil {
+		meshcore.RegisterChannel(c.Name, key)
+	}
+	return nil
+}
+
+// RemovedChannels returns the channels an admin has removed.
+func (s *Store) RemovedChannels() ([]ChannelCandidate, error) {
+	return s.channelsWithStatus(ChannelRemoved)
+}
+
+func (s *Store) channelRemoved(name string) bool {
+	s.chanMu.RLock()
+	defer s.chanMu.RUnlock()
+	return s.removedChans[name]
+}
+
 // CachedConfirmedChannels returns the confirmed channels and candidate counts
 // from memory, without touching the database. Current as of the last
 // confirmation; the pending count is refreshed each discovery pass.
@@ -169,16 +250,20 @@ func (s *Store) PendingChannelNames() ([]string, error) {
 // ConfirmedChannels returns confirmed channels with their derived keys, for
 // loading into the decoder at startup.
 func (s *Store) ConfirmedChannels() ([]ChannelCandidate, error) {
+	return s.channelsWithStatus(ChannelConfirmed)
+}
+
+func (s *Store) channelsWithStatus(status string) ([]ChannelCandidate, error) {
 	rows, err := s.db.Query(`
 		SELECT name, source, COALESCE(key_hex,''), first_added, COALESCE(confirmed_at,'')
-		FROM channel_candidates WHERE status = 'confirmed' ORDER BY confirmed_at`)
+		FROM channel_candidates WHERE status = ? ORDER BY confirmed_at`, status)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []ChannelCandidate
 	for rows.Next() {
-		c := ChannelCandidate{Status: ChannelConfirmed}
+		c := ChannelCandidate{Status: status}
 		if err := rows.Scan(&c.Name, &c.Source, &c.KeyHex, &c.FirstAdded, &c.ConfirmedAt); err != nil {
 			return nil, err
 		}
@@ -316,6 +401,9 @@ func (s *Store) matchNames(buckets map[byte][][]byte, names []string, source str
 	}
 	var confirmed []string
 	for _, name := range names {
+		if s.channelRemoved(name) {
+			continue
+		}
 		key := meshcore.DeriveHashtagKey(name)
 		bucket := buckets[meshcore.ChannelHashByte(key)]
 		if len(bucket) < minPayloads {
@@ -401,9 +489,16 @@ func (s *Store) LoadConfirmedChannels() (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	removed, err := s.RemovedChannels()
+	if err != nil {
+		return 0, err
+	}
 	s.chanMu.Lock()
 	s.confirmedChans = append([]ChannelCandidate{}, chans...)
 	s.pendingChans = pending
+	for _, c := range removed {
+		s.removedChans[c.Name] = true
+	}
 	s.chanMu.Unlock()
 	n := 0
 	for _, c := range chans {

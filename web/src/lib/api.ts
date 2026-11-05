@@ -705,12 +705,57 @@ export interface FirmwareBuildResponse {
 
 export interface DiscoveredChannel {
   name: string; // without leading '#'
-  source: string; // harvested | user | config
+  source: string; // harvested | user | config | wordlist
   status: string;
   keyHex?: string;
   firstAdded: string;
   confirmedAt?: string;
 }
+/** How a discovered channel reached the list: the legend, in display order. */
+export const CHANNEL_SOURCES = [
+  {
+    id: 'user',
+    label: 'Added by a user',
+    color: 'text-lime/70',
+    help: 'Someone added this channel with sharing on, then traffic on it was heard.',
+  },
+  {
+    id: 'harvested',
+    label: 'Mentioned',
+    color: 'text-amber/60',
+    help: 'Seen as a #name in a message Ridgeline could read, then traffic on it was heard.',
+  },
+  {
+    id: 'wordlist',
+    label: 'Word search',
+    color: 'text-sky/70',
+    help: 'Found by trying common words as channel names until one decrypted real traffic.',
+  },
+  {
+    id: 'config',
+    label: 'Built in',
+    color: 'text-fg-dim',
+    help: "Set in Ridgeline's own configuration.",
+  },
+];
+
+function channelSource(id: string) {
+  return CHANNEL_SOURCES.find((source) => source.id === id);
+}
+
+/** The colour for a discovered channel's name. */
+export function channelSourceColor(id: string): string {
+  return channelSource(id)?.color ?? '';
+}
+
+/** The discovered-channel tooltip: how it was found and when it was confirmed. */
+export function channelSourceTitle(channel: DiscoveredChannel): string {
+  const label = channelSource(channel.source)?.label ?? 'Unknown';
+  if (!channel.confirmedAt) return label;
+  const date = new Date(channel.confirmedAt).toLocaleDateString(undefined, { dateStyle: 'medium' });
+  return `${label}, confirmed ${date}`;
+}
+
 export interface DiscoveredChannels {
   channels: DiscoveredChannel[];
   pending: number;
@@ -1310,6 +1355,15 @@ export const locationShares = {
 export const adminSos = {
   resolve: (csrf: string, sender: string) =>
     mutate<{ ok: boolean }>("/api/admin/sos/resolve", "POST", csrf, { sender }),
+};
+
+/** Admin: take channels off the discovery list, or put them back. */
+export const adminChannels = {
+  list: () => get<{ channels: DiscoveredChannel[]; removed: DiscoveredChannel[] }>("/api/admin/channels"),
+  remove: (csrf: string, name: string) =>
+    mutate<{ ok: boolean }>("/api/admin/channels/remove", "POST", csrf, { name }),
+  restore: (csrf: string, name: string) =>
+    mutate<{ ok: boolean }>("/api/admin/channels/restore", "POST", csrf, { name }),
 };
 
 /** Admin: the live map's seasonal theme for everyone — one theme id, "none",

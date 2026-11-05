@@ -372,6 +372,7 @@ type Store struct {
 	// Filled by LoadConfirmedChannels at startup, appended by confirmChannel.
 	chanMu         sync.RWMutex
 	confirmedChans []ChannelCandidate
+	removedChans   map[string]bool // names an admin removed; discovery skips them
 	pendingChans   int
 
 	// needAdvertTxBackfill is set on open when the advert_tx_count column was
@@ -624,7 +625,7 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("store: normalize radio: %w", err)
 	}
-	s := &Store{db: db, needAdvertTxBackfill: needAdvertTxBackfill}
+	s := &Store{db: db, needAdvertTxBackfill: needAdvertTxBackfill, removedChans: map[string]bool{}}
 	if err := s.loadBlocklist(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("store: load blocklist: %w", err)

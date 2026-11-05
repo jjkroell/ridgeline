@@ -10,7 +10,7 @@
 	import SosMonitors from '$lib/components/SosMonitors.svelte';
 	import { decryptGroupText } from '$lib/channel-crypto';
 	import { live } from '$lib/live.svelte';
-	import { api, type LiveEvent } from '$lib/api';
+	import { api, CHANNEL_SOURCES, channelSourceColor, type LiveEvent } from '$lib/api';
 	import { ago } from '$lib/format';
 	import Linkify from '$lib/components/Linkify.svelte';
 
@@ -127,6 +127,11 @@
 	const discoverableNew = $derived(
 		discovered.filter((d) => !channels.list.some((c) => c.name.toLowerCase() === ('#' + d.name).toLowerCase()))
 	);
+	// Phones can't hover, so tapping a legend entry shows its explanation.
+	let sourceHelp = $state('');
+	const discoverableSources = $derived(
+		CHANNEL_SOURCES.filter((s) => discoverableNew.some((d) => d.source === s.id))
+	);
 	function addDiscovered(name: string) {
 		if (!channels.addHashtag(name)) { adding = false; open(channels.list[channels.list.length - 1].id); }
 	}
@@ -203,19 +208,25 @@
 							<input type="checkbox" bind:checked={shareToPool} class="accent-signal h-4 w-4" />
 							Share with the discovery list
 						</label>
+						<div class="text-fg-faint text-xs">Will appear here once traffic is heard on channel</div>
 						{#if hashtagErr}<div class="text-coral text-xs">{hashtagErr}</div>{/if}
 					</form>
 
 					<div class="space-y-2">
-						<div class="label">Discovered on the mesh</div>
 						{#if !discoveredLoaded}
 							<div class="text-fg-faint text-xs">Looking…</div>
 						{:else if discoverableNew.length === 0}
 							<div class="text-fg-faint text-xs">{discovered.length ? 'All discovered channels are already added.' : 'None confirmed yet.'}</div>
 						{:else}
+							<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+								{#each discoverableSources as s (s.id)}
+									<button type="button" class={s.color} onclick={() => (sourceHelp = sourceHelp === s.help ? '' : s.help)}>{s.label}</button>
+								{/each}
+							</div>
+							{#if sourceHelp}<div class="text-fg-faint text-xs">{sourceHelp}</div>{/if}
 							<div class="flex flex-wrap gap-2">
 								{#each discoverableNew as d (d.name)}
-									<button type="button" onclick={() => addDiscovered(d.name)} class="border-line text-fg-dim active:border-signal/50 active:text-signal rounded-full border px-3 py-1.5 font-mono text-xs">+ #{d.name}</button>
+									<button type="button" onclick={() => addDiscovered(d.name)} class="border-line text-fg-dim active:border-signal/50 active:text-signal rounded-full border px-3 py-1.5 font-mono text-xs">+ <span class={channelSourceColor(d.source)}>#{d.name}</span></button>
 								{/each}
 							</div>
 						{/if}

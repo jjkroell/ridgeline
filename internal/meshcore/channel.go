@@ -56,6 +56,20 @@ func RegisterChannel(name string, key []byte) {
 	extraChannels = append(extraChannels, Channel{Name: name, Key: k})
 }
 
+// UnregisterChannel drops a channel from the decode set.
+func UnregisterChannel(name string) {
+	extraMu.Lock()
+	defer extraMu.Unlock()
+	delete(extraSeen, name)
+	kept := make([]Channel, 0, len(extraChannels))
+	for _, c := range extraChannels {
+		if c.Name != name {
+			kept = append(kept, c)
+		}
+	}
+	extraChannels = kept
+}
+
 // RegisteredChannelNames returns the names registered via RegisterChannel, for
 // diagnostics. The built-in Public channel is not included.
 func RegisteredChannelNames() []string {

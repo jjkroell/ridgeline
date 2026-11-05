@@ -8,6 +8,7 @@
 	import MembersPanel from '$lib/components/MembersPanel.svelte';
 	import EmailLogPanel from '$lib/components/EmailLogPanel.svelte';
 	import SeasonsPanel from '$lib/components/SeasonsPanel.svelte';
+	import ChannelsPanel from '$lib/components/ChannelsPanel.svelte';
 	import KnownBridgePicker from '$lib/components/KnownBridgePicker.svelte';
 
 	// Gated by the signed-in account's is_admin flag (no static token). Bounce
@@ -362,6 +363,7 @@
 			<MembersPanel compact />
 			<EmailLogPanel compact />
 			<SeasonsPanel compact />
+			<ChannelsPanel compact />
 		</div>
 </div>
 

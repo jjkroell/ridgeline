@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -55,6 +56,53 @@ func (s *Server) adminResolveSOS(w http.ResponseWriter, r *http.Request, actor s
 		return
 	}
 	s.log.Info("admin resolved sos alert", "actor", actor.ID, "sender", req.Sender)
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
+// adminChannels lists the discovery list for the admin panel: what's on it and
+// what an admin has taken off.
+func (s *Server) adminChannels(w http.ResponseWriter, _ *http.Request, _ store.User) {
+	channels, _, _ := s.store.CachedConfirmedChannels()
+	removed, err := s.store.RemovedChannels()
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	if removed == nil {
+		removed = []store.ChannelCandidate{}
+	}
+	writeJSON(w, map[string]any{"channels": channels, "removed": removed})
+}
+
+// adminRemoveChannel takes a channel off the discovery list for everyone.
+func (s *Server) adminRemoveChannel(w http.ResponseWriter, r *http.Request, actor store.User) {
+	s.adminChangeChannel(w, r, actor, "channel_remove", s.store.RemoveChannel)
+}
+
+// adminRestoreChannel puts a removed channel back on the discovery list.
+func (s *Server) adminRestoreChannel(w http.ResponseWriter, r *http.Request, actor store.User) {
+	s.adminChangeChannel(w, r, actor, "channel_restore", s.store.RestoreChannel)
+}
+
+func (s *Server) adminChangeChannel(
+	w http.ResponseWriter, r *http.Request, actor store.User, action string, change func(string) error,
+) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		writeErr(w, http.StatusBadRequest, "name required")
+		return
+	}
+	if err := change(req.Name); err != nil {
+		if errors.Is(err, store.ErrChannelNotRemovable) {
+			writeErr(w, http.StatusBadRequest, "that channel can't be changed")
+			return
+		}
+		s.fail(w, err)
+		return
+	}
+	s.audit(actor, action, req.Name, "")
 	writeJSON(w, map[string]bool{"ok": true})
 }
 

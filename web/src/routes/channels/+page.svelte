@@ -10,7 +10,7 @@
 	import SosMonitors from '$lib/components/SosMonitors.svelte';
 	import { decryptGroupText } from '$lib/channel-crypto';
 	import { live } from '$lib/live.svelte';
-	import { api, type LiveEvent } from '$lib/api';
+	import { api, CHANNEL_SOURCES, channelSourceColor, channelSourceTitle, type LiveEvent } from '$lib/api';
 	import { ago } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -179,6 +179,9 @@
 			(d) => !channels.list.some((c) => c.name.toLowerCase() === ('#' + d.name).toLowerCase())
 		)
 	);
+	const discoverableSources = $derived(
+		CHANNEL_SOURCES.filter((s) => discoverableNew.some((d) => d.source === s.id))
+	);
 	function addDiscovered(name: string) {
 		const err = channels.addHashtag(name);
 		if (!err) selectChannel(channels.list[channels.list.length - 1].id);
@@ -334,15 +337,16 @@
 								<input bind:value={hashtagName} placeholder="name" class={inputCls} oninput={() => (hashtagErr = null)} />
 								<button type="submit" class={btnCls} disabled={!hashtagName.trim()}>Add</button>
 							</div>
-							<label class="text-fg-faint flex cursor-pointer items-center gap-1.5 text-xs">
-								<input type="checkbox" bind:checked={shareToPool} class="accent-signal" />
-								Share with the discovery list
-							</label>
+							<Tooltip text="Will appear here once traffic is heard on channel">
+								<label class="text-fg-faint flex cursor-pointer items-center gap-1.5 text-xs">
+									<input type="checkbox" bind:checked={shareToPool} class="accent-signal" />
+									Share with the discovery list
+								</label>
+							</Tooltip>
 							{#if hashtagErr}<div class="text-coral text-xs">{hashtagErr}</div>{/if}
 						</form>
 
 						<div class="space-y-2">
-							<div class="label">Discovered on the mesh</div>
 							{#if !discoveredLoaded}
 								<div class="text-fg-faint text-xs">Looking…</div>
 							{:else if discoverableNew.length === 0}
@@ -350,14 +354,19 @@
 									{discovered.length ? 'All discovered channels are already added.' : 'None confirmed yet.'}
 								</div>
 							{:else}
+								<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+									{#each discoverableSources as s (s.id)}
+										<Tooltip text={s.help}><span class={s.color}>{s.label}</span></Tooltip>
+									{/each}
+								</div>
 								<div class="flex flex-wrap gap-1.5">
 									{#each discoverableNew as d (d.name)}
 										<button
 											type="button"
 											onclick={() => addDiscovered(d.name)}
-											title="Add #{d.name} to your channels"
+											title="Add #{d.name} to your channels. {channelSourceTitle(d)}"
 											class="text-fg-dim hover:border-signal/50 hover:text-signal border-line rounded-[var(--radius)] border px-2 py-1 font-mono text-xs transition-colors"
-										>+ #{d.name}</button>
+										>+ <span class={channelSourceColor(d.source)}>#{d.name}</span></button>
 									{/each}
 								</div>
 							{/if}

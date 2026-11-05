@@ -64,3 +64,52 @@ func TestChannelCandidateEndpoint(t *testing.T) {
 		t.Errorf("listed channel = %v, want name BC-Fire", chs[0])
 	}
 }
+
+func TestAdminRemoveAndRestoreChannel(t *testing.T) {
+	st, base, cleanup := newAuthEnv(t)
+	defer cleanup()
+
+	owner := newClient(t, base)
+	owner.do("POST", "/api/auth/register",
+		map[string]string{"email": "owner@example.com", "password": "hunter2hunter2"}, false)
+	member := newClient(t, base)
+	member.do("POST", "/api/auth/register",
+		map[string]string{"email": "m@example.com", "password": "hunter2hunter2", "displayName": "M"}, false)
+
+	key := meshcore.DeriveHashtagKey("gone-soon")
+	if err := st.ConfirmChannel("gone-soon", hex.EncodeToString(key)); err != nil {
+		t.Fatal(err)
+	}
+	listed := func() bool {
+		channels, _, _ := st.CachedConfirmedChannels()
+		for _, c := range channels {
+			if c.Name == "gone-soon" {
+				return true
+			}
+		}
+		return false
+	}
+	name := map[string]string{"name": "gone-soon"}
+
+	if resp, _ := member.do("POST", "/api/admin/channels/remove", name, true); resp.StatusCode != 403 {
+		t.Errorf("member remove: got %d, want 403", resp.StatusCode)
+	}
+	if !listed() {
+		t.Fatal("a member's refused request removed the channel")
+	}
+	if resp, _ := owner.do("POST", "/api/admin/channels/remove", name, true); resp.StatusCode != 200 {
+		t.Fatalf("admin remove: got %d", resp.StatusCode)
+	}
+	if listed() {
+		t.Error("channel still listed after removal")
+	}
+	if resp, _ := owner.do("POST", "/api/admin/channels/remove", map[string]string{"name": "sos"}, true); resp.StatusCode != 400 {
+		t.Errorf("removing #sos: got %d, want 400", resp.StatusCode)
+	}
+	if resp, _ := owner.do("POST", "/api/admin/channels/restore", name, true); resp.StatusCode != 200 {
+		t.Fatalf("admin restore: got %d", resp.StatusCode)
+	}
+	if !listed() {
+		t.Error("channel not listed after restore")
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"testing"
 	"time"
 
@@ -208,5 +209,94 @@ func TestBruteForceRefloodCountsOnce(t *testing.T) {
 		if c == "charlie" {
 			t.Error("two reflooded copies of one message confirmed a brute-force name")
 		}
+	}
+}
+
+func TestRemovedChannelStaysRemoved(t *testing.T) {
+	st := testStore(t)
+	now := time.Now().UTC()
+	since := now.Add(-time.Hour).Format(time.RFC3339Nano)
+	pubKey, _ := hex.DecodeString("8b3387e9c5cdea6ac9e5edbaa115cd72")
+	key := meshcore.DeriveHashtagKey("unwanted")
+	defer meshcore.UnregisterChannel("unwanted")
+
+	recordRaw(t, st, groupTextRaw(t, key, "a", "first"), now)
+	recordRaw(t, st, groupTextRaw(t, key, "b", "second"), now)
+	uid := int64(7)
+	if _, err := st.AddChannelCandidate("unwanted", ChannelSourceUser, &uid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.DiscoverChannels(since, 0); err != nil {
+		t.Fatal(err)
+	}
+	listed := func() bool {
+		channels, _, _ := st.CachedConfirmedChannels()
+		for _, c := range channels {
+			if c.Name == "unwanted" {
+				return true
+			}
+		}
+		return false
+	}
+	if !listed() {
+		t.Fatal("channel did not confirm")
+	}
+
+	if err := st.RemoveChannel("unwanted"); err != nil {
+		t.Fatal(err)
+	}
+	if listed() {
+		t.Fatal("still listed after removal")
+	}
+	for _, name := range meshcore.RegisteredChannelNames() {
+		if name == "unwanted" {
+			t.Error("still registered with the decoder after removal")
+		}
+	}
+
+	// Every route back in: fresh traffic, a mention, a submission, the wordlist,
+	// a config seed, and a restart.
+	recordRaw(t, st, groupTextRaw(t, key, "c", "third"), now)
+	recordRaw(t, st, groupTextRaw(t, pubKey, "d", "try #unwanted"), now)
+	if _, err := st.AddChannelCandidate("unwanted", ChannelSourceUser, &uid); err != nil {
+		t.Fatal(err)
+	}
+	st.SetChannelWordlist([]string{"unwanted"})
+	if confirmed, err := st.DiscoverChannels(since, 0); err != nil || len(confirmed) != 0 {
+		t.Fatalf("rediscovered: %v, %v", confirmed, err)
+	}
+	if err := st.ConfirmChannel("unwanted", hex.EncodeToString(key)); err != nil {
+		t.Fatal(err)
+	}
+	st.removedChans = map[string]bool{}
+	if _, err := st.LoadConfirmedChannels(); err != nil {
+		t.Fatal(err)
+	}
+	if listed() || !st.channelRemoved("unwanted") {
+		t.Fatal("removal did not survive a restart")
+	}
+
+	if err := st.RestoreChannel("unwanted"); err != nil {
+		t.Fatal(err)
+	}
+	if !listed() {
+		t.Fatal("not listed after restore")
+	}
+	channels, _, _ := st.CachedConfirmedChannels()
+	if channels[0].Source != ChannelSourceUser {
+		t.Errorf("restore changed the source to %q", channels[0].Source)
+	}
+}
+
+func TestRemoveChannelRefusals(t *testing.T) {
+	st := testStore(t)
+	if err := st.RemoveChannel(SOSChannel); !errors.Is(err, ErrChannelNotRemovable) {
+		t.Errorf("remove sos: %v", err)
+	}
+	if err := st.RemoveChannel("never-heard"); !errors.Is(err, ErrChannelNotRemovable) {
+		t.Errorf("remove unknown: %v", err)
+	}
+	if err := st.RestoreChannel("never-heard"); !errors.Is(err, ErrChannelNotRemovable) {
+		t.Errorf("restore unknown: %v", err)
 	}
 }

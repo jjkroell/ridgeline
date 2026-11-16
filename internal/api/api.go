@@ -783,6 +783,8 @@ const (
 	nodeHistoryTTL   = time.Minute
 	// Matches the pages' own 30s poll: one scan per window for everyone.
 	meshAnalyticsTTL = 30 * time.Second
+	// Windows over 6h (the 24h view).
+	meshAnalyticsLongTTL = 2 * time.Minute
 	// The observer page polls every 15 s.
 	observerAnalyticsTTL = 30 * time.Second
 )
@@ -798,7 +800,13 @@ func (s *Server) meshAnalytics(w http.ResponseWriter, r *http.Request) {
 	// Polled every 30s by every open Overview (the landing page's activity
 	// widget), Topology and Analytics tab — 0.6s of scanning each at the
 	// default 6h window, 2.2s at 24h. Shared, so all viewers cost one scan.
-	body, err := s.nodeCache.get(fmt.Sprintf("mesh|%d|%d", sinceSec, bucketMin), meshAnalyticsTTL, func() (any, error) {
+	// A full day (~280k receptions) takes seconds to decode, and its 30-min
+	// bars barely move in 30 s — refresh the long windows less often.
+	ttl := meshAnalyticsTTL
+	if sinceSec > 6*3600 {
+		ttl = meshAnalyticsLongTTL
+	}
+	body, err := s.nodeCache.get(fmt.Sprintf("mesh|%d|%d", sinceSec, bucketMin), ttl, func() (any, error) {
 		nodes, err := s.store.ListNodes()
 		if err != nil {
 			return nil, err

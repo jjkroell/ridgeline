@@ -189,15 +189,14 @@ type obsTime struct {
 // one on-air copy), as a share of the window, median across observers, so it
 // reflects how busy the channel is at a typical spot on the mesh.
 func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap int, radio RadioParams, bucketMinutes int) (*MeshAnalytics, error) {
-	if scanCap <= 0 || scanCap > 300000 {
-		scanCap = 120000
+	// A day of traffic is ~280k receptions (Nov 2026); the cap leaves headroom
+	// for growth. Rows stream in hour slices (store.RawWindowEach), so the
+	// cap bounds work, not memory or how long the DB connection is held.
+	if scanCap <= 0 || scanCap > 1000000 {
+		scanCap = 600000
 	}
 	if bucketMinutes <= 0 {
 		bucketMinutes = 10
-	}
-	raws, err := st.RawWindow(sinceISO, scanCap)
-	if err != nil {
-		return nil, err
 	}
 	resolve := newPrefixResolver(nodes)
 	byKey := make(map[string]store.Node, len(nodes))
@@ -234,10 +233,12 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 	directLink := map[string]map[string]int{} // observer → node → direct (zero-hop) hear count
 	txObs := map[string][]obsTime{}           // messageHash → (observer, time) for clock skew
 
-	for _, ro := range raws {
+	var oldestRecv string // oldest row scanned (rows arrive newest first)
+	scanned, err := st.RawWindowEach(sinceISO, time.Hour, scanCap, func(ro store.RawObservation) {
+		oldestRecv = ro.ReceivedAt
 		pkt, err := meshcore.DecodeHex(ro.RawHex)
 		if err != nil || pkt == nil {
-			continue
+			return
 		}
 		observations++
 		lengthBytes := len(ro.RawHex) / 2
@@ -355,6 +356,9 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 				relayPathWide[pkt.MessageHash] = seqWide
 			}
 		}
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	out := &MeshAnalytics{
@@ -366,14 +370,14 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 	// window short (rows come newest first), from the oldest row actually
 	// scanned, so rates aren't diluted by hours that were never read.
 	since := parseTime(sinceISO)
-	if len(raws) >= scanCap && len(raws) > 0 {
-		if oldest := parseTime(raws[len(raws)-1].ReceivedAt); oldest.After(since) {
+	if scanned >= scanCap && oldestRecv != "" {
+		if oldest := parseTime(oldestRecv); oldest.After(since) {
 			since = oldest
 		}
 	}
 	windowSec := time.Since(since).Seconds()
 	if windowSec <= 0 {
-		windowSec = float64(len(raws)) // fallback; avoids div-by-zero
+		windowSec = float64(scanned) // fallback; avoids div-by-zero
 	}
 	out.WindowHours = windowSec / 3600.0
 

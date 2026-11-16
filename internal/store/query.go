@@ -559,6 +559,69 @@ func (s *Store) RawWindow(sinceISO string, max int) ([]RawObservation, error) {
 	return s.rawSince(sinceISO, max)
 }
 
+// RawWindowEach streams raw observations received at or after sinceISO to fn,
+// newest first, one time slice at a time, stopping after max rows.
+//
+// It exists for windows too big to read in one statement. The store has ONE
+// connection, so a single 24h read (~280k rows) would hold it — blocking ingest
+// and every page — for the whole read. Each slice is its own short indexed range
+// query (SEARCH idx_obs_received, ~16 ms per hour of traffic), read fully and
+// closed before fn runs, so the connection is free between slices and while the
+// caller decodes. Returns the rows delivered.
+//
+// Slice bounds are whole seconds written with a fixed 9-digit fraction, so they
+// sort correctly against the RFC3339Nano strings in received_at (which drop
+// trailing zeros): every row falls in exactly one slice.
+func (s *Store) RawWindowEach(sinceISO string, slice time.Duration, max int, fn func(RawObservation)) (int, error) {
+	since, err := time.Parse(time.RFC3339Nano, sinceISO)
+	if err != nil {
+		return 0, fmt.Errorf("store: RawWindowEach since: %w", err)
+	}
+	if slice <= 0 {
+		slice = time.Hour
+	}
+	const boundFmt = "2006-01-02T15:04:05.000000000Z"
+	// Upper bound for the first (newest) slice: past any plausible row.
+	hi := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+	n := 0
+	for n < max && hi.After(since) {
+		lo := hi.Add(-slice)
+		loStr := lo.Format(boundFmt)
+		if !lo.After(since) {
+			loStr = sinceISO // last slice: the caller's exact cutoff, as RawWindow uses it
+		}
+		rows, err := s.db.Query(`
+			SELECT raw_hex, COALESCE(observer_id,''), COALESCE(region,''), snr, rssi, received_at
+			FROM observations
+			WHERE received_at >= ? AND received_at < ?
+			ORDER BY received_at DESC
+			LIMIT ?`, loStr, hi.Format(boundFmt), max-n)
+		if err != nil {
+			return n, err
+		}
+		chunk := []RawObservation{}
+		for rows.Next() {
+			var o RawObservation
+			if err := rows.Scan(&o.RawHex, &o.ObserverID, &o.Region, &o.SNR, &o.RSSI, &o.ReceivedAt); err != nil {
+				rows.Close()
+				return n, err
+			}
+			chunk = append(chunk, o)
+		}
+		err = rows.Err()
+		rows.Close() // release the connection before the caller's work
+		if err != nil {
+			return n, err
+		}
+		for _, o := range chunk {
+			fn(o)
+		}
+		n += len(chunk)
+		hi = lo
+	}
+	return n, nil
+}
+
 // RecentRaw returns raw observations received at or after sinceISO (an
 // RFC3339Nano UTC string), newest first, capped at limit.
 func (s *Store) RecentRaw(sinceISO string, limit int) ([]RawObservation, error) {

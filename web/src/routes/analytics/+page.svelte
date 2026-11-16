@@ -363,6 +363,15 @@
 				<span class="font-mono text-fg-faint text-[0.68rem]">{bucketMin}-min buckets · airtime + link score</span>
 			</div>
 			<div class="px-5 py-5">
+				<!-- Key: hover (or focus) an item for what that number means. The same
+				     four numbers appear in the readout when you hover a bar. -->
+				<div class="text-fg-dim mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+					<Tooltip text={TIP.util}><span class="flex cursor-help items-center gap-1.5"><span class="bg-signal/70 inline-block h-3 w-2.5 rounded-[2px]"></span>Utilisation % <span class="text-fg-faint">ⓘ</span></span></Tooltip>
+					<Tooltip text={TIP.link}><span class="flex cursor-help items-center gap-1.5"><span class="inline-block h-0.5 w-3.5" style="background:var(--color-lime)"></span>Link score <span class="text-fg-faint">ⓘ</span></span></Tooltip>
+					<Tooltip text={TIP.tx}><span class="flex cursor-help items-center gap-1.5">tx <span class="text-fg-faint">ⓘ</span></span></Tooltip>
+					<Tooltip text={TIP.relayed}><span class="flex cursor-help items-center gap-1.5">Relayed <span class="text-fg-faint">ⓘ</span></span></Tooltip>
+					<span class="text-fg-faint ml-auto hidden sm:inline">Hover a bar for its numbers</span>
+				</div>
 				{#if data.airtime.length === 0}
 					<div class="text-fg-faint py-8 text-center text-sm">No traffic in window.</div>
 				{:else}
@@ -393,21 +402,10 @@
 						<span>{fmtTime(data.airtime[0].timestamp)}</span>
 						<span class="flex items-center gap-3">
 							<span>top slice {pct(maxUtil)}</span>
-							<span class="flex items-center gap-1"><span class="inline-block h-0.5 w-3" style="background:var(--color-lime)"></span>link score</span>
 						</span>
 						<span>{fmtTime(data.airtime[data.airtime.length - 1].timestamp)}</span>
 					</div>
-					<!-- Key: what each number in the hover readout means. -->
-					<div class="text-fg-dim mt-3 flex flex-wrap gap-x-5 gap-y-1.5 font-mono text-[0.68rem]">
-						{#each [
-							{ k: 'utilisation %', t: TIP.util },
-							{ k: 'tx', t: TIP.tx },
-							{ k: 'relayed', t: TIP.relayed },
-							{ k: 'link score', t: TIP.link }
-						] as item (item.k)}
-							<Tooltip text={item.t}><span class="cursor-help">{item.k} <span class="text-fg-faint">ⓘ</span></span></Tooltip>
-						{/each}
-					</div>
+
 				{/if}
 			</div>
 		</section>

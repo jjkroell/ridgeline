@@ -91,6 +91,7 @@
 			<div class="border-line/60 bg-panel rounded-2xl border px-4 pt-7 pb-3">
 				<Sparkline values={util} height={72} color={tierColor[data.kpis.congestionTier] ?? 'var(--color-signal)'} labels={utilAt} format={(v) => v.toFixed(2) + '%'} />
 				<div class="text-fg-faint mt-2 flex justify-between font-mono text-[0.6rem]"><span>-{Math.round(data.windowHours)}h</span><span>Press and drag to read</span><span>now</span></div>
+				<p class="text-fg-faint mt-2 text-[0.68rem] leading-snug">How much of each slice the channel was busy at a typical observer, counting every repeater's rebroadcast it heard.</p>
 			</div>
 		{/if}
 

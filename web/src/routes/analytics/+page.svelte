@@ -101,14 +101,22 @@
 		return n == null ? '—' : n.toFixed(2);
 	}
 
+	// What each per-slice number on the utilisation chart means (key row + KPIs).
+	const TIP = {
+		util: 'How much of the slice the channel was busy, as heard by a typical observer (median across observers). Every copy it receives counts: the original and each repeater\'s rebroadcast. "Busiest" is the observer that heard the most. Past ~10%, LoRa starts losing packets to collisions.',
+		tx: 'Distinct messages first heard in the slice. Every copy of one message (each observer, each repeater hop) counts as 1, so a flood and a routed message both add 1.',
+		relayed: 'Messages at least one repeater forwarded: floods heard with a hop in their path, and routed packets heard with hops still to go. A zero-hop message to a neighbour isn\'t counted.',
+		link: 'Average chance (0–1) that each reception in the slice decoded: its SNR margin above the SF7 floor of −7.5 dB (+10 dB scores 1.0), less a little for long packets. It rates the last hop into an observer, not the whole path.'
+	};
+
 	const k = $derived(data?.kpis);
 	const kpis = $derived([
 		{ label: 'Active Nodes', value: k ? fmtNum(k.activeNodes) : '—', accent: true },
-		{ label: 'Transmissions', value: k ? fmtNum(k.transmissions) : '—' },
+		{ label: 'Transmissions', value: k ? fmtNum(k.transmissions) : '—', hint: TIP.tx },
 		{ label: 'Observations', value: k ? fmtNum(k.observations) : '—' },
-		{ label: 'Avg Link Score', value: score(k?.avgLinkScore), accent: true, hint: 'Mean per-reception decode probability (SNR vs SF threshold × length penalty).' },
+		{ label: 'Avg Link Score', value: score(k?.avgLinkScore), accent: true, hint: TIP.link },
 		{ label: 'Flood Redundancy', value: k?.floodRedundancy ? `×${k.floodRedundancy.toFixed(1)}` : '—', hint: 'Average observers hearing each transmission.' },
-		{ label: 'Channel Util', value: pct(k?.channelUtilPct), accent: true, hint: 'Estimated logical airtime ÷ window. Lower bound — counts each packet once, not physical flood retransmissions.' }
+		{ label: 'Channel Util', value: pct(k?.channelUtilPct), accent: true, hint: 'Share of the window the channel was busy, as heard by a typical observer (median across observers). Every copy it receives counts — the original and each repeater\'s rebroadcast.' }
 	]);
 
 	const maxUtil = $derived(Math.max(0.0001, ...(data?.airtime ?? []).map((b) => b.utilPct)));
@@ -323,7 +331,7 @@
 <PageHeader eyebrow="Network Observatory" title="Mesh Analytics">
 	<div class="flex items-center gap-3">
 		{#if data}
-			<Tooltip text="Mesh load tier from estimated channel utilisation">
+			<Tooltip text="Mesh load from channel utilisation (typical observer): Quiet under 2%, Normal under 6%, Busy under 12%, Congested 12% and up">
 				<span
 					class="label rounded-full border px-2.5 py-1"
 					style="color:{tierColor(data.kpis.congestionTier)};border-color:{tierColor(data.kpis.congestionTier)}55"
@@ -362,7 +370,7 @@
 						{#if barI != null && data.airtime[barI]}
 							{@const b = data.airtime[barI]}
 							<ScrubReadout at={((barI + 0.5) / data.airtime.length) * 100}>
-								<b>{pct(b.utilPct)}</b><span class="text-fg-faint"> · {fmtTime(b.timestamp)} · {b.transmissions} tx · {b.relayTx} relayed{b.avgLinkScore != null ? ` · link ${score(b.avgLinkScore)}` : ''}</span>
+								<b>{pct(b.utilPct)}</b><span class="text-fg-faint"> (busiest {pct(b.peakUtilPct)}) · {fmtTime(b.timestamp)} · {b.transmissions} tx · {b.relayTx} relayed{b.avgLinkScore != null ? ` · link ${score(b.avgLinkScore)}` : ''}</span>
 							</ScrubReadout>
 						{/if}
 						<div data-chart-bars class="flex h-full items-end gap-px" use:scrub={{ onpick: (i) => (barI = i) }}>
@@ -384,10 +392,21 @@
 					<div class="text-fg-faint mt-2 flex justify-between font-mono text-[0.62rem]">
 						<span>{fmtTime(data.airtime[0].timestamp)}</span>
 						<span class="flex items-center gap-3">
-							<span>peak {pct(maxUtil)}</span>
+							<span>top slice {pct(maxUtil)}</span>
 							<span class="flex items-center gap-1"><span class="inline-block h-0.5 w-3" style="background:var(--color-lime)"></span>link score</span>
 						</span>
 						<span>{fmtTime(data.airtime[data.airtime.length - 1].timestamp)}</span>
+					</div>
+					<!-- Key: what each number in the hover readout means. -->
+					<div class="text-fg-dim mt-3 flex flex-wrap gap-x-5 gap-y-1.5 font-mono text-[0.68rem]">
+						{#each [
+							{ k: 'utilisation %', t: TIP.util },
+							{ k: 'tx', t: TIP.tx },
+							{ k: 'relayed', t: TIP.relayed },
+							{ k: 'link score', t: TIP.link }
+						] as item (item.k)}
+							<Tooltip text={item.t}><span class="cursor-help">{item.k} <span class="text-fg-faint">ⓘ</span></span></Tooltip>
+						{/each}
 					</div>
 				{/if}
 			</div>

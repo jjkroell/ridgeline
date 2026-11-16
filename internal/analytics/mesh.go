@@ -103,7 +103,7 @@ type MeshKPIs struct {
 	Observations    int      `json:"observations"`  // raw reception rows
 	AvgLinkScore    *float64 `json:"avgLinkScore,omitempty"`
 	FloodRedundancy *float64 `json:"floodRedundancy,omitempty"` // observations / transmission
-	ChannelUtilPct  float64  `json:"channelUtilPct"`            // est. logical airtime / window
+	ChannelUtilPct  float64  `json:"channelUtilPct"`            // median observer heard airtime / window
 	CongestionTier  string   `json:"congestionTier"`            // Quiet | Normal | Busy | Congested
 }
 
@@ -123,11 +123,13 @@ type HistogramBin struct {
 // relay-health signals (forwarded transmissions and mean link score) over the
 // same slice so the timeline doubles as a trend of how the mesh is performing.
 type AirtimeBucket struct {
-	Timestamp     string   `json:"timestamp"` // bucket start, RFC3339
-	AirtimeMs     float64  `json:"airtimeMs"`
-	UtilPct       float64  `json:"utilPct"`
+	Timestamp     string   `json:"timestamp"`   // bucket start, RFC3339
+	AirtimeMs     float64  `json:"airtimeMs"`   // est. mesh-wide airtime incl. rebroadcasts
+	UtilPct       float64  `json:"utilPct"`     // median observer's heard airtime / slice
+	PeakUtilPct   float64  `json:"peakUtilPct"` // busiest observer's heard airtime / slice
 	Transmissions int      `json:"transmissions"`
-	RelayTx       int      `json:"relayTx"`                // transmissions that were relayed (≥1 hop)
+	OnAirTx       int      `json:"onAirTx"`                // est. on-air copies (originals + rebroadcasts)
+	RelayTx       int      `json:"relayTx"`                // transmissions forwarded by ≥1 repeater (flood or routed)
 	AvgLinkScore  *float64 `json:"avgLinkScore,omitempty"` // mean per-reception link score in slice
 }
 
@@ -148,8 +150,32 @@ type txAgg struct {
 	routeType   string
 	lengthBytes int
 	firstSeen   time.Time
-	relayed     bool // any observation of it carried ≥1 relay hop
+	flood       bool            // flood-routed: relays append themselves to the path
+	floodHops   map[string]bool // flood: distinct relay hop entries seen across all copies
+	maxHops     int             // routed/trace: most path entries seen on any copy
 }
+
+// copies estimates how many times this packet went over the air: the
+// originator's send plus one rebroadcast per repeater that forwarded it.
+//
+//   - Flood: each relay appends its hash to the path, so every distinct hop
+//     entry seen across all observers' copies is one repeater that rebroadcast.
+//   - Routed (direct): the path is the hops still to go, and each repeater
+//     removes itself before forwarding (MeshCore Mesh.cpp removeSelfFromPath), so
+//     a copy heard with N hops left means N more forwards follow it.
+//   - Trace: each hop appends an SNR byte, so N entries means N forwards so far.
+//
+// It's still an estimate: repeaters no observer heard aren't counted, and
+// colliding short hop hashes merge into one.
+func (t *txAgg) copies() int {
+	if t.flood {
+		return 1 + len(t.floodHops)
+	}
+	return 1 + t.maxHops
+}
+
+// relayed reports whether at least one repeater forwarded the packet.
+func (t *txAgg) relayed() bool { return t.copies() > 1 }
 
 // obsTime is one observer's reception time of a transmission, for clock-skew.
 type obsTime struct {
@@ -159,9 +185,9 @@ type obsTime struct {
 
 // MeshSummary scans stored observations received at or after sinceISO (decoding
 // up to scanCap rows) and aggregates them into a mesh-wide snapshot. Channel
-// utilisation counts each logical packet's airtime once (a lower bound — it does
-// not multiply by physical flood retransmissions we can't disambiguate), so the
-// percentage is a stable congestion trend rather than an exact duty figure.
+// utilisation is the airtime each observer actually heard (every reception is
+// one on-air copy), as a share of the window, median across observers, so it
+// reflects how busy the channel is at a typical spot on the mesh.
 func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap int, radio RadioParams, bucketMinutes int) (*MeshAnalytics, error) {
 	if scanCap <= 0 || scanCap > 300000 {
 		scanCap = 120000
@@ -198,6 +224,8 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 		n   int
 	}
 	bucketLink := map[int64]*linkAcc{}
+	obsAirWin := map[string]float64{}              // observer → heard airtime over the window
+	obsAirBucket := map[int64]map[string]float64{} // bucket → observer → heard airtime
 
 	// Per-observer RF coverage + direct (zero-hop) adjacency.
 	obsCount := map[string]int{}              // observer → total receptions
@@ -217,6 +245,18 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 
 		if ro.ObserverID != "" {
 			obsCount[ro.ObserverID]++
+			// Channel occupancy as this observer heard it: every reception is one
+			// real on-air copy (original or a repeater's rebroadcast) that took up
+			// the channel at that spot.
+			if !recv.IsZero() {
+				air := Airtime(lengthBytes, radio)
+				obsAirWin[ro.ObserverID] += air
+				b := (recv.Unix() / bucketSec) * bucketSec
+				if obsAirBucket[b] == nil {
+					obsAirBucket[b] = map[string]float64{}
+				}
+				obsAirBucket[b][ro.ObserverID] += air
+			}
 			if ro.Region != "" {
 				obsRegion[ro.ObserverID] = ro.Region
 			}
@@ -255,8 +295,17 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 		} else if t := txs[pkt.MessageHash]; !recv.IsZero() && (t.firstSeen.IsZero() || recv.Before(t.firstSeen)) {
 			t.firstSeen = recv
 		}
-		if len(pkt.RelayPath()) > 0 {
-			txs[pkt.MessageHash].relayed = true
+		// Rebroadcast evidence, merged across every observer's copy.
+		if t := txs[pkt.MessageHash]; pkt.PayloadType != meshcore.PayloadTrace && pkt.RouteType.IsFlood() {
+			t.flood = true
+			for _, hop := range pkt.Path {
+				if t.floodHops == nil {
+					t.floodHops = map[string]bool{}
+				}
+				t.floodHops[hop] = true
+			}
+		} else if pkt.PathHopCount > t.maxHops {
+			t.maxHops = pkt.PathHopCount
 		}
 
 		// Participation: advert originator + uniquely-resolved relay hops.
@@ -313,8 +362,15 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 		Radio:       radio,
 	}
 
-	// Window length from the oldest retained row (or the requested since).
+	// Window length from the requested since — or, when the scan cap cut the
+	// window short (rows come newest first), from the oldest row actually
+	// scanned, so rates aren't diluted by hours that were never read.
 	since := parseTime(sinceISO)
+	if len(raws) >= scanCap && len(raws) > 0 {
+		if oldest := parseTime(raws[len(raws)-1].ReceivedAt); oldest.After(since) {
+			since = oldest
+		}
+	}
 	windowSec := time.Since(since).Seconds()
 	if windowSec <= 0 {
 		windowSec = float64(len(raws)) // fallback; avoids div-by-zero
@@ -338,12 +394,11 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 	payload := map[string]int{}
 	route := map[string]int{}
 	buckets := map[int64]*AirtimeBucket{}
-	var totalAirtime float64
 	for _, t := range txs {
 		payload[t.payloadType]++
 		route[t.routeType]++
-		ms := Airtime(t.lengthBytes, radio)
-		totalAirtime += ms
+		copies := t.copies()
+		ms := Airtime(t.lengthBytes, radio) * float64(copies)
 		if !t.firstSeen.IsZero() {
 			b := (t.firstSeen.Unix() / bucketSec) * bucketSec
 			bk := buckets[b]
@@ -353,7 +408,8 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 			}
 			bk.AirtimeMs += ms
 			bk.Transmissions++
-			if t.relayed {
+			bk.OnAirTx += copies
+			if t.relayed() {
 				bk.RelayTx++
 			}
 		}
@@ -361,13 +417,28 @@ func MeshSummary(st *store.Store, nodes []store.Node, sinceISO string, scanCap i
 	out.PayloadTypes = sortedCounts(payload)
 	out.RouteTypes = sortedCounts(route)
 	if windowSec > 0 {
-		out.KPIs.ChannelUtilPct = totalAirtime / (windowSec * 1000.0) * 100.0
+		var pcts []float64
+		for _, air := range obsAirWin {
+			pcts = append(pcts, air/(windowSec*1000.0)*100.0)
+		}
+		out.KPIs.ChannelUtilPct = medianFloat(pcts)
 	}
 
 	// Airtime time series, chronological, with per-bucket utilisation.
 	bk := make([]AirtimeBucket, 0, len(buckets))
 	for ts, v := range buckets {
-		v.UtilPct = v.AirtimeMs / (float64(bucketSec) * 1000.0) * 100.0
+		// Utilisation is what a typical observer heard (median across observers
+		// active in the slice); summing the whole mesh's rebroadcasts would count
+		// repeaters that transmit at once out of each other's range, and can top 100%.
+		var pcts []float64
+		for _, air := range obsAirBucket[ts] {
+			p := air / (float64(bucketSec) * 1000.0) * 100.0
+			pcts = append(pcts, p)
+			if p > v.PeakUtilPct {
+				v.PeakUtilPct = p
+			}
+		}
+		v.UtilPct = medianFloat(pcts)
 		if la := bucketLink[ts]; la != nil && la.n > 0 {
 			avg := la.sum / float64(la.n)
 			v.AvgLinkScore = &avg
@@ -557,14 +628,16 @@ func buildTopology(relayPath map[string][]string, relayPathWide map[string][]boo
 }
 
 // congestionTier buckets estimated channel utilisation into a coarse mesh-load
-// label. Thresholds are calibrated to the lower-bound utilisation figure.
+// label. utilPct is the median observer's heard airtime, so it is a real
+// occupancy share: pure-ALOHA LoRa starts losing a noticeable fraction of
+// packets to collisions past ~10%, and its throughput peaks near 18%.
 func congestionTier(utilPct float64) string {
 	switch {
-	case utilPct >= 5:
+	case utilPct >= 12:
 		return "Congested"
-	case utilPct >= 2:
+	case utilPct >= 6:
 		return "Busy"
-	case utilPct >= 0.5:
+	case utilPct >= 2:
 		return "Normal"
 	default:
 		return "Quiet"

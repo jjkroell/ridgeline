@@ -334,10 +334,16 @@ export interface HistogramBin {
 }
 export interface AirtimeBucket {
   timestamp: string;
+  /** Estimated mesh-wide airtime incl. every rebroadcast (can exceed the slice). */
   airtimeMs: number;
+  /** Median observer's heard airtime as a share of the slice. */
   utilPct: number;
+  /** Busiest observer's heard airtime as a share of the slice. */
+  peakUtilPct: number;
   transmissions: number;
-  /** Transmissions in the slice that were relayed (≥1 hop). */
+  /** Estimated on-air copies: originals plus repeater rebroadcasts. */
+  onAirTx: number;
+  /** Transmissions forwarded by ≥1 repeater (flood or routed). */
   relayTx: number;
   /** Mean per-reception link score in the slice (relay-health trend). */
   avgLinkScore?: number;

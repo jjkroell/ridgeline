@@ -106,7 +106,7 @@
 		util: 'How much of the slice the channel was busy, as heard by a typical observer (median across observers). Every copy it receives counts: the original and each repeater\'s rebroadcast. "Busiest" is the observer that heard the most. Past ~10%, LoRa starts losing packets to collisions.',
 		tx: 'Distinct messages first heard in the slice. Every copy of one message (each observer, each repeater hop) counts as 1, so a flood and a routed message both add 1.',
 		relayed: 'Messages at least one repeater forwarded: floods heard with a hop in their path, and routed packets heard with hops still to go. A zero-hop message to a neighbour isn\'t counted.',
-		link: 'Average chance (0–1) that each reception in the slice decoded: its SNR margin above the SF7 floor of −7.5 dB (+10 dB scores 1.0), less a little for long packets. It rates the last hop into an observer, not the whole path.'
+		link: 'Link score (0 to 1): how cleanly each copy reached an observer, averaged over every reception. 0 = at the edge of what the radio can decode (SNR −7.5 dB at SF7); 1 = 10 dB or more above that. Longer packets score lower, since they\'re likelier to collide. Rates the last hop into an observer, not the whole path.'
 	};
 
 	const k = $derived(data?.kpis);

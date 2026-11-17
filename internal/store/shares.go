@@ -56,7 +56,9 @@ type SharedWithMe struct {
 // each annotated with the node's name/role and who shared it.
 func (s *Store) SharesForUser(granteeUserID int64) ([]SharedWithMe, error) {
 	rows, err := s.db.Query(`
-		SELECT ls.node_pubkey, COALESCE(n.name,''), COALESCE(n.role,''),
+		SELECT ls.node_pubkey,
+		       COALESCE(NULLIF(n.name,''), (SELECT node_name FROM node_claims vc WHERE vc.node_pubkey = ls.node_pubkey AND vc.status = 'verified'), ''),
+		       COALESCE(NULLIF(n.role,''), (SELECT node_role FROM node_claims vc WHERE vc.node_pubkey = ls.node_pubkey AND vc.status = 'verified'), ''),
 		       ls.owner_user_id, COALESCE(NULLIF(o.display_name,''), 'User #' || o.id),
 		       ls.created_at, ls.seen, n.pubkey IS NOT NULL
 		FROM location_shares ls

@@ -4,7 +4,7 @@
 	import { overview } from '$lib/overview.svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { claims, shares, type ClaimWithNode, type SharedWithMe } from '$lib/api';
-	import { shortKey } from '$lib/format';
+	import { ago, shortKey } from '$lib/format';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
 	import OwnershipIcon from '$lib/components/OwnershipIcon.svelte';
 
@@ -64,7 +64,9 @@
 								? c.status === 'verified'
 									? 'owned'
 									: 'claim pending'
-								: 'not currently in the mesh'}
+								: c.lastHeard
+									? `dormant · last heard ${ago(c.lastHeard)} ago`
+									: 'not currently in the mesh'}
 						</div>
 					</div>
 					{#if c.nodePresent}<RoleBadge role={c.nodeRole} />{/if}

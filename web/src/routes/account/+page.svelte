@@ -279,11 +279,14 @@
 									<span class="text-fg truncate text-sm font-600">{c.nodeName || shortKey(c.nodePubkey)}</span>
 									<OwnershipIcon kind={c.status === 'verified' ? 'owned' : 'pending'} />
 								</span>
-								<span class="text-fg-faint block truncate font-mono text-xs">{shortKey(c.nodePubkey, 6, 4)}</span>
+								<span class="text-fg-faint block truncate font-mono text-xs"
+									>{shortKey(c.nodePubkey, 6, 4)}{#if !c.nodePresent}
+										· {c.lastHeard ? `last heard ${ago(c.lastHeard)} ago` : 'last heard: unknown'}{/if}</span
+								>
 							</span>
 							{#if !c.nodePresent}
 								<Tooltip
-									text="This node hasn't been heard in a while, so it's no longer listed in the mesh. Your claim is kept — it reconnects automatically if the node advertises again."
+									text="This node hasn't advertised in a while, so it's no longer listed in the mesh. Your claim, and the node's name, are kept — it reconnects automatically when the node advertises again."
 								>
 									<span class="border-line text-fg-dim rounded-full border px-2.5 py-1 text-xs font-600"
 										>Dormant</span

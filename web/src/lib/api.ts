@@ -18,6 +18,8 @@ export interface Node {
   firstSeen: string;
   lastSeen: string;
   lastAdvert?: string;
+  /** Latest advert or node-discover reply from the node itself. */
+  lastHeard?: string;
   advertCount: number;
   /** Actual advert transmissions (re-flood / multi-observer copies of one
    *  broadcast collapsed by a ~90s gap) — vs advertCount which counts every
@@ -1081,6 +1083,8 @@ export interface ClaimWithNode extends Claim {
    *  sweep prunes silent nodes but the owner keeps the claim, so these render
    *  as dormant rather than linking to a node page that would 404. */
   nodePresent: boolean;
+  /** Latest advert or discover reply. Kept on the claim once the node goes dormant. */
+  lastHeard?: string;
 }
 
 /** Result of a scrub — what was actually deleted. */

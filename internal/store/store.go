@@ -375,6 +375,11 @@ type Store struct {
 	removedChans   map[string]bool // names an admin removed; discovery skips them
 	pendingChans   int
 
+	// heardWritten throttles last_heard writes from node-discover replies to one
+	// per key per heardThrottle (a reply reaches several observers at once and
+	// probes repeat). Guarded by mu, which Record holds.
+	heardWritten map[string]time.Time
+
 	// needAdvertTxBackfill is set on open when the advert_tx_count column was
 	// just added, so a caller can seed it once from history.
 	needAdvertTxBackfill bool
@@ -571,6 +576,18 @@ func Open(path string) (*Store, error) {
 	// path, where only the far end's byte is unique). NULL means this side.
 	db.Exec(`ALTER TABLE nodes ADD COLUMN via_bridge TEXT`)
 	db.Exec(`ALTER TABLE nodes ADD COLUMN via_bridge_conf TEXT`)
+	// last_heard is the latest time the node itself transmitted something we
+	// can attribute to it by key: an advert, or a node-discover reply (which
+	// carries the responder's key but is not an advert, so last_seen never
+	// moved for it). Relays are attributed separately by analytics.
+	db.Exec(`ALTER TABLE nodes ADD COLUMN last_heard TEXT`)
+	// A claim keeps a copy of its node's name, role and last-heard time from the
+	// moment retention removes the node row, so a dormant claim still says WHICH
+	// node it is and when it was last on the air. last_heard keeps advancing
+	// while dormant if the node is heard answering discovery.
+	db.Exec(`ALTER TABLE node_claims ADD COLUMN node_name TEXT`)
+	db.Exec(`ALTER TABLE node_claims ADD COLUMN node_role TEXT`)
+	db.Exec(`ALTER TABLE node_claims ADD COLUMN last_heard TEXT`)
 	// User account status columns (added after the initial users table shipped).
 	db.Exec(`ALTER TABLE users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE users ADD COLUMN protected INTEGER NOT NULL DEFAULT 0`)
@@ -987,8 +1004,8 @@ func (s *Store) Record(o Observation) error {
 		if _, err := tx.Exec(`
 			INSERT INTO nodes
 				(pubkey, name, role, latitude, longitude, has_location,
-				 first_seen, last_seen, last_advert, advert_count, advert_tx_count, hash_size, radio)
-			VALUES (?,?,?,?,?,?,?,?,?,1,?,?,?)
+				 first_seen, last_seen, last_advert, advert_count, advert_tx_count, hash_size, radio, last_heard)
+			VALUES (?,?,?,?,?,?,?,?,?,1,?,?,?,?)
 			ON CONFLICT(pubkey) DO UPDATE SET
 				name         = COALESCE(NULLIF(excluded.name,''), nodes.name),
 				role         = excluded.role,
@@ -1004,12 +1021,22 @@ func (s *Store) Record(o Observation) error {
 				-- established size; the periodic consensus pass (analytics) owns
 				-- corrections from there, voting over many adverts.
 				hash_size    = CASE WHEN nodes.hash_size = 0 THEN excluded.hash_size ELSE nodes.hash_size END,
-				radio        = COALESCE(NULLIF(excluded.radio,''), nodes.radio)`,
+				radio        = COALESCE(NULLIF(excluded.radio,''), nodes.radio),
+				last_heard   = MAX(COALESCE(nodes.last_heard,''), excluded.last_heard)`,
 			a.PublicKey, nullStr(a.Name), a.DeviceRole.String(),
-			lat, lon, boolInt(a.HasLocation), ts, ts, ts, txInc, advertHashSize, nullStr(observerRadio),
+			lat, lon, boolInt(a.HasLocation), ts, ts, ts, txInc, advertHashSize, nullStr(observerRadio), ts,
 			txInc,
 		); err != nil {
 			return fmt.Errorf("store: upsert node: %w", err)
+		}
+	}
+
+	// A node-discover reply proves its sender is on the air even though it is
+	// not an advert. Credit it to the node (or, if retention already removed
+	// the node row, to its claim) so "last heard" reflects it.
+	if c := p.Control; c != nil && c.SubType == meshcore.ControlNodeDiscoverResp {
+		if err := s.noteDiscoverHeard(tx, c.PublicKey, ts, o.ReceivedAt); err != nil {
+			return fmt.Errorf("store: note heard: %w", err)
 		}
 	}
 

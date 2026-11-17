@@ -417,6 +417,13 @@ func (s *Store) purgeTargets(observers, bridges, nodes []string, cascadeUserData
 	// Delete node rows for explicitly targeted nodes/bridges, along with the
 	// user-authored data keyed to them (see the doc comment).
 	for k := range nodeSet {
+		if !cascadeUserData {
+			// Retention (not a scrub): the claim outlives the node, so keep a
+			// copy of what identifies it before the row goes.
+			if _, err := tx.Exec(snapshotClaimSQL, k, k, k, k); err != nil {
+				return res, err
+			}
+		}
 		r, err := tx.Exec(`DELETE FROM nodes WHERE UPPER(pubkey) = ?`, k)
 		if err != nil {
 			return res, err
@@ -645,3 +652,15 @@ func (s *Store) purgeObservationBatch(afterID int64, obsSet map[string]bool, bri
 	}
 	return len(batch), last, nil
 }
+
+// snapshotClaimSQL copies a node's name, role and last-heard time onto any
+// claim on it, just before the node row is deleted (args: key ×4). Missing or
+// blank node values leave the claim's existing copy alone, and last_heard only
+// ever moves forward.
+const snapshotClaimSQL = `
+	UPDATE node_claims SET
+		node_name  = COALESCE((SELECT NULLIF(name,'') FROM nodes WHERE UPPER(pubkey) = ?), node_name),
+		node_role  = COALESCE((SELECT NULLIF(role,'') FROM nodes WHERE UPPER(pubkey) = ?), node_role),
+		last_heard = COALESCE((SELECT MAX(COALESCE(n.last_seen,''), COALESCE(n.last_heard,''), COALESCE(node_claims.last_heard,''))
+		                         FROM nodes n WHERE UPPER(n.pubkey) = ?), last_heard)
+	WHERE UPPER(node_pubkey) = ?`

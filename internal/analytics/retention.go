@@ -33,6 +33,9 @@ func StaleNodeKeys(nodes []store.Node, cutoffISO string) []string {
 		if n.LastSeen == "" || n.LastSeen >= cutoffISO {
 			continue // never seen (shouldn't happen) or adverted recently enough
 		}
+		if n.LastHeard >= cutoffISO {
+			continue // answered node discovery recently — on the air, just not adverting
+		}
 		stale = append(stale, n.PublicKey)
 	}
 	return stale

@@ -15,12 +15,12 @@ export interface NodeStatus {
 // node is up and working. Thresholds: Online <6h, Idle <33h (one advert cycle +
 // grace), Offline beyond that.
 const HOUR = 3_600_000;
-type Activity = { lastSeen?: string; lastRelayed?: string; lastObserved?: string };
+type Activity = { lastSeen?: string; lastHeard?: string; lastRelayed?: string; lastObserved?: string };
 
-/** The most recent time a node was heard — its latest advert, relay or observer report. */
+/** The most recent time a node was heard — its latest advert, discover reply, relay or observer report. */
 export function lastHeard(n: Activity): string | undefined {
 	let best: string | undefined;
-	for (const t of [n.lastSeen, n.lastRelayed, n.lastObserved]) {
+	for (const t of [n.lastSeen, n.lastHeard, n.lastRelayed, n.lastObserved]) {
 		if (t && (!best || new Date(t).getTime() > new Date(best).getTime())) best = t;
 	}
 	return best;
@@ -28,7 +28,7 @@ export function lastHeard(n: Activity): string | undefined {
 
 export function nodeStatus(n: Activity): NodeStatus {
 	const times: number[] = [];
-	for (const t of [n.lastSeen, n.lastRelayed, n.lastObserved]) {
+	for (const t of [n.lastSeen, n.lastHeard, n.lastRelayed, n.lastObserved]) {
 		if (t) {
 			const ms = parseTime(t);
 			if (!Number.isNaN(ms)) times.push(ms);

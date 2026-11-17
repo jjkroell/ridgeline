@@ -9,7 +9,7 @@
 	import QRCode from 'qrcode';
 	import { copyText } from '$lib/mobile/context-menu.svelte';
 	import { api, type Node, type NodeAnalytics, type NodeObserverStat, type BlockEntry, type RFNeighbors } from '$lib/api';
-	import { ago, shortKey, fmtNum, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, fmtRadio, fmtCoord, fmtAirtime, fmtClockDrift, clockDriftLevel } from '$lib/format';
+	import { ago, shortKey, fmtNum, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, lastHeard, fmtRadio, fmtCoord, fmtAirtime, fmtClockDrift, clockDriftLevel } from '$lib/format';
 	import { nodeHashId } from '$lib/hash-ids';
 	import { favorites } from '$lib/favorites.svelte';
 	import { basemapStyleUrl, collapseAttribution } from '$lib/map-basemap';
@@ -81,7 +81,7 @@
 		return () => clearInterval(t);
 	});
 
-	const status = $derived(nodeStatus({ lastSeen: node?.lastSeen, lastRelayed: detail?.relay.lastRelayed, lastObserved: node?.lastObserved }));
+	const status = $derived(nodeStatus({ lastSeen: node?.lastSeen, lastHeard: node?.lastHeard, lastRelayed: detail?.relay.lastRelayed, lastObserved: node?.lastObserved }));
 	const isRelay = $derived(node?.role === 'Repeater' || node?.role === 'RoomServer');
 	const hasLoc = $derived(!!node && node.latitude != null && node.longitude != null);
 
@@ -111,6 +111,7 @@
 								? { k: 'Radio', v: 'unknown — far side of a bridge' }
 								: null, // single-band mesh: shown site-wide instead
 					{ k: 'Location', v: fmtCoord(node.latitude, node.longitude) },
+					{ k: 'Last heard', v: ((h) => (h ? ago(h) + ' ago' : '—'))(lastHeard({ lastSeen: node.lastSeen, lastHeard: node.lastHeard, lastRelayed: detail?.relay.lastRelayed, lastObserved: node.lastObserved })) },
 					{ k: 'Last advert', v: ago(node.lastAdvert || node.lastSeen) + ' ago' },
 					{ k: 'Last relay', v: detail?.relay.lastRelayed ? ago(detail.relay.lastRelayed) + ' ago' : '—' },
 					{ k: 'Packets', v: detail ? `${fmtNum(detail.totalPackets)} · seen ${fmtNum(detail.totalObservations)}×` : '—' },

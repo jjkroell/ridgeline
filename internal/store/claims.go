@@ -41,6 +41,10 @@ type ClaimWithNode struct {
 	// than linking to a node page that would 404. Distinguishing this from an
 	// unnamed node is why it isn't inferred from an empty NodeName.
 	NodePresent bool `json:"nodePresent"`
+	// LastHeard is the node's latest advert or discover reply. For a dormant
+	// claim it comes from the copy kept on the claim when the node was removed
+	// (and is advanced if the node is heard answering discovery since).
+	LastHeard string `json:"lastHeard,omitempty"`
 }
 
 // OwnerInfo identifies the verified owner of a node (public-facing).
@@ -334,8 +338,11 @@ func (s *Store) VerifyPendingClaims(nodePubkey, advertName string) ([]Claim, err
 func (s *Store) ListUserClaims(userID int64) ([]ClaimWithNode, error) {
 	rows, err := s.db.Query(`
 		SELECT c.id, c.node_pubkey, c.user_id, c.code, c.status, c.created_at, c.expires_at,
-		       COALESCE(c.verified_at,''), COALESCE(n.name,''), COALESCE(n.role,''),
-		       n.pubkey IS NOT NULL
+		       COALESCE(c.verified_at,''),
+		       COALESCE(NULLIF(n.name,''), c.node_name, ''), COALESCE(NULLIF(n.role,''), c.node_role, ''),
+		       n.pubkey IS NOT NULL,
+		       CASE WHEN n.pubkey IS NULL THEN COALESCE(c.last_heard,'')
+		            ELSE MAX(n.last_seen, COALESCE(n.last_heard,'')) END
 		FROM node_claims c LEFT JOIN nodes n ON n.pubkey = c.node_pubkey
 		WHERE c.user_id = ?
 		ORDER BY c.created_at DESC`, userID)
@@ -347,7 +354,7 @@ func (s *Store) ListUserClaims(userID int64) ([]ClaimWithNode, error) {
 	for rows.Next() {
 		var c ClaimWithNode
 		if err := rows.Scan(&c.ID, &c.NodePubkey, &c.UserID, &c.Code, &c.Status, &c.CreatedAt,
-			&c.ExpiresAt, &c.VerifiedAt, &c.NodeName, &c.NodeRole, &c.NodePresent); err != nil {
+			&c.ExpiresAt, &c.VerifiedAt, &c.NodeName, &c.NodeRole, &c.NodePresent, &c.LastHeard); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

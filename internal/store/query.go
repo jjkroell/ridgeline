@@ -25,6 +25,10 @@ type Node struct {
 	FirstSeen   string   `json:"firstSeen"`
 	LastSeen    string   `json:"lastSeen"`
 	LastAdvert  string   `json:"lastAdvert,omitempty"`
+	// LastHeard is the latest advert or node-discover reply from this node (see
+	// the nodes.last_heard migration). Relays and observer reports are added on
+	// top by the API/UI, which hold those signals.
+	LastHeard string `json:"lastHeard,omitempty"`
 	AdvertCount int      `json:"advertCount"`
 	// AdvertTxCount is the number of actual advert *transmissions* — re-flood and
 	// multi-observer copies of one advert collapsed by a 30s gap — vs AdvertCount
@@ -175,7 +179,7 @@ func (s *Store) ListNodes() ([]Node, error) {
 		       latitude, longitude, has_location,
 		       first_seen, last_seen, COALESCE(last_advert,''), advert_count, advert_tx_count,
 		       COALESCE(hash_size, 0), COALESCE(hash_size_source,'auto'), COALESCE(radio,''), COALESCE(retired_at,''),
-		       COALESCE(via_bridge,''), COALESCE(via_bridge_conf,'')
+		       COALESCE(via_bridge,''), COALESCE(via_bridge_conf,''), COALESCE(last_heard,'')
 		FROM nodes
 		ORDER BY last_seen DESC`)
 	if err != nil {
@@ -190,7 +194,7 @@ func (s *Store) ListNodes() ([]Node, error) {
 		if err := rows.Scan(&n.PublicKey, &n.Name, &n.Role,
 			&n.Latitude, &n.Longitude, &hasLoc,
 			&n.FirstSeen, &n.LastSeen, &n.LastAdvert, &n.AdvertCount, &n.AdvertTxCount, &n.HashSize, &n.HashSizeSource, &n.Radio, &n.RetiredAt,
-			&n.ViaBridge, &n.ViaBridgeConfidence); err != nil {
+			&n.ViaBridge, &n.ViaBridgeConfidence, &n.LastHeard); err != nil {
 			return nil, err
 		}
 		n.HasLocation = hasLoc != 0

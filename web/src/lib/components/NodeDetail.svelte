@@ -12,7 +12,7 @@
 	import { isLight, clusterColors } from '$lib/map-util';
 	import { hasWebGL } from '$lib/webgl';
 	import LeafletInset from './LeafletInset.svelte';
-	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, fmtRadio, fmtAirtime, fmtClockDrift, clockDriftLevel } from '$lib/format';
+	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, lastHeard, fmtRadio, fmtAirtime, fmtClockDrift, clockDriftLevel } from '$lib/format';
 	import { nodeHashId } from '$lib/hash-ids';
 	import PayloadTag from './PayloadTag.svelte';
 	import RoleBadge from './RoleBadge.svelte';
@@ -152,9 +152,17 @@
 	// a corrupted copy of a real node, we surface that instead.
 	const hashId = $derived(nodeHashId(nodesList, node, pubkey));
 
-	// Liveness from the most recent of advert or relay activity (see nodeStatus).
+	// Liveness from the most recent of advert, discover reply, relay or observer
+	// report (see nodeStatus); "Last heard" shows that same moment.
+	const activity = $derived({
+		lastSeen: node?.lastSeen,
+		lastHeard: node?.lastHeard,
+		lastRelayed: detail?.relay.lastRelayed,
+		lastObserved: node?.lastObserved
+	});
+	const heard = $derived(lastHeard(activity));
 	const status = $derived(
-		nodeStatus({ lastSeen: node?.lastSeen, lastRelayed: detail?.relay.lastRelayed, lastObserved: node?.lastObserved })
+		nodeStatus(activity)
 	);
 	const isRelay = $derived(node?.role === 'Repeater' || node?.role === 'RoomServer');
 
@@ -235,9 +243,11 @@
 						c: driftColor[clockDriftLevel(detail.clockDriftSec)]
 					}
 				: { k: 'Clock', v: '—', c: 'var(--color-fg-faint)' };
+		const lastHeardRow = { k: 'Last heard', v: heard ? ago(heard) + ' ago' : '—' };
 		if (compact) {
 			return [
 				{ k: 'Status', v: status.label, c: status.color },
+				lastHeardRow,
 				radio,
 				location,
 				{ k: 'Last advert', v: ago(node.lastSeen) + ' ago' },
@@ -248,6 +258,7 @@
 		}
 		return [
 			{ k: 'Status', v: status.label, c: status.color },
+			lastHeardRow,
 			radio,
 			location,
 			{ k: 'Last advert', v: ago(node.lastSeen) + ' ago' },

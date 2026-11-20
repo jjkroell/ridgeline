@@ -951,29 +951,41 @@ func (s *Server) recent(w http.ResponseWriter, r *http.Request) {
 // messages without the all-traffic row cap truncating history to ~30 minutes.
 func (s *Server) channelsRecent(w http.ResponseWriter, r *http.Request) {
 	sinceSec := queryInt(r, "since", 24*3600, 1, 24*3600)
-	cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
-
-	raws, err := s.store.RecentGroupText(cutoff, 10000)
+	// Shared and briefly reused: every caller (overview widget, /channels,
+	// /m/channels) asks for the same 24h window, and one run holds the single
+	// DB connection for ~0.7s plus ~1s of decoding (prod, 2026-11-20: 153k
+	// GroupText observation rows a day). Clients merge the live feed on top,
+	// so a few seconds of staleness is invisible.
+	body, err := s.nodeCache.get(fmt.Sprintf("channels-recent|%d", sinceSec), channelsRecentTTL, func() (any, error) {
+		cutoff := time.Now().Add(-time.Duration(sinceSec) * time.Second).UTC().Format(time.RFC3339Nano)
+		raws, err := s.store.RecentGroupText(cutoff, 10000)
+		if err != nil {
+			return nil, err
+		}
+		// Observations store the observer's stable id; resolve labels once per run.
+		obsNames, _ := s.store.ObserverNames()
+		out := make([]LiveEvent, 0, len(raws))
+		for _, ro := range raws {
+			pkt, err := meshcore.DecodeHex(ro.RawHex)
+			if err != nil || pkt == nil {
+				continue
+			}
+			if s.store.ShouldDrop(pkt, ro.ObserverID) {
+				continue
+			}
+			out = append(out, newLiveEvent(pkt, ro.RawHex, ro.ObserverID, obsNames[ro.ObserverID], ro.Region, ro.ReceivedAt, ro.SNR, ro.RSSI))
+		}
+		return out, nil
+	})
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	// Observations store the observer's stable id; resolve labels once per request.
-	obsNames, _ := s.store.ObserverNames()
-
-	out := make([]LiveEvent, 0, len(raws))
-	for _, ro := range raws {
-		pkt, err := meshcore.DecodeHex(ro.RawHex)
-		if err != nil || pkt == nil {
-			continue
-		}
-		if s.store.ShouldDrop(pkt, ro.ObserverID) {
-			continue
-		}
-		out = append(out, newLiveEvent(pkt, ro.RawHex, ro.ObserverID, obsNames[ro.ObserverID], ro.Region, ro.ReceivedAt, ro.SNR, ro.RSSI))
-	}
-	writeJSON(w, out)
+	writeCachedJSON(w, body)
 }
+
+// channelsRecentTTL bounds how stale shared channel history may be.
+const channelsRecentTTL = 15 * time.Second
 
 // Live-feed WebSocket limits. Clients never send anything meaningful (the
 // reader only detects close), so inbound messages are capped tiny; pings with

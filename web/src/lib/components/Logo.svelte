@@ -1,26 +1,25 @@
 <script lang="ts">
-	// Ridgeline mark, "Ridge to Signal": a ridgeline climbs to a summit node and
-	// leaves it as a radio wave — terrain turning into signal. The ridge takes
-	// the theme accent, the wave --logo-b (amber, unless the accent is too close
-	// to it; see app.css).
+	// Ridgeline mark, "Constellation" (public vote winner, November 2026):
+	// relay nodes scattered like stars, joined into the outline of a mountain,
+	// the way the mesh looks at night. Nodes and links take the theme accent,
+	// the star --logo-b (amber, unless the accent is too close to it; see app.css).
 	let { class: cls = 'h-8 w-8' }: { class?: string } = $props();
 </script>
 
 <svg viewBox="0 0 32 32" class={cls} aria-hidden="true">
+	<g fill="none" stroke="var(--color-signal)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M3 25 9 17l4 3.5 7-12 5 8 4 8" opacity="0.6" />
+		<path d="M13 20.5l12-4" opacity="0.35" />
+	</g>
+	<g fill="var(--color-signal)">
+		<circle cx="3" cy="25" r="1.5" />
+		<circle cx="9" cy="17" r="1.8" />
+		<circle cx="13" cy="20.5" r="1.5" />
+		<circle cx="25" cy="16.5" r="1.7" />
+		<circle cx="29" cy="24.5" r="1.5" />
+	</g>
 	<path
-		d="M2.5 24 8.5 15l3.5 4 4-8"
-		fill="none"
-		stroke="var(--color-signal)"
-		stroke-width="2.4"
-		stroke-linecap="round"
-		stroke-linejoin="round"
+		d="M20 4.5l1.1 2.6 2.7.3-2 1.9.6 2.7-2.4-1.4-2.4 1.4.6-2.7-2-1.9 2.7-.3z"
+		fill="var(--logo-b, var(--color-amber))"
 	/>
-	<path
-		d="M16 11c2 0 2.2 11 4.8 11s2.6-8 4.8-8c2 0 2 5 3.9 5"
-		fill="none"
-		stroke="var(--logo-b, var(--color-amber))"
-		stroke-width="2.4"
-		stroke-linecap="round"
-	/>
-	<circle cx="16" cy="11" r="2.3" fill="var(--color-signal)" />
 </svg>

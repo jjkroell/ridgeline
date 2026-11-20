@@ -87,8 +87,8 @@
 		},
 		{
 			icon: 'M3 20l6-9 4 5 3-4 5 8zM16 4.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z',
-			title: 'A calmer map, and a new logo on the way',
-			body: 'There is a new Muted base map, a soft, low-colour map that lets the nodes stand out (Harbour uses it by default; change it under Base map on any map). Ridgeline’s logo is being replaced: the one you see now is a stand-in, and the new one is being chosen by public vote at logo.ve7kod.ca until Friday, November 6 at 18:00 BC time.'
+			title: 'A calmer map, and a new logo',
+			body: 'There is a new Muted base map, a soft, low-colour map that lets the nodes stand out (Harbour uses it by default; change it under Base map on any map). Ridgeline has a new logo, Constellation: relay nodes joined into a mountain under a star. It came first in the public vote; thank you to everyone who voted.'
 		},
 		{
 			icon: 'M5 12.5l4.5 4.5L19 7.5',

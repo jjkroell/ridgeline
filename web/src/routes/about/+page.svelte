@@ -134,6 +134,15 @@
 		</p>
 	</section>
 
+	<section class="text-fg-dim mt-10 space-y-4">
+		<h2 class="text-fg text-xl font-700">Questions or problems?</h2>
+		<p>
+			If something on Ridgeline isn't working, or you have a question about the mesh,
+			<a href="/contact" class="text-signal hover:underline">contact us</a>. It helps to say which
+			page you were on and roughly when it happened.
+		</p>
+	</section>
+
 	<footer class="border-line text-fg-faint mt-12 border-t pt-6 text-sm">
 		<p>
 			Ridgeline is an independent project, run by the community, for the coastal

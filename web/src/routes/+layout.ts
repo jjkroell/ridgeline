@@ -9,7 +9,7 @@ export const prerender = false;
 
 // Desktop section roots that have a mobile equivalent under /m. Dynamic detail
 // routes (/nodes/[k], /observers/[id]) are omitted until their /m screens exist.
-const MOBILE_ROOTS = ['/', '/nodes', '/live', '/map', '/live-map', '/analytics', '/channels', '/observers', '/admin'];
+const MOBILE_ROOTS = ['/', '/nodes', '/live', '/map', '/live-map', '/analytics', '/channels', '/observers', '/admin', '/contact'];
 
 // Send phones to the mobile app.
 export const load: LayoutLoad = ({ url }) => {

@@ -86,6 +86,7 @@
 			<div class="px-4 py-3"><MeshRadio variant="inline" /></div>
 		{/if}
 		<a href="/about" class="active:bg-line/40 flex items-center gap-3 px-4 py-3"><span class="text-fg flex-1 text-sm">About Ridgeline</span></a>
+		<a href="/m/contact" class="active:bg-line/40 flex items-center gap-3 px-4 py-3"><span class="text-fg flex-1 text-sm">Contact us</span></a>
 		<a href="/privacy" class="active:bg-line/40 flex items-center gap-3 px-4 py-3"><span class="text-fg flex-1 text-sm">Privacy</span></a>
 	</div>
 </div>

@@ -45,6 +45,7 @@
 		{ href: '/m/identity', label: 'Identity', icon: 'keys', desc: 'Collisions & key generator' },
 		{ href: '/m/observers', label: 'Observers', icon: 'observers', desc: 'Listening posts & telemetry' },
 		{ href: '/m/settings', label: 'Settings', icon: 'settings', desc: 'Theme, map style and display' },
+		{ href: '/m/contact', label: 'Contact us', icon: 'mail', desc: 'Report a problem or ask a question' },
 		{ href: '/m/admin', label: 'Admin', icon: 'admin', desc: 'Injection control (restricted)', adminOnly: true }
 	];
 	// Admin is the only restricted destination; hide its link from anyone who is
@@ -66,6 +67,7 @@
 		observers: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
 		admin: 'M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z',
 		keys: 'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3',
+		mail: 'M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM3.5 6.5 12 13l8.5-6.5',
 		account: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
 		settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z'
 	};
@@ -93,6 +95,7 @@
 		if (p.startsWith('/m/admin')) return 'Admin';
 		if (p.startsWith('/m/account')) return 'Account';
 		if (p.startsWith('/m/settings')) return 'Settings';
+		if (p.startsWith('/m/contact')) return 'Contact us';
 		if (p.startsWith('/m/login')) return auth.loggedIn ? 'Account' : 'Sign in';
 		return 'Ridgeline';
 	});
@@ -107,7 +110,7 @@
 	// Cupertino large titles: list-style pages show the title big in the
 	// content and hand it to the bar once it scrolls away. Maps, detail pages
 	// and the full-height chat/topology views keep the compact bar title.
-	const LARGE = ['/m', '/m/nodes', '/m/live', '/m/analytics', '/m/observers', '/m/identity', '/m/hash-ids', '/m/sos', '/m/account', '/m/admin', '/m/login', '/m/settings'];
+	const LARGE = ['/m', '/m/nodes', '/m/live', '/m/analytics', '/m/observers', '/m/identity', '/m/hash-ids', '/m/sos', '/m/account', '/m/admin', '/m/login', '/m/settings', '/m/contact'];
 	const largeTitle = $derived(theme.isApple && LARGE.includes(page.url.pathname));
 	let mainEl = $state<HTMLElement>();
 	let scrolled = $state(false);

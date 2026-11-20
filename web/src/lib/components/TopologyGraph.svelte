@@ -1,23 +1,45 @@
 <script lang="ts">
-	// Fullscreen, interactive force-directed view of the mesh relay backbone.
-	// Pan (drag empty space), zoom (wheel), reposition a node (drag it), hover to
-	// highlight a node and its neighbours, click a node to open it. Rendered on a
-	// canvas with a hand-rolled force simulation so it stays smooth at scale.
-	import { onMount } from 'svelte';
+	// Interactive force-directed view of the mesh relay backbone, on a canvas
+	// with a hand-rolled simulation so it stays smooth at scale.
+	//
+	// Legibility rules (the old view drew all ~400 links equally and coloured
+	// by role, which on this mesh is 58 repeaters = one red blob):
+	//  - only links seen ≥ minWeight times are drawn and simulated (plus each
+	//    node's strongest, so nobody is stranded); width/opacity follow weight
+	//  - colour = how much the node forwarded; role is the marker SHAPE
+	//  - focusing a node (hover or select) shows ALL of its links, weak ones too
+	//  - labels: top hubs + focus neighbourhood, with screen-space collision
+	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { roleColor, shortKey } from '$lib/format';
+	import { shortKey } from '$lib/format';
 	import type { TopologyNode, TopologyEdge } from '$lib/api';
+	import { visibleEdges, relayNorm, relayRanks, topoPalette, rampAt, ROLE_SHAPE } from '$lib/topology';
 
-	// nodePath lets the mobile PWA (/m/nodes) reuse this with its own detail route.
 	let {
 		nodes,
 		edges,
-		nodePath = '/nodes'
-	}: { nodes: TopologyNode[]; edges: TopologyEdge[]; nodePath?: string } = $props();
+		nodePath = '/nodes',
+		minWeight = 1,
+		selected = null,
+		onselect
+	}: {
+		nodes: TopologyNode[];
+		edges: TopologyEdge[];
+		nodePath?: string;
+		minWeight?: number;
+		selected?: string | null;
+		/** When given, a click selects instead of navigating (desktop side panel). */
+		onselect?: (key: string | null) => void;
+	} = $props();
 
 	let canvas: HTMLCanvasElement;
 	let raf = 0;
 	let resetView: () => void = () => {};
+	let applyFilter: (w: number) => void = () => {};
+	let applySelected: (k: string | null) => void = () => {};
+
+	$effect(() => applyFilter(minWeight));
+	$effect(() => applySelected(selected));
 
 	onMount(() => {
 		// only nodes that participate in an edge (isolated nodes carry no topology)
@@ -30,21 +52,10 @@
 
 		const dpr = window.devicePixelRatio || 1;
 		const ctx = canvas.getContext('2d')!;
+		const pal = topoPalette();
+		const maxRelayed = Math.max(1, ...gNodes.map((n) => n.relayed));
+		const ranks = relayRanks(gNodes);
 
-		// Canvas can't parse `var(--…)`, so resolve the role palette to concrete
-		// hex once from the computed stylesheet (theme-aware). roleColor() returns
-		// CSS custom properties — fine for HTML, useless for a 2D context.
-		const cs = getComputedStyle(document.documentElement);
-		const cvar = (name: string) => cs.getPropertyValue(name).trim();
-		const roleHex: Record<string, string> = {
-			Repeater: cvar('--color-role-repeater'),
-			ChatNode: cvar('--color-role-companion'),
-			RoomServer: cvar('--color-role-room'),
-			Sensor: cvar('--color-role-sensor'),
-			Observer: cvar('--color-role-observer')
-		};
-		const fallbackHex = cvar('--color-fg-faint') || '#8b9bad';
-		const fillFor = (role: string) => roleHex[role] || fallbackHex;
 		const fit = () => {
 			const W = canvas.clientWidth,
 				H = canvas.clientHeight;
@@ -55,42 +66,65 @@
 		let { W, H } = fit();
 
 		const idx = new Map(gNodes.map((n, i) => [n.publicKey, i]));
-		type PN = { n: TopologyNode; x: number; y: number; vx: number; vy: number; fixed: boolean; deg: number };
-		const P: PN[] = gNodes.map((n, i) => ({
-			n,
-			x: W / 2 + Math.cos(i * 2.4) * (60 + (i % 180)),
-			y: H / 2 + Math.sin(i * 2.4) * (60 + (i % 180)),
-			vx: 0,
-			vy: 0,
-			fixed: false,
-			deg: 0
-		}));
-		const E = edges
+		type PN = { n: TopologyNode; x: number; y: number; vx: number; vy: number; fixed: boolean; color: string; r: number };
+		const P: PN[] = gNodes.map((n, i) => {
+			const t = relayNorm(n, maxRelayed);
+			return {
+				n,
+				x: W / 2 + Math.cos(i * 2.4) * (60 + (i % 180)),
+				y: H / 2 + Math.sin(i * 2.4) * (60 + (i % 180)),
+				vx: 0,
+				vy: 0,
+				fixed: false,
+				color: rampAt(pal, ranks.get(n.publicKey) ?? 0),
+				r: 3.5 + t * 9
+			};
+		});
+		type PE = { a: number; b: number; w: number; inf: boolean; t: number };
+		const allE: PE[] = edges
 			.filter((e) => idx.has(e.a) && idx.has(e.b))
-			.map((e) => ({ a: idx.get(e.a)!, b: idx.get(e.b)!, w: e.weight, inf: !!e.inferred }));
-		const adj: Set<number>[] = P.map(() => new Set());
-		for (const e of E) {
-			adj[e.a].add(e.b);
-			adj[e.b].add(e.a);
-			P[e.a].deg++;
-			P[e.b].deg++;
+			.map((e) => ({ a: idx.get(e.a)!, b: idx.get(e.b)!, w: e.weight, inf: !!e.inferred, t: 0 }));
+		const maxW = Math.max(1, ...allE.map((e) => e.w));
+		for (const e of allE) e.t = Math.sqrt(e.w / maxW);
+		allE.sort((x, y) => x.w - y.w); // paint weak first so strong links sit on top
+		// full adjacency (focus shows every link, even filtered-out ones)
+		const adjAll: Set<number>[] = P.map(() => new Set());
+		for (const e of allE) {
+			adjAll[e.a].add(e.b);
+			adjAll[e.b].add(e.a);
 		}
-		const maxRelayed = Math.max(1, ...gNodes.map((n) => n.relayed));
 
-		// Only the busiest ~12 nodes ("major hubs") carry a persistent label so the
-		// view isn't a wall of names; everything else is revealed on hover. Cutoff
-		// is the 12th-highest degree, floored so tiny graphs still label a few.
-		const degsSorted = P.map((p) => p.deg).sort((a, b) => b - a);
-		const hubCutoff = Math.max(4, degsSorted[Math.min(degsSorted.length - 1, 11)] ?? 4);
+		// E = the drawn + simulated subset
+		let E: PE[] = allE;
+		applyFilter = (w: number) => {
+			const keep = new Set(visibleEdges(edges, w).map((e) => `${e.a}|${e.b}`));
+			E = allE.filter((e) => keep.has(`${P[e.a].n.publicKey}|${P[e.b].n.publicKey}`) || keep.has(`${P[e.b].n.publicKey}|${P[e.a].n.publicKey}`));
+			alpha = Math.max(alpha, 0.6); // re-settle around the new link set
+		};
+
+		// Persistent labels: the 12 busiest forwarders.
+		const hubs = new Set(
+			P.map((p, i) => [p.n.relayed, i] as const)
+				.sort((a, b) => b[0] - a[0])
+				.slice(0, 12)
+				.map(([, i]) => i)
+		);
 
 		let scale = 1,
 			tx = 0,
 			ty = 0,
 			alpha = 1;
 		let hover = -1,
+			sel = -1,
 			dragNode = -1,
 			panning = false,
 			moved = false;
+		applySelected = (k: string | null) => {
+			sel = k ? (idx.get(k) ?? -1) : -1;
+		};
+		applyFilter(untrack(() => minWeight));
+		applySelected(untrack(() => selected));
+
 		let lastX = 0,
 			lastY = 0,
 			downX = 0,
@@ -106,7 +140,6 @@
 		};
 		const wx = (sx: number) => (sx - tx) / scale;
 		const wy = (sy: number) => (sy - ty) / scale;
-		const rad = (p: PN) => 3 + Math.sqrt(p.n.relayed / maxRelayed) * 9;
 
 		function nodeAt(sx: number, sy: number) {
 			const x = wx(sx),
@@ -121,7 +154,7 @@
 				}
 			}
 			if (best < 0) return -1;
-			const r = rad(P[best]) + 6;
+			const r = P[best].r + 6 / scale;
 			return bd <= r * r ? best : -1;
 		}
 		function physics() {
@@ -132,7 +165,7 @@
 						dy = P[i].y - P[j].y,
 						d2 = dx * dx + dy * dy + 0.01,
 						d = Math.sqrt(d2),
-						f = 900 / d2;
+						f = 1400 / d2;
 					const fx = (dx / d) * f,
 						fy = (dy / d) * f;
 					P[i].vx += fx;
@@ -146,7 +179,10 @@
 					dx = b.x - a.x,
 					dy = b.y - a.y,
 					d = Math.sqrt(dx * dx + dy * dy) + 0.01,
-					f = (d - 80) * 0.02;
+					// strong links pull tighter and shorter, so busy corridors read as
+					// compact chains and weak cross-links stretch out of the way
+					rest = 110 - e.t * 50,
+					f = (d - rest) * (0.01 + e.t * 0.03);
 				const fx = (dx / d) * f,
 					fy = (dy / d) * f;
 				a.vx += fx;
@@ -160,8 +196,8 @@
 					p.vy = 0;
 					continue;
 				}
-				p.vx += (W / 2 - p.x) * 0.002;
-				p.vy += (H / 2 - p.y) * 0.002;
+				p.vx += (W / 2 - p.x) * 0.003;
+				p.vy += (H / 2 - p.y) * 0.003;
 				p.x += p.vx * alpha;
 				p.y += p.vy * alpha;
 				p.vx *= 0.85;
@@ -169,56 +205,106 @@
 			}
 			alpha *= 0.99;
 		}
+
+		const [lr, lg, lb] = pal.link;
+		function shape(role: string, x: number, y: number, r: number) {
+			const s = ROLE_SHAPE[role] ?? 'circle';
+			ctx.beginPath();
+			if (s === 'square') ctx.rect(x - r * 0.9, y - r * 0.9, r * 1.8, r * 1.8);
+			else if (s === 'diamond') {
+				ctx.moveTo(x, y - r * 1.25);
+				ctx.lineTo(x + r * 1.25, y);
+				ctx.lineTo(x, y + r * 1.25);
+				ctx.lineTo(x - r * 1.25, y);
+				ctx.closePath();
+			} else if (s === 'triangle') {
+				ctx.moveTo(x, y - r * 1.2);
+				ctx.lineTo(x + r * 1.1, y + r * 0.8);
+				ctx.lineTo(x - r * 1.1, y + r * 0.8);
+				ctx.closePath();
+			} else ctx.arc(x, y, r, 0, 7);
+		}
+
+		function drawEdge(e: PE, style: string, width: number) {
+			ctx.strokeStyle = style;
+			ctx.lineWidth = width / scale;
+			// An edge resolved only from 1-byte hops is an inference, not a
+			// measurement — dashed, matching PacketPathMap's ambiguous hops.
+			ctx.setLineDash(e.inf ? [4 / scale, 3 / scale] : []);
+			ctx.beginPath();
+			ctx.moveTo(P[e.a].x, P[e.a].y);
+			ctx.lineTo(P[e.b].x, P[e.b].y);
+			ctx.stroke();
+		}
+
 		function draw() {
 			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 			ctx.clearRect(0, 0, W, H);
 			ctx.translate(tx, ty);
 			ctx.scale(scale, scale);
-			const hl = hover >= 0;
+			const f = hover >= 0 ? hover : sel;
+			const hl = f >= 0;
+
+			// background links (thin → thick, so strong links paint on top)
 			for (const e of E) {
-				const on = hl && (e.a === hover || e.b === hover);
-				ctx.strokeStyle = on
-					? 'rgba(45,212,167,.85)'
-					: hl
-						? 'rgba(139,155,173,.06)'
-						: 'rgba(139,155,173,.22)';
-				ctx.lineWidth = (on ? 2 : 1) / scale;
-				// An edge resolved only from 1-byte hops is an inference, not a
-				// measurement — dashed, matching how PacketPathMap draws a hop whose
-				// prefix could belong to several nodes.
-				ctx.setLineDash(e.inf ? [4 / scale, 3 / scale] : []);
-				ctx.beginPath();
-				ctx.moveTo(P[e.a].x, P[e.a].y);
-				ctx.lineTo(P[e.b].x, P[e.b].y);
-				ctx.stroke();
+				if (hl && (e.a === f || e.b === f)) continue;
+				const a = hl ? 0.05 : 0.1 + e.t * 0.55;
+				drawEdge(e, `rgba(${lr},${lg},${lb},${a})`, 0.6 + e.t * 3.2);
 			}
+			// focus: every link of the focused node, filtered-out ones included
+			if (hl)
+				for (const e of allE)
+					if (e.a === f || e.b === f) drawEdge(e, pal.focus, 0.8 + e.t * 3.2);
 			ctx.setLineDash([]);
+
 			for (let i = 0; i < P.length; i++) {
 				const p = P[i],
-					r = rad(p),
-					dim = hl && i !== hover && !adj[hover].has(i);
-				ctx.globalAlpha = dim ? 0.2 : 1;
-				ctx.beginPath();
-				ctx.arc(p.x, p.y, r, 0, 7);
-				ctx.fillStyle = fillFor(p.n.role);
+					dim = hl && i !== f && !adjAll[f].has(i);
+				ctx.globalAlpha = dim ? 0.18 : 1;
+				shape(p.n.role, p.x, p.y, p.r);
+				ctx.fillStyle = p.color;
 				ctx.fill();
-				if (i === hover) {
-					ctx.lineWidth = 2 / scale;
-					ctx.strokeStyle = '#e6edf3';
+				ctx.lineWidth = 1.2 / scale;
+				ctx.strokeStyle = pal.ink;
+				ctx.stroke();
+				if (i === f) {
+					ctx.lineWidth = 2.2 / scale;
+					ctx.strokeStyle = pal.label;
 					ctx.stroke();
-				}
-				const isHub = p.deg >= hubCutoff;
-				if (i === hover || (hl && adj[hover].has(i)) || (!hl && isHub)) {
-					ctx.globalAlpha = 1;
-					// major hubs read brighter + a touch larger than the spoke names
-					// that surface on hover
-					const hubLabel = isHub && !hl;
-					ctx.fillStyle = hubLabel ? '#e6edf3' : '#c7d2de';
-					ctx.font = `${(hubLabel ? 12 : 11) / scale}px ui-sans-serif, system-ui`;
-					ctx.fillText((p.n.name || shortKey(p.n.publicKey)).slice(0, 22), p.x + r + 2 / scale, p.y + 3 / scale);
 				}
 			}
 			ctx.globalAlpha = 1;
+
+			// labels in screen space so text stays crisp and a fixed size at any zoom
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+			const cand: { i: number; pri: number }[] = [];
+			for (let i = 0; i < P.length; i++) {
+				if (i === f) cand.push({ i, pri: 3 });
+				else if (hl && adjAll[f].has(i)) cand.push({ i, pri: 2 });
+				else if (!hl && hubs.has(i)) cand.push({ i, pri: 1 });
+			}
+			cand.sort((a, b) => b.pri - a.pri || P[b.i].n.relayed - P[a.i].n.relayed);
+			const placed: [number, number, number, number][] = [];
+			for (const { i, pri } of cand) {
+				const p = P[i];
+				const text = (p.n.name || shortKey(p.n.publicKey)).slice(0, 24);
+				ctx.font = `${pri >= 2 ? 600 : 500} ${pri === 3 ? 13 : 11.5}px ui-sans-serif, system-ui`;
+				const w = ctx.measureText(text).width;
+				const sx = p.x * scale + tx + p.r * scale + 4,
+					sy = p.y * scale + ty + 4;
+				const box: [number, number, number, number] = [sx - 2, sy - 12, sx + w + 2, sy + 4];
+				if (pri < 3 && placed.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1]))
+					continue;
+				placed.push(box);
+				// halo keeps names readable over links
+				ctx.lineWidth = 3;
+				ctx.strokeStyle = pal.ink;
+				ctx.globalAlpha = 0.85;
+				ctx.strokeText(text, sx, sy);
+				ctx.globalAlpha = 1;
+				ctx.fillStyle = pri === 1 ? pal.labelDim : pal.label;
+				ctx.fillText(text, sx, sy);
+			}
 		}
 		function loop() {
 			physics();
@@ -290,7 +376,7 @@
 			} else if (panning) {
 				tx += mx - lastX;
 				ty += my - lastY;
-			} else {
+			} else if (ev.pointerType === 'mouse') {
 				hover = nodeAt(mx, my);
 				canvas.style.cursor = hover >= 0 ? 'pointer' : 'grab';
 			}
@@ -307,8 +393,14 @@
 			if (pointers.size < 2) pinchDist = 0;
 			if (dragNode >= 0) {
 				P[dragNode].fixed = false;
-				if (!moved) goto(`${nodePath}/${P[dragNode].n.publicKey}`);
+				if (!moved) {
+					const key = P[dragNode].n.publicKey;
+					if (onselect) onselect(sel === dragNode ? null : key);
+					else goto(`${nodePath}/${key}`);
+				}
 				dragNode = -1;
+			} else if (panning && !moved && onselect) {
+				onselect(null); // tap on empty space clears the selection
 			}
 			panning = false;
 			canvas.style.cursor = 'grab';
@@ -340,6 +432,8 @@
 
 		return () => {
 			cancelAnimationFrame(raf);
+			applyFilter = () => {};
+			applySelected = () => {};
 			ro.disconnect();
 			canvas.removeEventListener('wheel', onWheel);
 			canvas.removeEventListener('pointerdown', onDown);
@@ -349,13 +443,6 @@
 			canvas.removeEventListener('pointerleave', onLeave);
 		};
 	});
-
-	const legend = [
-		{ role: 'Repeater', label: 'Repeater' },
-		{ role: 'ChatNode', label: 'Companion' },
-		{ role: 'RoomServer', label: 'Room' },
-		{ role: 'Sensor', label: 'Sensor' }
-	];
 </script>
 
 <div class="relative h-full w-full overflow-hidden">
@@ -365,14 +452,4 @@
 		class="border-line bg-panel/85 text-fg-dim hover:border-signal/50 hover:text-signal absolute top-3 right-3 rounded-[var(--radius)] border px-2.5 py-1 font-mono text-[0.68rem] font-600 backdrop-blur transition-colors"
 		>⟲ Reset view</button
 	>
-	<div
-		class="border-line/70 bg-panel/85 text-fg-dim absolute bottom-3 left-3 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-x-4 gap-y-1 rounded-[var(--radius)] border px-3 py-2 font-mono text-[0.62rem] backdrop-blur"
-	>
-		{#each legend as l (l.role)}
-			<span class="flex items-center gap-1.5"
-				><span class="inline-block h-2.5 w-2.5 rounded-full" style="background:{roleColor(l.role)}"></span>{l.label}</span
-			>
-		{/each}
-		<span class="text-fg-faint w-full">scroll / pinch = zoom · drag = pan · drag a node = move it · tap a node = open it</span>
-	</div>
 </div>

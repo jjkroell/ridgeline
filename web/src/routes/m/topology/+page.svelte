@@ -3,6 +3,8 @@
 	import { onMount } from 'svelte';
 	import { api, type MeshAnalytics } from '$lib/api';
 	import TopologyGraph from '$lib/components/TopologyGraph.svelte';
+	import TopologyLegend from '$lib/components/TopologyLegend.svelte';
+	import { autoMinWeight, visibleEdges } from '$lib/topology';
 
 	let windowSec = $state(21600);
 	const windows = [
@@ -35,6 +37,9 @@
 
 	const topo = $derived(data?.topology);
 	const hasTopo = $derived(!!topo && topo.nodes.length > 0 && topo.edges.length > 0);
+	// Same weak-link hiding as desktop (auto threshold; tap still opens the node).
+	const minWeight = $derived(topo ? autoMinWeight(topo.edges, topo.nodes.length) : 1);
+	const shown = $derived(topo ? visibleEdges(topo.edges, minWeight).length : 0);
 </script>
 
 <Seo title="Topology" description="Relay backbone graph." path="/m/topology" />
@@ -52,7 +57,7 @@
 		{/each}
 		{#if hasTopo && topo}
 			<span class="text-fg-faint ml-auto font-mono text-[0.62rem] tnum"
-				>{topo.nodes.length} relays · {topo.edges.length} links</span
+				>{topo.nodes.length} relays · {shown}/{topo.edges.length} links</span
 			>
 		{/if}
 	</div>
@@ -67,8 +72,9 @@
 			</div>
 		{:else}
 			{#key windowSec}
-				<TopologyGraph nodes={topo.nodes} edges={topo.edges} nodePath="/m/nodes" />
+				<TopologyGraph nodes={topo.nodes} edges={topo.edges} nodePath="/m/nodes" {minWeight} />
 			{/key}
+			<TopologyLegend nodes={topo.nodes} layout="graph" />
 		{/if}
 	</div>
 </div>

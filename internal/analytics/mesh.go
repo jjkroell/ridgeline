@@ -49,6 +49,10 @@ type TopologyNode struct {
 	Name      string `json:"name"`
 	Role      string `json:"role"`
 	Relayed   int    `json:"relayed"`
+	// Lat/Lon are the node's public advertised position (nil when it has none
+	// or the GPS fix is flagged suspect) — drives the geographic layout.
+	Lat *float64 `json:"lat,omitempty"`
+	Lon *float64 `json:"lon,omitempty"`
 }
 
 // TopologyEdge is an undirected adjacency between two relays, weighted by how
@@ -618,9 +622,11 @@ func buildTopology(relayPath map[string][]string, relayPathWide map[string][]boo
 	for _, r := range ranked {
 		keep[r.key] = true
 		n := byKey[r.key]
-		out.Nodes = append(out.Nodes, TopologyNode{
-			PublicKey: r.key, Name: displayName(n, r.key), Role: n.Role, Relayed: r.n,
-		})
+		tn := TopologyNode{PublicKey: r.key, Name: displayName(n, r.key), Role: n.Role, Relayed: r.n}
+		if n.HasLocation && !n.GpsSuspect && n.Latitude != nil && n.Longitude != nil {
+			tn.Lat, tn.Lon = n.Latitude, n.Longitude
+		}
+		out.Nodes = append(out.Nodes, tn)
 	}
 	for e, w := range edgeW {
 		if keep[e[0]] && keep[e[1]] {

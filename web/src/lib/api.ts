@@ -355,6 +355,9 @@ export interface TopologyNode {
   name: string;
   role: string;
   relayed: number;
+  /** Public advertised position; absent when unknown or GPS-suspect. */
+  lat?: number;
+  lon?: number;
 }
 export interface TopologyEdge {
   a: string;

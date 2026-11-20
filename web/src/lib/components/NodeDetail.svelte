@@ -15,6 +15,8 @@
 	import { ago, shortKey, fmtCoord, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, lastHeard, fmtRadio, fmtAirtime, fmtClockDrift, clockDriftLevel } from '$lib/format';
 	import { nodeHashId } from '$lib/hash-ids';
 	import PayloadTag from './PayloadTag.svelte';
+	import LiveGroupModal from './LiveGroupModal.svelte';
+	import { groupLive, type LiveGroup } from '$lib/live.svelte';
 	import RoleBadge from './RoleBadge.svelte';
 	import ObserverBadge from './ObserverBadge.svelte';
 	import FavoriteStar from './FavoriteStar.svelte';
@@ -53,6 +55,39 @@
 		{ label: '3d', sec: 259200 }
 	];
 	let history = $state<NodeHistoryEntry[]>([]);
+
+	// Activity history row → the same packet modal the live feed uses, opened
+	// straight on the observation that was clicked (observer + receive time).
+	let pkt = $state<LiveGroup | null>(null);
+	let pktObs = $state<string | null>(null);
+	let pktAt = $state<string | null>(null);
+	let pktLoading = $state<string | null>(null); // row key while fetching
+	let pktMissing = $state<string | null>(null); // row key whose packet is gone
+	async function openHistory(h: NodeHistoryEntry, key: string) {
+		pktLoading = key;
+		pktMissing = null;
+		try {
+			const events = await api.packet(h.messageHash);
+			const g = groupLive(events)[0];
+			if (!g) {
+				pktMissing = key;
+				return;
+			}
+			// Match by instant, not string: the two endpoints may format the
+			// timestamp differently.
+			const t = +new Date(h.receivedAt);
+			const ev =
+				g.events.find((e) => e.observerId === h.observerId && Math.abs(+new Date(e.receivedAt) - t) < 1) ??
+				null;
+			pktObs = ev?.observerId ?? null;
+			pktAt = ev?.receivedAt ?? null;
+			pkt = g;
+		} catch {
+			pktMissing = key;
+		} finally {
+			pktLoading = null;
+		}
+	}
 	let histRange = $state(86400);
 	let histLoading = $state(false);
 
@@ -796,14 +831,21 @@
 				{:else}
 					<div class="divide-line/40 max-h-96 divide-y overflow-y-auto">
 						{#each history as h (h.messageHash + h.receivedAt + h.kind + h.hopIndex)}
-							<div class="flex items-center gap-3 px-5 py-2 text-sm">
+							{@const rk = h.messageHash + h.receivedAt + h.kind + h.hopIndex}
+							<button
+								type="button"
+								onclick={() => openHistory(h, rk)}
+								title="Open packet details"
+								class="panel-hover flex w-full cursor-pointer items-center gap-3 px-5 py-2 text-left text-sm {pktLoading === rk ? 'opacity-60' : ''}"
+							>
 								<Tooltip text={fmtAbs(h.receivedAt)} class="w-10 shrink-0"><span class="font-mono text-fg-faint text-xs tnum">{ago(h.receivedAt)}</span></Tooltip>
 								<span class="label shrink-0 rounded px-1.5 py-0.5 text-[0.56rem] {h.kind === 'advert' ? 'text-signal bg-signal/10' : 'text-sky bg-sky/10'}">{h.kind === 'advert' ? 'SENT' : 'RELAY'}</span>
 								<PayloadTag type={h.payloadType} />
 								<span class="font-mono text-fg-dim min-w-0 flex-1 truncate text-xs">via {h.observerName ?? h.observerId ?? '—'}</span>
 								{#if h.kind === 'relay'}<Tooltip text="this node's position in the packet's path" class="shrink-0"><span class="font-mono text-fg-dim text-xs tnum">hop {h.hopIndex + 1}/{h.pathHops}</span></Tooltip>{/if}
 								<span class="font-mono w-14 shrink-0 text-right text-xs tnum" style="color:{snrColor(h.snr)}">{fmtSnr(h.snr)} dB</span>
-							</div>
+								{#if pktMissing === rk}<span class="text-fg-faint shrink-0 text-[0.6rem]">no longer stored</span>{:else}<span class="text-fg-faint shrink-0 text-xs" aria-hidden="true">›</span>{/if}
+							</button>
 						{/each}
 					</div>
 					<div class="text-fg-faint border-line/50 border-t px-5 py-2 text-center text-[0.62rem]">
@@ -882,6 +924,17 @@
 		{/if}
 	</div>
 {/if}
+
+<LiveGroupModal
+	group={pkt}
+	initialObs={pktObs}
+	initialAt={pktAt}
+	onclose={() => {
+		pkt = null;
+		pktObs = null;
+		pktAt = null;
+	}}
+/>
 
 <style>
 	.qr :global(svg) {

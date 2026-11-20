@@ -113,6 +113,11 @@
 		{ t: 'Pair the app', b: 'Install the MeshCore app on your phone and connect over Bluetooth.' },
 		{ t: 'Say hello', b: 'Set the local radio settings below, then post on the Public channel.' }
 	];
+	const bridgeWhy = [
+		{ t: 'The traffic comes back', b: 'Everything heard on the busy default channel would be repeated across our repeaters, undoing the move.' },
+		{ t: 'It works both ways', b: 'Our messages would add to the congestion on 910.525 too. Not neighbourly.' },
+		{ t: 'Settings can’t filter it', b: 'Once a bridge transmits on 909.000, every radio in range hears it, whatever its region.' }
+	];
 	const settings = [
 		{ tag: 'Frequency', v: '909.000', u: 'MHz' },
 		{ tag: 'Bandwidth', v: '62.5', u: 'kHz' },
@@ -130,7 +135,7 @@
 <div bind:this={root} class="deck" class:presenting>
 	<!-- Controls -->
 	<div class="controls">
-		<span class="count tnum">{current + 1} / {total || 16}</span>
+		<span class="count tnum">{current + 1} / {total || 17}</span>
 		<button type="button" onclick={() => go(current - 1)} aria-label="Previous slide" disabled={current === 0}>
 			<svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" /></svg>
 		</button>
@@ -378,8 +383,23 @@
 		</div>
 	</section>
 
-	<!-- 13 Close -->
+	<!-- Bridging -->
 	<section data-slide class="slide alt">
+		<div class="wrap">
+			<p class="eyebrow r" style="--i:0">Our mesh · one rule of thumb</p>
+			<h2 class="r" style="--i:1">We don’t bridge to the default 910.525&#8239;MHz mesh</h2>
+			<p class="lead r" style="--i:2">A bridge is a pair of radios that repeats everything from one frequency onto another, joining two meshes into one. We moved to 909.000 to get away from the crowded default channel, and a bridge would bring it straight back.</p>
+			<div class="grid three">
+				{#each bridgeWhy as x, i (x.t)}
+					<div class="card r" style="--i:{i + 3}"><h3>{x.t}</h3><p>{x.b}</p></div>
+				{/each}
+			</div>
+			<p class="lead r" style="--i:6">Thinking of building a bridge? Please <a href="/contact">talk to us first</a>. More on the <a href="/about#bridging">About page</a>.</p>
+		</div>
+	</section>
+
+	<!-- 13 Close -->
+	<section data-slide class="slide">
 		<div class="wrap">
 			<p class="eyebrow r" style="--i:0">Thank you</p>
 			<h1 class="r" style="--i:1">Questions?</h1>

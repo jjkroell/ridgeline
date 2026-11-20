@@ -3,7 +3,8 @@
 	// a presentation: one full-height slide per idea. Scrolls like a page;
 	// ←/→, PageUp/PageDown and Space step between slides; Present goes
 	// full screen with one slide per screen. Fixed night palette in every theme
-	// (it is a presentation, and the video is dark).
+	// (it is a presentation, and the videos are dark). Each video plays
+	// while its slide is on screen and pauses when you move on.
 	import { onMount } from 'svelte';
 	import Seo from '$lib/components/Seo.svelte';
 
@@ -23,7 +24,7 @@
 
 	function onKey(e: KeyboardEvent) {
 		const t = e.target as HTMLElement | null;
-		if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+		if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT|VIDEO)$/.test(t.tagName))) return;
 		if (e.metaKey || e.ctrlKey || e.altKey) return;
 		if (['ArrowRight', 'ArrowDown', 'PageDown'].includes(e.key) || (e.key === ' ' && !e.shiftKey)) {
 			e.preventDefault();
@@ -63,16 +64,17 @@
 		s.forEach((el) => io.observe(el));
 
 		// Play the clip only while its slide is on screen.
-		const video = root.querySelector('video');
 		const vio = new IntersectionObserver(
-			([en]) => {
-				if (!video) return;
-				if (en.isIntersecting) video.play().catch(() => {});
-				else video.pause();
+			(entries) => {
+				for (const en of entries) {
+					const v = en.target as HTMLVideoElement;
+					if (en.isIntersecting) v.play().catch(() => {});
+					else v.pause();
+				}
 			},
 			{ threshold: 0.4 }
 		);
-		if (video) vio.observe(video);
+		root.querySelectorAll('video').forEach((v) => vio.observe(v));
 
 		const onFs = () => {
 			presenting = document.fullscreenElement === root;
@@ -128,7 +130,7 @@
 <div bind:this={root} class="deck" class:presenting>
 	<!-- Controls -->
 	<div class="controls">
-		<span class="count tnum">{current + 1} / {total || 13}</span>
+		<span class="count tnum">{current + 1} / {total || 16}</span>
 		<button type="button" onclick={() => go(current - 1)} aria-label="Previous slide" disabled={current === 0}>
 			<svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" /></svg>
 		</button>
@@ -166,6 +168,22 @@
 				<rect x="678" y="324" width="44" height="72" rx="9" fill="#E8B454" />
 				<path d="M0 640 C120 590 220 600 330 570 C450 540 560 600 760 560 L760 640 Z" fill="#12222A" />
 			</svg>
+		</div>
+	</section>
+
+	<!-- Full intro video -->
+	<section data-slide class="slide video full">
+		<div class="vwrap">
+			<p class="eyebrow r" style="--i:0">Watch · about a minute and a quarter</p>
+			<video
+				src="/intro/meshcore-intro.webm"
+				poster="/intro/meshcore-intro.png"
+				muted
+				controls
+				playsinline
+				preload="metadata"
+				aria-label="Animated overview of MeshCore: why it matters, what it is, how far LoRa reaches, the four radio roles, how messages find their way, privacy, and the settings to join the coastal BC mesh"
+			></video>
 		</div>
 	</section>
 
@@ -209,6 +227,19 @@
 				</table>
 			</div>
 		</div>
+	</section>
+
+	<!-- LoRa range clip -->
+	<section data-slide class="slide video">
+		<video
+			src="/intro/lora-range.webm"
+			poster="/intro/lora-range.png"
+			muted
+			loop
+			playsinline
+			preload="metadata"
+			aria-label="Animation: Wi-Fi reaches across a house; a pocket LoRa radio reaches kilometres; repeaters on high ground link far-off hilltops"
+		></video>
 	</section>
 
 	<!-- 5 Video -->
@@ -270,6 +301,19 @@
 			</div>
 			<p class="small r" style="--i:4">Your radio also announces its name and type to the mesh. Its location is shared only if you set one. A mesh is not a replacement for 911.</p>
 		</div>
+	</section>
+
+	<!-- Privacy clip -->
+	<section data-slide class="slide video">
+		<video
+			src="/intro/who-can-read.webm"
+			poster="/intro/who-can-read.png"
+			muted
+			loop
+			playsinline
+			preload="metadata"
+			aria-label="Animation: who can read a message. A direct message only your friend; a private channel anyone with the key; a hashtag channel anyone who knows its name; the Public channel everyone"
+		></video>
 	</section>
 
 	<!-- 9 Compare -->
@@ -413,6 +457,9 @@
 
 	.slide.video { padding: 0; background: #0b1418; justify-content: center; }
 	.slide.video video { width: 100%; max-height: 100dvh; aspect-ratio: 16 / 9; object-fit: contain; display: block; }
+	.slide.video.full { padding: 56px 24px; }
+	.vwrap { width: 100%; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+	.slide.video.full video { max-height: calc(100dvh - 150px); border-radius: 14px; background: #0b1418; }
 
 	/* Arrival: each slide's parts rise in once, staged. */
 	.r { opacity: 0; transform: translateY(18px); transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); transition-delay: calc(var(--i, 0) * 90ms); }

@@ -23,14 +23,19 @@ type fakeMailer struct {
 	sent []sentMail
 }
 
-type sentMail struct{ kind, to, subject, text, html string }
+type sentMail struct{ kind, to, subject, text, html, replyTo string }
 
 func (f *fakeMailer) Enabled() bool   { return true }
 func (f *fakeMailer) BaseURL() string { return f.base }
 func (f *fakeMailer) SendAsync(kind, to, subject, text, html string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.sent = append(f.sent, sentMail{kind, to, subject, text, html})
+	f.sent = append(f.sent, sentMail{kind, to, subject, text, html, ""})
+}
+func (f *fakeMailer) SendAsyncReplyTo(kind, to, replyTo, subject, text, html string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sent = append(f.sent, sentMail{kind, to, subject, text, html, replyTo})
 }
 func (f *fakeMailer) ofKind(kind string) []sentMail {
 	f.mu.Lock()

@@ -16,7 +16,7 @@ func TestBuildStripsHeaderInjection(t *testing.T) {
 
 	// A recipient and a subject both carrying a CRLF + injected Bcc header.
 	msg := string(m.build(
-		"victim@example.com\r\nBcc: attacker@evil.com",
+		"victim@example.com\r\nBcc: attacker@evil.com", "",
 		"New note on Node\r\nBcc: attacker@evil.com",
 		"plain body", "<p>html body</p>",
 	))
@@ -56,7 +56,7 @@ func TestBuildMessage(t *testing.T) {
 		t.Errorf("BaseURL should be trimmed of trailing slash, got %q", m.BaseURL())
 	}
 
-	msg := string(m.build("you@example.com", "Hi & welcome", "plain body", "<p>html body</p>"))
+	msg := string(m.build("you@example.com", "", "Hi & welcome", "plain body", "<p>html body</p>"))
 	for _, want := range []string{
 		"From: ", "noreply@ve7kod.ca",
 		"To: you@example.com",
@@ -81,14 +81,14 @@ func TestReplyToHeader(t *testing.T) {
 	}
 
 	// Omitted entirely when unset, so existing mail keeps its current headers.
-	msg := string(New(base, slog.Default()).build("a@example.com", "s", "t", "<p>h</p>"))
+	msg := string(New(base, slog.Default()).build("a@example.com", "", "s", "t", "<p>h</p>"))
 	if strings.Contains(msg, "Reply-To:") {
 		t.Errorf("Reply-To emitted with no address configured:\n%s", msg)
 	}
 
 	withReply := base
 	withReply.ReplyTo = "ve7kod@example.com"
-	msg = string(New(withReply, slog.Default()).build("a@example.com", "s", "t", "<p>h</p>"))
+	msg = string(New(withReply, slog.Default()).build("a@example.com", "", "s", "t", "<p>h</p>"))
 	if !strings.Contains(msg, "Reply-To: ve7kod@example.com\r\n") {
 		t.Errorf("Reply-To missing:\n%s", msg)
 	}
@@ -96,8 +96,14 @@ func TestReplyToHeader(t *testing.T) {
 	// Sanitised like every other header: a CRLF must not open an injected line.
 	injected := base
 	injected.ReplyTo = "x@example.com\r\nBcc: attacker@evil.com"
-	msg = string(New(injected, slog.Default()).build("a@example.com", "s", "t", "<p>h</p>"))
+	msg = string(New(injected, slog.Default()).build("a@example.com", "", "s", "t", "<p>h</p>"))
 	if strings.Contains(msg, "\r\nBcc:") {
 		t.Errorf("header injection via Reply-To succeeded:\n%s", msg)
+	}
+	// A per-message Reply-To (contact form) replaces the configured one for
+	// that message only.
+	msg = string(New(withReply, slog.Default()).build("a@example.com", `"Pat" <pat@example.com>`, "s", "t", "<p>h</p>"))
+	if !strings.Contains(msg, "Reply-To: \"Pat\" <pat@example.com>\r\n") || strings.Contains(msg, "ve7kod@example.com") {
+		t.Errorf("per-message Reply-To not used:\n%s", msg)
 	}
 }

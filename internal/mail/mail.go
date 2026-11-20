@@ -61,11 +61,18 @@ func (m *Mailer) BaseURL() string { return strings.TrimRight(m.cfg.BaseURL, "/")
 // SendAsync sends in a goroutine and logs the outcome, so request handlers never
 // block on SMTP. what is a short label for logs (e.g. "verification").
 func (m *Mailer) SendAsync(what, to, subject, text, html string) {
+	m.SendAsyncReplyTo(what, to, "", subject, text, html)
+}
+
+// SendAsyncReplyTo is SendAsync with a Reply-To for this one message, in place
+// of the configured one (the contact form: replying should reach the visitor,
+// not the unattended From address). Empty replyTo keeps the configured value.
+func (m *Mailer) SendAsyncReplyTo(what, to, replyTo, subject, text, html string) {
 	if !m.Enabled() {
 		return
 	}
 	go func() {
-		err := m.Send(to, subject, text, html)
+		err := m.send(to, replyTo, subject, text, html)
 		if m.onResult != nil {
 			m.onResult(what, to, subject, err)
 		}
@@ -80,10 +87,14 @@ func (m *Mailer) SendAsync(what, to, subject, text, html string) {
 // Send delivers one multipart (text + HTML) message synchronously. Returns nil
 // immediately if the mailer is disabled.
 func (m *Mailer) Send(to, subject, text, html string) error {
+	return m.send(to, "", subject, text, html)
+}
+
+func (m *Mailer) send(to, replyTo, subject, text, html string) error {
 	if !m.Enabled() {
 		return nil
 	}
-	msg := m.build(to, subject, text, html)
+	msg := m.build(to, replyTo, subject, text, html)
 	addr := fmt.Sprintf("%s:%d", m.cfg.Host, m.cfg.Port)
 	auth := smtp.PlainAuth("", m.cfg.Username, m.cfg.Password, m.cfg.Host)
 
@@ -151,7 +162,7 @@ func sanitizeHeader(v string) string {
 }
 
 // build assembles an RFC 5322 multipart/alternative message.
-func (m *Mailer) build(to, subject, text, html string) []byte {
+func (m *Mailer) build(to, replyTo, subject, text, html string) []byte {
 	to = sanitizeHeader(to)
 	from := sanitizeHeader(m.cfg.From)
 	if m.cfg.FromName != "" {
@@ -161,8 +172,11 @@ func (m *Mailer) build(to, subject, text, html string) []byte {
 	var b strings.Builder
 	fmt.Fprintf(&b, "From: %s\r\n", from)
 	fmt.Fprintf(&b, "To: %s\r\n", to)
-	if m.cfg.ReplyTo != "" {
-		fmt.Fprintf(&b, "Reply-To: %s\r\n", sanitizeHeader(m.cfg.ReplyTo))
+	if replyTo == "" {
+		replyTo = m.cfg.ReplyTo
+	}
+	if replyTo != "" {
+		fmt.Fprintf(&b, "Reply-To: %s\r\n", sanitizeHeader(replyTo))
 	}
 	// Q-encoding already escapes control chars; sanitize first as belt-and-suspenders.
 	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", sanitizeHeader(subject)))

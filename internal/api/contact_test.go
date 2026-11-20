@@ -78,6 +78,10 @@ func TestContactDeliversToConfiguredMailboxOnly(t *testing.T) {
 	if !strings.Contains(sent[0].text, "node is deaf") {
 		t.Fatalf("body lost the message: %q", sent[0].text)
 	}
+	// Replying to the notification must reach the visitor, not noreply@.
+	if sent[0].replyTo != `"Pat" <pat@example.com>` {
+		t.Fatalf("Reply-To = %q, want the visitor", sent[0].replyTo)
+	}
 }
 
 func TestContactHoneypotLooksLikeSuccessAndSendsNothing(t *testing.T) {

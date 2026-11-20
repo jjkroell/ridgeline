@@ -73,7 +73,8 @@ func (s *Server) contact(w http.ResponseWriter, r *http.Request) {
 	// A reply address is required: a report nobody can answer is worth little,
 	// and the alternative is a mailbox of anonymous notes with no way to ask a
 	// follow-up question.
-	if _, err := mail.ParseAddress(req.Email); err != nil {
+	addr, err := mail.ParseAddress(req.Email)
+	if err != nil {
 		writeJSONStatus(w, http.StatusBadRequest,
 			map[string]string{"error": "a valid email address is required so we can reply"})
 		return
@@ -96,11 +97,12 @@ func (s *Server) contact(w http.ResponseWriter, r *http.Request) {
 	}
 	subject := fmt.Sprintf("[Ridgeline] Message from %s", from)
 
-	// The submitter's address leads the body rather than riding in a Reply-To
-	// header: the mailer sets Reply-To from its own config for every message it
-	// sends, and bending that for one endpoint would change the headers of the
-	// verification and notification mail too. The HTML part carries a mailto:
-	// so replying is still one click.
+	// Reply-To is the visitor, so the operator's Reply goes to them rather than
+	// to the unattended From address. Only this message overrides the configured
+	// Reply-To; verification and notification mail keep it. The address is the
+	// parsed one (no display-name tricks), and mail.Address encodes the name.
+	// The body repeats it, for clients that ignore Reply-To.
+	replyTo := (&mail.Address{Name: req.Name, Address: addr.Address}).String()
 	text := fmt.Sprintf("From: %s\nReply to: %s\n\n%s\n", from, req.Email, req.Message)
 	htmlBody := fmt.Sprintf(
 		`<p>From: %s<br>Reply to: <a href="mailto:%s">%s</a></p><hr><p style="white-space:pre-wrap">%s</p>`,
@@ -108,7 +110,7 @@ func (s *Server) contact(w http.ResponseWriter, r *http.Request) {
 		html.EscapeString(req.Email), html.EscapeString(req.Email),
 		html.EscapeString(req.Message))
 
-	s.mail.SendAsync("contact", s.contactTo, subject, text, htmlBody)
+	s.mail.SendAsyncReplyTo("contact", s.contactTo, replyTo, subject, text, htmlBody)
 	s.log.Info("contact form submitted", "from", req.Email)
 	writeJSON(w, map[string]bool{"ok": true})
 }

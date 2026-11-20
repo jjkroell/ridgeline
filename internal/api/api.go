@@ -27,6 +27,7 @@ type mailSender interface {
 	Enabled() bool
 	BaseURL() string
 	SendAsync(kind, to, subject, text, html string)
+	SendAsyncReplyTo(kind, to, replyTo, subject, text, html string)
 }
 
 // Server holds API dependencies and serves HTTP.

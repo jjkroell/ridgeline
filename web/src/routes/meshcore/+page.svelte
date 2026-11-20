@@ -391,15 +391,15 @@
 	<!-- Bridging -->
 	<section data-slide class="slide alt">
 		<div class="wrap">
-			<p class="eyebrow r" style="--i:0">Our mesh · one rule of thumb</p>
-			<h2 class="r" style="--i:1">We don’t bridge to the default 910.525&#8239;MHz mesh</h2>
-			<p class="lead r" style="--i:2">A bridge is a pair of radios that repeats everything from one frequency onto another, joining two meshes into one. We moved to 909.000 to get away from the crowded default channel, and a bridge would bring it straight back.</p>
+			<p class="eyebrow r" style="--i:0">Our mesh · etiquette</p>
+			<h2 class="r" style="--i:1">Bridging, and why not to the default 910.525&#8239;MHz mesh</h2>
+			<p class="lead r" style="--i:2">A bridge repeats everything from one frequency onto another, joining two meshes into one. It can be two radios wired together, one radio switching between frequencies, or an internet gateway. We moved to 909.000 to get away from the crowded default channel, and a bridge would bring it straight back.</p>
 			<div class="grid three">
 				{#each bridgeWhy as x, i (x.t)}
 					<div class="card r" style="--i:{i + 3}"><h3>{x.t}</h3><p>{x.b}</p></div>
 				{/each}
 			</div>
-			<p class="lead r" style="--i:6">Thinking of building a bridge? Please <a href="/contact">talk to us first</a>. More on the <a href="/about#bridging">About page</a>.</p>
+			<p class="lead r" style="--i:6">Testing a bridge? Keep it short, pick a quiet time and <a href="/contact">tell us first</a>. Etiquette and safe-testing tips are on the <a href="/about#bridging">About page</a>.</p>
 		</div>
 	</section>
 

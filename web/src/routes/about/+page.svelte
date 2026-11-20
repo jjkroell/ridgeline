@@ -109,56 +109,111 @@
 	</section>
 
 	<section id="bridging" class="text-fg-dim mt-10 space-y-4">
-		<h2 class="text-fg text-xl font-700">Bridges, and why we don't bridge to 910.525&thinsp;MHz</h2>
+		<h2 class="text-fg text-xl font-700">Bridging etiquette</h2>
 		<p>
-			A <strong>bridge</strong> joins two meshes that sit on different frequencies. It is usually a
-			pair of radios wired together, one tuned to each channel: every packet one side hears is
-			transmitted again on the other. To the people using them, the two meshes become one.
+			This section is about good manners on a shared channel, not a list of rules. Bridging has its
+			place. It just affects everyone on the mesh, so it is worth knowing what it does before you try
+			it.
 		</p>
+
+		<h3 class="text-fg text-base font-600 pt-2">What a bridge is</h3>
+		<p>
+			A <strong>bridge</strong> joins two meshes that sit on different frequencies or radio settings.
+			Every packet it hears on one side is transmitted again on the other, so to the people using them
+			the two meshes become one. The firmware known to do this:
+		</p>
+		<ul class="list-disc space-y-2 pl-5">
+			<li>
+				<strong>Official MeshCore repeater builds with a bridge.</strong> Two repeaters, one per
+				frequency, joined by a serial cable (RS-232) or by ESP-NOW (Wi-Fi between two ESP32 boards).
+				These ship as ready-made builds, so anyone can flash one.
+			</li>
+			<li>
+				<strong>Halo Keymind Cascade</strong>, Mike Carper's MeshCore firmware (used by
+				<a href="https://cascadiamesh.org" target="_blank" rel="noopener" class="text-signal hover:underline">CascadiaMesh</a>). One
+				radio can time-share two frequencies and pass traffic between them, which it calls
+				<em>crossing</em>, so a bridge no longer needs two radios. It also has MQTT, ESP-NOW and
+				RS-232 bridges. Crossing is off by default.
+			</li>
+			<li>
+				<strong>Internet and MQTT gateways</strong> that take packets from a network connection and
+				transmit them on the air. They are not always called bridges, but they have the same effect.
+			</li>
+		</ul>
+
+		<h3 class="text-fg text-base font-600 pt-2">What it does to the mesh</h3>
 		<p>
 			Most MeshCore radios in North America ship on the default preset,
 			<strong>910.525&thinsp;MHz</strong>, and that channel is shared by a very large population of
 			stations. We left it because of that load: collisions were costing us channel messages, direct
 			messages and remote administration of our repeaters (the
-			<a href="/faq" class="text-signal hover:underline">frequency FAQ</a> has the full story). A
-			bridge back to 910.525 would undo the move:
+			<a href="/faq" class="text-signal hover:underline">frequency FAQ</a> has the full story). That is why a bridge to 910.525 is
+			the clearest example of what to avoid:
 		</p>
 		<ul class="list-disc space-y-2 pl-5">
 			<li>
-				<strong>The traffic comes back.</strong> Everything the bridge hears on the default channel
-				is repeated onto 909.000 and flooded across our repeaters. The airtime we gained by moving
-				would be spent carrying other networks' messages.
+				<strong>The traffic comes with it.</strong> Everything the bridge hears on the other side is
+				repeated onto 909.000 and flooded across our repeaters. The airtime we gained by moving would
+				be spent carrying another network's messages.
 			</li>
 			<li>
-				<strong>It works both ways.</strong> Our own floods would be pushed onto 910.525 as well,
-				adding to the congestion there. That is not a good-neighbour thing to do to a channel that
-				is already busy.
+				<strong>It works both ways.</strong> Our own floods get pushed onto the other side as well,
+				which is not a good-neighbour thing to do to a channel that is already busy.
 			</li>
 			<li>
 				<strong>Floods get bigger, not just busier.</strong> A flood spreads until it has crossed the
-				whole joined network. Every message would travel further, through more repeaters, and take
-				up airtime in more places at once.
+				whole joined network. Every message travels further, through more repeaters, and takes up
+				airtime in more places at once.
 			</li>
 			<li>
 				<strong>Routes get less reliable.</strong> MeshCore names each repeater in a route by a short
-				fragment of its key. Join two large meshes and many more repeaters share the same fragment,
-				so direct routes become easier to confuse.
+				fragment of its key. Join two large meshes and many more repeaters share the same fragment, so
+				direct routes become easier to confuse.
 			</li>
 			<li>
-				<strong>Settings can't filter it.</strong> As the FAQ explains, region scoping decides what a
-				repeater forwards, not what is on the air. Once a bridge transmits it onto 909.000, every radio
-				in range hears it.
+				<strong>Channel settings don't filter it.</strong> A plain bridge forwards every packet it
+				hears and cannot read channels, so removing channels from the bridge radio changes nothing.
+				Region scoping doesn't help either: it decides what a repeater forwards, not what is on the
+				air.
+			</li>
+		</ul>
+
+		<h3 class="text-fg text-base font-600 pt-2">Where bridging has a place</h3>
+		<p>
+			Testing and experimenting, and short-term jobs. During the move we ran a bridge on
+			Mt&nbsp;Cokley between 910.425 and 909.000 so nobody was cut off while their node was retuned,
+			and it came down once the move was complete. It joined two halves of <em>our</em> mesh, for a
+			set time.
+		</p>
+
+		<h3 class="text-fg text-base font-600 pt-2">Doing it safely</h3>
+		<ul class="list-disc space-y-2 pl-5">
+			<li>
+				<strong>Tell us first.</strong> A quick note through the
+				<a href="/contact" class="text-signal hover:underline">contact page</a> means nobody chases a mystery traffic spike.
+			</li>
+			<li>
+				<strong>Keep it short.</strong> An hour or two, then switch bridging off
+				(<code>set bridge.enabled off</code>, or turn crossing off) rather than leaving it running.
+			</li>
+			<li><strong>Pick a quiet time</strong>, not an evening or a net.</li>
+			<li>
+				<strong>Bridge to something nobody else uses</strong>, such as a test frequency or a second
+				radio of your own, not a live mesh.
+			</li>
+			<li>
+				<strong>Filter if your firmware can.</strong> Halo Keymind Cascade can drop or rate-limit
+				bridged traffic by packet type and channel, so a test can carry only a dedicated channel such
+				as <code>#bridge</code>. A plain bridge can't do this: it passes everything.
+			</li>
+			<li>
+				<strong>Watch the mesh while it runs.</strong> The <a href="/live" class="text-signal hover:underline">live feed</a> and
+				Analytics show quickly if traffic on 909.000 jumps, and that's the time to switch it off.
 			</li>
 		</ul>
 		<p>
-			Bridges are not bad in themselves. During the move we ran one on Mt&nbsp;Cokley between 910.425
-			and 909.000 so nobody was cut off while their node was retuned, and it came down once the move
-			was complete. The difference is that it joined two halves of <em>our</em> mesh, for a set time.
-		</p>
-		<p>
-			If you are building a bridge, or experimenting with one that has a 909.000 side, please
-			<a href="/contact" class="text-signal hover:underline">talk to us first</a>. A single bridge
-			that transmits on the wrong side can push a busy channel's traffic across the whole mesh.
+			If a bridge starts pushing traffic onto 909.000, we'll get in touch and point the owner to this
+			page. Most of the time nobody has told them the etiquette yet.
 		</p>
 	</section>
 

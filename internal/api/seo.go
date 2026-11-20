@@ -141,6 +141,7 @@ var seoStaticPages = []struct{ Path, Freq, Priority string }{
 var seoNav = [][2]string{
 	{"/about", "About Ridgeline & the MeshCore mesh"},
 	{"/meshcore", "What is MeshCore? An introduction"},
+	{"/faq", "Why 909.000 MHz: the frequency move FAQ"},
 	{"/nodes", "Node & repeater directory"},
 	{"/live", "Live packet feed"},
 	{"/map", "Coverage map"},

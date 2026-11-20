@@ -1,6 +1,6 @@
 <script lang="ts">
-	// The site's one contact form (also posted to by the static /faq page's own
-	// dialog). POST /api/contact delivers to the operator's mailbox; the server
+	// The site's one contact form (on /contact; the /faq page links there).
+	// POST /api/contact delivers to the operator's mailbox; the server
 	// validates, rate-limits and drops anything that fills the hidden "website"
 	// field (bots), so the client only checks the two required fields.
 	import { auth } from '$lib/auth.svelte';

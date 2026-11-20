@@ -11,6 +11,27 @@
 		{ k: 'Spreading factor', v: 'SF 7' },
 		{ k: 'Coding rate', v: 'CR 5' }
 	];
+
+	// One full day of traffic as Ridgeline stored it: 19 November 2026,
+	// 00:00–24:00 UTC. A static snapshot (counted from the observations table),
+	// not live data — update the date with the numbers if this is ever refreshed.
+	// "obs" = observations: one observer hearing one copy of a packet.
+	const day = { date: '19 November 2026', packets: 11063, obs: 514759 };
+	const traffic: { name: string; what: string; packets: number; obs: number; flood?: boolean }[] = [
+		{ name: 'Requests', what: 'A node asking another for status, telemetry or a login. Encrypted.', packets: 2622, obs: 185796, flood: true },
+		{ name: 'Channel messages', what: 'Text on Public and hashtag channels.', packets: 2159, obs: 146168, flood: true },
+		{ name: 'Path returns', what: 'The route back, sent after a flood reaches the node it was for.', packets: 755, obs: 50268, flood: true },
+		{ name: 'Channel data', what: 'Non-text data sent on a channel.', packets: 695, obs: 43889, flood: true },
+		{ name: 'Direct messages', what: 'Private text between two people.', packets: 621, obs: 32450, flood: true },
+		{ name: 'Adverts', what: 'A node announcing its name, type and location.', packets: 1356, obs: 32407 },
+		{ name: 'Responses', what: 'Replies to requests, usually sent along a known path.', packets: 1360, obs: 8258 },
+		{ name: 'Anonymous requests', what: 'Guest logins to rooms and repeaters.', packets: 177, obs: 6620, flood: true },
+		{ name: 'Acks', what: 'Acknowledgements: delivery receipts for direct messages.', packets: 97, obs: 6010, flood: true },
+		{ name: 'Discovery', what: 'Nodes asking who is nearby, and the replies.', packets: 1095, obs: 2599 },
+		{ name: 'Other', what: 'Traces, multipart, firmware updates and unrecognised packets.', packets: 139, obs: 294 }
+	];
+	const fmt = (n: number) => n.toLocaleString('en-CA');
+	const pct = (n: number, of: number) => ((n / of) * 100).toFixed(1) + '%';
 </script>
 
 <Seo
@@ -232,6 +253,70 @@
 		</p>
 	</section>
 
+
+	<section id="traffic" class="text-fg-dim mt-10 space-y-4">
+		<h2 class="text-fg text-xl font-700">What the mesh carries</h2>
+		<p>
+			Here is one full day of traffic as Ridgeline recorded it, from
+			<strong>{day.date}</strong> (00:00–24:00&nbsp;UTC). That day the observers picked up
+			<strong>{fmt(day.packets)}</strong> distinct packets. Because a packet is heard many times over —
+			by several observers, and by each of them again as neighbouring repeaters pass it on — those
+			packets add up to <strong>{fmt(day.obs)}</strong> observations, about
+			{Math.round(day.obs / day.packets)} per packet.
+		</p>
+
+		<div class="border-line/70 not-prose my-2 overflow-hidden rounded-[var(--radius)] border">
+			<div class="text-fg-faint border-line/60 flex items-end gap-3 border-b px-4 py-2 font-mono text-[0.65rem] tracking-wide uppercase">
+				<span class="min-w-0 flex-1">Packet type</span>
+				<span class="w-16 shrink-0 text-right">Packets</span>
+				<span class="w-24 shrink-0 text-right sm:w-28">Observations</span>
+			</div>
+			<div class="divide-line/60 divide-y">
+				{#each traffic as t (t.name)}
+					<div class="flex items-start gap-3 px-4 py-2.5">
+						<div class="min-w-0 flex-1">
+							<div class="text-fg text-sm font-600 break-words">{t.name}</div>
+							{#if t.flood}<div class="text-fg-faint font-mono text-[0.58rem] tracking-wide uppercase">mostly flood</div>{/if}
+							<div class="text-fg-faint text-xs leading-snug">{t.what}</div>
+						</div>
+						<div class="w-16 shrink-0 text-right font-mono text-sm tabular-nums">
+							<div class="text-fg">{fmt(t.packets)}</div>
+							<div class="text-fg-faint text-[0.65rem]">{pct(t.packets, day.packets)}</div>
+						</div>
+						<div class="w-24 shrink-0 text-right font-mono text-sm tabular-nums sm:w-28">
+							<div class="text-signal font-600">{fmt(t.obs)}</div>
+							<div class="bg-line/50 mt-1 ml-auto h-1 w-full overflow-hidden rounded-full">
+								<div class="bg-signal h-full rounded-full" style="width:{(t.obs / traffic[0].obs) * 100}%"></div>
+							</div>
+							<div class="text-fg-faint text-[0.65rem]">{pct(t.obs, day.obs)}</div>
+						</div>
+					</div>
+				{/each}
+			</div>
+		</div>
+
+		<h3 class="text-fg text-base font-600 pt-2">Floods are what fill the air</h3>
+		<p>
+			A <strong>flood</strong> packet is passed on by every repeater that hears it, so a single one
+			reaches the whole mesh and is on the air many times over. Flood types were heard 50 to 70 times
+			each. Packets sent <strong>direct</strong>, along a path the sender already knows, only touch the
+			repeaters on that path: discovery made up about 10% of the day's packets but only 0.5% of what
+			was heard.
+		</p>
+
+		<h3 class="text-fg text-base font-600 pt-2">Requests were the biggest load</h3>
+		<p>
+			Requests were about a quarter of the packets but over a third of everything heard, and nearly
+			all of them were floods. They arrived at a steady rate around the clock, which points to software
+			polling repeaters on a schedule rather than people. The path returns they trigger add roughly
+			another tenth.
+		</p>
+		<p>
+			If you run anything that checks on a repeater automatically, poll as rarely as you can, and make
+			sure your companion already has a path to that repeater so its requests go direct instead of
+			flooding the whole mesh. Every flood uses airtime that everyone on 909.000&thinsp;MHz shares.
+		</p>
+	</section>
 
 	<section class="text-fg-dim mt-10 space-y-4">
 		<h2 class="text-fg text-xl font-700">Join the network</h2>

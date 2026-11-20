@@ -87,6 +87,28 @@
 	// A seasonal theme starting (by date or the admin switch) opens What's new
 	// once per season. Waits for /api/health, which carries the admin's switch.
 	onMount(() => seasonal.load());
+
+	// A shared link like /about#bridging: the browser jumps to the section in the
+	// prerendered HTML, then hydration and web fonts shrink the content above it,
+	// leaving the heading scrolled out of view (184 px on a phone). Land on it
+	// again once layout has settled — unless the reader already scrolled away.
+	onMount(() => {
+		const id = decodeURIComponent(location.hash.slice(1));
+		const target = id ? document.getElementById(id) : null;
+		if (!target) return;
+		let moved = false;
+		const stop = () => (moved = true);
+		const opts = { passive: true, once: true } as const;
+		addEventListener('wheel', stop, opts);
+		addEventListener('touchmove', stop, opts);
+		addEventListener('keydown', stop, opts);
+		const land = () => {
+			if (!moved && Math.abs(target.getBoundingClientRect().top) > 4) target.scrollIntoView({ block: 'start' });
+		};
+		(document.fonts?.ready ?? Promise.resolve()).then(() => requestAnimationFrame(land));
+		const t = setTimeout(land, 700);
+		return () => clearTimeout(t);
+	});
 	$effect(() => {
 		const id = env.loaded ? seasonal.scheduled?.id : undefined;
 		if (id) announce.season(id);

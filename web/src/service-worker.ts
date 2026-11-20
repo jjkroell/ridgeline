@@ -11,7 +11,9 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 const DEV = import.meta.env.DEV;
 
 const CACHE = `ridgeline-${version}`;
-const SHELL = [...build, ...files];
+// /intro/ holds the MeshCore intro video (MBs, streamed with range requests):
+// fetched only by visitors who open /meshcore, never precached for everyone.
+const SHELL = [...build, ...files.filter((f) => !f.startsWith('/intro/'))];
 
 sw.addEventListener('install', (event) => {
 	sw.skipWaiting();

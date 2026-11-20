@@ -31,6 +31,12 @@ type mailSender interface {
 }
 
 // Server holds API dependencies and serves HTTP.
+// Static files are typed by extension; the host's mime.types decides
+// otherwise, and Debian's maps .webm to audio/webm (the /meshcore intro clip).
+func init() {
+	_ = mime.AddExtensionType(".webm", "video/webm")
+}
+
 type Server struct {
 	store   *store.Store
 	log     *slog.Logger

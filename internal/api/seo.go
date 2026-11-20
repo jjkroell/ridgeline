@@ -140,6 +140,7 @@ var seoStaticPages = []struct{ Path, Freq, Priority string }{
 // seoNav is the crawl summary's link list, the same set as app.html's.
 var seoNav = [][2]string{
 	{"/about", "About Ridgeline & the MeshCore mesh"},
+	{"/meshcore", "What is MeshCore? An introduction"},
 	{"/nodes", "Node & repeater directory"},
 	{"/live", "Live packet feed"},
 	{"/map", "Coverage map"},

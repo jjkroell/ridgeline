@@ -19,7 +19,7 @@ import (
 // SPA shell. shareHandler already writes each public route's head; this adds
 // what a crawler needs beyond the head: a search-length title and description,
 // a crawlable summary in the shell's <noscript> block, JSON-LD for the page,
-// and a sitemap listing every recently heard node. Everything here comes from
+// and a sitemap of the site's sections and content pages. Everything here comes from
 // the same public node list /api/nodes serves.
 
 // seoSitemapDays is how recently a node must have been heard to be listed in
@@ -130,11 +130,15 @@ var seoSections = map[string]seoSection{
 	},
 }
 
-// Prerendered pages: real HTML of their own, listed only in the sitemap.
+// Content pages listed in the sitemap after the sections: the prerendered
+// explainers (real HTML of their own) plus /contact.
 var seoStaticPages = []struct{ Path, Freq, Priority string }{
 	{"/about", "monthly", "0.9"},
+	{"/meshcore", "monthly", "0.9"},
+	{"/faq", "monthly", "0.8"},
 	{"/hash-ids", "monthly", "0.8"},
 	{"/sos", "monthly", "0.8"},
+	{"/contact", "yearly", "0.4"},
 }
 
 // seoNav is the crawl summary's link list, the same set as app.html's.
@@ -383,10 +387,6 @@ func (s *Server) buildSitemap() ([]byte, error) {
 	if origin == "" {
 		return nil, fmt.Errorf("no public site URL (share-site.json)")
 	}
-	nodes, err := s.recentNodes()
-	if err != nil {
-		return nil, err
-	}
 	var b bytes.Buffer
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n" + `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
 	url := func(path, lastmod, freq, prio string) {
@@ -413,17 +413,11 @@ func (s *Server) buildSitemap() ([]byte, error) {
 	for _, p := range seoStaticPages {
 		url(p.Path, "", p.Freq, p.Priority)
 	}
-	for _, n := range nodes {
-		lastmod := ""
-		if t, err := time.Parse(time.RFC3339Nano, n.LastSeen); err == nil {
-			lastmod = t.UTC().Format("2006-01-02")
-		}
-		prio := "0.5"
-		if r := seoRoleWord(n.Role); r == "repeater" || r == "room server" {
-			prio = "0.6"
-		}
-		url("/nodes/"+n.PublicKey, lastmod, "daily", prio)
-	}
+	// Individual node pages are deliberately NOT listed (2026-11-20). They were
+	// ~430 of ~440 entries: hex-keyed, client-rendered (Google can't fetch the
+	// /api/ data they need), with lastmods changing daily. On a new domain that
+	// left the whole site stuck in Search Console's "Discovered - currently not
+	// indexed". The pages still resolve, and /nodes' crawl summary links them.
 	b.WriteString("</urlset>\n")
 	return b.Bytes(), nil
 }

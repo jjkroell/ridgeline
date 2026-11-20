@@ -134,13 +134,14 @@ func TestSitemap(t *testing.T) {
 	for _, u := range set.URLs {
 		locs[u.Loc] = u.LastMod
 	}
-	for _, want := range []string{"https://mesh.example/", "https://mesh.example/about", "https://mesh.example/nodes"} {
+	for _, want := range []string{"https://mesh.example/", "https://mesh.example/about", "https://mesh.example/nodes", "https://mesh.example/meshcore", "https://mesh.example/faq"} {
 		if _, ok := locs[want]; !ok {
 			t.Errorf("missing %s", want)
 		}
 	}
-	if lm, ok := locs["https://mesh.example/nodes/"+key]; !ok || len(lm) != 10 {
-		t.Fatalf("node URL/lastmod: %q %v", lm, ok)
+	// Node pages are kept out of the sitemap on purpose (see buildSitemap).
+	if _, ok := locs["https://mesh.example/nodes/"+key]; ok {
+		t.Fatal("node page listed in sitemap")
 	}
 }
 

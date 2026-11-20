@@ -132,6 +132,11 @@
 	path="/meshcore"
 />
 
+<svelte:head>
+	<!-- Prerendered: without JS nothing would ever fade the slides in. -->
+	<noscript><style>.r { opacity: 1 !important; transform: none !important; }</style></noscript>
+</svelte:head>
+
 <div bind:this={root} class="deck" class:presenting>
 	<!-- Controls -->
 	<div class="controls">

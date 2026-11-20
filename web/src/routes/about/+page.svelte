@@ -108,6 +108,60 @@
 		</p>
 	</section>
 
+	<section id="bridging" class="text-fg-dim mt-10 space-y-4">
+		<h2 class="text-fg text-xl font-700">Bridges, and why we don't bridge to 910.525&thinsp;MHz</h2>
+		<p>
+			A <strong>bridge</strong> joins two meshes that sit on different frequencies. It is usually a
+			pair of radios wired together, one tuned to each channel: every packet one side hears is
+			transmitted again on the other. To the people using them, the two meshes become one.
+		</p>
+		<p>
+			Most MeshCore radios in North America ship on the default preset,
+			<strong>910.525&thinsp;MHz</strong>, and that channel is shared by a very large population of
+			stations. We left it because of that load: collisions were costing us channel messages, direct
+			messages and remote administration of our repeaters (the
+			<a href="/faq" class="text-signal hover:underline">frequency FAQ</a> has the full story). A
+			bridge back to 910.525 would undo the move:
+		</p>
+		<ul class="list-disc space-y-2 pl-5">
+			<li>
+				<strong>The traffic comes back.</strong> Everything the bridge hears on the default channel
+				is repeated onto 909.000 and flooded across our repeaters. The airtime we gained by moving
+				would be spent carrying other networks' messages.
+			</li>
+			<li>
+				<strong>It works both ways.</strong> Our own floods would be pushed onto 910.525 as well,
+				adding to the congestion there. That is not a good-neighbour thing to do to a channel that
+				is already busy.
+			</li>
+			<li>
+				<strong>Floods get bigger, not just busier.</strong> A flood spreads until it has crossed the
+				whole joined network. Every message would travel further, through more repeaters, and take
+				up airtime in more places at once.
+			</li>
+			<li>
+				<strong>Routes get less reliable.</strong> MeshCore names each repeater in a route by a short
+				fragment of its key. Join two large meshes and many more repeaters share the same fragment,
+				so direct routes become easier to confuse.
+			</li>
+			<li>
+				<strong>Settings can't filter it.</strong> As the FAQ explains, region scoping decides what a
+				repeater forwards, not what is on the air. Once a bridge transmits it onto 909.000, every radio
+				in range hears it.
+			</li>
+		</ul>
+		<p>
+			Bridges are not bad in themselves. During the move we ran one on Mt&nbsp;Cokley between 910.425
+			and 909.000 so nobody was cut off while their node was retuned, and it came down once the move
+			was complete. The difference is that it joined two halves of <em>our</em> mesh, for a set time.
+		</p>
+		<p>
+			If you are building a bridge, or experimenting with one that has a 909.000 side, please
+			<a href="/contact" class="text-signal hover:underline">talk to us first</a>. A single bridge
+			that transmits on the wrong side can push a busy channel's traffic across the whole mesh.
+		</p>
+	</section>
+
 	<section class="text-fg-dim mt-10 space-y-4">
 		<h2 class="text-fg text-xl font-700">Nodes, repeaters, and observers</h2>
 		<p>

@@ -361,11 +361,14 @@
 				</div>
 
 				<!-- Reception stats for this repeat -->
-				<div class="border-line/50 grid grid-cols-4 gap-3 border-b px-5 py-3">
-					{#each [{ k: 'SNR', v: fmtSnr(ev.snr), u: 'dB' }, { k: 'RSSI', v: ev.rssi != null ? String(ev.rssi) : '—', u: 'dBm' }, { k: 'Hops', v: String(ev.path?.length ?? ev.pathHops ?? 0), u: '' }, { k: 'Heard', v: absTime(ev.receivedAt), u: '' }] as s (s.k)}
-						<div>
+				<!-- Phones: columns size to content so the wide Heard time gets the spare
+				     room (equal quarters pushed it off the right edge at 390 px). The
+				     .mmmZ tail renders small, like a unit, but keeps ms precision. -->
+				<div class="border-line/50 grid grid-cols-[auto_auto_auto_minmax(0,1fr)] gap-3 border-b px-5 py-3 sm:grid-cols-4">
+					{#each [{ k: 'SNR', v: fmtSnr(ev.snr), u: 'dB' }, { k: 'RSSI', v: ev.rssi != null ? String(ev.rssi) : '—', u: 'dBm' }, { k: 'Hops', v: String(ev.path?.length ?? ev.pathHops ?? 0), u: '' }, { k: 'Heard', v: absTime(ev.receivedAt).slice(0, 8), u: absTime(ev.receivedAt).slice(8) }] as s (s.k)}
+						<div class="min-w-0">
 							<div class="label">{s.k}</div>
-							<div class="font-display tnum text-fg mt-1 text-lg font-700">{s.v}{#if s.u && s.v !== '—'}<span class="text-fg-faint ml-1 text-xs font-400">{s.u}</span>{/if}</div>
+							<div class="font-display tnum text-fg mt-1 text-lg font-700 whitespace-nowrap">{s.v}{#if s.u && s.v !== '—'}<span class="text-fg-faint text-xs font-400 {s.k === 'Heard' ? '' : 'ml-1'}">{s.u}</span>{/if}</div>
 						</div>
 					{/each}
 				</div>

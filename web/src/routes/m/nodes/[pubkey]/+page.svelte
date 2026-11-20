@@ -8,7 +8,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import QRCode from 'qrcode';
 	import { copyText } from '$lib/mobile/context-menu.svelte';
-	import { api, type Node, type NodeAnalytics, type NodeObserverStat, type BlockEntry, type RFNeighbors } from '$lib/api';
+	import { api, type Node, type NodeAnalytics, type NodeObserverStat, type BlockEntry, type RFNeighbors, type NodeHistoryEntry } from '$lib/api';
 	import { ago, shortKey, fmtNum, fmtSnr, snrColor, roleColor, roleLabel, nodeStatus, lastHeard, fmtRadio, fmtCoord, fmtAirtime, fmtClockDrift, clockDriftLevel } from '$lib/format';
 	import { nodeHashId } from '$lib/hash-ids';
 	import { favorites } from '$lib/favorites.svelte';
@@ -19,6 +19,9 @@
 	import LeafletInset from '$lib/components/LeafletInset.svelte';
 	import NodeAdmin from '$lib/components/NodeAdmin.svelte';
 	import ObserverBadge from '$lib/components/ObserverBadge.svelte';
+	import PayloadTag from '$lib/components/PayloadTag.svelte';
+	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
+	import { groupLive, type LiveGroup } from '$lib/live.svelte';
 
 	const pubkey = $derived((page.params.pubkey ?? '').toUpperCase());
 
@@ -74,9 +77,68 @@
 		loadObservers();
 	}
 
+	// Activity history (adverts sent + packets relayed), same feed as desktop.
+	// Shown a page at a time — 300 rows is too long a scroll on a phone.
+	const histRanges = [
+		{ label: '6h', sec: 21600 },
+		{ label: '24h', sec: 86400 },
+		{ label: '3d', sec: 259200 }
+	];
+	let history = $state<NodeHistoryEntry[]>([]);
+	let histRange = $state(86400);
+	let histLoading = $state(false);
+	let histShown = $state(30);
+	async function loadHistory() {
+		histLoading = true;
+		try {
+			history = await api.nodeHistory(pubkey, histRange, 300);
+		} catch {
+			history = [];
+		} finally {
+			histLoading = false;
+		}
+	}
+	function setHistRange(sec: number) {
+		if (sec === histRange) return;
+		histRange = sec;
+		histShown = 30;
+		loadHistory();
+	}
+	const rowKey = (h: NodeHistoryEntry) => h.messageHash + h.receivedAt + h.kind + h.hopIndex;
+
+	// Tap a row → the live feed's packet modal, opened on that exact observation.
+	let pkt = $state<LiveGroup | null>(null);
+	let pktObs = $state<string | null>(null);
+	let pktAt = $state<string | null>(null);
+	let pktLoading = $state<string | null>(null);
+	let pktMissing = $state<string | null>(null);
+	async function openHistory(h: NodeHistoryEntry) {
+		const key = rowKey(h);
+		pktLoading = key;
+		pktMissing = null;
+		try {
+			const g = groupLive(await api.packet(h.messageHash))[0];
+			if (!g) {
+				pktMissing = key;
+				return;
+			}
+			// match by instant, not string — the endpoints may format it differently
+			const t = +new Date(h.receivedAt);
+			const ev = g.events.find((e) => e.observerId === h.observerId && Math.abs(+new Date(e.receivedAt) - t) < 1) ?? null;
+			pktObs = ev?.observerId ?? null;
+			pktAt = ev?.receivedAt ?? null;
+			pkt = g;
+		} catch {
+			pktMissing = key;
+		} finally {
+			pktLoading = null;
+		}
+	}
+
 	onMount(() => {
 		refresh();
 		loadObservers();
+		loadHistory();
 		const t = setInterval(refresh, 15000);
 		return () => clearInterval(t);
 	});
@@ -372,6 +434,58 @@
 			</div>
 		{/if}
 
+		<!-- activity history: tap a row for the packet -->
+		<div class="mt-5 mb-2 flex items-center gap-2 px-1">
+			<h2 class="font-display text-fg text-xs font-700 tracking-wide">ACTIVITY HISTORY · {history.length}{history.length >= 300 ? '+' : ''}</h2>
+			<div class="ml-auto flex items-center gap-1">
+				{#each histRanges as r (r.sec)}
+					<button
+						onclick={() => setHistRange(r.sec)}
+						class="rounded-full border px-2 py-0.5 text-[0.6rem] font-600 transition-colors {histRange === r.sec ? 'border-signal text-signal' : 'border-line text-fg-faint'}"
+						>{r.label}</button
+					>
+				{/each}
+			</div>
+		</div>
+		{#if histLoading && history.length === 0}
+			<div class="text-fg-faint px-1 py-3 text-xs">Loading…</div>
+		{:else if history.length === 0}
+			<div class="border-line/60 bg-panel text-fg-faint rounded-2xl border px-4 py-4 text-center text-xs">
+				No observations in this range.
+			</div>
+		{:else}
+			<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
+				{#each history.slice(0, histShown) as h (rowKey(h))}
+					<button
+						type="button"
+						onclick={() => openHistory(h)}
+						class="active:bg-line/40 flex w-full items-center gap-2.5 px-4 py-2.5 text-left {pktLoading === rowKey(h) ? 'opacity-60' : ''}"
+					>
+						<span class="font-mono text-fg-faint w-9 shrink-0 text-[0.65rem] tnum">{ago(h.receivedAt)}</span>
+						<span class="shrink-0 rounded px-1.5 py-0.5 text-[0.55rem] font-700 tracking-wide {h.kind === 'advert' ? 'text-signal bg-signal/10' : 'text-sky bg-sky/10'}">{h.kind === 'advert' ? 'SENT' : 'RELAY'}</span>
+						<PayloadTag type={h.payloadType} />
+						<span class="min-w-0 flex-1">
+							<span class="text-fg-dim block truncate text-xs">{h.observerName ?? h.observerId ?? '—'}</span>
+							{#if pktMissing === rowKey(h)}
+								<span class="text-fg-faint block text-[0.6rem]">packet no longer stored</span>
+							{:else if h.kind === 'relay'}
+								<span class="text-fg-faint block font-mono text-[0.6rem] tnum">hop {h.hopIndex + 1}/{h.pathHops}</span>
+							{/if}
+						</span>
+						<span class="font-mono shrink-0 text-xs tnum" style="color:{snrColor(h.snr)}">{fmtSnr(h.snr)} dB</span>
+						<span class="text-fg-faint shrink-0" aria-hidden="true">›</span>
+					</button>
+				{/each}
+			</div>
+			{#if history.length > histShown}
+				<button
+					onclick={() => (histShown += 30)}
+					class="border-line/60 text-signal mt-2 w-full rounded-2xl border py-2 text-xs font-600 active:bg-line/40"
+					>Show {Math.min(30, history.length - histShown)} more</button
+				>
+			{/if}
+		{/if}
+
 		<!-- RF neighbours: published zero-hop tables (measured, not inferred) -->
 		{#if rf}
 			{#if rf.reportedAt}
@@ -420,3 +534,14 @@
 
 	{/if}
 </div>
+
+<LiveGroupModal
+	group={pkt}
+	initialObs={pktObs}
+	initialAt={pktAt}
+	onclose={() => {
+		pkt = null;
+		pktObs = null;
+		pktAt = null;
+	}}
+/>

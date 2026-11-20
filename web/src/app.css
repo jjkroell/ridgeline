@@ -55,6 +55,7 @@
 
 	/* Atmosphere (dark defaults). Overridden by .theme-light below. */
 	--contour-color: rgba(94, 124, 140, 0.17);
+	--contour-img: url('/contours/ridgeline.svg');
 	--glow-a: rgba(52, 227, 196, 0.06);
 	--glow-b: rgba(232, 180, 84, 0.045);
 }
@@ -98,6 +99,7 @@ html[data-theme='light'] {
 	--color-role-observer: #7c5cf0;
 
 	--contour-color: rgba(141, 110, 74, 0.28);
+	--contour-img: url('/contours/light.svg');
 	--glow-a: rgba(15, 158, 138, 0.07);
 	--glow-b: rgba(176, 125, 30, 0.06);
 }
@@ -133,6 +135,7 @@ html[data-theme='slate'] {
 	--color-role-observer: #b39bf5;
 
 	--contour-color: rgba(90, 140, 200, 0.2);
+	--contour-img: url('/contours/slate.svg');
 	--glow-a: rgba(92, 200, 255, 0.07);
 	--glow-b: rgba(229, 180, 95, 0.04);
 }
@@ -168,6 +171,7 @@ html[data-theme='graphite'] {
 	--color-role-observer: #b39bd0;
 
 	--contour-color: rgba(180, 145, 95, 0.16);
+	--contour-img: url('/contours/graphite.svg');
 	--glow-a: rgba(224, 166, 63, 0.06);
 	--glow-b: rgba(224, 122, 85, 0.04);
 }
@@ -202,6 +206,7 @@ html[data-theme='mist'] {
 	--color-role-observer: #5b45c9;
 
 	--contour-color: rgba(70, 105, 150, 0.24);
+	--contour-img: url('/contours/mist.svg');
 	--glow-a: rgba(43, 95, 168, 0.07);
 	--glow-b: rgba(154, 108, 20, 0.05);
 }
@@ -257,6 +262,7 @@ html[data-theme='apple'] {
 	--sh-lift: 0 1px 3px rgba(0, 0, 0, 0.06), 0 12px 32px rgba(0, 0, 0, 0.1);
 	--sh-overlay: 0 2px 8px rgba(0, 0, 0, 0.1), 0 30px 80px rgba(0, 0, 0, 0.24);
 	--contour-color: rgba(60, 60, 67, 0.11);
+	--contour-img: url('/contours/harbour-light.svg');
 	/* Selected segment of a segmented control. */
 	--seg-on: #f8f8fa;
 }
@@ -302,6 +308,7 @@ html[data-theme='apple-dark'] {
 	--sh-lift: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 12px 32px rgba(0, 0, 0, 0.5);
 	--sh-overlay: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 30px 80px rgba(0, 0, 0, 0.6);
 	--contour-color: rgba(235, 235, 245, 0.07);
+	--contour-img: url('/contours/harbour-dark.svg');
 	--seg-on: #636366;
 }
 
@@ -343,6 +350,7 @@ html:is([data-theme='apple'], [data-theme='apple-dark']):not([data-accent='blue'
 		--color-fg-faint: #48484a;
 		--fill: rgba(120, 120, 128, 0.22);
 		--contour-color: rgba(60, 60, 67, 0.16);
+		--contour-img: url('/contours/harbour-light-hc.svg');
 	}
 	html[data-theme='apple-dark'] {
 		--hairline: rgba(255, 255, 255, 0.24);
@@ -351,6 +359,7 @@ html:is([data-theme='apple'], [data-theme='apple-dark']):not([data-accent='blue'
 		--color-fg-faint: #aeaeb2;
 		--fill: rgba(118, 118, 128, 0.4);
 		--contour-color: rgba(235, 235, 245, 0.1);
+		--contour-img: url('/contours/harbour-dark-hc.svg');
 	}
 }
 
@@ -384,7 +393,6 @@ html:is([data-theme='apple'], [data-theme='apple-dark']) {
 		color-scheme: light;
 	}
 	body {
-		background-color: var(--color-ink);
 		color: var(--color-fg);
 		font-family: var(--font-sans);
 		font-feature-settings: 'ss01', 'cv01';
@@ -392,27 +400,20 @@ html:is([data-theme='apple'], [data-theme='apple-dark']) {
 		text-rendering: optimizeLegibility;
 	}
 
-	/* Atmosphere, fixed behind everything: corner glows + topographic
-	   contour lines drawn through a mask so they pick up the theme color. */
-	body::before {
-		content: '';
-		position: fixed;
-		inset: 0;
-		z-index: -2;
+	/* Atmosphere: corner glows + topographic contour lines (pre-tinted per
+	   theme in /contours/), painted as the ROOT background, fixed to the
+	   viewport. It used to be two position:fixed pseudo-elements on body;
+	   Chrome then had to lift all page content onto its own transparent GPU
+	   layer to keep it above them ("overlap"), and on a transparent layer
+	   Windows drops ClearType for greyscale AA, so light-on-black text
+	   (Harbour Dark) went visibly fuzzy. A root background keeps the text in
+	   the opaque root layer. */
+	html {
 		background:
-			radial-gradient(120% 80% at 80% -10%, var(--glow-a), transparent 60%),
-			radial-gradient(100% 70% at 0% 110%, var(--glow-b), transparent 55%),
+			radial-gradient(120% 80% at 80% -10%, var(--glow-a), transparent 60%) fixed,
+			radial-gradient(100% 70% at 0% 110%, var(--glow-b), transparent 55%) fixed,
+			var(--contour-img) center / cover no-repeat fixed,
 			var(--color-ink);
-	}
-	body::after {
-		content: '';
-		position: fixed;
-		inset: 0;
-		z-index: -1;
-		pointer-events: none;
-		background-color: var(--contour-color);
-		-webkit-mask: url('/contours.svg') center / cover no-repeat;
-		mask: url('/contours.svg') center / cover no-repeat;
 	}
 
 	::selection {
@@ -636,8 +637,9 @@ html:is([data-theme='apple'], [data-theme='apple-dark']) {
 		}
 		/* Flat cool ground, no glows. The topographic contours stay — Ridgeline's
 		   signature — but drawn as a faint grey etching behind solid panels. */
-		body::before {
-			background: var(--color-ink);
+		& {
+			--glow-a: transparent;
+			--glow-b: transparent;
 		}
 
 		::selection {

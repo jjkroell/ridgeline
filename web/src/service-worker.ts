@@ -13,7 +13,9 @@ const DEV = import.meta.env.DEV;
 const CACHE = `ridgeline-${version}`;
 // /intro/ holds the MeshCore intro video (MBs, streamed with range requests):
 // fetched only by visitors who open /meshcore, never precached for everyone.
-const SHELL = [...build, ...files.filter((f) => !f.startsWith('/intro/'))];
+// /contours/ holds one pre-tinted background per theme (~130 KB each);
+// a visitor only needs their own, fetched on first paint and HTTP-cached.
+const SHELL = [...build, ...files.filter((f) => !f.startsWith('/intro/') && !f.startsWith('/contours/'))];
 
 sw.addEventListener('install', (event) => {
 	sw.skipWaiting();

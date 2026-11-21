@@ -10,18 +10,20 @@ import (
 
 func TestMonitorWord(t *testing.T) {
 	for msg, want := range map[string]monitorKind{
-		"test":                monitorTest,
-		"Test!":               monitorTest,
-		"TEST 1":              monitorTest,
-		"  test from Nanaimo": monitorTest,
-		"test.":               monitorTest,
-		"unsub":               monitorUnsub,
-		"Unsubscribe please":  monitorUnsub,
-		"UNSUB!":              monitorUnsub,
-		"testing":             notMonitor,
-		"contest":             notMonitor,
-		"a test":              notMonitor,
-		"unsubscribed":        notMonitor,
+		"join":                monitorJoin,
+		"Join!":               monitorJoin,
+		"JOIN 1":              monitorJoin,
+		"  join from Nanaimo": monitorJoin,
+		"join.":               monitorJoin,
+		"leave":               monitorLeave,
+		"Leave please":        monitorLeave,
+		"LEAVE!":              monitorLeave,
+		"joined":              notMonitor,
+		"rejoin":              notMonitor,
+		"leaving":             notMonitor,
+		"please join":         notMonitor,
+		"test":                notMonitor, // the old check-in word
+		"unsub":               notMonitor, // the old check-out word
 		"":                    notMonitor,
 	} {
 		if got := monitorWord(msg); got != want {
@@ -30,7 +32,7 @@ func TestMonitorWord(t *testing.T) {
 	}
 }
 
-// unsub takes a sender off; only a NEWER test puts them back, whatever order
+// leave takes a sender off; only a NEWER join puts them back, whatever order
 // the copies arrive in.
 func TestSOSUnsub(t *testing.T) {
 	RegisterSOSChannel()
@@ -38,9 +40,9 @@ func TestSOSUnsub(t *testing.T) {
 	key := meshcore.DeriveHashtagKey(SOSChannel)
 	now := time.Now().UTC()
 
-	oldTest := groupTextRaw(t, key, "Erin", "test")
+	oldTest := groupTextRaw(t, key, "Erin", "join")
 	recordRaw(t, st, oldTest, now)
-	recordRaw(t, st, groupTextRaw(t, key, "Erin", "unsub"), now.Add(time.Minute))
+	recordRaw(t, st, groupTextRaw(t, key, "Erin", "leave"), now.Add(time.Minute))
 	if n := len(st.SOSMonitors()); n != 0 {
 		t.Fatalf("after unsub: %d monitors, want 0", n)
 	}
@@ -50,8 +52,8 @@ func TestSOSUnsub(t *testing.T) {
 		t.Fatalf("late old test re-listed: %d monitors", n)
 	}
 	// An unsub from someone never listed leaves nobody listed.
-	recordRaw(t, st, groupTextRaw(t, key, "Finn", "unsubscribe"), now)
-	recordRaw(t, st, groupTextRaw(t, key, "Erin", "Test again"), now.Add(2*time.Minute))
+	recordRaw(t, st, groupTextRaw(t, key, "Finn", "leave"), now)
+	recordRaw(t, st, groupTextRaw(t, key, "Erin", "Join again"), now.Add(2*time.Minute))
 	mons := st.SOSMonitors()
 	if len(mons) != 1 || mons[0].Name != "Erin" {
 		t.Fatalf("after re-test = %+v, want Erin", mons)
@@ -64,7 +66,7 @@ func TestSOSUnsub(t *testing.T) {
 		t.Fatalf("after reload = %+v", mons)
 	}
 	// Finn tests later: first_test comes from the test, not the unsub's ''.
-	recordRaw(t, st, groupTextRaw(t, key, "Finn", "test"), now.Add(3*time.Minute))
+	recordRaw(t, st, groupTextRaw(t, key, "Finn", "join"), now.Add(3*time.Minute))
 	if err := st.loadSOSMonitors(); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +84,7 @@ func TestSOSUnsub(t *testing.T) {
 	}
 }
 
-// A live #sos "test" lists its sender once per transmission (not per observer
+// A live #sos "join" lists its sender once per transmission (not per observer
 // copy); other messages and other channels do not.
 func TestRecordSOSMonitors(t *testing.T) {
 	RegisterSOSChannel()
@@ -90,13 +92,13 @@ func TestRecordSOSMonitors(t *testing.T) {
 	key := meshcore.DeriveHashtagKey(SOSChannel)
 	now := time.Now().UTC()
 
-	test1 := groupTextRaw(t, key, "Alice", "test")
+	test1 := groupTextRaw(t, key, "Alice", "join")
 	recordRaw(t, st, test1, now)
 	recordRaw(t, st, test1, now.Add(2*time.Second)) // another observer's copy
-	recordRaw(t, st, groupTextRaw(t, key, "Alice", "Test from the ridge"), now.Add(time.Minute))
+	recordRaw(t, st, groupTextRaw(t, key, "Alice", "Join from the ridge"), now.Add(time.Minute))
 	recordRaw(t, st, groupTextRaw(t, key, "Bob", "anyone around?"), now)
 	pub := []byte{0x8b, 0x33, 0x87, 0xe9, 0xc5, 0xcd, 0xea, 0x6a, 0xc9, 0xe5, 0xed, 0xba, 0xa1, 0x15, 0xcd, 0x72}
-	recordRaw(t, st, groupTextRaw(t, pub, "Carol", "test"), now) // Public, not #sos
+	recordRaw(t, st, groupTextRaw(t, pub, "Carol", "join"), now) // Public, not #sos
 
 	mons := st.SOSMonitors()
 	if len(mons) != 1 || mons[0].Name != "Alice" || mons[0].Tests != 2 {
@@ -120,7 +122,7 @@ func TestBackfillSOSMonitors(t *testing.T) {
 	key := meshcore.DeriveHashtagKey(SOSChannel)
 	now := time.Now().UTC()
 
-	recordRaw(t, st, groupTextRaw(t, key, "Dave", "test"), now.Add(-48*time.Hour))
+	recordRaw(t, st, groupTextRaw(t, key, "Dave", "join"), now.Add(-48*time.Hour))
 	// Wipe what live ingest wrote, as on a database from before the roster.
 	if _, err := st.db.Exec(`DELETE FROM channel_monitors`); err != nil {
 		t.Fatal(err)
@@ -323,7 +325,7 @@ func TestPurgeChannelKeepsRoster(t *testing.T) {
 	pub := []byte{0x8b, 0x33, 0x87, 0xe9, 0xc5, 0xcd, 0xea, 0x6a, 0xc9, 0xe5, 0xed, 0xba, 0xa1, 0x15, 0xcd, 0x72}
 	now := time.Now().UTC()
 
-	test := groupTextRaw(t, key, "Gail", "test")
+	test := groupTextRaw(t, key, "Gail", "join")
 	recordRaw(t, st, test, now.Add(-time.Hour))
 	recordRaw(t, st, test, now.Add(-time.Hour+time.Second)) // second observer
 	recordRaw(t, st, groupTextRaw(t, key, "Gail", "anyone?"), now.Add(-30*time.Minute))

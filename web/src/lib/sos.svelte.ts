@@ -2,8 +2,9 @@
 // #sos row and the Channels nav item until the viewer switches to #sos), its two cards — what the channel is for (info) and
 // who monitors it — each either open or minimized to a pill beside the channel
 // name, per browser. Also the roster from the server, and the rules that keep
-// the chat clean: "test" / "unsub" housekeeping messages are hidden from the
-// #sos chat five minutes after they are heard (the sender stays listed), calls
+// the chat clean: "join" / "leave" / "test" housekeeping messages are hidden
+// from the #sos chat five minutes after they are heard (the sender stays
+// listed), calls
 // for help after 12 hours, everything else after 3.
 // Shared by the desktop and mobile channel pages and the Channels widget.
 import { serverNow } from '$lib/server-clock.svelte';
@@ -38,7 +39,7 @@ export type SosCardKind = 'info' | 'monitors' | 'alerts';
 /** Only alerts this fresh ring the alarm (not ones found on load or reconnect). */
 const ALARM_FRESH_MS = 5 * 60_000;
 // How often an open page refreshes the roster; it changes only when someone
-// sends "test" or "unsub", so this is slow on purpose.
+// sends "join" or "leave", so this is slow on purpose.
 const REFRESH_MS = 60_000;
 /** A housekeeping message stays in the #sos chat this long, then is hidden. */
 export const HIDE_AFTER_MS = 5 * 60_000;
@@ -47,17 +48,28 @@ export const CHAT_HIDE_MS = 3 * 60 * 60_000;
 /** A call for help (an emergency word, not a reply) stays as long as its alert. */
 export const ALERT_HIDE_MS = ALERT_WINDOW_MS;
 
+function firstWord(text: string): string {
+	const first = text.trim().split(/\s+/)[0] ?? '';
+	return first.replace(/[\p{P}]+$/u, '').toLowerCase();
+}
+
 /**
  * Classifies a channel message by its first word, in any case, trailing
- * punctuation allowed: "test" checks in, "unsub"/"unsubscribe" checks out.
- * Mirrors monitorWord in internal/store/sos.go — keep the two in step.
+ * punctuation allowed: "join" checks in, "leave" checks out. (Until v0.24.67
+ * the words were "test" and "unsub".) Mirrors monitorWord in
+ * internal/store/sos.go — keep the two in step.
  */
-export function monitorWord(text: string): 'test' | 'unsub' | null {
-	const first = text.trim().split(/\s+/)[0] ?? '';
-	const w = first.replace(/[\p{P}]+$/u, '').toLowerCase();
-	if (w === 'test') return 'test';
-	if (w === 'unsub' || w === 'unsubscribe') return 'unsub';
+export function monitorWord(text: string): 'join' | 'leave' | null {
+	const w = firstWord(text);
+	if (w === 'join') return 'join';
+	if (w === 'leave') return 'leave';
 	return null;
+}
+
+/** Housekeeping on #sos, hidden after five minutes: a join or leave, or a
+ *  message starting with "test" (radio checks, the monthly test). */
+export function housekeeping(text: string): boolean {
+	return monitorWord(text) !== null || firstWord(text) === 'test';
 }
 
 function readFlag(key: string, fallback: 'open' | 'min'): { value: 'open' | 'min'; seen: boolean } {
@@ -214,12 +226,12 @@ class SOS {
 
 	/**
 	 * Whether a decrypted message is hidden from the chat, by its age (t, epoch
-	 * ms) on #sos: a test/unsub after five minutes, a call for help after 12
+	 * ms) on #sos: a join/leave/test after five minutes, a call for help after 12
 	 * hours (its alert window), anything else — replies included — after 3.
 	 */
 	hidden(channelId: string, text: string, t: number): boolean {
 		if (channelId !== SOS_ID) return false;
-		const limit = monitorWord(text) !== null ? HIDE_AFTER_MS : alertWord(text) ? ALERT_HIDE_MS : CHAT_HIDE_MS;
+		const limit = housekeeping(text) ? HIDE_AFTER_MS : alertWord(text) ? ALERT_HIDE_MS : CHAT_HIDE_MS;
 		return this.now - t > limit;
 	}
 

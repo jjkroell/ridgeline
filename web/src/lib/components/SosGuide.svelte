@@ -11,7 +11,8 @@
 	//   - pulse window 12 h (SOSAlertWindow / ALERT_WINDOW_MS)
 	//   - emails: 30 s batch, then at most one per 10 min, except a real call after a
 	//     tests-only email (api/sos_alerts.go)
-	//   - chat clean-up (#cleanup): test/unsub hidden after 5 min, calls for
+	//   - monitor list: first word "join" adds, "leave" removes (store.monitorWord)
+	//   - chat clean-up (#cleanup): join/leave/test hidden after 5 min, calls for
 	//     help after 12 h, everything else after 3 h (sos.svelte.ts hidden())
 	//   - a message opening with an @-mention never alerts (sosReplyRe)
 	//   - monthly test: KOD-BOT [Scheduled_Messages] `0 9 1 * *` on the bot Pi
@@ -79,7 +80,7 @@
 					In your MeshCore app or radio, add a hashtag channel named <span class="text-fg font-mono">sos</span>.
 				</li>
 				<li>
-					Send a single message <span class="text-fg font-mono">'Test'</span> from your companion to the channel. If
+					Send a single message <span class="text-fg font-mono">join</span> from your companion to the channel. If
 					Ridgeline hears your message, your username is added to the
 					<span class="text-fg">monitoring</span> list on its #sos page.
 				</li>
@@ -89,8 +90,10 @@
 				</li>
 			</ol>
 			<p class="text-fg-dim">
-				Send <span class="text-fg font-mono">unsub</span> to come off the list. Ridgeline hides test and unsub
-				messages after 5 minutes; a hidden test still keeps you on the list. See
+				Send <span class="text-fg font-mono">leave</span> to come off the list. The word has to come first in the
+				message, in any case. Ridgeline hides join and leave messages after 5 minutes; a hidden join still keeps
+				you on the list. If you joined with the old word, <span class="text-fg font-mono">test</span>, you're
+				still on it. See
 				<a href="#cleanup" class="text-coral hover:underline">clean-up</a> for how long other messages stay.
 			</p>
 			<p class="text-fg-dim">
@@ -259,9 +262,10 @@
 			<ul class="text-fg-dim space-y-1.5">
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>
-					<span><span class="text-fg font-mono">test</span> and <span class="text-fg font-mono">unsub</span>
-						after <span class="text-fg">5 minutes</span>. Hiding a test doesn't take you off the monitoring list;
-						only sending <span class="text-fg font-mono">unsub</span> removes your name.</span>
+					<span><span class="text-fg font-mono">join</span>, <span class="text-fg font-mono">leave</span> and
+						<span class="text-fg font-mono">test</span> after <span class="text-fg">5 minutes</span>. Hiding a join
+						doesn't take you off the monitoring list; only sending <span class="text-fg font-mono">leave</span>
+						removes your name.</span>
 				</li>
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>

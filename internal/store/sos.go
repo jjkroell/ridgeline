@@ -18,10 +18,11 @@ import (
 // confirmed it) and every browser carries it as a permanent channel.
 //
 // Who monitors it is learned from the channel itself: a sender who posts a
-// message starting with the word "test" is listed as a monitor, so the list
+// message starting with the word "join" is listed as a monitor, so the list
 // says who has shown they are listening rather than who signed up somewhere;
-// one starting with "unsub" (or "unsubscribe") takes them off it again. The
-// web UI hides both kinds of message from the #sos chat after five minutes
+// one starting with "leave" takes them off it again. (Until v0.24.67 the words
+// were "test" and "unsub"; the list they built is kept.) The web UI hides
+// join, leave and test messages from the #sos chat after five minutes
 // (other messages after 3 hours, calls for help after 12; sos.svelte.ts).
 // The sender is the name the message carries — MeshCore group text is not
 // signed per sender, so the list is a courtesy roster, not an identity proof.
@@ -57,14 +58,14 @@ type monitorKind int
 
 const (
 	notMonitor monitorKind = iota
-	monitorTest
-	monitorUnsub
+	monitorJoin
+	monitorLeave
 )
 
 // monitorWord classifies a channel message by its first word, in any case,
-// with trailing punctuation allowed: "test" ("Test!", "test from Nanaimo",
-// "TEST 1") checks in; "unsub" or "unsubscribe" checks out. "testing" and
-// "contest" are neither. Mirrored in web/src/lib/sos.svelte.ts.
+// with trailing punctuation allowed: "join" ("Join!", "join from Nanaimo")
+// checks in; "leave" checks out. "joined", "rejoin" and "leaving" are neither,
+// and neither is "test" any more. Mirrored in web/src/lib/sos.svelte.ts.
 func monitorWord(msg string) monitorKind {
 	f := strings.Fields(msg)
 	if len(f) == 0 {
@@ -72,10 +73,10 @@ func monitorWord(msg string) monitorKind {
 	}
 	w := strings.ToLower(strings.TrimRightFunc(f[0], func(r rune) bool { return unicode.IsPunct(r) }))
 	switch w {
-	case "test":
-		return monitorTest
-	case "unsub", "unsubscribe":
-		return monitorUnsub
+	case "join":
+		return monitorJoin
+	case "leave":
+		return monitorLeave
 	}
 	return notMonitor
 }
@@ -318,7 +319,7 @@ type execer interface {
 // backfill and live ingest can write in either order. An unsub only moves
 // unsub_at forward; it keeps the row so its time can outrank late copies.
 func writeMonitor(ex execer, kind monitorKind, channel, sender, hash, at string) error {
-	if kind == monitorUnsub {
+	if kind == monitorLeave {
 		_, err := ex.Exec(`
 			INSERT INTO channel_monitors (channel, sender, first_test, last_test, tests, last_hash, unsub_at)
 			VALUES (?,?,'','',0,'',?)
@@ -350,7 +351,7 @@ func (s *Store) noteMonitor(kind monitorKind, sender, hash, at string) {
 		m = &ChannelMonitor{Name: sender}
 		s.sosMonitors[sender] = m
 	}
-	if kind == monitorUnsub {
+	if kind == monitorLeave {
 		if at > m.UnsubAt {
 			m.UnsubAt = at
 		}

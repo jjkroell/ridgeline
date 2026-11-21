@@ -1,5 +1,5 @@
 <!--
-  Who monitors #sos: everyone who has sent "test" there (and not "unsub"
+  Who monitors #sos: everyone who has sent "join" there (and not "leave"
   since), most recent first. Its own card beside the info card; minimizing it
   leaves a "N monitoring" pill (SosPill kind="monitors") by the channel name.
 -->
@@ -37,13 +37,13 @@
 	{#if !sos.loaded}
 		<div class="text-fg-faint text-xs">Loading…</div>
 	{:else if sos.monitors.length === 0}
-		<div class="text-fg-faint text-xs">No one has checked in yet. Send <span class="font-mono">test</span> on #sos to be the first.</div>
+		<div class="text-fg-faint text-xs">No one has checked in yet. Send <span class="font-mono">join</span> on #sos to be the first.</div>
 	{:else}
 		<ul class="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
 			{#each sos.monitors as m (m.name)}
 				<li
 					data-sos-monitor
-					title="{m.tests} test{m.tests === 1 ? '' : 's'} · first {new Date(m.firstTest).toLocaleDateString()} · last {new Date(m.lastTest).toLocaleString()}"
+					title="Joined {new Date(m.firstTest).toLocaleDateString()} · last check-in {new Date(m.lastTest).toLocaleString()}"
 					class="border-line bg-panel-2/50 inline-flex items-baseline gap-1.5 rounded-[var(--radius)] border px-2 py-0.5 text-xs {stale(m.lastTest) ? 'opacity-55' : ''}"
 				>
 					<span class="text-fg font-600 max-w-[12rem] truncate">{m.name}</span>
@@ -52,7 +52,7 @@
 			{/each}
 		</ul>
 		<div class="text-fg-faint mt-2 text-[0.68rem]">
-			Names are as sent on the channel. Send <span class="font-mono">unsub</span> to come off the list.
+			Names are as sent on the channel. Send <span class="font-mono">leave</span> to come off the list.
 		</div>
 	{/if}
 </section>

@@ -26,7 +26,7 @@
 		{
 			icon: 'M9 8a3.2 3.2 0 100-.01M3 20a6 6 0 0112 0M16 4.5a3.2 3.2 0 010 6.3M18 20a6 6 0 00-3-5.2',
 			title: 'Help keep watch on #sos',
-			body: 'Join #sos on your radio or app and send one (just one) test message. You will be listed as a monitor, so everyone can see how many people are listening. Then leave notifications on for #sos. Send unsub to come off the list. Test and unsub messages leave the #sos chat on Ridgeline after 5 minutes, and your name stays on the list.'
+			body: 'Join #sos on your radio or app and send one (just one) message: join. You will be listed as a monitor, so everyone can see how many people are listening. Then keep notifications on for #sos. Send leave to come off the list. Join and leave messages drop out of the #sos chat on Ridgeline after 5 minutes, and your name stays on the list.'
 		},
 		{
 			icon: 'M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0',

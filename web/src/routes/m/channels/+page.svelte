@@ -68,7 +68,7 @@
 		}
 		const out = new Map<string, ChatMsg[]>();
 		for (const [id, m] of buckets) {
-			// #sos test/unsub housekeeping drops out five minutes after it was heard.
+			// #sos join/leave/test housekeeping drops out five minutes after it was heard.
 			out.set(id, [...m.values()].filter((x) => !sos.hidden(id, x.text, x.t)).map(({ obs, ...r }) => ({ ...r, observers: obs.size })).sort((a, b) => a.t - b.t));
 		}
 		return out;

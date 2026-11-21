@@ -294,7 +294,8 @@ CREATE TABLE IF NOT EXISTS neighbor_reports (
 );
 
 -- Who monitors a channel: senders who have posted a message starting with
--- "test" to it (#sos only, for now), less those who sent "unsub" since.
+-- "join" (before v0.24.67, "test") to it (#sos only, for now), less those
+-- who sent "leave" (was "unsub") since.
 -- One row per channel+sender name. See sos.go.
 CREATE TABLE IF NOT EXISTS channel_monitors (
 	channel    TEXT NOT NULL,              -- hashtag name without '#'
@@ -1040,8 +1041,8 @@ func (s *Store) Record(o Observation) error {
 		}
 	}
 
-	// A #sos check-in ("test …") lists its sender as a channel monitor; an
-	// "unsub …" takes them off.
+	// A #sos check-in ("join …") lists its sender as a channel monitor; a
+	// "leave …" takes them off.
 	sosSender, sosKind := sosMonitorMsg(p)
 	if sosKind != notMonitor {
 		if err := writeMonitor(tx, sosKind, SOSChannel, sosSender, p.MessageHash, ts); err != nil {

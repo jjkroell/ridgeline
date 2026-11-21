@@ -4,7 +4,7 @@
 // per-frame geometry that a renderer turns into pixels. The MapLibre live map
 // feeds the output into GeoJSON sources; the WebGL-free Leaflet fallback draws it
 // onto a 2-D canvas. Keeping the logic here means both stay identical.
-import { serverNow } from '$lib/server-clock.svelte';
+import { live } from '$lib/live.svelte';
 import type { Node, LiveEvent } from './api';
 
 export type LngLat = [number, number];
@@ -206,7 +206,9 @@ export class PulseEngine {
 			if (!ev.path || ev.path.length < 1) continue;
 			// Only pulse genuinely fresh arrivals — skip the last-hour history the
 			// feed seeds into the shared buffer, so the map doesn't burst on load.
-			if (serverNow() - +new Date(ev.receivedAt) > 20000) continue;
+			// Timed by when the event reached this browser, not by receivedAt:
+			// no clock comparison, so a viewer's fast clock can't stop the map.
+			if (!live.arrivedWithin(ev, 20000)) continue;
 			const key = ev.messageHash + ':' + ev.path.join(',');
 			if (this.fired.has(key)) continue;
 			this.fired.set(key, now);

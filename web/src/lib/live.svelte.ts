@@ -106,6 +106,31 @@ class LiveFeed {
 		}
 	}
 
+	// When each event came in over the socket, by THIS browser's clock. Hydrated
+	// history never gets an entry. The live map pulses only events that arrived
+	// in the last few seconds; judging that from receivedAt (the server's clock)
+	// broke on a viewer whose clock ran 20-30 s fast: too little skew for
+	// serverNow() to correct (SKEW_IGNORE_MS), yet every packet looked >20 s
+	// old, so nothing ever animated (seen on a Windows PC, 2026-11-21).
+	// Keyed by observer+hash+time, not the object: events is deep $state, so
+	// readers see proxies. Entries older than a minute are pruned as it goes.
+	#arrived = new Map<string, number>();
+	#arrivedPruned = 0;
+
+	/** Whether ev arrived over the live socket within the last `ms` (local clock). */
+	arrivedWithin(ev: LiveEvent, ms: number): boolean {
+		const t = this.#arrived.get(ev.observerId + ev.messageHash + ev.receivedAt);
+		return t !== undefined && performance.now() - t <= ms;
+	}
+
+	#noteArrival(ev: LiveEvent) {
+		const now = performance.now();
+		this.#arrived.set(ev.observerId + ev.messageHash + ev.receivedAt, now);
+		if (now - this.#arrivedPruned < 10_000) return;
+		this.#arrivedPruned = now;
+		for (const [k, t] of this.#arrived) if (now - t > 60_000) this.#arrived.delete(k);
+	}
+
 	start() {
 		if (this.#started) return;
 		this.#started = true;
@@ -161,6 +186,7 @@ class LiveFeed {
 		ws.onmessage = (e) => {
 			try {
 				const ev = JSON.parse(e.data) as LiveEvent;
+				this.#noteArrival(ev);
 				this.#tally(ev);
 				const cutoff = serverNow() - RETAIN_MS;
 				this.events = [ev, ...this.events]

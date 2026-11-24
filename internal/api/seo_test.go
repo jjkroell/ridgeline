@@ -99,10 +99,13 @@ func TestSEOMissingNodeIs404(t *testing.T) {
 }
 
 func TestSEODirectoryAndSections(t *testing.T) {
-	_, key, h := seoTestEnv(t, "")
+	_, _, h := seoTestEnv(t, "")
 	body := previewRequest(h, "GET", "/nodes").Body.String()
-	if !strings.Contains(body, `<a href="/nodes/`+key+`">`) {
-		t.Fatal("directory summary lacks the node link")
+	if strings.Contains(body, `href="/nodes/`) {
+		t.Fatal("directory summary links node pages")
+	}
+	if !strings.Contains(body, "Heard in the last") || !strings.Contains(body, ", last heard ") {
+		t.Fatal("directory summary lacks the node list")
 	}
 	for path, sec := range seoSections {
 		body := previewRequest(h, "GET", path).Body.String()

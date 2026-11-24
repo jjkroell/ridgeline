@@ -27,7 +27,7 @@ import (
 // aren't advertised to crawlers.
 const seoSitemapDays = 30
 
-// seoDirectoryMax caps the node links in the /nodes crawl summary.
+// seoDirectoryMax caps the nodes named in the /nodes crawl summary.
 const seoDirectoryMax = 400
 
 // seoSitemapTTL is how long the generated sitemap is reused.
@@ -301,6 +301,8 @@ func (s *Server) seoFor(site shareSite, p *sharePreview) *seoDoc {
 		fmt.Fprintf(&b, "<h1>%s</h1>\n", esc(sec.Heading))
 		seoParas(&b, sec.Paras)
 		if p.Path == "/nodes" {
+			// Names only, no links: robots.txt keeps Google out of the node pages,
+			// and linking them here only fed its backlog.
 			if nodes, err := s.recentNodes(); err == nil && len(nodes) > 0 {
 				fmt.Fprintf(&b, "<h2>Heard in the last %d days</h2>\n<ul>\n", seoSitemapDays)
 				for i, n := range nodes {
@@ -311,7 +313,7 @@ func (s *Server) seoFor(site shareSite, p *sharePreview) *seoDoc {
 					if name == "" {
 						name = "Node " + n.PublicKey[:12]
 					}
-					fmt.Fprintf(&b, "<li><a href=\"/nodes/%s\">%s</a> — %s, last heard %s</li>\n", n.PublicKey, esc(name), seoRoleWord(n.Role), seoDate(n.LastSeen))
+					fmt.Fprintf(&b, "<li>%s — %s, last heard %s</li>\n", esc(name), seoRoleWord(n.Role), seoDate(n.LastSeen))
 				}
 				b.WriteString("</ul>\n")
 			}
@@ -423,7 +425,8 @@ func (s *Server) buildSitemap() ([]byte, error) {
 	// ~430 of ~440 entries: hex-keyed, client-rendered (Google can't fetch the
 	// /api/ data they need), with lastmods changing daily. On a new domain that
 	// left the whole site stuck in Search Console's "Discovered - currently not
-	// indexed". The pages still resolve, and /nodes' crawl summary links them.
+	// indexed". The pages still resolve; robots.txt keeps
+	// Google out of them.
 	b.WriteString("</urlset>\n")
 	return b.Bytes(), nil
 }

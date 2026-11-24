@@ -11,6 +11,21 @@ Disallow: /identity
 Disallow: /login
 Disallow: /api/
 
+# Google: the same, minus the individual node pages. Hundreds of them, each
+# client-rendered from /api/, sat in "Discovered - currently not indexed" and took
+# the crawl the main pages needed. The directory at /nodes stays open. A crawler
+# follows only its own group, so every line above is repeated here.
+User-agent: Googlebot
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+Allow: /
+Disallow: /admin
+Disallow: /account
+Disallow: /identity
+Disallow: /login
+Disallow: /api/
+Disallow: /nodes/
+Disallow: /m/nodes/
+
 # AI search and answer engines (fetch pages to answer a question and link to
 # them; these are not the training crawlers).
 User-agent: OAI-SearchBot

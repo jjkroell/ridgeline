@@ -36,15 +36,15 @@
 	const common = ['set agc.reset.interval 4', 'set multi.acks 1', 'set rxdelay 3'];
 
 	let tier = $state(1);
-	const block = $derived(
-		[
-			`set txdelay ${tiers[tier].tx}`,
-			`set direct.txdelay ${tiers[tier].direct}`,
-			...common,
-			`set advert.interval ${advert.zeroHop}`,
-			`set flood.advert.interval ${advert.flood}`
-		].join('\n')
-	);
+	// One command per line, each with its own copy button: remote admin takes a
+	// single command per message, so a pasted block would not work there.
+	const lines = $derived([
+		`set txdelay ${tiers[tier].tx}`,
+		`set direct.txdelay ${tiers[tier].direct}`,
+		...common,
+		`set advert.interval ${advert.zeroHop}`,
+		`set flood.advert.interval ${advert.flood}`
+	]);
 
 	// Shared links from the old About page (/about#bridging, /about#traffic) arrive
 	// here via the /about redirect; those sections now live on the FAQ.
@@ -70,6 +70,24 @@
 	description="The radio settings for the Vancouver Island and Lower Mainland MeshCore mesh (909.000 MHz, 62.5 kHz, SF7, CR5), path hash IDs, and repeater tuning by neighbour count."
 	path="/settings"
 />
+
+{#snippet cmdList(cmds: string[])}
+	<ol class="cmds border-line divide-line/60 panel divide-y overflow-hidden rounded-[var(--radius)] border">
+		{#each cmds as c (c)}
+			<li class="flex items-center gap-3 px-4 py-2">
+				<span class="text-fg-faint font-mono text-sm select-none">&gt;</span>
+				<code class="cmd-line min-w-0 flex-1">{c}</code>
+				<button
+					type="button"
+					onclick={() => copy(c, c)}
+					aria-label="Copy {c}"
+					class="border-line text-fg-dim hover:text-fg shrink-0 rounded-[var(--radius)] border px-2.5 py-1 text-xs"
+					>{copied === c ? 'Copied ✓' : 'Copy'}</button
+				>
+			</li>
+		{/each}
+	</ol>
+{/snippet}
 
 <article class="st mx-auto max-w-3xl px-6 py-12 leading-relaxed">
 	<header class="mb-8">
@@ -104,8 +122,7 @@
 			<em>Custom</em>, which is expected.
 		</p>
 		<p><strong>Repeaters and room servers:</strong> over the serial console or remote admin:</p>
-		<pre class="cmd"><span class="p">&gt; </span><span class="c">set radio 909.000,62.5,7,5</span>
-<span class="p">&gt; </span><span class="c">reboot</span></pre>
+		{@render cmdList(['set radio 909.000,62.5,7,5', 'reboot'])}
 		<p>
 			The new radio settings take effect after the reboot. Before changing a repeater you can only
 			reach remotely, read
@@ -242,8 +259,8 @@
 
 		<h3 id="commands">Copy and paste</h3>
 		<p>
-			Pick your neighbour count, then paste the commands into the repeater's command line (remote
-			admin, or the serial console).
+			Pick your neighbour count, then send the commands to the repeater one at a time (remote admin,
+			or the serial console). Each line has its own copy button.
 		</p>
 		<div class="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Neighbours">
 			{#each tiers as t, i (t.n)}
@@ -259,16 +276,7 @@
 				>
 			{/each}
 		</div>
-		<div class="relative">
-			<pre class="cmd">{#each block.split('\n') as line (line)}<span class="p">&gt; </span><span class="c">{line}</span>
-{/each}</pre>
-			<button
-				type="button"
-				onclick={() => copy('block', block)}
-				class="border-line bg-panel text-fg-dim hover:text-fg absolute top-2 right-2 rounded-[var(--radius)] border px-2.5 py-1 text-xs"
-				>{copied === 'block' ? 'Copied ✓' : 'Copy'}</button
-			>
-		</div>
+		{@render cmdList(lines)}
 		<p>
 			These take effect straight away, with no reboot. Read any of them back with <code>get</code>,
 			for example <code>get txdelay</code>.
@@ -355,24 +363,18 @@
 		border-radius: 0.3rem;
 		white-space: nowrap;
 	}
-	.cmd {
-		font-family: var(--font-mono);
-		font-size: 0.85rem;
-		line-height: 1.8;
-		background: var(--color-panel);
-		border: 1px solid var(--color-line);
-		border-radius: var(--radius);
-		padding: 1rem 1.15rem;
-		overflow-x: auto;
-		white-space: pre;
-	}
-	.cmd .p {
-		color: var(--color-fg-faint);
-		user-select: none;
-	}
-	.cmd .c {
+	.st .cmd-line {
+		background: none;
+		padding: 0;
 		color: var(--color-signal);
 		font-weight: 600;
+		font-size: 0.85rem;
+		overflow-wrap: anywhere;
+		white-space: normal;
+	}
+	.cmds {
+		list-style: none;
+		padding: 0;
 	}
 	.callout {
 		background: var(--color-panel);

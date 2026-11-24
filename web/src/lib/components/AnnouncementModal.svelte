@@ -187,11 +187,6 @@
 
 		<div class="border-line/70 flex flex-wrap items-center justify-end gap-x-3 gap-y-2 border-t px-6 py-4">
 			<a
-				href="/about"
-				onclick={() => announce.close()}
-				class="text-fg-dim hover:text-fg text-sm transition-colors">Learn more</a
-			>
-			<a
 				href="/channels?channel=sos"
 				onclick={() => announce.close()}
 				class="text-coral hover:brightness-125 text-sm font-600 transition-[filter]">Open #sos</a

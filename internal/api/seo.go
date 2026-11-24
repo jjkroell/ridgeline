@@ -133,7 +133,7 @@ var seoSections = map[string]seoSection{
 // Content pages listed in the sitemap after the sections: the prerendered
 // explainers (real HTML of their own) plus /contact.
 var seoStaticPages = []struct{ Path, Freq, Priority string }{
-	{"/about", "monthly", "0.9"},
+	{"/settings", "monthly", "0.9"},
 	{"/faq", "monthly", "0.8"},
 	{"/hash-ids", "monthly", "0.8"},
 	{"/sos", "monthly", "0.8"},
@@ -142,7 +142,7 @@ var seoStaticPages = []struct{ Path, Freq, Priority string }{
 
 // seoNav is the crawl summary's link list, the same set as app.html's.
 var seoNav = [][2]string{
-	{"/about", "About Ridgeline & the MeshCore mesh"},
+	{"/settings", "Recommended radio and repeater settings"},
 	{"/faq", "Why 909.000 MHz: the frequency move FAQ"},
 	{"/nodes", "Node & repeater directory"},
 	{"/live", "Live packet feed"},

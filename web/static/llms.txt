@@ -6,7 +6,7 @@ MeshCore is an off-grid, long-range text-messaging mesh built on low-cost LoRa r
 
 ## Pages
 
-- [About Ridgeline and the MeshCore mesh](https://ridgeline.ve7kod.ca/about): what the mesh is, how to join, radio settings
+- [Recommended settings](https://ridgeline.ve7kod.ca/settings): radio settings (909.000 MHz, 62.5 kHz, SF7, CR5), path hash IDs, repeater tuning by neighbour count
 - [Multi-byte hash IDs](https://ridgeline.ve7kod.ca/hash-ids): why meshes outgrow 1-byte path IDs and how to move a node to 2- or 3-byte IDs
 - [Node and repeater directory](https://ridgeline.ve7kod.ca/nodes): every node heard, with a page per node
 - [Coverage map](https://ridgeline.ve7kod.ca/map)

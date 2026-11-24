@@ -88,7 +88,7 @@
 	// once per season. Waits for /api/health, which carries the admin's switch.
 	onMount(() => seasonal.load());
 
-	// A shared link like /about#bridging: the browser jumps to the section in the
+	// A shared link like /faq#bridging: the browser jumps to the section in the
 	// prerendered HTML, then hydration and web fonts shrink the content above it,
 	// leaving the heading scrolled out of view (184 px on a phone). Land on it
 	// again once layout has settled — unless the reader already scrolled away.
@@ -144,7 +144,7 @@
 		{ href: '/topology', label: 'Topology', icon: 'graph' },
 		{ href: '/identity', label: 'Identity', icon: 'key' },
 		{ href: '/observers', label: 'Observers', icon: 'eye' },
-		{ href: '/about', label: 'About', icon: 'info' },
+		{ href: '/settings', label: 'Settings', icon: 'sliders' },
 		{ href: '/contact', label: 'Contact us', icon: 'mail' },
 		{ href: '/admin', label: 'Admin', icon: 'shield', adminOnly: true }
 	];
@@ -187,6 +187,7 @@
 		eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 9a3 3 0 100 6 3 3 0 000-6z',
 		key: 'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3',
 		shield: 'M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3z',
+		sliders: 'M4 6h9m4 0h3M4 12h3m4 0h9M4 18h11m4 0h1M15 4v4M9 10v4M17 16v4',
 		info: 'M12 2a10 10 0 100 20 10 10 0 000-20zM12 8h.01M11 12h1v5h1',
 		play: 'M12 2a10 10 0 100 20 10 10 0 000-20zM10 8.5v7l6-3.5z',
 		mail: 'M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM3.5 6.5 12 13l8.5-6.5'

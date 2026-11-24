@@ -19,6 +19,13 @@ func staticHandler(dir string) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
+		// /about became /settings (v0.24.70). A permanent redirect moves search
+		// engines across; the browser keeps any #fragment, and /settings sends the
+		// old #bridging / #traffic links on to the FAQ, where those sections live now.
+		if clean == "/about" {
+			http.Redirect(w, r, "/settings", http.StatusMovedPermanently)
+			return
+		}
 
 		p := filepath.Join(dir, clean)
 		if info, err := os.Stat(p); err == nil && !info.IsDir() {

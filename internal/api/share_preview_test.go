@@ -42,7 +42,7 @@ func shareTestEnv(t *testing.T) (*store.Store, string, http.Handler, string) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	for name, body := range map[string]string{"index.html": previewShell, "share-site.json": `{"name":"Test Mesh","url":"https://mesh.example"}`, "about.html": "prerendered about", "app.js": "original JS"} {
+	for name, body := range map[string]string{"index.html": previewShell, "share-site.json": `{"name":"Test Mesh","url":"https://mesh.example"}`, "settings.html": "prerendered settings", "app.js": "original JS"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -283,7 +283,7 @@ func TestShareCardLayouts(t *testing.T) {
 
 func TestSharePreviewFallbacksAndPages(t *testing.T) {
 	st, _, h, _ := shareTestEnv(t)
-	for p, want := range map[string]string{"/about": "prerendered about", "/app.js": "original JS", "/login?token=secret": previewShell, "/admin": previewShell, "/nodes/nope": previewShell, "/unknown": previewShell} {
+	for p, want := range map[string]string{"/settings": "prerendered settings", "/app.js": "original JS", "/login?token=secret": previewShell, "/admin": previewShell, "/nodes/nope": previewShell, "/unknown": previewShell} {
 		rr := previewRequest(h, "GET", p)
 		if rr.Body.String() != want {
 			t.Errorf("%s changed fallback", p)

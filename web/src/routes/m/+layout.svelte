@@ -44,7 +44,6 @@
 		{ href: '/m/map', label: 'Map', icon: 'map', desc: 'Node locations & coverage' },
 		{ href: '/m/identity', label: 'Identity', icon: 'keys', desc: 'Collisions & key generator' },
 		{ href: '/m/observers', label: 'Observers', icon: 'observers', desc: 'Listening posts & telemetry' },
-		{ href: '/meshcore', label: 'What is MeshCore?', icon: 'play', desc: 'A short introduction for newcomers' },
 		{ href: '/m/settings', label: 'Settings', icon: 'settings', desc: 'Theme, map style and display' },
 		{ href: '/m/contact', label: 'Contact us', icon: 'mail', desc: 'Report a problem or ask a question' },
 		{ href: '/m/admin', label: 'Admin', icon: 'admin', desc: 'Injection control (restricted)', adminOnly: true }

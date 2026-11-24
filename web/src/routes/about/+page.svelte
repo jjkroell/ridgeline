@@ -53,9 +53,6 @@
 			which radios are awake, which repeaters are carrying traffic over water and
 			around mountains, and where a message can still get through today.
 		</p>
-		<p class="mt-4">
-			<a href="/meshcore" class="text-signal font-600 hover:underline">New to MeshCore? Start with the short introduction →</a>
-		</p>
 	</header>
 
 	<section class="text-fg-dim space-y-4">

@@ -134,7 +134,7 @@ func TestSitemap(t *testing.T) {
 	for _, u := range set.URLs {
 		locs[u.Loc] = u.LastMod
 	}
-	for _, want := range []string{"https://mesh.example/", "https://mesh.example/about", "https://mesh.example/nodes", "https://mesh.example/meshcore", "https://mesh.example/faq"} {
+	for _, want := range []string{"https://mesh.example/", "https://mesh.example/about", "https://mesh.example/nodes", "https://mesh.example/faq"} {
 		if _, ok := locs[want]; !ok {
 			t.Errorf("missing %s", want)
 		}

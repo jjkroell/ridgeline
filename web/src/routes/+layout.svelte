@@ -144,7 +144,6 @@
 		{ href: '/topology', label: 'Topology', icon: 'graph' },
 		{ href: '/identity', label: 'Identity', icon: 'key' },
 		{ href: '/observers', label: 'Observers', icon: 'eye' },
-		{ href: '/meshcore', label: 'What is MeshCore?', icon: 'play' },
 		{ href: '/about', label: 'About', icon: 'info' },
 		{ href: '/contact', label: 'Contact us', icon: 'mail' },
 		{ href: '/admin', label: 'Admin', icon: 'shield', adminOnly: true }

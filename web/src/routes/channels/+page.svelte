@@ -289,7 +289,11 @@
 />
 
 <div class="flex h-[calc(100dvh-3.25rem)] flex-col md:h-screen">
-	<PageHeader eyebrow="Decrypted Traffic" title="Channels">
+	<PageHeader
+	eyebrow="Decrypted Traffic"
+	title="Channels"
+	intro="Messages on the MeshCore public and hashtag channels across Vancouver Island and the Lower Mainland, including #sos, the mesh&#39;s permanent emergency channel."
+>
 		<div class="font-mono text-fg-dim text-xs">
 			<span class="text-signal tnum">{channels.list.length}</span>
 			<span class="text-fg-faint">configured · stored in this browser</span>

@@ -4,9 +4,12 @@
 		title: string;
 		/** Optional adornment rendered inline to the left of the title (e.g. a star). */
 		titleLeft?: import('svelte').Snippet;
+		/** What the page shows, in a sentence or two under the title. It is also the
+		    only text search engines get on the data pages: they can't load /api/. */
+		intro?: string | import('svelte').Snippet;
 		children?: import('svelte').Snippet;
 	}
-	let { eyebrow, title, titleLeft, children }: Props = $props();
+	let { eyebrow, title, titleLeft, intro, children }: Props = $props();
 </script>
 
 <header class="flex flex-wrap items-end justify-between gap-4 px-6 py-6 md:px-10">
@@ -24,5 +27,10 @@
 		<div class="rise flex flex-wrap items-center gap-3 *:whitespace-nowrap" style="animation-delay:60ms">
 			{@render children()}
 		</div>
+	{/if}
+	{#if intro}
+		<p class="rise text-fg-dim -mt-1 max-w-5xl basis-full text-sm leading-relaxed">
+			{#if typeof intro === 'string'}{intro}{:else}{@render intro()}{/if}
+		</p>
 	{/if}
 </header>

@@ -29,11 +29,9 @@
 	let filterOpen = $state(false);
 
 	async function refresh() {
-		try {
-			nodes = await api.nodes();
-		} finally {
-			loading = false;
-		}
+		// Until a load succeeds the list is unknown, not empty: keep the skeleton.
+		nodes = await api.nodes();
+		loading = false;
 	}
 	onMount(() => {
 		refresh();
@@ -67,7 +65,11 @@
 	path="/nodes"
 />
 
-<PageHeader eyebrow="Mesh Inventory" title="Nodes">
+<PageHeader
+	eyebrow="Mesh Inventory"
+	title="Nodes"
+	intro="Every repeater, companion radio, room server and sensor heard on the MeshCore mesh across Vancouver Island and the Lower Mainland, with its adverts and when it was last heard. Open a node for its relay activity, observers and coverage."
+>
 	<div class="font-mono text-fg-dim text-xs">
 		<span class="text-signal tnum">{fmtNum(sorted.length)}</span>
 		<span class="text-fg-faint"> / {fmtNum(nodes.length)} shown</span>

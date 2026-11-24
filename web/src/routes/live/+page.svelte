@@ -179,7 +179,11 @@
 	path="/live"
 />
 
-<PageHeader eyebrow="Real-time Telemetry" title="Feed">
+<PageHeader
+	eyebrow="Real-time Telemetry"
+	title="Feed"
+	intro="MeshCore packets as Ridgeline&#39;s observers hear them: adverts, channel messages, traces and acknowledgements, with the path each one took through the repeaters across Vancouver Island and the Lower Mainland."
+>
 	<Tooltip text="Toggle the Path column between node names and hash IDs">
 		<button
 			onclick={() => (showIds = !showIds)}

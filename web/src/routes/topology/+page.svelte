@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import Seo from '$lib/components/Seo.svelte';
+	import { isSearchCrawler } from '$lib/crawler';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import WindowToggle from '$lib/components/WindowToggle.svelte';
 	import TopologyGraph from '$lib/components/TopologyGraph.svelte';
@@ -94,18 +95,22 @@
 	path="/topology"
 />
 
-<PageHeader eyebrow="Network Observatory" title="Topology">
+<PageHeader
+	eyebrow="Network Observatory"
+	title="Topology"
+	intro="The relay backbone of the MeshCore mesh: which repeaters hand traffic to one another, inferred from the flood paths of packets heard across Vancouver Island and the Lower Mainland."
+>
 	<WindowToggle options={windows} bind:value={windowSec} />
 </PageHeader>
 
 <div class="px-6 py-6 md:px-10">
-	{#if error}
+	{#if error && !isSearchCrawler()}
 		<div class="panel border-coral/40 text-coral mb-6 px-4 py-3 text-sm">
 			Can't reach the daemon — {error}
 		</div>
 	{/if}
 
-	<section class="panel rise flex h-[calc(100dvh-13rem)] min-h-[520px] flex-col overflow-hidden">
+	<section class="panel rise flex h-[calc(100dvh-16.5rem)] min-h-[520px] flex-col overflow-hidden">
 		<div class="border-line/70 flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-5 py-3">
 			<h2 class="font-display text-fg text-sm font-700 tracking-wide">RELAY BACKBONE</h2>
 
@@ -154,7 +159,7 @@
 		</div>
 
 		<div class="relative flex-1 overflow-hidden">
-			{#if loading && !data}
+			{#if !data && (loading || error)}
 				<div class="text-fg-faint flex h-full items-center justify-center text-sm">Loading…</div>
 			{:else if !hasTopo || !topo}
 				<div class="text-fg-faint flex h-full items-center justify-center px-6 text-center text-sm">

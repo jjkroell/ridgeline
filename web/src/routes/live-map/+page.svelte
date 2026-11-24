@@ -434,7 +434,11 @@
 
 <!-- Above the map: the activity pill in the header opens down over it. -->
 <div class="relative z-30">
-<PageHeader eyebrow="Real-time Propagation" title="Live Map">
+<PageHeader
+	eyebrow="Real-time Propagation"
+	title="Live Map"
+	intro="Watch packets cross the MeshCore mesh as they are heard: each one lights up the repeaters and links it used across Vancouver Island and the Lower Mainland."
+>
 	<!-- Live activity pill. A fixed-size slot: opened, it drops down over the
 	     map from the right instead of pushing the page. -->
 	<div class="relative z-30 h-8 w-56">
@@ -446,7 +450,7 @@
 </div>
 
 <div class="px-6 py-6 md:px-10">
-	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
+	<div class="panel relative overflow-hidden" style="height:calc(100vh - 260px);min-height:420px">
 		<NodeInspector pubkey={nodeKey} onclose={() => (nodeKey = null)} />
 		<SeasonSnow />
 		{#if !webglOk}

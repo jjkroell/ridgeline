@@ -5,6 +5,7 @@
 	import { live } from '$lib/live.svelte';
 	import { ago, fmtNum } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import { isSearchCrawler } from '$lib/crawler';
 	import { announce } from '$lib/announce.svelte';
 	import { overview } from '$lib/overview.svelte';
 	import OverviewGrid from '$lib/components/widgets/OverviewGrid.svelte';
@@ -30,9 +31,9 @@
 	});
 
 	const cards = $derived([
-		{ label: 'Nodes', value: stats?.nodes ?? 0, accent: true, icon: 'node' },
-		{ label: 'Observers', value: stats?.observers ?? 0, accent: false, icon: 'eye' },
-		{ label: 'Observations', value: stats?.observations ?? 0, accent: false, icon: 'pulse' },
+		{ label: 'Nodes', value: stats?.nodes, accent: true, icon: 'node' },
+		{ label: 'Observers', value: stats?.observers, accent: false, icon: 'eye' },
+		{ label: 'Observations', value: stats?.observations, accent: false, icon: 'pulse' },
 		{ label: 'Session Events', value: live.total, accent: false, icon: 'bolt' }
 	]);
 
@@ -50,7 +51,15 @@
 	path="/"
 />
 
-<PageHeader eyebrow="Network Observatory" title="Overview">
+{#snippet intro()}
+	Ridgeline is a live observatory for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland of British
+	Columbia: an off-grid text messaging network on 909.000 MHz that needs no internet or cell service. New here? See the
+	<a href="/settings" class="text-signal hover:underline">recommended radio settings</a>, the
+	<a href="/faq" class="text-signal hover:underline">909.000 MHz FAQ</a> or the
+	<a href="/sos" class="text-signal hover:underline">#sos channel</a>.
+{/snippet}
+
+<PageHeader eyebrow="Network Observatory" title="Overview" {intro}>
 	<button
 		onclick={() => (overview.editing = !overview.editing)}
 		class="flex items-center gap-2 rounded-[var(--radius)] border px-3 py-2 text-sm font-600 transition-colors {overview.editing
@@ -78,7 +87,7 @@
 </PageHeader>
 
 <div class="px-6 py-6 md:px-10">
-	{#if error}
+	{#if error && !isSearchCrawler()}
 		<div class="panel border-coral/40 text-coral mb-6 px-4 py-3 text-sm">
 			Can't reach the daemon — {error}
 		</div>
@@ -97,7 +106,7 @@
 						<svg viewBox="0 0 24 24" class="h-4 w-4 {c.accent ? 'text-signal' : 'text-fg-faint'}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d={icons[c.icon]} /></svg>
 					</div>
 					<div class="font-display tnum mt-3 text-[clamp(1.25rem,13cqw,2.25rem)] leading-tight font-700 {c.accent ? 'text-signal glow-signal' : 'text-fg'}">
-						{fmtNum(c.value)}
+						{c.value === undefined ? '—' : fmtNum(c.value)}
 					</div>
 				</div>
 			</div>

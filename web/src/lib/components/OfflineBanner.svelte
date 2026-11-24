@@ -4,11 +4,15 @@
 	// mobile shells, like DevBanner. It clears itself on the next live response.
 	import { serverClock } from '$lib/server-clock.svelte';
 	import { ago } from '$lib/format';
+	import { isSearchCrawler } from '$lib/crawler';
 
+	// robots.txt keeps crawlers out of /api/, so to them the server always looks
+	// unreachable; a page that says so reads as broken.
+	const crawler = isSearchCrawler();
 	const saved = $derived(serverClock.savedAt ? new Date(serverClock.savedAt).toISOString() : '');
 </script>
 
-{#if serverClock.offline}
+{#if serverClock.offline && !crawler}
 	<div
 		data-offline-banner
 		class="bg-coral/12 text-coral border-coral/30 flex shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-0.5 border-b px-3 py-1 text-center text-[0.72rem] leading-tight font-700"

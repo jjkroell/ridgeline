@@ -128,16 +128,24 @@ var seoSections = map[string]seoSection{
 		},
 		Freq: "daily", Priority: "0.6",
 	},
+	"/contact": {
+		Title:       "Contact us · Ridgeline",
+		Description: "Questions, problems or feedback about Ridgeline or the coastal BC MeshCore mesh? Send us a message.",
+		Heading:     "Contact us",
+		Paras: []string{
+			"Something not working, a question about the mesh, or an idea for Ridgeline? Send a message and we will get back to you by email.",
+		},
+		Freq: "yearly", Priority: "0.4",
+	},
 }
 
 // Content pages listed in the sitemap after the sections: the prerendered
-// explainers (real HTML of their own) plus /contact.
+// explainers, which have real HTML of their own.
 var seoStaticPages = []struct{ Path, Freq, Priority string }{
 	{"/settings", "monthly", "0.9"},
 	{"/faq", "monthly", "0.8"},
 	{"/hash-ids", "monthly", "0.8"},
 	{"/sos", "monthly", "0.8"},
-	{"/contact", "yearly", "0.4"},
 }
 
 // seoNav is the crawl summary's link list, the same set as app.html's.

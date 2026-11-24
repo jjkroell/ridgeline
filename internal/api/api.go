@@ -312,7 +312,7 @@ func (s *Server) Handler() http.Handler {
 
 	if s.webDir != "" {
 		if info, err := os.Stat(s.webDir); err == nil && info.IsDir() {
-			mux.HandleFunc("/", s.shareHandler(staticHandler(s.webDir)))
+			mux.Handle("/", s.crawlRules(s.shareHandler(staticHandler(s.webDir))))
 			mux.HandleFunc("GET /sitemap.xml", s.sitemap)
 			s.log.Info("serving web UI", "dir", s.webDir)
 		} else {

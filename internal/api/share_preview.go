@@ -43,6 +43,7 @@ var sharePages = map[string]sharePreview{
 	"/topology":  {Title: "Mesh topology", Description: "Explore observed connections between MeshCore nodes."},
 	"/identity":  {Title: "Hash-ID planner", Description: "Inspect MeshCore public-key prefix ambiguity at each path width."},
 	"/observers": {Title: "Observers", Description: "Meet the receive-only stations listening to this mesh."},
+	"/contact":   {Title: "Contact us", Description: "Questions, problems or feedback about this MeshCore observatory."},
 }
 
 func previewPath(path string) string {
@@ -154,8 +155,8 @@ func (p *sharePreview) imageURL(site shareSite) string {
 }
 
 // shareHandler renders only the document head, in the existing Go process.
-// Interactive Svelte routes remain client-rendered. No user-agent sniffing,
-// external requests, browser renderer, new service or session access is needed.
+// Interactive Svelte routes remain client-rendered. No user-agent sniffing here
+// (crawlRules does the little there is), external requests, browser renderer, new service or session access is needed.
 func (s *Server) shareHandler(next http.HandlerFunc) http.HandlerFunc {
 	shell, err := os.ReadFile(filepath.Join(s.webDir, "index.html"))
 	if err != nil {

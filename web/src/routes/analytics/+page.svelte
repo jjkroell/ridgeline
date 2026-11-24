@@ -6,6 +6,7 @@
 	import Seo from '$lib/components/Seo.svelte';
 	import { api, type MeshAnalytics, type Node } from '$lib/api';
 	import { fmtNum, roleColor, shortKey, skewColor, fmtSkew, fmtClockDrift, clockDriftLevel } from '$lib/format';
+	import { isSearchCrawler } from '$lib/crawler';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import RoleBadge from '$lib/components/RoleBadge.svelte';
 	import Tooltip from '$lib/components/Tooltip.svelte';
@@ -328,7 +329,11 @@
 	path="/analytics"
 />
 
-<PageHeader eyebrow="Network Observatory" title="Mesh Analytics">
+<PageHeader
+	eyebrow="Network Observatory"
+	title="Mesh Analytics"
+	intro="Health of the MeshCore mesh across Vancouver Island and the Lower Mainland: traffic over time, the busiest repeaters, link quality between nodes, hop counts and path hash sizes."
+>
 	<div class="flex items-center gap-3">
 		{#if data}
 			<Tooltip text="Mesh load from channel utilisation (typical observer): Quiet under 2%, Normal under 6%, Busy under 12%, Congested 12% and up">
@@ -344,7 +349,7 @@
 </PageHeader>
 
 <div class="px-6 py-6 md:px-10">
-	{#if error}
+	{#if error && !isSearchCrawler()}
 		<div class="panel border-coral/40 text-coral mb-6 px-4 py-3 text-sm">
 			Can't reach the daemon — {error}
 		</div>

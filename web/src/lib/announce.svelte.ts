@@ -1,3 +1,5 @@
+import { isSearchCrawler } from './crawler';
+
 // Announcement / "what's new" modal state. Auto-shows once per release the first
 // time a visitor lands (tracked in localStorage by version), and can be reopened
 // on demand from the overview page. Bump CURRENT when there's something new to
@@ -14,6 +16,7 @@ class Announce {
 
 	/** Called once on app load: opens the modal if this release hasn't been seen. */
 	init() {
+		if (isSearchCrawler()) return;
 		let seen = '';
 		try {
 			seen = localStorage.getItem(STORAGE_KEY) ?? '';
@@ -26,6 +29,7 @@ class Announce {
 	/** A season is in force: open once for it, if this browser hasn't seen it. */
 	season(id: string) {
 		this.#season = id;
+		if (isSearchCrawler()) return;
 		try {
 			let seen = localStorage.getItem(SEASON_KEY);
 			// Halloween was announced through CURRENT before seasons had their own key.

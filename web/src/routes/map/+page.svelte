@@ -442,14 +442,18 @@
 	path="/map"
 />
 
-<PageHeader eyebrow="Terrain & Topology" title="Network Map">
+<PageHeader
+	eyebrow="Terrain & Topology"
+	title="Network Map"
+	intro="Where the MeshCore repeaters and other nodes are across Vancouver Island and the Lower Mainland, the radio links heard between them, and predicted coverage on 909.000 MHz."
+>
 	<div class="font-mono text-fg-dim text-xs">
 		<span class="text-signal tnum">{visible.length}</span> <span class="text-fg-faint">shown</span>
 	</div>
 </PageHeader>
 
 <div class="px-6 py-6 md:px-10">
-	<div class="panel relative overflow-hidden" style="height:calc(100vh - 220px);min-height:420px">
+	<div class="panel relative overflow-hidden" style="height:calc(100vh - 260px);min-height:420px">
 		<NodeInspector pubkey={nodeKey} onclose={() => (nodeKey = null)} />
 		{#if !webglOk}
 			<FallbackMap

@@ -16,13 +16,11 @@
 	let showSetup = $state(false);
 
 	async function refresh() {
-		try {
-			const [obs, mesh] = await Promise.all([api.observers(), api.meshAnalytics().catch(() => null)]);
-			observers = obs;
-			if (mesh) coverage = Object.fromEntries(mesh.observers.map((o) => [o.id, o]));
-		} finally {
-			loading = false;
-		}
+		// Until a load succeeds the list is unknown, not empty: keep the skeleton.
+		const [obs, mesh] = await Promise.all([api.observers(), api.meshAnalytics().catch(() => null)]);
+		observers = obs;
+		if (mesh) coverage = Object.fromEntries(mesh.observers.map((o) => [o.id, o]));
+		loading = false;
 	}
 	onMount(() => {
 		refresh();
@@ -37,7 +35,11 @@
 	path="/observers"
 />
 
-<PageHeader eyebrow="Listening Posts" title="Observers">
+<PageHeader
+	eyebrow="Listening Posts"
+	title="Observers"
+	intro="Receive-only stations that report every MeshCore packet they hear to Ridgeline. Their combined view is what the maps, feed and analytics are built from."
+>
 	<div class="flex items-center gap-4">
 		<button
 			onclick={() => (showSetup = true)}

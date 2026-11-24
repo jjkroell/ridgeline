@@ -121,7 +121,10 @@
 			<em>USA/Canada</em> preset, then change the frequency to 909.000. The preset then shows as
 			<em>Custom</em>, which is expected.
 		</p>
-		<p><strong>Repeaters and room servers:</strong> over the serial console or remote admin:</p>
+		<p>
+			<strong>Repeaters and room servers:</strong> use the radio settings in the app when you manage
+			the node, or the CLI, either in the app or over serial:
+		</p>
 		{@render cmdList(['set radio 909.000,62.5,7,5', 'reboot'])}
 		<p>
 			The new radio settings take effect after the reboot. Before changing a repeater you can only

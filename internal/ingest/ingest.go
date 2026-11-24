@@ -500,6 +500,12 @@ func (in *Ingestor) handleStatus(msg mqtt.Message) {
 	// battery/noise reading with the reconnect time invents a data point that was
 	// never measured, one per reconnect, for as long as the retained message lives.
 	if msg.Retained() {
+		// A copy that contradicts a confirmed observer is left over from an old
+		// radio setting: it may not overwrite the row or touch the verdict.
+		if in.store.RetainedRadioOutdated(observerID, env.Radio) {
+			in.log.Debug("ignored outdated retained status", "observer", observerID, "radio", env.Radio)
+			return
+		}
 		found, err := in.store.UpdateObserverStatusIfPresent(observerID, observerName, region, pubkey, string(b), env.Radio, now)
 		if err != nil {
 			in.log.Error("update observer status failed", "err", err)

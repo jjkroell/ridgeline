@@ -220,9 +220,10 @@ type RadioVerdict struct {
 // Clearing is as important as setting: an operator who fixes their radio must
 // come back automatically, without anyone noticing and intervening.
 //
-// retained says the status is the broker's replay of the observer's last one,
-// not a live report. It still decides admission — that is what readmits an
-// observer fixed while the daemon was away — but it must not move the anchor
+// retained says the status is the broker's replay of an earlier one, not a live
+// report. It still decides admission — that is what readmits an observer fixed
+// while the daemon was away — but it cannot turn out a confirmed observer (see
+// RetainedRadioOutdated), and it must not move the anchor
 // forward: it proves nothing about the observer NOW, and a later retraction
 // would then start too late and leave foreign rows from before the reconnect.
 // It only sets the anchor when there is none, because no anchor means no
@@ -232,6 +233,9 @@ func (s *Store) EvaluateObserverRadio(observerID, reported, at string, retained 
 		return RadioVerdict{}
 	}
 	bad := !s.radioAllowed(reported)
+	if retained && bad && s.ObserverRadioConfirmed(observerID) {
+		return RadioVerdict{}
+	}
 
 	s.radioMu.Lock()
 	was := s.quarantinedRadios[observerID]
@@ -286,6 +290,18 @@ func (s *Store) EvaluateObserverRadio(observerID, reported, at string, retained 
 			at, observerID)
 	}
 	return v
+}
+
+// RetainedRadioOutdated reports whether a retained status names a preset off
+// this mesh for an observer already confirmed on it. The broker keeps a retained
+// message until it is replaced, which a live status that is not retained (or is
+// on another topic) never does: two kept a 910.425 copy from before the move to
+// 909.000, and every reconnect quarantined them and deleted good packets until
+// their next live status. Such a copy is ignored whole. An observer that really
+// did retune is caught by that same live status, which retracts everything back
+// to the last good one, so nothing off-mesh is kept by waiting for it.
+func (s *Store) RetainedRadioOutdated(observerID, reported string) bool {
+	return s.AllowedRadioCount() > 0 && !s.radioAllowed(reported) && s.ObserverRadioConfirmed(observerID)
 }
 
 // anchorSet is the SET clause that records an accepted status as the

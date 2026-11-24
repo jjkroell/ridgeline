@@ -227,7 +227,12 @@
 				back to the sender, it sends it twice. The second send gives the receipt another chance to get
 				through.
 			</li>
-			<li><code>set rxdelay 3</code>: favours the strongest copy of a flood over a weaker one.</li>
+			<li>
+				<code>set rxdelay 3</code>: a repeater that hears a flood strongly passes it on straight away,
+				and one that hears it weakly waits a moment first. Often the packet has already been passed on by
+				then, so the weak repeater doesn't need to send it at all. Off by default, and marked
+				experimental in MeshCore.
+			</li>
 		</ul>
 
 		<h3 id="commands">Copy and paste</h3>

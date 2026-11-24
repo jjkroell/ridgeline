@@ -1,15 +1,14 @@
 <script lang="ts">
 	import Modal from './Modal.svelte';
 	import { announce } from '$lib/announce.svelte';
-	import { theme } from '$lib/theme.svelte';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { seasonal } from '$lib/seasonal.svelte';
 
 	// Each entry is one new capability, in user-facing terms. While a season is
 	// in force its own items lead (see $lib/seasonal.svelte; they vanish when it
-	// ends), then the newest release's (`latest`); `sos` (red) and `items` are
-	// earlier releases', each kept under an "Earlier" label.
+	// ends), then the newest release's (`latest`); `sos` (red) is the
+	// previous release's, kept under an "Earlier" label.
 	onMount(() => seasonal.load());
 	const season = $derived(seasonal.season);
 	function trySeason() {
@@ -56,63 +55,6 @@
 			body: 'While Ridgeline is open, it can also play a bell and show a system notification when someone calls for help on #sos. Turn either on under the Alerts pill beside #sos (on a phone, also under More → Settings), and press Test to hear it. They are off unless you turn them on, and the choice is saved in this browser only.'
 		}
 	];
-	const items: { icon: string; title: string; body: string }[] = [
-		{
-			icon: 'M12 3a9 9 0 100 18c1.1 0 1.6-.9 1.2-1.8-.5-1-.1-2.2 1.1-2.2H17a4 4 0 004-4c0-5-4-10-9-10zM7.5 12a1 1 0 100-2 1 1 0 000 2zM10.5 8a1 1 0 100-2 1 1 0 000 2zM15 8a1 1 0 100-2 1 1 0 000 2z',
-			title: 'Harbour, a new look for Ridgeline',
-			body: 'A clean, rounded new theme: soft grey surfaces, frosted glass bars, your device’s own system font, rounder cards and a single accent colour. Pick Light, Dark, or Auto to follow your device’s appearance, and choose an accent: blue, purple, pink, red, orange, green or graphite. To try it, open Theme at the bottom of the sidebar (on a phone, the round button at the top right, or More → Settings). Your choice is saved in this browser, and every other theme is still there.'
-		},
-		{
-			icon: 'M8 3h8a2 2 0 012 2v14a2 2 0 01-2 2H8a2 2 0 01-2-2V5a2 2 0 012-2zM11 18h2',
-			title: 'On a phone, it feels like an app',
-			body: 'With Harbour on, the phone layout gets large page titles that tuck into the bar as you scroll, content that slides under frosted bars, full-screen maps, toggle switches and segmented controls, and grouped lists. Add Ridgeline to your home screen and it opens with a proper launch screen, and you can swipe in from the left edge to go back.'
-		},
-		{
-			icon: 'M4 14h16M4 14a2 2 0 01-2-2V6a2 2 0 012-2h16a2 2 0 012 2v6a2 2 0 01-2 2M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4M12 8h.01',
-			title: 'Node cards on the phone maps',
-			body: 'Tapping a node on the phone map or live map opens a card over the map instead of leaving it. Drag the card up for everything else about the node (first heard, adverts, relays, clock and radio), drag it down to close it, or tap Details for the full page.'
-		},
-		{
-			icon: 'M9 11V6a1.5 1.5 0 013 0v5m0-1a1.5 1.5 0 013 0v1m0 0a1.5 1.5 0 013 0v3a6 6 0 01-6 6h-1a5 5 0 01-4-2l-2.5-3.5a1.5 1.5 0 012.4-1.8L9 15',
-			title: 'Shortcuts for touch and mouse',
-			body: 'Press and hold a node or observer in a list on your phone, or right-click it on a computer, for a quick menu: open it, star it, show it on the map, copy its key or share a link. On a phone, swipe a node to the left to star it, and pull down on a list to refresh it. On charts such as battery, noise, activity, throughput and channel use, drag along the chart to read each value.'
-		},
-		{
-			icon: 'M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM21 21l-5.2-5.2',
-			title: 'Faster to get around',
-			body: 'Press Ctrl+K (⌘K on a Mac), or Search in the sidebar, to jump to any page or node by name. Clicking a node on the map opens a side panel so the map stays in view. On a phone, the Nodes list can be sorted A–Z with a letter strip down the side to jump through it, and Nodes and Observers both have a search field (in Harbour, pull the list down to show it). On an iPad held sideways, Nodes shows the list and the selected node side by side.'
-		},
-		{
-			icon: 'M2 12h3l2-7 3.5 15L16 8l2 4h4',
-			title: 'How busy is the mesh right now?',
-			body: 'Both live maps now show a small pill at the top with the number of packets heard in the last minute and the last node heard. Tap it to see the last 15 minutes minute by minute and the latest packets; tap a packet’s node to open it.'
-		},
-		{
-			icon: 'M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z',
-			title: 'Widgets in three sizes, and a Settings page',
-			body: 'In Harbour, Customize on the overview lets you make each widget small, medium or large, like home-screen widgets, with its headline number up front. Phones get a Settings page (More → Settings) for theme, map style, packet times and your account.'
-		},
-		{
-			icon: 'M12 3v18M3 12h18M5.6 5.6l12.8 12.8',
-			title: 'Easier to read',
-			body: 'Turn on Reduce transparency (under the theme choices) to make frosted bars and panels solid. It also switches on by itself if your device asks for less transparency, and in Harbour, edges and secondary text get firmer when Increase Contrast is on. Copying a key or starring a node now shows a short confirmation in the middle of the screen.'
-		},
-		{
-			icon: 'M3 20l6-9 4 5 3-4 5 8zM16 4.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z',
-			title: 'A calmer map, and a new logo',
-			body: 'There is a new Muted base map, a soft, low-colour map that lets the nodes stand out (Harbour uses it by default; change it under Base map on any map). Ridgeline has a new logo, Constellation: relay nodes joined into a mountain under a star. It came first in the public vote; thank you to everyone who voted.'
-		},
-		{
-			icon: 'M5 12.5l4.5 4.5L19 7.5',
-			title: 'Fixes in every theme',
-			body: 'Bold text is bold again across the site, so headings and numbers stand out more in every theme. The live map now plays its sound as soon as you tap or click anywhere, instead of staying silent until you switched sound off and on. Pages show a quiet outline while they load instead of “Loading…”, and the node count on the phone map is no longer hidden under Copy link.'
-		}
-	];
-	const onHarbour = $derived(theme.choice === 'apple' || theme.choice === 'apple-dark' || theme.choice === 'apple-auto');
-	function tryIt() {
-		theme.set('apple-auto');
-		announce.close();
-	}
 </script>
 
 {#if announce.open}
@@ -195,34 +137,6 @@
 					</li>
 				{/each}
 			</ul>
-
-			<div class="border-line/60 mt-5 mb-4 flex items-center gap-3 border-t pt-4">
-				<span class="label" data-caps>Earlier: Harbour</span>
-			</div>
-
-			<ul class="flex flex-col gap-4">
-				{#each items as item (item.title)}
-					<li class="flex items-start gap-3">
-						<span
-							class="bg-signal/10 text-signal mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full"
-						>
-							<svg
-								viewBox="0 0 24 24"
-								class="h-[18px] w-[18px]"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.6"
-								stroke-linecap="round"
-								stroke-linejoin="round"><path d={item.icon} /></svg
-							>
-						</span>
-						<div class="min-w-0">
-							<div class="text-fg text-sm font-600">{item.title}</div>
-							<div class="text-fg-dim mt-0.5 text-sm leading-relaxed">{item.body}</div>
-						</div>
-					</li>
-				{/each}
-			</ul>
 		</div>
 
 		<div class="border-line/70 flex flex-wrap items-center justify-end gap-x-3 gap-y-2 border-t px-6 py-4">
@@ -237,12 +151,6 @@
 					class="rounded-[var(--radius)] border px-4 py-2 text-sm font-600 transition-[filter] hover:brightness-125"
 					style="border-color:color-mix(in srgb, {season.accent} 50%, transparent);color:{season.accent}"
 					><img src={seasonal.src(season.emoji)} alt="" class="mr-1.5 inline h-4 w-4 align-[-0.15em]" />{season.tryLabel}</button
-				>
-			{/if}
-			{#if !onHarbour}
-				<button
-					onclick={tryIt}
-					class="text-signal hover:brightness-125 text-sm font-600 transition-[filter]">Try Harbour</button
 				>
 			{/if}
 			<a

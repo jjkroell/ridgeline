@@ -184,9 +184,14 @@
 
 		<h3 id="txdelay">TX delay by neighbour count</h3>
 		<p>
-			A repeater that hears many neighbours should wait longer before passing a packet on, so that
-			repeaters closer to the sender cover their own area first. Fewer repeaters then transmit the
-			same packet at once.
+			Before passing a flood on, each repeater waits a random moment so that nearby repeaters don't
+			all transmit at once. <code>txdelay</code> sets how long that wait can be. Give a repeater
+			that hears many neighbours a longer one, and the repeaters closer to the sender will usually go
+			first and cover their own area. The wait is random, so not every time.
+		</p>
+		<p>
+			A longer delay only changes <em>when</em> a repeater sends. It still sends its copy, even if it
+			has already heard a neighbour send the same packet.
 		</p>
 		<p>
 			To count your repeater's neighbours, run <code>neighbors</code> on it. It lists the repeaters it

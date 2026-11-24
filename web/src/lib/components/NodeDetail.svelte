@@ -858,7 +858,7 @@
 			{#if rf}
 				<section class="panel">
 					<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
-						<h3 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">RF neighbors</h3>
+						<h3 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">RF neighbours</h3>
 						<Tooltip text="Nodes heard directly over the air, from the neighbour table a repeater publishes over MQTT (openHop and some firmware builds). Measured links — unlike Neighbors below, which are inferred from packet paths. SNR is how well the reporting repeater hears the other node.">
 							<span class="text-fg-faint cursor-help text-xs">ⓘ</span>
 						</Tooltip>
@@ -902,7 +902,7 @@
 			<!-- Neighbors -->
 			<section class="panel">
 				<div class="border-line/70 flex items-center gap-2.5 border-b px-5 py-3">
-					<h3 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Path neighbors</h3>
+					<h3 data-caps class="font-display text-fg text-sm font-700 tracking-wide uppercase">Path neighbours</h3>
 					<span class="label ml-auto tnum">{detail?.neighbors.length ?? 0}</span>
 				</div>
 				{#if !detail || detail.neighbors.length === 0}

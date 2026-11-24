@@ -22,7 +22,7 @@
 	];
 
 	// Advert intervals: zero-hop in minutes, flood in hours.
-	const advert = { zeroHop: 60, flood: 3 };
+	const advert = { zeroHop: 60, flood: 30 };
 
 	// Repeaters that hear more neighbours wait longer before passing a packet on,
 	// so the ones closer to the sender get to cover their area first.

@@ -758,6 +758,7 @@ func runNodeRetention(ctx context.Context, st *store.Store, engine *analytics.En
 		if len(keys) == 0 {
 			return
 		}
+		began := time.Now()
 		res, err := st.PurgeTargets(nil, nil, keys)
 		if err != nil {
 			log.Warn("node retention: purge", "err", err)
@@ -765,7 +766,8 @@ func runNodeRetention(ctx context.Context, st *store.Store, engine *analytics.En
 		}
 		log.Info("node retention: removed silent nodes",
 			"thresholdDays", retentionDays, "minHopBytes", minHopBytes, "candidates", len(keys),
-			"nodesDeleted", res.Nodes, "observationsDeleted", res.Observations)
+			"nodesDeleted", res.Nodes, "observationsDeleted", res.Observations,
+			"purgeTook", time.Since(began).Round(time.Millisecond))
 	}
 
 	// Let ingest/analytics settle so liveness reflects current relays before the

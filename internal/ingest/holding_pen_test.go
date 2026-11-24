@@ -181,7 +181,7 @@ func TestIngestRefusesFramesOverMTU(t *testing.T) {
 	topic := "meshcore/TST/" + strings.Repeat("AB", 32) + "/packets"
 	for _, n := range []int{100, meshcore.MaxPacketSize, meshcore.MaxPacketSize + 1, 16384} {
 		raw := "1100" + strings.Repeat("00", n-2)
-		in.handle(nil, fakeMsg{topic: topic, payload: `{"raw":"` + raw + `","origin":"t"}`})
+		in.handle(fakeMsg{topic: topic, payload: `{"raw":"` + raw + `","origin":"t"}`}, time.Now())
 	}
 	if len(committed) != 2 || committed[0] != 200 || committed[1] != 2*meshcore.MaxPacketSize {
 		t.Fatalf("want only the 100- and 255-byte frames stored, got hex lengths %v", committed)

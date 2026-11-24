@@ -43,7 +43,7 @@ func TestOutdatedRetainedStatusIgnored(t *testing.T) {
 	}
 
 	st, in := open()
-	in.handleStatus(radioStatus(topic, good, false))
+	in.handleStatus(radioStatus(topic, good, false), time.Now())
 	pkt, err := meshcore.DecodeHex(retractAdvertHex)
 	if err != nil || pkt.Advert == nil {
 		t.Fatalf("decode fixture: %v", err)
@@ -76,22 +76,22 @@ func TestOutdatedRetainedStatusIgnored(t *testing.T) {
 		}
 	}
 
-	in.handleStatus(radioStatus(topic, old, true))
+	in.handleStatus(radioStatus(topic, old, true), time.Now())
 	check("reconnect", st)
 	st.Close()
 	st, in = open()
 	defer st.Close()
-	in.handleStatus(radioStatus(topic, old, true))
+	in.handleStatus(radioStatus(topic, old, true), time.Now())
 	check("restart", st)
 
 	// A live report of the same preset is the observer speaking now: it still
 	// quarantines, and takes back what was stored since the last good status.
-	in.handleStatus(radioStatus(topic, old, false))
+	in.handleStatus(radioStatus(topic, old, false), time.Now())
 	if !st.ObserverRadioQuarantined(obs) || stored(st) {
 		t.Error("a live foreign status must quarantine and retract")
 	}
 	// And a retained good one still readmits.
-	in.handleStatus(radioStatus(topic, good, true))
+	in.handleStatus(radioStatus(topic, good, true), time.Now())
 	if st.ObserverRadioQuarantined(obs) {
 		t.Error("a retained good status must readmit")
 	}
@@ -112,7 +112,7 @@ func TestRetainedForeignStatusStillQuarantinesUnconfirmed(t *testing.T) {
 	st.SetAllowedRadios([]string{"909.0,62.5,7,5"})
 	in := testIngestor()
 	in.store = st
-	in.handleStatus(radioStatus("meshcore/YVR/"+obs+"/status", "910.425,62.5,7,5", true))
+	in.handleStatus(radioStatus("meshcore/YVR/"+obs+"/status", "910.425,62.5,7,5", true), time.Now())
 	if !st.ObserverRadioQuarantined(obs) {
 		t.Error("a retained foreign status must still quarantine an unconfirmed observer")
 	}

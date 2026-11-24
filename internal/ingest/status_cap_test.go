@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jjkroell/ridgeline/internal/store"
 )
@@ -21,9 +22,9 @@ func TestStatusPayloadAndFieldsCapped(t *testing.T) {
 
 	huge, small := strings.Repeat("AB", 32), strings.Repeat("CD", 32)
 	in.handleStatus(fakeMsg{topic: "meshcore/YVR/" + huge + "/status",
-		payload: `{"status":"online","origin":"x","model":"` + strings.Repeat("M", 70000) + `"}`})
+		payload: `{"status":"online","origin":"x","model":"` + strings.Repeat("M", 70000) + `"}`}, time.Now())
 	in.handleStatus(fakeMsg{topic: "meshcore/YVR/" + small + "/status",
-		payload: `{"status":"online","origin":"` + strings.Repeat("N", 500) + `","model":"` + strings.Repeat("M", 500) + `"}`})
+		payload: `{"status":"online","origin":"` + strings.Repeat("N", 500) + `","model":"` + strings.Repeat("M", 500) + `"}`}, time.Now())
 
 	if ok, _ := st.ObserverExists(huge); ok {
 		t.Error("oversized status was stored")

@@ -130,6 +130,7 @@ func (s *Server) nodeScrub(w http.ResponseWriter, r *http.Request, u store.User)
 	// there is nothing left linking this node to the user who removed it.
 	s.audit(u, "node_scrub", pubkey, "owner-initiated hard delete")
 
+	began := time.Now()
 	res, err := s.store.ScrubNodes(nil, nil, []string{pubkey})
 	if err != nil {
 		s.fail(w, err)
@@ -138,6 +139,7 @@ func (s *Server) nodeScrub(w http.ResponseWriter, r *http.Request, u store.User)
 	s.log.Info("node scrubbed by owner", "node", pubkey, "user", u.Email,
 		"observationsDeleted", res.Observations, "nodesDeleted", res.Nodes,
 		"claimsDeleted", res.Claims, "notesDeleted", res.Notes,
-		"locationsDeleted", res.Locations, "sharesDeleted", res.Shares)
+		"locationsDeleted", res.Locations, "sharesDeleted", res.Shares,
+		"took", time.Since(began).Round(time.Millisecond))
 	writeJSON(w, res)
 }

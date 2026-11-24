@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jjkroell/ridgeline/internal/store"
 )
@@ -27,7 +28,7 @@ func TestStatusFromBlockedObserverIgnored(t *testing.T) {
 		in.handleStatus(fakeMsg{
 			topic:   "meshcore/YVR/" + key + "/status",
 			payload: `{"status":"online","origin":"obs","radio":"910.425,62.5,7,5"}`,
-		})
+		}, time.Now())
 	}
 	if ok, _ := st.ObserverExists(blocked); ok {
 		t.Error("blocked observer's status re-created its row")

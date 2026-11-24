@@ -64,6 +64,9 @@ WORKDIR /app
 COPY --from=mosquitto_builder /usr/local/include/ /usr/local/include/
 RUN git clone --depth 1 --branch ${GO_AUTH_VERSION} \
       https://github.com/iegomez/mosquitto-go-auth.git .
+# Fails the build rather than ship unpatched if it stops applying.
+COPY go-auth-cache-nil.patch /tmp/
+RUN git apply --verbose /tmp/go-auth-cache-nil.patch
 # Two passes, as upstream does: the c-archive build is what emits go-auth.h,
 # which the plugin's auth-plugin.c includes. Skipping it fails the c-shared
 # build with "go-auth.h: No such file or directory".

@@ -60,7 +60,7 @@ func nbIngestor(t *testing.T) (*Ingestor, *store.Store) {
 
 func TestNeighborsStoredUnderTopicKey(t *testing.T) {
 	in, st := nbIngestor(t)
-	in.handle(nil, fakeMsg{topic: "meshcore/YCD/" + nbReporter + "/neighbors", payload: nbPayload()})
+	in.handle(fakeMsg{topic: "meshcore/YCD/" + nbReporter + "/neighbors", payload: nbPayload()}, time.Now())
 
 	r, ok := st.NeighborReportOf(nbReporter)
 	if !ok {
@@ -109,7 +109,7 @@ func TestNeighborsRefusedWhenNotTrusted(t *testing.T) {
 	for name, setup := range cases {
 		t.Run(name, func(t *testing.T) {
 			in, st := nbIngestor(t)
-			in.handle(nil, setup(in, st))
+			in.handle(setup(in, st), time.Now())
 			if _, ok := st.NeighborReportOf(nbReporter); ok {
 				t.Error("report should have been refused")
 			}
@@ -125,7 +125,7 @@ func TestNeighborsReloadedOnOpen(t *testing.T) {
 	}
 	in := testIngestor()
 	in.store = st
-	in.handle(nil, fakeMsg{topic: "meshcore/YCD/" + nbReporter + "/neighbours", payload: nbPayload()})
+	in.handle(fakeMsg{topic: "meshcore/YCD/" + nbReporter + "/neighbours", payload: nbPayload()}, time.Now())
 	st.Close()
 	st2, err := store.Open(path)
 	if err != nil {

@@ -71,6 +71,13 @@ type Ingestor struct {
 
 	client mqtt.Client
 
+	// Messages received but not yet handled, see queue.go.
+	queue       chan arrival
+	queuedBytes atomic.Int64
+	queueFull   atomic.Int64  // messages refused since the last report
+	worked      chan struct{} // closed when the worker has finished
+	working     atomic.Bool   // the worker was started
+
 	// Packets from observers that have not yet reported a radio preset, held
 	// until the verdict arrives. See holding_pen.go.
 	penMu sync.Mutex
@@ -82,7 +89,8 @@ type Ingestor struct {
 	// so the time spent disconnected is the loss.
 	lostAt atomic.Value // time.Time of the last connection loss (paho DETECTED it)
 	// lastMsg is the UnixNano of the most recent message received from the
-	// broker. paho only notices a dead link after the keepalive + ping timeout
+	// broker — received, not handled: timed from handling, a backlog made every
+	// drop look like a 0 s gap. paho only notices a dead link after the keepalive + ping timeout
 	// (~60s here), so lostAt starts the clock long after packets actually
 	// stopped arriving. The last message received marks the true start of the
 	// silence. Int64 (not atomic.Value) to avoid boxing a time.Time per message
@@ -101,7 +109,8 @@ type Ingestor struct {
 
 // New creates an Ingestor.
 func New(cfg config.MQTT, st *store.Store, log *slog.Logger) *Ingestor {
-	return &Ingestor{cfg: cfg, store: st, log: log, done: make(chan struct{})}
+	return &Ingestor{cfg: cfg, store: st, log: log, done: make(chan struct{}),
+		queue: make(chan arrival, queueLen), worked: make(chan struct{})}
 }
 
 // Start connects to the broker and subscribes. It returns once the
@@ -129,11 +138,12 @@ func (in *Ingestor) Start() error {
 		// caused it. Measured gaps were 0-98s; this caps the tail.
 		SetMaxReconnectInterval(15 * time.Second).
 		SetConnectRetryInterval(5 * time.Second).
-		// The broker's auth plugin calls back into this process for every ACL
-		// check, so a burst of publishes can delay a PINGRESP. The defaults
-		// (30s keepalive, 10s ping timeout) turn that into a dropped connection
-		// and a reconnect that loses packets. More tolerance costs only slower
-		// detection of a genuinely dead link, which AutoReconnect then handles.
+		// The broker's auth plugin calls back into this process for ACL checks, so
+		// a burst of publishes can delay a PINGRESP. The defaults (30s keepalive,
+		// 10s ping timeout) turn that into a dropped connection and a reconnect
+		// that loses packets. More tolerance costs only slower detection of a
+		// genuinely dead link, which AutoReconnect then handles. The larger cause
+		// was handling messages inside the callback — see queue.go.
 		SetKeepAlive(45 * time.Second).
 		SetPingTimeout(15 * time.Second)
 
@@ -175,13 +185,16 @@ func (in *Ingestor) Start() error {
 			}
 		}
 		for _, topic := range in.cfg.Topics {
-			if tok := c.Subscribe(topic, 0, in.handle); tok.Wait() && tok.Error() != nil {
+			if tok := c.Subscribe(topic, 0, in.receive); tok.Wait() && tok.Error() != nil {
 				in.log.Error("subscribe failed", "topic", topic, "err", tok.Error())
 			} else {
 				in.log.Info("subscribed", "topic", topic)
 			}
 		}
 	})
+
+	in.working.Store(true)
+	go in.work()
 
 	in.client = mqtt.NewClient(opts)
 	tok := in.client.Connect()
@@ -205,15 +218,23 @@ func (in *Ingestor) Start() error {
 	return tok.Error()
 }
 
-// Stop disconnects from the broker and stops the pen sweeper.
+// Stop disconnects from the broker, handles what had already been received, and
+// stops the pen sweeper. It returns once nothing here can touch the store again
+// (or after drainLimit), so the caller may close it.
 //
 // Anything still held is dropped with the process. That is correct: it was never
 // vouched for, and re-admitting unverified packets across a restart would defeat
 // the hold.
 func (in *Ingestor) Stop() {
-	in.once.Do(func() { close(in.done) })
 	if in.client != nil {
 		in.client.Disconnect(250)
+	}
+	in.once.Do(func() { close(in.done) })
+	if in.working.Load() {
+		select {
+		case <-in.worked:
+		case <-time.After(drainLimit + time.Second):
+		}
 	}
 }
 
@@ -234,13 +255,11 @@ func reconnectGap(now, detectedAt, lastMsgAt time.Time) (gap, detectionLag time.
 // around a 255-byte frame, small enough that no single message is a memory cost.
 const maxPacketEnvelope = 8 << 10
 
-func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
-	// Every message — even one we go on to drop — is proof the link was alive at
-	// this instant. On the next reconnect this marks the last moment before the
-	// silence began, which is how the gap is measured (see reconnectGap).
-	in.lastMsg.Store(time.Now().UnixNano())
-
-	// This callback runs in a paho goroutine on untrusted, attacker-influenceable
+// handle processes one message. at is when it arrived, which is the time
+// everything derived from it carries: it may have waited in the queue, and a
+// packet's and a status's times must stay comparable with each other.
+func (in *Ingestor) handle(msg mqtt.Message, at time.Time) {
+	// This runs on untrusted, attacker-influenceable
 	// payloads (raw packet hex, observer status). An unrecovered panic here would
 	// be fatal to the whole daemon, so contain it: log and drop the one message.
 	defer func() {
@@ -250,11 +269,11 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 	}()
 
 	if strings.HasSuffix(msg.Topic(), "/status") {
-		in.handleStatus(msg)
+		in.handleStatus(msg, at)
 		return
 	}
 	if isTopicNeighbors(msg.Topic()) {
-		in.handleNeighbors(msg)
+		in.handleNeighbors(msg, at)
 		return
 	}
 	// A packet envelope is a few hundred bytes of JSON around at most
@@ -316,7 +335,7 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 		// Counts the discard and keeps last_seen current — we DID hear from the
 		// observer, we just aren't keeping what it said, and a frozen last_seen
 		// would make it read as silent and get swept by retention.
-		in.store.RecordStandbyDrop(observerID, time.Now().UTC().Format(time.RFC3339Nano))
+		in.store.RecordStandbyDrop(observerID, at.UTC().Format(time.RFC3339Nano))
 		in.log.Debug("discarded packet from observer on standby", "observer", observerID)
 		return
 	}
@@ -331,7 +350,7 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 		// Counts the drop and keeps last_seen current — we heard from it, we
 		// just refused the contents. A frozen last_seen would have retention
 		// sweep the row away within the hour, taking the quarantine with it.
-		in.store.RecordRadioQuarantineDrop(observerID, time.Now().UTC().Format(time.RFC3339Nano))
+		in.store.RecordRadioQuarantineDrop(observerID, at.UTC().Format(time.RFC3339Nano))
 		in.log.Debug("dropped packet from observer on a foreign radio preset", "observer", observerID)
 		return
 	}
@@ -347,7 +366,7 @@ func (in *Ingestor) handle(_ mqtt.Client, msg mqtt.Message) {
 		RSSI:           env.RSSI.ptr(),
 		// Server clock owns ordering; the envelope timestamp is untrusted
 		// (observers with skewed clocks would poison ordering).
-		ReceivedAt: time.Now(),
+		ReceivedAt: at,
 	}
 
 	// An observer that has not yet said what radio it is on gets held rather
@@ -431,7 +450,7 @@ type statusEnvelope struct {
 // handleStatus parses an observer /status message and stores its latest device
 // telemetry. The observer is keyed by its friendly origin name (matching the
 // packet path), so status attaches to the same observer row.
-func (in *Ingestor) handleStatus(msg mqtt.Message) {
+func (in *Ingestor) handleStatus(msg mqtt.Message, at time.Time) {
 	// A real status is a few hundred bytes. Everything in it is stored and
 	// served to every anonymous /api/observers visitor, so cap the message (as
 	// /neighbors does) and each free-text field.
@@ -492,7 +511,7 @@ func (in *Ingestor) handleStatus(msg mqtt.Message) {
 		return
 	}
 	pubkey := observerPubkey(observerKey, env.OriginID)
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := at.UTC().Format(time.RFC3339)
 	// A retained status is the broker replaying an observer's last known value on
 	// every reconnect, not a live sighting — it may refresh an observer we already
 	// know, but it must never create one, or decommissioned observers reappear.

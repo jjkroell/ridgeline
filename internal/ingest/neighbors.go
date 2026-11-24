@@ -54,7 +54,7 @@ func isTopicNeighbors(topic string) bool {
 // or wrong-preset observer is describing a network that is not this one — plus
 // one of its own: a retained copy is a replay of an old table, and stamping it
 // with today's receive time would present stale neighbours as current.
-func (in *Ingestor) handleNeighbors(msg mqtt.Message) {
+func (in *Ingestor) handleNeighbors(msg mqtt.Message, at time.Time) {
 	if msg.Retained() || len(msg.Payload()) > maxNeighborPayload {
 		return
 	}
@@ -78,7 +78,7 @@ func (in *Ingestor) handleNeighbors(msg mqtt.Message) {
 	r := store.NeighborReport{
 		Reporter:     reporter,
 		ObserverID:   observerKey,
-		ReportedAt:   time.Now().UTC().Format(time.RFC3339),
+		ReportedAt:   at.UTC().Format(time.RFC3339),
 		SelfScopes:   clip(env.Self.Scopes, maxScopesLen),
 		DefaultScope: clip(env.Self.DefaultScope, maxScopesLen),
 		Neighbors:    []store.NeighborEntry{},

@@ -1,0 +1,19 @@
+go-auth 3.0.0 (and its master, 2026-11-24) crash the whole broker when a cached
+decision expires between Has and Get: 32 times in 48 days on prod.
+
+diff --git a/cache/cache.go b/cache/cache.go
+index bc6b4f5..a6d8254 100644
+--- a/cache/cache.go
++++ b/cache/cache.go
+@@ -208,6 +208,11 @@ func (s *goStore) checkRecord(ctx context.Context, record string, expirationTime
+ 		item = s.client.Get(record)
+ 	}
+ 
++	// The entry can expire between Has and Get, and Get then returns nil.
++	if item == nil {
++		return false, false
++	}
++
+ 	return present, item.Value()
+ }
+ 

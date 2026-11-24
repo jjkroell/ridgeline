@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -66,6 +68,51 @@ func TestPurgeSpansBatches(t *testing.T) {
 	}
 	if nodeExists(t, st, node) {
 		t.Errorf("node row survived the purge")
+	}
+}
+
+// A purge for nodes alone skips what cannot be their advert without decoding it.
+// The skip must not miss an advert stored in lowercase or with spaces, and the
+// walk must start at the table's first id, not at 1, and cover id gaps.
+func TestPurgeFindsEveryStoredForm(t *testing.T) {
+	st := testStore(t)
+	node := heardBy(t, st, "obs-A")
+	now := time.Now()
+	spaced := strings.TrimSpace(strings.Join(slices.Collect(func(yield func(string) bool) {
+		for i := 0; i < len(orphanAdvertHex); i += 2 {
+			if !yield(orphanAdvertHex[i : i+2]) {
+				return
+			}
+		}
+	}), " "))
+	insertObs(t, st, strings.ToLower(orphanAdvertHex), "Advert", 0, now)
+	insertObs(t, st, spaced, "Advert", 0, now.Add(time.Millisecond))
+	// Another payload that merely mentions the key is not the node's advert.
+	insertObs(t, st, "1500"+node, "GroupText", 0, now.Add(2*time.Millisecond))
+	// Far beyond the first batch, across a gap with no rows at all.
+	if _, err := st.db.Exec(`UPDATE observations SET id = id + 1000000`); err != nil {
+		t.Fatal(err)
+	}
+	insertObs(t, st, orphanAdvertHex, "Advert", 0, now.Add(3*time.Millisecond))
+	if _, err := st.db.Exec(`UPDATE observations SET id = 1000000 + 7*? WHERE id = (SELECT MAX(id) FROM observations)`, purgeBatchSize); err != nil {
+		t.Fatal(err)
+	}
+	res, err := st.PurgeTargets(nil, nil, []string{strings.ToLower(node)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Observations != 4 {
+		t.Errorf("deleted %d observations, want 4", res.Observations)
+	}
+	if left := countObs(t, st, "1=1"); left != 1 {
+		t.Errorf("%d rows left, want only the group text", left)
+	}
+}
+
+// An empty table must not loop or fail.
+func TestPurgeEmptyTable(t *testing.T) {
+	if _, err := testStore(t).PurgeTargets(nil, nil, []string{strings.Repeat("AB", 32)}); err != nil {
+		t.Fatal(err)
 	}
 }
 

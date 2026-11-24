@@ -1,6 +1,7 @@
 package store
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -384,25 +385,44 @@ func (s *Store) purgeTargets(observers, bridges, nodes []string, cascadeUserData
 	witnessed := map[string]bool{} // advert keys still evidenced afterwards
 
 	// ⚠ The observations table has no node column, so finding a node's rows
-	// means decoding every stored packet (millions). Doing that in ONE
+	// means walking every stored packet (over ten million). Doing that in ONE
 	// transaction held s.mu and the single DB connection for ~2 minutes and
-	// froze the whole site, ingest included — every daily retention sweep and
-	// ~3 minutes after every restart. So walk it in short batches by rowid (an
-	// index range, never a scan from a computed floor), each in its own
-	// transaction, releasing the lock and the connection in between so ingest
-	// and page requests interleave. Deletes commit per batch: a purge that
-	// fails part-way leaves earlier batches applied, and re-running it finishes
-	// the job (it is idempotent).
-	var lastID int64
-	for {
-		n, last, err := s.purgeObservationBatch(lastID, obsSet, bridgeSet, nodeSet, orphanScan, condemned, witnessed, &res)
+	// froze the site. Batches fixed the freeze but still held the lock through
+	// the read AND the decode, so ingest got one operation in per batch: packets
+	// backed up behind the daily sweep and behind every owner scrub, and the
+	// MQTT connection dropped. So each batch now holds the connection only to
+	// read, decodes with nothing held, and takes the lock only to delete.
+	// Deletes commit as they go: a purge that fails part-way leaves earlier
+	// batches applied, and re-running it finishes the job (it is idempotent).
+	advertsOnly := len(obsSet) == 0 && len(bridgeSet) == 0
+	first, last, err := s.observationIDRange()
+	if err != nil {
+		return res, err
+	}
+	for from := first - 1; from < last; {
+		to := min(from+purgeBatchSize, last)
+		began := time.Now()
+		batch, err := s.purgeBatchRows(from, to, advertsOnly)
 		if err != nil {
 			return res, err
 		}
-		if n < purgeBatchSize {
-			break
+		held := time.Since(began)
+		delIDs := purgeMatches(batch, obsSet, bridgeSet, nodeSet, orphanScan, condemned, witnessed)
+		began = time.Now()
+		if err := s.deletePurged(delIDs, &res); err != nil {
+			return res, err
 		}
-		lastID = last
+		held += time.Since(began)
+		from = to
+		if from >= last {
+			// Packets stored while this ran: follow the table to its end.
+			if _, last, err = s.observationIDRange(); err != nil {
+				return res, err
+			}
+		}
+		// Rest as long as the batch held the connection, so a purge never has
+		// more than about half of it however slow the disk is.
+		time.Sleep(min(held, purgeMaxRest))
 	}
 
 	s.mu.Lock()
@@ -549,57 +569,73 @@ func (s *Store) KnownBridges() map[string]bool {
 	return out
 }
 
-// purgeBatchSize is how many observations one purge transaction examines. Small
-// enough that a batch (read + decode + delete) holds the lock for tens of
-// milliseconds on a Pi-class VM, large enough that the per-batch overhead is
-// noise across a few million rows.
-const purgeBatchSize = 5000
+// purgeBatchSize is how many observation ids one purge batch covers, and
+// purgeDeleteChunk how many rows one delete transaction removes. purgeMaxRest
+// caps the pause between batches.
+const (
+	purgeBatchSize   = 5000
+	purgeDeleteChunk = 500
+	purgeMaxRest     = 100 * time.Millisecond
+)
 
-// purgeObservationBatch examines the next purgeBatchSize observations after
-// afterID (rowid order), deletes those that match the purge targets, and
-// records the advert keys it saw for the orphan pass. It returns how many rows
-// it examined and the last id, so the caller can continue from there.
-func (s *Store) purgeObservationBatch(afterID int64, obsSet map[string]bool, bridgeSet []string,
-	nodeSet map[string]bool, orphanScan bool, condemned, witnessed map[string]bool, res *PurgeResult) (int, int64, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// observationIDRange returns the lowest and highest observation ids, both 0
+// when the table is empty. Two ends of the rowid b-tree, so O(1) — as separate
+// subqueries because SQLite scans the whole table for MIN and MAX in one SELECT.
+func (s *Store) observationIDRange() (first, last int64, err error) {
+	err = s.db.QueryRow(`SELECT COALESCE((SELECT MIN(id) FROM observations), 0),
+		COALESCE((SELECT MAX(id) FROM observations), 0)`).Scan(&first, &last)
+	return first, last, err
+}
 
-	// Read OUTSIDE the delete transaction. A transaction that reads and then
-	// writes cannot upgrade if another connection committed in between —
-	// SQLite fails it at once with SQLITE_BUSY_SNAPSHOT (517), busy_timeout
-	// notwithstanding. That never happens inside the daemon (one connection),
-	// but does when a separate process (cmd/purgenodes) purges beside a live
-	// daemon. A write-only transaction simply waits for the lock instead.
-	rows, err := s.db.Query(`SELECT id, raw_hex, COALESCE(observer_id,'') FROM observations
-		WHERE id > ? ORDER BY id LIMIT ?`, afterID, purgeBatchSize)
+type purgeRow struct {
+	id         int64
+	raw, obsID string
+}
+
+// purgeBatchRows reads the observations in (from, to]. Rows are copied out so
+// the connection is free before anything is decoded.
+//
+// advertsOnly is for a purge that targets nodes alone: only a node's own adverts
+// can match, so nine rows in ten need not leave SQLite.
+func (s *Store) purgeBatchRows(from, to int64, advertsOnly bool) ([]purgeRow, error) {
+	q := `SELECT id, raw_hex, COALESCE(observer_id,'') FROM observations WHERE id > ? AND id <= ?`
+	args := []any{from, to}
+	if advertsOnly {
+		q += ` AND payload_type = ?`
+		args = append(args, meshcore.PayloadAdvert.String())
+	}
+	rows, err := s.db.Query(q+` ORDER BY id`, args...)
 	if err != nil {
-		return 0, afterID, err
+		return nil, err
 	}
-	type obsRow struct {
-		id         int64
-		raw, obsID string
-	}
-	batch := make([]obsRow, 0, purgeBatchSize)
+	defer rows.Close()
+	var batch []purgeRow
 	for rows.Next() {
-		var r obsRow
+		var r purgeRow
 		if err := rows.Scan(&r.id, &r.raw, &r.obsID); err != nil {
-			rows.Close()
-			return 0, afterID, err
+			return nil, err
 		}
 		batch = append(batch, r)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return 0, afterID, err
-	}
+	return batch, rows.Err()
+}
 
-	last := afterID
+// purgeMatches returns the ids of the rows the purge targets, and records the
+// advert keys it saw for the orphan pass (condemned: on a row being deleted,
+// witnessed: on a row that stays). Holds no lock.
+func purgeMatches(batch []purgeRow, obsSet map[string]bool, bridgeSet []string, nodeSet map[string]bool,
+	orphanScan bool, condemned, witnessed map[string]bool) []int64 {
 	var delIDs []int64
 	for _, r := range batch {
-		last = r.id
 		byTarget := r.obsID != "" && obsSet[r.obsID]
 		if byTarget && !orphanScan {
 			delIDs = append(delIDs, r.id)
+			continue
+		}
+		// Decoding an advert verifies its signature, which is most of the cost.
+		// When nodes are all we are looking for, a packet that does not contain
+		// a targeted key cannot be one of their adverts.
+		if !orphanScan && len(bridgeSet) == 0 && !containsAnyKey(r.raw, nodeSet) {
 			continue
 		}
 		pkt, err := meshcore.DecodeHex(r.raw)
@@ -629,28 +665,61 @@ func (s *Store) purgeObservationBatch(afterID int64, obsSet map[string]bool, bri
 			witnessed[advertKey] = true
 		}
 	}
+	return delIDs
+}
 
-	if len(delIDs) > 0 {
-		before := res.Observations
-		tx, err := s.db.Begin()
-		if err != nil {
-			return 0, afterID, err
+// containsAnyKey reports whether a raw packet contains any of the (uppercase)
+// keys. Written as DecodeHex reads it: any case, spaces allowed.
+func containsAnyKey(raw string, keys map[string]bool) bool {
+	raw = strings.ToUpper(strings.ReplaceAll(raw, " ", ""))
+	for k := range keys {
+		if strings.Contains(raw, k) {
+			return true
 		}
-		defer tx.Rollback()
-		for _, id := range delIDs {
-			r, err := tx.Exec(`DELETE FROM observations WHERE id = ?`, id)
-			if err != nil {
-				return 0, afterID, err
-			}
-			n, _ := r.RowsAffected()
-			res.Observations += n
-		}
-		if err := tx.Commit(); err != nil {
-			return 0, afterID, err
-		}
-		s.obsCount.Add(-(res.Observations - before))
 	}
-	return len(batch), last, nil
+	return false
+}
+
+// deletePurged deletes observations by id in short transactions.
+//
+// Write-only on purpose: a transaction that reads and then writes cannot upgrade
+// if another connection committed in between — SQLite fails it at once with
+// SQLITE_BUSY_SNAPSHOT (517), busy_timeout notwithstanding. That never happens
+// inside the daemon (one connection), but does when a separate process
+// (cmd/purgenodes) purges beside a live daemon.
+func (s *Store) deletePurged(ids []int64, res *PurgeResult) error {
+	for chunk := range slices.Chunk(ids, purgeDeleteChunk) {
+		n, err := s.deleteObservations(chunk)
+		if err != nil {
+			return err
+		}
+		res.Observations += n
+	}
+	return nil
+}
+
+func (s *Store) deleteObservations(ids []int64) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	var deleted int64
+	for _, id := range ids {
+		r, err := tx.Exec(`DELETE FROM observations WHERE id = ?`, id)
+		if err != nil {
+			return 0, err
+		}
+		n, _ := r.RowsAffected()
+		deleted += n
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	s.obsCount.Add(-deleted)
+	return deleted, nil
 }
 
 // snapshotClaimSQL copies a node's name, role and last-heard time onto any

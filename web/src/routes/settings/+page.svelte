@@ -224,8 +224,8 @@
 			<li><code>set agc.reset.interval 4</code>: resets the receiver's gain every 4 seconds.</li>
 			<li>
 				<code>set multi.acks 1</code>: when the repeater passes a direct message's delivery receipt
-				back to the sender, it sends an extra copy too. If one copy is lost, the sender still knows the
-				message arrived and doesn't send it again.
+				back to the sender, it sends it twice. The second send gives the receipt another chance to get
+				through.
 			</li>
 			<li><code>set rxdelay 3</code>: favours the strongest copy of a flood over a weaker one.</li>
 		</ul>

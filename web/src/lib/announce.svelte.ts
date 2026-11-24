@@ -6,7 +6,7 @@
 // season() — so a new season needs no bump.
 const STORAGE_KEY = 'ridgeline-announce-seen';
 const SEASON_KEY = 'ridgeline-announce-season-seen';
-export const CURRENT = '2026-10-halloween-live-map';
+export const CURRENT = '2026-11-settings';
 
 class Announce {
 	open = $state(false);

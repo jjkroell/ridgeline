@@ -8,8 +8,8 @@
 
 	// Each entry is one new capability, in user-facing terms. While a season is
 	// in force its own items lead (see $lib/seasonal.svelte; they vanish when it
-	// ends), then the newest release's (red for #sos); `items` below are the
-	// previous release's, kept under an "Earlier this week" label.
+	// ends), then the newest release's (`latest`); `sos` (red) and `items` are
+	// earlier releases', each kept under an "Earlier" label.
 	onMount(() => seasonal.load());
 	const season = $derived(seasonal.season);
 	function trySeason() {
@@ -18,6 +18,18 @@
 		goto('/live-map');
 	}
 	const latest: { icon: string; title: string; body: string }[] = [
+		{
+			icon: 'M4 6h9m4 0h3M4 12h3m4 0h9M4 18h11m4 0h1M15 4v4M9 10v4M17 16v4',
+			title: 'Recommended settings, all on one page',
+			body: 'The About page is now Settings: the radio settings every node on the mesh needs (909.000 MHz, 62.5 kHz, SF7, CR5), which path hash ID size to use, and the recommended settings for repeaters. Find it under Settings in the sidebar (on a phone, More → Radio settings). The sections on bridging and on what the mesh carries moved to the FAQ, and old links to them still work.'
+		},
+		{
+			icon: 'M4 5h16v14H4zM7 9l3 3-3 3M12 15h5',
+			title: 'Run a repeater? Pick your neighbour count, copy the commands',
+			body: 'The page has advert intervals, and TX delay values based on how many neighbours your repeater hears, with a short explanation of what each setting does. Choose your neighbour count and it lists the commands to send, each with its own Copy button.'
+		}
+	];
+	const sos: { icon: string; title: string; body: string }[] = [
 		{
 			icon: 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
 			title: '#sos, the mesh’s emergency channel',
@@ -130,12 +142,40 @@
 			</ul>
 
 			<div class="border-line/60 mt-5 mb-4 flex items-center gap-3 border-t pt-4">
-				<span class="label" data-caps>Also new this week: #sos</span>
+				<span class="label" data-caps>Also new: recommended settings</span>
 			</div>
 			{/if}
 
 			<ul class="flex flex-col gap-4">
 				{#each latest as item (item.title)}
+					<li class="flex items-start gap-3">
+						<span
+							class="bg-signal/10 text-signal mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full"
+						>
+							<svg
+								viewBox="0 0 24 24"
+								class="h-[18px] w-[18px]"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.6"
+								stroke-linecap="round"
+								stroke-linejoin="round"><path d={item.icon} /></svg
+							>
+						</span>
+						<div class="min-w-0">
+							<div class="text-fg text-sm font-600">{item.title}</div>
+							<div class="text-fg-dim mt-0.5 text-sm leading-relaxed">{item.body}</div>
+						</div>
+					</li>
+				{/each}
+			</ul>
+
+			<div class="border-line/60 mt-5 mb-4 flex items-center gap-3 border-t pt-4">
+				<span class="label" data-caps>Earlier: #sos</span>
+			</div>
+
+			<ul class="flex flex-col gap-4">
+				{#each sos as item (item.title)}
 					<li class="flex items-start gap-3">
 						<span class="text-coral mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full" style="background:color-mix(in srgb, var(--color-coral) 14%, transparent)">
 							<svg
@@ -157,7 +197,7 @@
 			</ul>
 
 			<div class="border-line/60 mt-5 mb-4 flex items-center gap-3 border-t pt-4">
-				<span class="label" data-caps>Earlier this week: Harbour</span>
+				<span class="label" data-caps>Earlier: Harbour</span>
 			</div>
 
 			<ul class="flex flex-col gap-4">
@@ -202,10 +242,15 @@
 			{#if !onHarbour}
 				<button
 					onclick={tryIt}
-					class="bg-signal text-ink hover:bg-signal-deep rounded-[var(--radius)] px-4 py-2 text-sm font-600 transition-colors"
-					>Try Harbour</button
+					class="text-signal hover:brightness-125 text-sm font-600 transition-[filter]">Try Harbour</button
 				>
 			{/if}
+			<a
+				href="/settings"
+				onclick={() => announce.close()}
+				class="bg-signal text-ink hover:bg-signal-deep rounded-[var(--radius)] px-4 py-2 text-sm font-600 transition-colors"
+				>Open Settings</a
+			>
 			<button
 				onclick={() => announce.close()}
 				class="bg-signal/15 text-signal border-signal/40 hover:bg-signal/25 rounded-[var(--radius)] border px-4 py-2 text-sm font-600 transition-colors"

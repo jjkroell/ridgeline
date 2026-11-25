@@ -238,7 +238,7 @@
 				KOD-BOT also listens on #sos. When it hears a trigger word it replies on #sos, addressed to you:
 			</p>
 			<p class="border-line text-fg bg-panel-2/40 rounded-[var(--radius)] border px-3 py-2 font-mono text-xs">
-				@[your name] *auto reply*&nbsp; Email sent to Ridgeline alert users. Please reply with your location.
+				@[your name] SOS received, email sent to Ridgeline Alert users. Send your location and nature of the emergency ASAP.
 			</p>
 			<ul class="text-fg-dim space-y-1.5">
 				<li class="flex gap-2">
@@ -253,7 +253,7 @@
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>
 					<span
-						>It never uses a trigger word itself, so it can't set off an alert. Messages that aren't calls for
+						>It opens with an @-mention, so it can't set off an alert itself. Messages that aren't calls for
 						help (a <span class="text-fg font-mono">test</span>, chat) get no reply, and no other bot commands
 						answer on #sos.</span
 					>

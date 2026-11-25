@@ -14,7 +14,8 @@
 		{ hash: 'join', label: 'Join & monitor' },
 		{ hash: 'alerts', label: 'Alerts' },
 		{ hash: 'bot', label: 'Auto reply' },
-		{ hash: 'triggers', label: 'Trigger words' }
+		{ hash: 'triggers', label: 'Trigger words' },
+		{ hash: 'limits', label: 'Limits' }
 	];
 </script>
 

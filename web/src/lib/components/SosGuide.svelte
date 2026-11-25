@@ -29,7 +29,8 @@
 		{ id: 'alerts', label: 'Ridgeline alerts' },
 		{ id: 'bot', label: 'Auto reply' },
 		{ id: 'cleanup', label: 'Clean-up' },
-		{ id: 'triggers', label: 'Trigger words' }
+		{ id: 'triggers', label: 'Trigger words' },
+		{ id: 'limits', label: 'Limits & responsibility' }
 	];
 
 	const triggers = ['sos', 'emergency', 'mayday', '911', 'threat', 'life', 'need help', 'needs help', 'help me'];
@@ -322,6 +323,28 @@
 				write <span class="text-fg font-mono">SOS at the lake, @[Mike] is hurt</span>, not
 				<span class="text-fg font-mono">@[Mike] SOS at the lake</span>. And when you reply to a call, start with
 				their @-mention so the channel doesn't alert again.
+			</p>
+		</section>
+
+		<section id="limits" class="scroll-mt-24 space-y-2">
+			<h2 class="font-display text-fg text-base font-700">Limits and responsibility</h2>
+			<p class="text-fg-dim">
+				#sos and Ridgeline are run by volunteers and offered <span class="text-fg">as is</span>, with
+				<span class="text-fg">no guarantee that a message will be sent, heard, emailed or answered</span>. Coverage has
+				gaps, and radios, repeaters, the internet, Ridgeline, its emails and KOD-BOT can all fail without warning.
+				People on the monitoring list haven't promised to respond.
+			</p>
+			<p class="text-fg-dim">
+				Anyone can post under any name, and <span class="text-fg">everything on #sos is public, including your
+				location</span>.
+			</p>
+			<p class="text-fg-dim">
+				#sos is <span class="text-fg">not an emergency service</span> and must not replace 911, a satellite messenger
+				or a personal locator beacon. If you choose to help, look after your own safety first.
+			</p>
+			<p class="text-fg-dim">
+				To the extent the law allows, the volunteers who run Ridgeline, the repeaters and KOD-BOT accept no liability
+				for loss or injury from using #sos or relying on it.
 			</p>
 		</section>
 	</div>

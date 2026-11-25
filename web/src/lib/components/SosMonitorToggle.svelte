@@ -225,7 +225,7 @@
 		<p class="text-fg-faint mt-1.5 text-xs leading-relaxed" id="{uid}-hint">
 			Start typing your companion radio’s name and pick it. <span class="text-fg-dim font-600"
 				>You only need to enter one companion</span
-			>, even if you have several. It’s shown on the public list.
+			>, even if you have several. It’s shown on the public list. Being listed isn’t a commitment to respond.
 		</p>
 	{/if}
 	<p class="mt-1 text-xs {failed ? 'text-amber' : 'text-signal'} empty:hidden" role="status" aria-live="polite">{msg}</p>

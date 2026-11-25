@@ -26,6 +26,9 @@
 		return () => clearInterval(t);
 	});
 
+	// See the desktop Overview: one live event per observer report.
+	let sessionTip = $state(false);
+
 	const kpis = $derived([
 		{ label: 'Nodes', value: stats?.nodes ?? 0, accent: true },
 		{ label: 'Observers', value: stats?.observers ?? 0, accent: false },
@@ -64,15 +67,37 @@
 	<!-- Fixed KPI tiles -->
 	<div class="grid grid-cols-2 gap-3">
 		{#each kpis as k (k.label)}
-			<div class="border-line/60 bg-panel relative overflow-hidden rounded-2xl border px-4 py-4">
+			{#snippet body()}
 				{#if k.accent}<div class="from-signal/[0.08] absolute inset-0 bg-gradient-to-br to-transparent"></div>{/if}
 				<div class="relative">
-					<div class="label">{k.label}</div>
+					<div class="label flex items-center gap-1.5">
+						{k.label}{#if k.label === 'Session'}<span class="text-fg-faint"><svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg></span>{/if}
+					</div>
 					<div class="font-display tnum mt-1.5 text-3xl font-700 {k.accent ? 'text-signal glow-signal' : 'text-fg'}">{fmtNum(k.value)}</div>
 				</div>
-			</div>
+			{/snippet}
+			{#if k.label === 'Session'}
+				<button
+					type="button"
+					onclick={() => (sessionTip = !sessionTip)}
+					aria-expanded={sessionTip}
+					aria-controls="session-tip"
+					class="border-line/60 bg-panel relative overflow-hidden rounded-2xl border px-4 py-4 text-left"
+				>
+					{@render body()}
+				</button>
+			{:else}
+				<div class="border-line/60 bg-panel relative overflow-hidden rounded-2xl border px-4 py-4">
+					{@render body()}
+				</div>
+			{/if}
 		{/each}
 	</div>
+	{#if sessionTip}
+		<p id="session-tip" class="text-fg-dim border-line/60 bg-panel mt-3 rounded-2xl border px-4 py-3 text-xs leading-relaxed">
+			<span class="text-fg font-600">Session:</span> Every packet report this browser has received from the live feed since you opened the page. Each observer that hears a packet sends its own report, so one packet can count many times. Resets when you reload.
+		</p>
+	{/if}
 
 	<!-- Customizable dashboard -->
 	{#if overview.editing}

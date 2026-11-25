@@ -5,6 +5,7 @@
 	import { live } from '$lib/live.svelte';
 	import { ago, fmtNum } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import Tooltip from '$lib/components/Tooltip.svelte';
 	import { isSearchCrawler } from '$lib/crawler';
 	import { announce } from '$lib/announce.svelte';
 	import { overview } from '$lib/overview.svelte';
@@ -30,11 +31,16 @@
 		return () => clearInterval(t);
 	});
 
-	const cards = $derived([
+	// One live event per observer report, so a packet heard by many observers
+	// counts many times; people asked why it climbs so fast.
+	const SESSION_TIP =
+		'Every packet report this browser has received from the live feed since you opened the page. Each observer that hears a packet sends its own report, so one packet can count many times. Resets when you reload.';
+
+	const cards: { label: string; value: number | undefined; accent: boolean; icon: string; tip?: string }[] = $derived([
 		{ label: 'Nodes', value: stats?.nodes, accent: true, icon: 'node' },
 		{ label: 'Observers', value: stats?.observers, accent: false, icon: 'eye' },
 		{ label: 'Observations', value: stats?.observations, accent: false, icon: 'pulse' },
-		{ label: 'Session Events', value: live.total, accent: false, icon: 'bolt' }
+		{ label: 'Session Events', value: live.total, accent: false, icon: 'bolt', tip: SESSION_TIP }
 	]);
 
 	const icons: Record<string, string> = {
@@ -102,7 +108,13 @@
 				{/if}
 				<div class="relative">
 					<div class="label flex items-center justify-between">
-						{c.label}
+						{#if c.tip}
+							<Tooltip text={c.tip}>
+								<span class="flex cursor-help items-center gap-1.5">{c.label}<span class="text-fg-faint"><svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg></span></span>
+							</Tooltip>
+						{:else}
+							{c.label}
+						{/if}
 						<svg viewBox="0 0 24 24" class="h-4 w-4 {c.accent ? 'text-signal' : 'text-fg-faint'}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d={icons[c.icon]} /></svg>
 					</div>
 					<div class="font-display tnum mt-3 text-[clamp(1.25rem,13cqw,2.25rem)] leading-tight font-700 {c.accent ? 'text-signal glow-signal' : 'text-fg'}">

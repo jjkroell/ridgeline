@@ -38,23 +38,11 @@
 </script>
 
 <div class="mx-auto max-w-3xl space-y-4 {compact ? 'px-4 py-4' : 'px-6 py-6 md:px-10'}">
-	<div
-		class="panel rise relative overflow-hidden px-5 py-4 text-sm leading-relaxed"
-		style="animation-delay:0ms;border-color:color-mix(in srgb, var(--color-coral) 35%, var(--color-line))"
-	>
-		<span class="bg-coral absolute inset-y-0 left-0 w-[3px]" aria-hidden="true"></span>
-		<p class="text-fg">
-			In a life-threatening emergency, <span class="font-700">call 911 first</span> if you have any phone or cell
-			service. The mesh is a backup, not a replacement: nobody is paid to watch it, and nothing on it reaches
-			emergency services by itself.
-		</p>
-	</div>
-
-	<!-- Read before the rest: amber, under the 911 notice and above the menu. -->
+	<!-- Read before the rest: amber, above the menu, ending with 911 first. -->
 	<section
 		id="limits"
 		class="panel rise relative scroll-mt-24 space-y-2 overflow-hidden px-5 py-4 text-sm leading-relaxed"
-		style="animation-delay:15ms;border-color:color-mix(in srgb, var(--color-amber) 45%, var(--color-line));background-image:linear-gradient(color-mix(in srgb, var(--color-amber) 9%, transparent), color-mix(in srgb, var(--color-amber) 9%, transparent))"
+		style="animation-delay:0ms;border-color:color-mix(in srgb, var(--color-amber) 45%, var(--color-line));background-image:linear-gradient(color-mix(in srgb, var(--color-amber) 9%, transparent), color-mix(in srgb, var(--color-amber) 9%, transparent))"
 	>
 		<span class="bg-amber absolute inset-y-0 left-0 w-[3px]" aria-hidden="true"></span>
 		<h2 class="font-display text-fg flex items-center gap-2 text-base font-700">
@@ -78,6 +66,11 @@
 		<p class="text-fg">
 			To the extent the law allows, the volunteers who run Ridgeline, the repeaters and KOD-BOT accept no liability
 			for loss or injury from using #sos or relying on it.
+		</p>
+		<p class="text-fg">
+			In a life-threatening emergency, <span class="font-700">call 911 first</span> if you have any phone or cell
+			service. The mesh is a backup, not a replacement: nobody is paid to watch it, and nothing on it reaches
+			emergency services by itself.
 		</p>
 	</section>
 

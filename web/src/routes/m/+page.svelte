@@ -73,7 +73,14 @@
 					<div class="label flex items-center gap-1.5">
 						{k.label}{#if k.label === 'Session'}<span class="text-fg-faint"><svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg></span>{/if}
 					</div>
-					<div class="font-display tnum mt-1.5 text-3xl font-700 {k.accent ? 'text-signal glow-signal' : 'text-fg'}">{fmtNum(k.value)}</div>
+					<!-- Long counts (Packets runs to 8+ digits) shrink with the tile instead of clipping. -->
+					<div
+						class="font-display tnum mt-1.5 font-700 whitespace-nowrap {fmtNum(k.value).length > 6
+							? 'text-[clamp(1rem,15cqw,1.875rem)]'
+							: 'text-3xl'} {k.accent ? 'text-signal glow-signal' : 'text-fg'}"
+					>
+						{fmtNum(k.value)}
+					</div>
 				</div>
 			{/snippet}
 			{#if k.label === 'Session'}
@@ -82,12 +89,12 @@
 					onclick={() => (sessionTip = !sessionTip)}
 					aria-expanded={sessionTip}
 					aria-controls="session-tip"
-					class="border-line/60 bg-panel relative overflow-hidden rounded-2xl border px-4 py-4 text-left"
+					class="border-line/60 bg-panel @container relative overflow-hidden rounded-2xl border px-4 py-4 text-left"
 				>
 					{@render body()}
 				</button>
 			{:else}
-				<div class="border-line/60 bg-panel relative overflow-hidden rounded-2xl border px-4 py-4">
+				<div class="border-line/60 bg-panel @container relative overflow-hidden rounded-2xl border px-4 py-4">
 					{@render body()}
 				</div>
 			{/if}

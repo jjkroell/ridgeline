@@ -15,13 +15,17 @@
 	let show = $state(false);
 	// The anchor's centre, unclamped — the edge clamp is applied at render, once
 	// the bubble's real width is known.
-	let pos = $state({ x: 0, y: 0 });
+	let pos = $state({ x: 0, top: 0, bottom: 0 });
 	let bubbleW = $state(0);
+	let bubbleH = $state(0);
 
 	const MARGIN = 8;
 	// Clamping against half of max-w (125px) rather than the actual width pushed
 	// every tooltip in the left sidebar to x >= 133 — so a row of small controls
 	// got one shared position instead of one per control. Measure, then clamp.
+	// Flip under the anchor when the bubble would run off the top of the window
+	// (header buttons: the Feed page's Unscoped toggle was cut off).
+	const under = $derived(below || (bubbleH > 0 && pos.top - bubbleH - 9 < MARGIN));
 	const half = $derived(bubbleW ? bubbleW / 2 : 0);
 	const left = $derived(
 		bubbleW
@@ -44,7 +48,8 @@
 		// reflows the page (~10px shift) near edge-anchored controls — but the
 		// clamp can only be correct once the bubble has been measured.
 		bubbleW = 0;
-		pos = { x: r.left + r.width / 2, y: below ? r.bottom : r.top };
+		bubbleH = 0;
+		pos = { x: r.left + r.width / 2, top: r.top, bottom: r.bottom };
 		show = true;
 	}
 </script>
@@ -57,14 +62,15 @@
 	<div
 		use:portal
 		bind:clientWidth={bubbleW}
+		bind:clientHeight={bubbleH}
 		class="border-line-bright bg-ink-2 text-fg-dim pointer-events-none fixed z-[100] max-w-[250px] rounded-[var(--radius)] border px-2.5 py-1.5 text-xs leading-snug shadow-xl"
-		style="left:{left}px;top:{pos.y}px;transform:translate(-50%,{below ? '9px' : 'calc(-100% - 9px)'});visibility:{bubbleW
+		style="left:{left}px;top:{under ? pos.bottom : pos.top}px;transform:translate(-50%,{under ? '9px' : 'calc(-100% - 9px)'});visibility:{bubbleW
 			? 'visible'
 			: 'hidden'}"
 	>
 		{text}
 		<span
-			class="bg-ink-2 border-line-bright absolute left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 {below
+			class="bg-ink-2 border-line-bright absolute left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 {under
 				? 'bottom-full -mb-[5px] border-t border-l'
 				: 'top-full -mt-[5px] border-r border-b'}"
 		></span>

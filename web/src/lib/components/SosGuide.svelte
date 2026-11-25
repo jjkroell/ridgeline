@@ -23,14 +23,14 @@
 	const m = $derived(compact ? '/m' : '');
 
 	const sections = [
+		{ id: 'limits', label: 'Limits & responsibility' },
 		{ id: 'about', label: 'What #sos is' },
 		{ id: 'join', label: 'Join & monitor' },
 		{ id: 'flow', label: 'Message flow' },
 		{ id: 'alerts', label: 'Ridgeline alerts' },
 		{ id: 'bot', label: 'Auto reply' },
 		{ id: 'cleanup', label: 'Clean-up' },
-		{ id: 'triggers', label: 'Trigger words' },
-		{ id: 'limits', label: 'Limits & responsibility' }
+		{ id: 'triggers', label: 'Trigger words' }
 	];
 
 	const triggers = ['sos', 'emergency', 'mayday', '911', 'threat', 'life', 'need help', 'needs help', 'help me'];
@@ -38,19 +38,9 @@
 </script>
 
 <div class="mx-auto max-w-3xl space-y-4 {compact ? 'px-4 py-4' : 'px-6 py-6 md:px-10'}">
-	<nav class="panel rise flex flex-wrap gap-2 px-5 py-4">
-		{#each sections as sct (sct.id)}
-			<a
-				href="#{sct.id}"
-				class="border-line text-fg-dim hover:border-line-bright hover:text-fg rounded-[var(--radius)] border px-3 py-1.5 text-sm transition-colors"
-				>{sct.label}</a
-			>
-		{/each}
-	</nav>
-
 	<div
 		class="panel rise relative overflow-hidden px-5 py-4 text-sm leading-relaxed"
-		style="animation-delay:20ms;border-color:color-mix(in srgb, var(--color-coral) 35%, var(--color-line))"
+		style="animation-delay:0ms;border-color:color-mix(in srgb, var(--color-coral) 35%, var(--color-line))"
 	>
 		<span class="bg-coral absolute inset-y-0 left-0 w-[3px]" aria-hidden="true"></span>
 		<p class="text-fg">
@@ -59,6 +49,47 @@
 			emergency services by itself.
 		</p>
 	</div>
+
+	<!-- Read before the rest: amber, under the 911 notice and above the menu. -->
+	<section
+		id="limits"
+		class="panel rise relative scroll-mt-24 space-y-2 overflow-hidden px-5 py-4 text-sm leading-relaxed"
+		style="animation-delay:15ms;border-color:color-mix(in srgb, var(--color-amber) 45%, var(--color-line));background-image:linear-gradient(color-mix(in srgb, var(--color-amber) 9%, transparent), color-mix(in srgb, var(--color-amber) 9%, transparent))"
+	>
+		<span class="bg-amber absolute inset-y-0 left-0 w-[3px]" aria-hidden="true"></span>
+		<h2 class="font-display text-fg flex items-center gap-2 text-base font-700">
+			<svg viewBox="0 0 24 24" class="text-amber h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" /></svg>
+			Limits and responsibility
+		</h2>
+		<p class="text-fg">
+			#sos and Ridgeline are run by volunteers and offered <span class="font-700">as is</span>, with
+			<span class="font-700">no guarantee that a message will be sent, heard, emailed or answered</span>. Coverage has
+			gaps, and radios, repeaters, the internet, Ridgeline, its emails and KOD-BOT can all fail without warning.
+			People on the monitoring list haven't promised to respond.
+		</p>
+		<p class="text-fg">
+			Anyone can post under any name, and <span class="font-700">everything on #sos is public, including your
+			location</span>.
+		</p>
+		<p class="text-fg">
+			#sos is <span class="font-700">not an emergency service</span> and must not replace 911, a satellite messenger
+			or a personal locator beacon. If you choose to help, look after your own safety first.
+		</p>
+		<p class="text-fg">
+			To the extent the law allows, the volunteers who run Ridgeline, the repeaters and KOD-BOT accept no liability
+			for loss or injury from using #sos or relying on it.
+		</p>
+	</section>
+
+	<nav style="animation-delay:30ms" class="panel rise flex flex-wrap gap-2 px-5 py-4">
+		{#each sections as sct (sct.id)}
+			<a
+				href="#{sct.id}"
+				class="border-line text-fg-dim hover:border-line-bright hover:text-fg rounded-[var(--radius)] border px-3 py-1.5 text-sm transition-colors"
+				>{sct.label}</a
+			>
+		{/each}
+	</nav>
 
 	<div class="panel rise space-y-6 px-5 py-5 text-sm leading-relaxed" style="animation-delay:40ms">
 		<section id="about" class="scroll-mt-24 space-y-2">
@@ -323,28 +354,6 @@
 				write <span class="text-fg font-mono">SOS at the lake, @[Mike] is hurt</span>, not
 				<span class="text-fg font-mono">@[Mike] SOS at the lake</span>. And when you reply to a call, start with
 				their @-mention so the channel doesn't alert again.
-			</p>
-		</section>
-
-		<section id="limits" class="scroll-mt-24 space-y-2">
-			<h2 class="font-display text-fg text-base font-700">Limits and responsibility</h2>
-			<p class="text-fg-dim">
-				#sos and Ridgeline are run by volunteers and offered <span class="text-fg">as is</span>, with
-				<span class="text-fg">no guarantee that a message will be sent, heard, emailed or answered</span>. Coverage has
-				gaps, and radios, repeaters, the internet, Ridgeline, its emails and KOD-BOT can all fail without warning.
-				People on the monitoring list haven't promised to respond.
-			</p>
-			<p class="text-fg-dim">
-				Anyone can post under any name, and <span class="text-fg">everything on #sos is public, including your
-				location</span>.
-			</p>
-			<p class="text-fg-dim">
-				#sos is <span class="text-fg">not an emergency service</span> and must not replace 911, a satellite messenger
-				or a personal locator beacon. If you choose to help, look after your own safety first.
-			</p>
-			<p class="text-fg-dim">
-				To the extent the law allows, the volunteers who run Ridgeline, the repeaters and KOD-BOT accept no liability
-				for loss or injury from using #sos or relying on it.
 			</p>
 		</section>
 	</div>

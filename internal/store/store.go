@@ -111,7 +111,10 @@ CREATE TABLE IF NOT EXISTS users (
 	sos_alerts    INTEGER NOT NULL DEFAULT 0, -- opted in to #sos alert emails
 	sos_alert_tests INTEGER NOT NULL DEFAULT 0, -- …including messages that say they're a test
 	sos_alerts_at TEXT NOT NULL DEFAULT '',     -- when sos_alerts last changed
-	sos_alert_tests_at TEXT NOT NULL DEFAULT '' -- when sos_alert_tests last changed
+	sos_alert_tests_at TEXT NOT NULL DEFAULT '', -- when sos_alert_tests last changed
+	sos_monitor   INTEGER NOT NULL DEFAULT 0, -- says they monitor #sos (public list)
+	sos_monitor_name TEXT NOT NULL DEFAULT '', -- the radio's name; kept while off
+	sos_monitor_at TEXT NOT NULL DEFAULT ''     -- when it was switched on
 );
 
 -- sessions are server-side so they can be revoked. token_hash is the SHA-256 of
@@ -293,25 +296,6 @@ CREATE TABLE IF NOT EXISTS neighbor_reports (
 	rows_json     TEXT NOT NULL            -- []NeighborEntry
 );
 
--- Who monitors a channel: senders who have posted a message starting with
--- "join" (before v0.24.67, "test") to it (#sos only, for now), less those
--- who sent "leave" (was "unsub") since.
--- One row per channel+sender name. See sos.go.
-CREATE TABLE IF NOT EXISTS channel_monitors (
-	channel    TEXT NOT NULL,              -- hashtag name without '#'
-	sender     TEXT NOT NULL,              -- sender name as the message carries it
-	first_test TEXT NOT NULL,              -- server receive time (RFC3339)
-	last_test  TEXT NOT NULL,
-	tests      INTEGER NOT NULL,           -- distinct test messages
-	last_hash  TEXT NOT NULL DEFAULT '',   -- dedupes copies of one transmission
-	unsub_at   TEXT NOT NULL DEFAULT '',   -- newest unsub; listed while last_test is newer
-	PRIMARY KEY (channel, sender)
-);
--- Marks a channel whose history has been scanned once for monitors.
-CREATE TABLE IF NOT EXISTS channel_monitor_backfills (
-	channel TEXT PRIMARY KEY,
-	done_at TEXT NOT NULL
-);
 -- #sos alerts an admin marked resolved: the map ring on that sender's node goes
 -- for everyone, until they send a new alert. One row per sender name.
 CREATE TABLE IF NOT EXISTS sos_resolved (
@@ -433,11 +417,11 @@ type Store struct {
 	neighborMu      sync.RWMutex
 	neighborReports map[string]NeighborReport
 
-	// #sos monitor roster (sender -> monitor), read by the public endpoint so
-	// it never queues on the DB connection. See sos.go.
+	// #sos monitor roster, read by the public endpoint so it never queues on
+	// the DB connection. sosRosterMu serializes its writers. See sos.go.
+	sosRosterMu  sync.Mutex
 	sosMu        sync.RWMutex
-	sosMonitors  map[string]*ChannelMonitor
-	sosLastHash  map[string]string
+	sosMonitors  []SOSMonitor
 	sosLastAlert string            // newest #sos message with an emergency word (RFC3339)
 	sosAlerts    []SOSAlertSender  // who sent the alerts in the last SOSAlertWindow (the maps ring them)
 	sosResolved  map[string]string // sender → when an admin cleared their ring (RFC3339)
@@ -498,7 +482,6 @@ func Open(path string) (*Store, error) {
 	// by the node's verified owner). The consensus pass never overrides a 'manual' row.
 	db.Exec(`ALTER TABLE nodes ADD COLUMN hash_size_source TEXT NOT NULL DEFAULT 'auto'`)
 	db.Exec(`ALTER TABLE observers ADD COLUMN status_json TEXT`)
-	db.Exec(`ALTER TABLE channel_monitors ADD COLUMN unsub_at TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE observers ADD COLUMN last_status_at TEXT`)
 	db.Exec(`ALTER TABLE observers ADD COLUMN radio TEXT`)
 	db.Exec(`ALTER TABLE nodes ADD COLUMN radio TEXT`)
@@ -600,6 +583,10 @@ func Open(path string) (*Store, error) {
 	// When each of those was last changed (empty: never, or before this was kept).
 	db.Exec(`ALTER TABLE users ADD COLUMN sos_alerts_at TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE users ADD COLUMN sos_alert_tests_at TEXT NOT NULL DEFAULT ''`)
+	// "I'm monitoring #sos": opt-in, so the public list starts empty.
+	db.Exec(`ALTER TABLE users ADD COLUMN sos_monitor INTEGER NOT NULL DEFAULT 0`)
+	db.Exec(`ALTER TABLE users ADD COLUMN sos_monitor_name TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE users ADD COLUMN sos_monitor_at TEXT NOT NULL DEFAULT ''`)
 	// Email verification: new accounts must confirm their address before logging
 	// in. Accounts that predate this feature are grandfathered as verified on the
 	// one-time column add, so nobody is locked out.
@@ -1041,22 +1028,10 @@ func (s *Store) Record(o Observation) error {
 		}
 	}
 
-	// A #sos check-in ("join …") lists its sender as a channel monitor; a
-	// "leave …" takes them off.
-	sosSender, sosKind := sosMonitorMsg(p)
-	if sosKind != notMonitor {
-		if err := writeMonitor(tx, sosKind, SOSChannel, sosSender, p.MessageHash, ts); err != nil {
-			return fmt.Errorf("store: upsert sos monitor: %w", err)
-		}
-	}
-
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 	s.obsCount.Add(1)
-	if sosKind != notMonitor {
-		s.noteMonitor(sosKind, sosSender, p.MessageHash, ts)
-	}
 	if sosAlert {
 		s.noteSOSAlert(ts, p.GroupText.Sender)
 		if sosAlertNew {

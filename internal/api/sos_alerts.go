@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"net/http"
@@ -226,6 +227,48 @@ func (s *Server) accountSOSAlerts(w http.ResponseWriter, r *http.Request, user s
 	}
 	s.log.Info("sos alert settings", "id", user.ID, "email", user.Email,
 		"enabled", fmtOptBool(req.Enabled), "tests", fmtOptBool(req.Tests))
+	s.returnUpdatedUser(w, user.ID)
+}
+
+// accountSOSMonitor lists the caller as monitoring #sos, or takes them off the
+// list. The name must be a companion radio Ridgeline has heard, and is listed
+// as that radio advertises it.
+func (s *Server) accountSOSMonitor(w http.ResponseWriter, r *http.Request, user store.User) {
+	var req struct {
+		Enabled *bool  `json:"enabled"`
+		Name    string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Enabled == nil {
+		writeErr(w, http.StatusBadRequest, "bad request body")
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if *req.Enabled {
+		if name == "" {
+			writeErr(w, http.StatusBadRequest, "Enter your radio's name first.")
+			return
+		}
+		heard, ok, err := s.store.FindCompanion(name)
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		if !ok {
+			writeErr(w, http.StatusUnprocessableEntity, "Not a valid radio name: Ridgeline hasn't heard a companion called that. "+
+				"Check the spelling, or send a flood advert from your radio, wait a minute and try again.")
+			return
+		}
+		name = heard
+	}
+	if err := s.store.SetSOSMonitor(user.ID, *req.Enabled, name); err != nil {
+		if errors.Is(err, store.ErrSOSNameTaken) {
+			writeErr(w, http.StatusConflict, "Someone is already listed with that radio.")
+			return
+		}
+		s.fail(w, err)
+		return
+	}
+	s.log.Info("sos monitor", "id", user.ID, "email", user.Email, "enabled", *req.Enabled, "name", name)
 	s.returnUpdatedUser(w, user.ID)
 }
 

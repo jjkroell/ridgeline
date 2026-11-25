@@ -773,16 +773,15 @@ export interface DiscoveredChannels {
   confirmed: number;
 }
 
-/** A sender who has posted "join" on #sos — someone who monitors the channel. */
-export interface ChannelMonitor {
+/** An account that says it monitors #sos, under its radio's name. */
+export interface SOSMonitor {
   name: string;
-  firstTest: string;
-  lastTest: string;
-  tests: number;
+  /** When it was switched on. */
+  since: string;
 }
 export interface SOSRoster {
   channel: string;
-  monitors: ChannelMonitor[];
+  monitors: SOSMonitor[];
   /** When the newest #sos message with an emergency word was heard ("" if none in 12 h). */
   lastAlert?: string;
   /** Who sent #sos alerts in the last 12 h, newest first (the maps ring their nodes). */
@@ -859,7 +858,7 @@ export const api = {
     get<LiveEvent[]>(`/api/channels/recent?since=${sinceSec}`),
   /** Hashtag channels confirmed on the mesh by decryption, plus candidate counts. */
   discoveredChannels: () => get<DiscoveredChannels>(`/api/channels/discovered`),
-  /** Who monitors #sos: senders of a "join" message there, most recent first. */
+  /** Who monitors #sos (by name), and its alert state. */
   sosMonitors: () => get<SOSRoster>(`/api/channels/sos`),
   /**
    * Submit a hashtag name to the shared discovery pool (best-effort; open to
@@ -902,6 +901,10 @@ export interface AuthUser {
   /** When sosAlerts / sosAlertTests last changed (absent: never recorded). */
   sosAlertsAt?: string;
   sosAlertTestsAt?: string;
+  /** Listed publicly as monitoring #sos… */
+  sosMonitor: boolean;
+  /** …with this radio (its name; kept while off; "" if never set). */
+  sosMonitorName: string;
   createdAt: string;
   lastLogin?: string;
 }
@@ -995,6 +998,9 @@ export const account = {
   /** Include #sos test messages in those emails; returns the updated account. */
   setSOSAlertTests: (csrf: string, tests: boolean) =>
     mutate<AuthUser>("/api/account/sos-alerts", "PUT", csrf, { tests }),
+  /** Go on or off the public #sos monitoring list; returns the updated account. */
+  setSOSMonitor: (csrf: string, enabled: boolean, name: string) =>
+    mutate<AuthUser>("/api/account/sos-monitor", "PUT", csrf, { enabled, name }),
   /** Change password after re-authenticating with the current one. */
   changePassword: (
     csrf: string,

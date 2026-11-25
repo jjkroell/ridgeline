@@ -39,6 +39,10 @@ type User struct {
 	// changes were recorded).
 	SOSAlertsAt     string `json:"sosAlertsAt,omitempty"`
 	SOSAlertTestsAt string `json:"sosAlertTestsAt,omitempty"`
+	// SOSMonitor lists the account publicly as monitoring #sos, with its
+	// radio SOSMonitorName (kept while off). Off unless the user turns it on.
+	SOSMonitor     bool   `json:"sosMonitor"`
+	SOSMonitorName string `json:"sosMonitorName"`
 }
 
 // Session is a server-side login session keyed by the SHA-256 of the cookie
@@ -103,7 +107,7 @@ func (s *Store) GetUserByEmail(email string) (User, bool, error) {
 	return s.scanUser(s.db.QueryRow(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
 		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests,
-		       sos_alerts_at, sos_alert_tests_at
+		       sos_alerts_at, sos_alert_tests_at, sos_monitor, sos_monitor_name
 		FROM users WHERE email = ?`, email))
 }
 
@@ -112,7 +116,7 @@ func (s *Store) GetUserByID(id int64) (User, bool, error) {
 	return s.scanUser(s.db.QueryRow(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
 		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests,
-		       sos_alerts_at, sos_alert_tests_at
+		       sos_alerts_at, sos_alert_tests_at, sos_monitor, sos_monitor_name
 		FROM users WHERE id = ?`, id))
 }
 
@@ -120,7 +124,7 @@ func (s *Store) scanUser(row *sql.Row) (User, bool, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin,
 		&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin, &u.EmailVerified, &u.SOSAlerts, &u.SOSAlertTests,
-		&u.SOSAlertsAt, &u.SOSAlertTestsAt)
+		&u.SOSAlertsAt, &u.SOSAlertTestsAt, &u.SOSMonitor, &u.SOSMonitorName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, false, nil
 	}
@@ -142,7 +146,7 @@ func (s *Store) ListUsers() ([]User, error) {
 	rows, err := s.db.Query(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
 		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests,
-		       sos_alerts_at, sos_alert_tests_at
+		       sos_alerts_at, sos_alert_tests_at, sos_monitor, sos_monitor_name
 		FROM users ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -153,7 +157,7 @@ func (s *Store) ListUsers() ([]User, error) {
 		var u User
 		if err := rows.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.IsAdmin,
 			&u.CanClaim, &u.Blocked, &u.IsOwner, &u.CreatedAt, &u.LastLogin, &u.EmailVerified, &u.SOSAlerts, &u.SOSAlertTests,
-			&u.SOSAlertsAt, &u.SOSAlertTestsAt); err != nil {
+			&u.SOSAlertsAt, &u.SOSAlertTestsAt, &u.SOSMonitor, &u.SOSMonitorName); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -317,8 +321,10 @@ func (s *Store) SetUserAdmin(id int64, isAdmin bool) error {
 // Blocking also invalidates the user's active sessions so access is cut
 // immediately; call DeleteUserSessions from the caller for that.
 func (s *Store) SetUserBlocked(id int64, blocked bool) error {
-	_, err := s.db.Exec(`UPDATE users SET blocked = ? WHERE id = ?`, boolInt(blocked), id)
-	return err
+	if _, err := s.db.Exec(`UPDATE users SET blocked = ? WHERE id = ?`, boolInt(blocked), id); err != nil {
+		return err
+	}
+	return s.loadSOSMonitors() // a blocked account leaves the #sos list
 }
 
 // DeleteUser permanently removes an account and its sessions (the sessions FK is
@@ -326,8 +332,11 @@ func (s *Store) SetUserBlocked(id int64, blocked bool) error {
 // pragma state).
 func (s *Store) DeleteUser(id int64) error {
 	s.db.Exec(`DELETE FROM sessions WHERE user_id = ?`, id)
-	_, err := s.db.Exec(`DELETE FROM users WHERE id = ?`, id)
-	return err
+	if _, err := s.db.Exec(`DELETE FROM users WHERE id = ?`, id); err != nil {
+		return err
+	}
+	s.loadSOSMonitors()
+	return nil
 }
 
 // DeleteUserAndReleaseNodes permanently removes an account and, for every node it
@@ -384,6 +393,7 @@ func (s *Store) DeleteUserAndReleaseNodes(id int64, ownerLabel string) error {
 	}
 	// The removed account may have held pending claims; refresh the ingest cache.
 	s.loadPendingClaims()
+	s.loadSOSMonitors() // nor may they stay on the #sos list
 	return nil
 }
 

@@ -202,7 +202,7 @@ func (s *Server) Handler() http.Handler {
 	// grants nothing — the limiter guards table growth, not a secret.
 	mux.HandleFunc("GET /api/channels/discovered", s.channelsDiscovered)
 	mux.HandleFunc("POST /api/channels/candidates", s.channelCandidateCreate)
-	// The permanent #sos channel's monitor roster (senders of "test"); public.
+	// The permanent #sos channel's monitor roster and alert state; public.
 	mux.HandleFunc("GET /api/channels/sos", s.channelsSOS)
 	mux.HandleFunc("GET /api/live", s.live)
 
@@ -227,6 +227,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/account/email", s.requireUser(s.accountChangeEmail))
 	mux.HandleFunc("POST /api/account/delete", s.requireUser(s.accountDelete))
 	mux.HandleFunc("PUT /api/account/sos-alerts", s.requireUser(s.accountSOSAlerts))
+	mux.HandleFunc("PUT /api/account/sos-monitor", s.requireUser(s.accountSOSMonitor))
 
 	// Node ownership claims (authenticated; creating requires the can_claim gate).
 	mux.HandleFunc("POST /api/claims", s.requireUser(s.claimCreate))

@@ -241,3 +241,71 @@ func TestSOSAlertRealSkipsGapAfterTest(t *testing.T) {
 		t.Fatalf("real alert inside a real gap: %d emails, want still 2", count())
 	}
 }
+
+// The "I'm monitoring #sos" switch: signed in only, with a radio that has been heard.
+func TestSOSMonitorSwitch(t *testing.T) {
+	st, base, fm, cleanup := mailEnv(t)
+	defer cleanup()
+	owner, member, anon := newClient(t, base), newClient(t, base), newClient(t, base)
+	owner.do("POST", "/api/auth/register",
+		map[string]string{"email": "owner@example.com", "password": "hunter2hunter2", "displayName": "Someone"}, false)
+	member.do("POST", "/api/auth/register",
+		map[string]string{"email": "member@example.com", "password": "hunter2hunter2"}, false)
+	vs := fm.ofKind("verification")
+	member.do("POST", "/api/auth/verify", map[string]string{"token": tokenFromLink(t, vs[len(vs)-1].text)}, false)
+
+	put := func(c *authTestClient, body any, csrf bool, want int) map[string]any {
+		t.Helper()
+		r, got := c.do("PUT", "/api/account/sos-monitor", body, csrf)
+		if r.StatusCode != want {
+			t.Fatalf("%v: got %d %v, want %d", body, r.StatusCode, got, want)
+		}
+		return got
+	}
+	type m = map[string]any
+	put(anon, m{"enabled": true, "name": "X"}, false, 401)
+	put(owner, m{"enabled": true}, false, 403) // no CSRF token
+	put(owner, m{"name": "X"}, true, 400)
+	put(member, m{"enabled": true, "name": " "}, true, 400)
+	e := put(member, m{"enabled": true, "name": "Nobody"}, true, 422)
+	if msg, _ := e["error"].(string); !strings.Contains(msg, "flood advert") {
+		t.Fatalf("unheard radio: %v", e)
+	}
+	seedCompanion(t, st, "VE7AAA")
+	seedCompanion(t, st, "Bob Hill 📡")
+	got := put(owner, m{"enabled": true, "name": " ve7aaa "}, true, 200)
+	if got["sosMonitor"] != true || got["sosMonitorName"] != "VE7AAA" {
+		t.Fatalf("owner = %v", got)
+	}
+	put(member, m{"enabled": true, "name": "VE7AAA"}, true, 409)
+	put(member, m{"enabled": true, "name": "bob hill"}, true, 200) // the emoji needn't be typed
+	mons := st.SOSMonitors()
+	if len(mons) != 2 || mons[0].Name != "Bob Hill 📡" || mons[1].Name != "VE7AAA" {
+		t.Fatalf("monitors = %+v", mons)
+	}
+	// What the public list carries: a name and a date, no account details.
+	r, body := anon.do("GET", "/api/channels/sos", nil, false)
+	list, _ := body["monitors"].([]any)
+	if r.StatusCode != 200 || len(list) != 2 {
+		t.Fatalf("roster = %d %v", r.StatusCode, body)
+	}
+	if e, _ := list[0].(map[string]any); len(e) != 2 || e["name"] != "Bob Hill 📡" || e["since"] == "" {
+		t.Fatalf("entry = %v", list[0])
+	}
+	put(member, m{"enabled": false}, true, 200)
+	if mons := st.SOSMonitors(); len(mons) != 1 {
+		t.Fatalf("after off = %+v", mons)
+	}
+}
+
+// seedCompanion records a signed advert from a companion radio called name.
+func seedCompanion(t *testing.T, st *store.Store, name string) {
+	t.Helper()
+	h := sha256.Sum256([]byte(name))
+	p := &meshcore.Packet{MessageHash: hex.EncodeToString(h[:8]), Advert: &meshcore.Advert{
+		PublicKey: strings.ToUpper(hex.EncodeToString(h[:])), DeviceRole: meshcore.RoleChatNode,
+		HasName: true, Name: name, SignatureValid: true}}
+	if err := st.Record(store.Observation{Packet: p, RawHex: "00", ObserverID: "obs", ReceivedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+}

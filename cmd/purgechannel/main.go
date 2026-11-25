@@ -1,7 +1,7 @@
 // Command purgechannel removes every stored message of one hashtag channel —
 // all observations whose GroupText decrypts to it — e.g. to clear #sos of its
 // set-up chatter. Only the packets go: the channel's monitor roster
-// (channel_monitors) and everything else are kept. Writes a JSON backup of
+// (on the accounts) and everything else are kept. Writes a JSON backup of
 // the rows it deletes first.
 //
 //	purgechannel -db data/ridgeline.db -channel sos                 # dry run

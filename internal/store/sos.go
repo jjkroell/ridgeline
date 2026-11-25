@@ -2,8 +2,7 @@ package store
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
+	"errors"
 	"regexp"
 	"sort"
 	"strings"
@@ -17,20 +16,15 @@ import (
 // always decrypted (registered at startup whether or not discovery has
 // confirmed it) and every browser carries it as a permanent channel.
 //
-// Who monitors it is learned from the channel itself: a sender who posts a
-// message starting with the word "join" is listed as a monitor, so the list
-// says who has shown they are listening rather than who signed up somewhere;
-// one starting with "leave" takes them off it again. (Until v0.24.67 the words
-// were "test" and "unsub"; the list they built is kept.) The web UI hides
-// join, leave and test messages from the #sos chat after five minutes
-// (other messages after 3 hours, calls for help after 12; sos.svelte.ts).
-// The sender is the name the message carries — MeshCore group text is not
-// signed per sender, so the list is a courtesy roster, not an identity proof.
+// Who monitors it is what people say: a signed-in account switches "I'm
+// monitoring #sos" on and gives the name of its companion radio, which must be
+// one the mesh has heard (see SetSOSMonitor, FindCompanion). Until
+// v0.24.78 the list was learned from "join" and "leave" messages sent on the
+// channel; those are now ordinary messages (the old channel_monitors rows stay
+// in databases that have them, unread). The web UI still hides join, leave and
+// test messages from the #sos chat after five minutes (other messages after 3
+// hours, calls for help after 12; sos.svelte.ts).
 const SOSChannel = "sos"
-
-// sosBackfillMarker records that history was scanned once for monitors, in
-// channel_monitor_backfills, so the 45-day scan runs on the first boot only.
-const sosBackfillMarker = SOSChannel
 
 // RegisterSOSChannel adds #sos to the decoder's channel set. Idempotent;
 // called at startup before ingest so live #sos messages decrypt from the first
@@ -39,47 +33,15 @@ func RegisterSOSChannel() {
 	meshcore.RegisterChannel(SOSChannel, meshcore.DeriveHashtagKey(SOSChannel))
 }
 
-// ChannelMonitor is one sender who has sent a test message to a channel.
-type ChannelMonitor struct {
-	Name      string `json:"name"`
-	FirstTest string `json:"firstTest"` // RFC3339, server receive time
-	LastTest  string `json:"lastTest"`
-	Tests     int    `json:"tests"` // distinct test messages (not observations)
-	// UnsubAt is the newest unsub; the sender is listed only while LastTest is
-	// newer. Times rather than arrival order decide it, so a late copy of an
-	// old test (the holding pen stores late) cannot re-list someone.
-	UnsubAt string `json:"-"`
+// SOSMonitor is one account listed as monitoring #sos, under the radio name it gave.
+type SOSMonitor struct {
+	UserID int64  `json:"-"`
+	Name   string `json:"name"`
+	Since  string `json:"since"` // RFC3339, when it was switched on
 }
 
-// active reports whether the sender is currently listed.
-func (m *ChannelMonitor) active() bool { return m.LastTest != "" && m.LastTest > m.UnsubAt }
-
-type monitorKind int
-
-const (
-	notMonitor monitorKind = iota
-	monitorJoin
-	monitorLeave
-)
-
-// monitorWord classifies a channel message by its first word, in any case,
-// with trailing punctuation allowed: "join" ("Join!", "join from Nanaimo")
-// checks in; "leave" checks out. "joined", "rejoin" and "leaving" are neither,
-// and neither is "test" any more. Mirrored in web/src/lib/sos.svelte.ts.
-func monitorWord(msg string) monitorKind {
-	f := strings.Fields(msg)
-	if len(f) == 0 {
-		return notMonitor
-	}
-	w := strings.ToLower(strings.TrimRightFunc(f[0], func(r rune) bool { return unicode.IsPunct(r) }))
-	switch w {
-	case "join":
-		return monitorJoin
-	case "leave":
-		return monitorLeave
-	}
-	return notMonitor
-}
+// ErrSOSNameTaken: another account is already listed under that name.
+var ErrSOSNameTaken = errors.New("store: #sos monitor name taken")
 
 // sosAlertRe matches an emergency word: sos, emergency, mayday or 911 as a
 // whole word ("#sos", the channel's own tag, does not count), or "need help" /
@@ -296,221 +258,131 @@ func (s *Store) LoadSOSAlert(ctx context.Context, now time.Time) error {
 	return nil
 }
 
-// sosMonitorMsg returns the sender and kind of a decrypted #sos test or unsub.
-func sosMonitorMsg(p *meshcore.Packet) (string, monitorKind) {
-	if p == nil || p.GroupText == nil || !p.GroupText.Decrypted || p.GroupText.Channel != SOSChannel {
-		return "", notMonitor
+// SetSOSMonitor lists an account as monitoring #sos under name, or takes it
+// off. Off keeps the saved name for next time. A name another listed account
+// uses, in any case, is refused, so nobody can be listed as someone else who is
+// already there.
+func (s *Store) SetSOSMonitor(id int64, on bool, name string) error {
+	s.sosRosterMu.Lock()
+	defer s.sosRosterMu.Unlock()
+	if !on {
+		if _, err := s.db.Exec(`UPDATE users SET sos_monitor = 0 WHERE id = ?`, id); err != nil {
+			return err
+		}
+		return s.readSOSMonitors()
 	}
-	k := monitorWord(p.GroupText.Message)
-	sender := strings.TrimSpace(p.GroupText.Sender)
-	if k == notMonitor || sender == "" {
-		return "", notMonitor
+	for _, m := range s.SOSMonitors() {
+		if m.UserID != id && strings.EqualFold(m.Name, name) {
+			return ErrSOSNameTaken
+		}
 	}
-	return sender, k
-}
-
-type execer interface {
-	Exec(string, ...any) (sql.Result, error)
-}
-
-// writeMonitor records one test or unsub. For a test, lastHash dedupes the
-// copies of a single transmission (re-floods and other observers arrive within
-// seconds), so `tests` counts messages; every time takes a min/max so the
-// backfill and live ingest can write in either order. An unsub only moves
-// unsub_at forward; it keeps the row so its time can outrank late copies.
-func writeMonitor(ex execer, kind monitorKind, channel, sender, hash, at string) error {
-	if kind == monitorLeave {
-		_, err := ex.Exec(`
-			INSERT INTO channel_monitors (channel, sender, first_test, last_test, tests, last_hash, unsub_at)
-			VALUES (?,?,'','',0,'',?)
-			ON CONFLICT(channel, sender) DO UPDATE SET
-				unsub_at = MAX(channel_monitors.unsub_at, excluded.unsub_at)`,
-			channel, sender, at)
+	// "Since" is when it was switched on; a rename while on keeps it.
+	if _, err := s.db.Exec(`UPDATE users SET
+			sos_monitor_at = CASE WHEN sos_monitor = 1 THEN sos_monitor_at ELSE ? END,
+			sos_monitor = 1, sos_monitor_name = ?
+		WHERE id = ?`, time.Now().UTC().Format(time.RFC3339), name, id); err != nil {
 		return err
 	}
-	_, err := ex.Exec(`
-		INSERT INTO channel_monitors (channel, sender, first_test, last_test, tests, last_hash)
-		VALUES (?,?,?,?,1,?)
-		ON CONFLICT(channel, sender) DO UPDATE SET
-			first_test = CASE WHEN channel_monitors.first_test = '' THEN excluded.first_test
-			                  ELSE MIN(channel_monitors.first_test, excluded.first_test) END,
-			last_test  = MAX(channel_monitors.last_test, excluded.last_test),
-			tests      = channel_monitors.tests + CASE WHEN channel_monitors.last_hash = excluded.last_hash THEN 0 ELSE 1 END,
-			last_hash  = excluded.last_hash`,
-		channel, sender, at, at, hash)
-	return err
+	return s.readSOSMonitors()
 }
 
-// noteMonitor folds a recorded test or unsub into the in-memory roster the
-// API serves, with the same rules as writeMonitor.
-func (s *Store) noteMonitor(kind monitorKind, sender, hash, at string) {
-	s.sosMu.Lock()
-	defer s.sosMu.Unlock()
-	m, ok := s.sosMonitors[sender]
-	if !ok {
-		m = &ChannelMonitor{Name: sender}
-		s.sosMonitors[sender] = m
+// FindCompanion returns the advertised name of the heard companion radio called
+// name, ok=false if there is none. Case is ignored; so are spaces, punctuation
+// and emoji when that leaves exactly one companion name (they are hard to
+// type). Companions not heard within retention, retired or blocked don't count.
+func (s *Store) FindCompanion(name string) (string, bool, error) {
+	name = strings.TrimSpace(name)
+	rows, err := s.db.Query(`SELECT pubkey, name FROM nodes
+		WHERE role = 'ChatNode' AND COALESCE(name,'') <> '' AND COALESCE(retired_at,'') = ''`)
+	if err != nil {
+		return "", false, err
 	}
-	if kind == monitorLeave {
-		if at > m.UnsubAt {
-			m.UnsubAt = at
+	defer rows.Close()
+	plain, near := plainName(name), map[string]bool{}
+	exact := ""
+	for rows.Next() {
+		var pk, n string
+		if err := rows.Scan(&pk, &n); err != nil {
+			return "", false, err
 		}
-		return
+		if s.IsNodeBlocked(pk) {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(n), name) {
+			exact = n
+		}
+		if plain != "" && plainName(n) == plain {
+			near[n] = true
+		}
 	}
-	if m.FirstTest == "" || at < m.FirstTest {
-		m.FirstTest = at
+	if err := rows.Err(); err != nil {
+		return "", false, err
 	}
-	if at > m.LastTest {
-		m.LastTest = at
+	if exact != "" {
+		return strings.TrimSpace(exact), true, nil
 	}
-	if s.sosLastHash[sender] != hash {
-		m.Tests++
+	if len(near) == 1 {
+		for n := range near {
+			return strings.TrimSpace(n), true, nil
+		}
 	}
-	s.sosLastHash[sender] = hash
+	return "", false, nil
 }
 
-// loadSOSMonitors fills the in-memory roster from the table at open.
+// plainName is a name's letters and digits, lowercased.
+func plainName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return unicode.ToLower(r)
+		}
+		return -1
+	}, name)
+}
+
+// loadSOSMonitors fills the in-memory roster at open, and again when an
+// account that may be on it is blocked, unblocked or removed.
 func (s *Store) loadSOSMonitors() error {
-	rows, err := s.db.Query(`SELECT sender, first_test, last_test, tests, last_hash, unsub_at
-		FROM channel_monitors WHERE channel = ?`, SOSChannel)
+	s.sosRosterMu.Lock()
+	defer s.sosRosterMu.Unlock()
+	return s.readSOSMonitors()
+}
+
+// readSOSMonitors re-reads the roster; the caller holds sosRosterMu, so an
+// older read can't replace a newer one.
+func (s *Store) readSOSMonitors() error {
+	rows, err := s.db.Query(`SELECT id, sos_monitor_name, sos_monitor_at FROM users
+		WHERE sos_monitor = 1 AND blocked = 0 AND sos_monitor_name <> ''`)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
-	mons := map[string]*ChannelMonitor{}
-	hashes := map[string]string{}
+	mons := []SOSMonitor{}
 	for rows.Next() {
-		var m ChannelMonitor
-		var h string
-		if err := rows.Scan(&m.Name, &m.FirstTest, &m.LastTest, &m.Tests, &h, &m.UnsubAt); err != nil {
+		var m SOSMonitor
+		if err := rows.Scan(&m.UserID, &m.Name, &m.Since); err != nil {
 			return err
 		}
-		mons[m.Name] = &m
-		hashes[m.Name] = h
+		mons = append(mons, m)
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	sort.Slice(mons, func(i, j int) bool {
+		if a, b := strings.ToLower(mons[i].Name), strings.ToLower(mons[j].Name); a != b {
+			return a < b
+		}
+		return mons[i].UserID < mons[j].UserID
+	})
 	s.sosMu.Lock()
-	s.sosMonitors, s.sosLastHash = mons, hashes
+	s.sosMonitors = mons
 	s.sosMu.Unlock()
 	return nil
 }
 
-// SOSMonitors returns the current #sos roster (unsubscribed senders left
-// out), most recent test first. Served from memory — the endpoint never
-// queues on the single DB connection.
-func (s *Store) SOSMonitors() []ChannelMonitor {
+// SOSMonitors returns who monitors #sos, by name. Served from memory — the
+// endpoint never queues on the single DB connection. Never nil.
+func (s *Store) SOSMonitors() []SOSMonitor {
 	s.sosMu.RLock()
-	out := make([]ChannelMonitor, 0, len(s.sosMonitors))
-	for _, m := range s.sosMonitors {
-		if m.active() {
-			out = append(out, *m)
-		}
-	}
-	s.sosMu.RUnlock()
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].LastTest != out[j].LastTest {
-			return out[i].LastTest > out[j].LastTest
-		}
-		return out[i].Name < out[j].Name
-	})
-	return out
-}
-
-// BackfillSOSMonitors scans the retained history once for #sos tests and unsubs,
-// so monitors who checked in before this feature shipped are listed. Batched
-// by hour of received_at (idx_obs_received), reading outside any transaction
-// and writing each batch's finds in a short write-only one, releasing s.mu and
-// the connection between batches — never one pass over observations (see
-// [[ridgeline-database]]). Covers [now-days, now]; a no-op once marked done.
-// RegisterSOSChannel must have run first, or nothing decrypts.
-func (s *Store) BackfillSOSMonitors(ctx context.Context, days int, now time.Time) (scanned, found int, err error) {
-	var done int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM channel_monitor_backfills WHERE channel = ?`,
-		sosBackfillMarker).Scan(&done); err != nil {
-		return 0, 0, err
-	}
-	if done > 0 {
-		return 0, 0, nil
-	}
-
-	type hit struct {
-		kind             monitorKind
-		sender, hash, at string
-	}
-	// Copies of one transmission land within seconds of each other, so a
-	// two-window seen set dedupes them without holding every hash in memory.
-	seen, prevSeen := map[string]bool{}, map[string]bool{}
-	end := now.UTC().Truncate(time.Hour).Add(time.Hour)
-	for from := end.Add(-time.Duration(days) * 24 * time.Hour); from.Before(end); from = from.Add(time.Hour) {
-		if err := ctx.Err(); err != nil {
-			return scanned, found, err
-		}
-		to := from.Add(time.Hour)
-		rows, err := s.db.Query(`
-			SELECT message_hash, raw_hex, received_at FROM observations
-			WHERE received_at >= ? AND received_at < ? AND payload_type = 'GroupText'`,
-			from.Format(time.RFC3339Nano), to.Format(time.RFC3339Nano))
-		if err != nil {
-			return scanned, found, err
-		}
-		var hits []hit
-		for rows.Next() {
-			var h, raw, at string
-			if err := rows.Scan(&h, &raw, &at); err != nil {
-				rows.Close()
-				return scanned, found, err
-			}
-			scanned++
-			if seen[h] || prevSeen[h] {
-				continue
-			}
-			seen[h] = true
-			p, err := meshcore.DecodeHex(raw)
-			if err != nil {
-				continue
-			}
-			if sender, kind := sosMonitorMsg(p); kind != notMonitor {
-				hits = append(hits, hit{kind, sender, h, at})
-			}
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return scanned, found, err
-		}
-		prevSeen, seen = seen, map[string]bool{}
-		if len(hits) == 0 {
-			continue
-		}
-		s.mu.Lock()
-		tx, err := s.db.Begin()
-		if err == nil {
-			for _, h := range hits {
-				if err = writeMonitor(tx, h.kind, SOSChannel, h.sender, h.hash, h.at); err != nil {
-					break
-				}
-			}
-			if err == nil {
-				err = tx.Commit()
-			} else {
-				tx.Rollback()
-			}
-		}
-		s.mu.Unlock()
-		if err != nil {
-			return scanned, found, fmt.Errorf("store: sos backfill write: %w", err)
-		}
-		found += len(hits)
-	}
-	if _, err := s.db.Exec(`INSERT OR IGNORE INTO channel_monitor_backfills (channel, done_at) VALUES (?,?)`,
-		sosBackfillMarker, time.Now().UTC().Format(time.RFC3339)); err != nil {
-		return scanned, found, err
-	}
-	// Re-read so the roster carries the backfilled rows merged with anything
-	// live ingest wrote meanwhile (the table is the merge point). Under s.mu so
-	// no Record commits between the read and the swap and gets dropped.
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return scanned, found, s.loadSOSMonitors()
+	defer s.sosMu.RUnlock()
+	return append([]SOSMonitor{}, s.sosMonitors...)
 }

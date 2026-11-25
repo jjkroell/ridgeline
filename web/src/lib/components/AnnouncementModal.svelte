@@ -4,11 +4,12 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { seasonal } from '$lib/seasonal.svelte';
+	import { sos as sosState } from '$lib/sos.svelte';
 
 	// Each entry is one new capability, in user-facing terms. While a season is
 	// in force its own items lead (see $lib/seasonal.svelte; they vanish when it
-	// ends), then the newest release's (`latest`); `sos` (red) is the
-	// previous release's, kept under an "Earlier" label.
+	// ends), then the newest release's (`latest`, red: it is about
+	// #sos); `settings` and `sos` are earlier ones, under "Earlier" labels.
 	onMount(() => seasonal.load());
 	const season = $derived(seasonal.season);
 	function trySeason() {
@@ -16,7 +17,29 @@
 		announce.close();
 		goto('/live-map');
 	}
+	// Land on #sos with its Monitoring card (the Yes / No) open.
+	function openMonitoring() {
+		sosState.setCard('monitors', true);
+		announce.close();
+	}
 	const latest: { icon: string; title: string; body: string }[] = [
+		{
+			icon: 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
+			title: 'The #sos monitoring list has been cleared: please add yourself again',
+			body: 'People are no longer listed by sending join on the channel, and everyone who was on the old list has come off it. If you monitor #sos, please go through the new selection below, so others can see you are listening. Your radio still receives #sos as before; only the list on Ridgeline was cleared.'
+		},
+		{
+			icon: 'M9 8a3.2 3.2 0 100-.01M3 20a6 6 0 0112 0M16 11l2 2 4-4',
+			title: 'How to get back on the list',
+			body: 'Sign in to Ridgeline, open #sos under Channels and tap the monitoring count beside its name. Enter your companion radio’s name and answer Yes to “Are you monitoring #sos?”. Answer No at any time to come off. If it says the name isn’t valid, Ridgeline hasn’t heard your radio: send a flood advert, wait a minute and try again.'
+		},
+		{
+			icon: 'M18.4 5.6a9 9 0 11-12.8 0 9 9 0 0112.8 0zM5.6 5.6l12.8 12.8',
+			title: 'Please don’t send join or leave on #sos',
+			body: 'They do nothing now. Keep #sos clear for people who need help.'
+		}
+	];
+	const settings: { icon: string; title: string; body: string }[] = [
 		{
 			icon: 'M4 6h9m4 0h3M4 12h3m4 0h9M4 18h11m4 0h1M15 4v4M9 10v4M17 16v4',
 			title: 'Recommended settings, all on one page',
@@ -35,11 +58,6 @@
 			body: 'Everyone now has #sos under Channels, next to Public. It is for people who need help: post there if you or someone near you needs assistance, and say where you are. Keep it clear otherwise. In a life-threatening emergency, call 911 first; the mesh is a backup, not a replacement.'
 		},
 		{
-			icon: 'M9 8a3.2 3.2 0 100-.01M3 20a6 6 0 0112 0M16 4.5a3.2 3.2 0 010 6.3M18 20a6 6 0 00-3-5.2',
-			title: 'Help keep watch on #sos',
-			body: 'Join #sos on your radio or app and send one (just one) message: join. You will be listed as a monitor, so everyone can see how many people are listening. Then keep notifications on for #sos. Send leave to come off the list. Join and leave messages drop out of the #sos chat on Ridgeline after 5 minutes, and your name stays on the list.'
-		},
-		{
 			icon: 'M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0',
 			title: '#sos lights up when someone needs help',
 			body: 'If a #sos message mentions sos, emergency, mayday, 911, threat or life, or says someone needs help, the #sos row and Channels in the menu (More on a phone) pulse red until you open #sos. They also pulse if it arrived while Ridgeline was closed, for up to 12 hours.'
@@ -56,6 +74,39 @@
 		}
 	];
 </script>
+
+{#snippet heading(text: string)}
+	<div class="border-line/60 mt-5 mb-4 flex items-center gap-3 border-t pt-4">
+		<span class="label" data-caps>{text}</span>
+	</div>
+{/snippet}
+
+{#snippet list(items: { icon: string; title: string; body: string }[], red: boolean)}
+	<ul class="flex flex-col gap-4">
+		{#each items as item (item.title)}
+			<li class="flex items-start gap-3">
+				<span
+					class="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full {red ? 'text-coral' : 'bg-signal/10 text-signal'}"
+					style={red ? 'background:color-mix(in srgb, var(--color-coral) 14%, transparent)' : undefined}
+				>
+					<svg
+						viewBox="0 0 24 24"
+						class="h-[18px] w-[18px]"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.6"
+						stroke-linecap="round"
+						stroke-linejoin="round"><path d={item.icon} /></svg
+					>
+				</span>
+				<div class="min-w-0">
+					<div class="text-fg text-sm font-600">{item.title}</div>
+					<div class="text-fg-dim mt-0.5 text-sm leading-relaxed">{item.body}</div>
+				</div>
+			</li>
+		{/each}
+	</ul>
+{/snippet}
 
 {#if announce.open}
 	<Modal onclose={() => announce.close()} size="2xl">
@@ -83,68 +134,17 @@
 				{/each}
 			</ul>
 
-			<div class="border-line/60 mt-5 mb-4 flex items-center gap-3 border-t pt-4">
-				<span class="label" data-caps>Also new: recommended settings</span>
-			</div>
+			{@render heading('Also new: #sos monitoring')}
 			{/if}
 
-			<ul class="flex flex-col gap-4">
-				{#each latest as item (item.title)}
-					<li class="flex items-start gap-3">
-						<span
-							class="bg-signal/10 text-signal mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full"
-						>
-							<svg
-								viewBox="0 0 24 24"
-								class="h-[18px] w-[18px]"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.6"
-								stroke-linecap="round"
-								stroke-linejoin="round"><path d={item.icon} /></svg
-							>
-						</span>
-						<div class="min-w-0">
-							<div class="text-fg text-sm font-600">{item.title}</div>
-							<div class="text-fg-dim mt-0.5 text-sm leading-relaxed">{item.body}</div>
-						</div>
-					</li>
-				{/each}
-			</ul>
-
-			<div class="border-line/60 mt-5 mb-4 flex items-center gap-3 border-t pt-4">
-				<span class="label" data-caps>Earlier: #sos</span>
-			</div>
-
-			<ul class="flex flex-col gap-4">
-				{#each sos as item (item.title)}
-					<li class="flex items-start gap-3">
-						<span class="text-coral mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full" style="background:color-mix(in srgb, var(--color-coral) 14%, transparent)">
-							<svg
-								viewBox="0 0 24 24"
-								class="h-[18px] w-[18px]"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.6"
-								stroke-linecap="round"
-								stroke-linejoin="round"><path d={item.icon} /></svg
-							>
-						</span>
-						<div class="min-w-0">
-							<div class="text-fg text-sm font-600">{item.title}</div>
-							<div class="text-fg-dim mt-0.5 text-sm leading-relaxed">{item.body}</div>
-						</div>
-					</li>
-				{/each}
-			</ul>
+			{@render list(latest, true)}
+			{@render heading('Earlier: recommended settings')}
+			{@render list(settings, false)}
+			{@render heading('Earlier: #sos')}
+			{@render list(sos, true)}
 		</div>
 
 		<div class="border-line/70 flex flex-wrap items-center justify-end gap-x-3 gap-y-2 border-t px-6 py-4">
-			<a
-				href="/channels?channel=sos"
-				onclick={() => announce.close()}
-				class="text-coral hover:brightness-125 text-sm font-600 transition-[filter]">Open #sos</a
-			>
 			{#if season}
 				<button
 					onclick={trySeason}
@@ -154,10 +154,10 @@
 				>
 			{/if}
 			<a
-				href="/settings"
-				onclick={() => announce.close()}
-				class="bg-signal text-ink hover:bg-signal-deep rounded-[var(--radius)] px-4 py-2 text-sm font-600 transition-colors"
-				>Open Settings</a
+				href="/channels?channel=sos"
+				onclick={openMonitoring}
+				class="bg-coral text-ink rounded-[var(--radius)] px-4 py-2 text-sm font-600 transition-[filter] hover:brightness-110"
+				>Open the #sos list</a
 			>
 			<button
 				onclick={() => announce.close()}

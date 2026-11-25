@@ -105,7 +105,8 @@
 		<p>
 			Accounts are optional. If you create one, we store your email address, a display name, and a
 			hashed password so you can sign in, claim nodes, leave notes, and receive notifications you ask
-			for. Email is used only for verification and the notifications you enable. You can edit your
+			for. Email is used only for verification and the notifications you enable. If you say you monitor
+			#sos, your radio’s name is shown on its public monitoring list. You can edit your
 			profile or <strong>delete your account</strong> at any time from your account page; deleting it
 			removes your personal data and releases any nodes you had claimed.
 		</p>

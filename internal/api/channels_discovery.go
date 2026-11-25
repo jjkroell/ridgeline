@@ -26,9 +26,8 @@ func (s *Server) channelsDiscovered(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-// channelsSOS returns who monitors #sos: every sender who has posted a
-// message starting with "join" there (and not "leave" since), most recent
-// first, plus when the newest message with an emergency word was heard there
+// channelsSOS returns who monitors #sos (accounts that switched it on, under
+// each one's radio name), plus when the newest message with an emergency word was heard there
 // (lastAlert, "" if none in the last 12 h) — the UI flags #sos from it on
 // every page. Served from memory.
 func (s *Server) channelsSOS(w http.ResponseWriter, _ *http.Request) {

@@ -5,6 +5,7 @@
 	// padding for the mobile layout.
 	import { auth } from '$lib/auth.svelte';
 	import { authApi } from '$lib/api';
+	import SosMonitorToggle from './SosMonitorToggle.svelte';
 
 	let { compact = false }: { compact?: boolean } = $props();
 	const pad = $derived(compact ? 'px-4 py-4' : 'px-5 py-4');
@@ -194,6 +195,11 @@
 			</label>
 		{/if}
 		{#if sosMsg}<p class="text-signal mt-1.5 pl-7 text-xs">{sosMsg}</p>{/if}
+	</div>
+
+	<!-- The public #sos monitoring list (target of /account#sos-monitor) -->
+	<div id="sos-monitor" class="scroll-mt-20 {pad}">
+		<SosMonitorToggle mobile={compact} />
 	</div>
 
 	<!-- Email -->

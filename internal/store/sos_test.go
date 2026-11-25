@@ -2,149 +2,111 @@ package store
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jjkroell/ridgeline/internal/meshcore"
 )
 
-func TestMonitorWord(t *testing.T) {
-	for msg, want := range map[string]monitorKind{
-		"join":                monitorJoin,
-		"Join!":               monitorJoin,
-		"JOIN 1":              monitorJoin,
-		"  join from Nanaimo": monitorJoin,
-		"join.":               monitorJoin,
-		"leave":               monitorLeave,
-		"Leave please":        monitorLeave,
-		"LEAVE!":              monitorLeave,
-		"joined":              notMonitor,
-		"rejoin":              notMonitor,
-		"leaving":             notMonitor,
-		"please join":         notMonitor,
-		"test":                notMonitor, // the old check-in word
-		"unsub":               notMonitor, // the old check-out word
-		"":                    notMonitor,
-	} {
-		if got := monitorWord(msg); got != want {
-			t.Errorf("monitorWord(%q) = %v, want %v", msg, got, want)
-		}
-	}
-}
-
-// leave takes a sender off; only a NEWER join puts them back, whatever order
-// the copies arrive in.
-func TestSOSUnsub(t *testing.T) {
+// Only accounts that switch it on are listed; a radio "join" isn't.
+func TestSOSMonitors(t *testing.T) {
 	RegisterSOSChannel()
 	st := testStore(t)
-	key := meshcore.DeriveHashtagKey(SOSChannel)
-	now := time.Now().UTC()
-
-	oldTest := groupTextRaw(t, key, "Erin", "join")
-	recordRaw(t, st, oldTest, now)
-	recordRaw(t, st, groupTextRaw(t, key, "Erin", "leave"), now.Add(time.Minute))
-	if n := len(st.SOSMonitors()); n != 0 {
-		t.Fatalf("after unsub: %d monitors, want 0", n)
-	}
-	// A late observer copy of the OLD test, stored after the unsub.
-	recordRaw(t, st, oldTest, now.Add(-time.Second))
-	if n := len(st.SOSMonitors()); n != 0 {
-		t.Fatalf("late old test re-listed: %d monitors", n)
-	}
-	// An unsub from someone never listed leaves nobody listed.
-	recordRaw(t, st, groupTextRaw(t, key, "Finn", "leave"), now)
-	recordRaw(t, st, groupTextRaw(t, key, "Erin", "Join again"), now.Add(2*time.Minute))
-	mons := st.SOSMonitors()
-	if len(mons) != 1 || mons[0].Name != "Erin" {
-		t.Fatalf("after re-test = %+v, want Erin", mons)
-	}
-	// The table agrees with memory.
-	if err := st.loadSOSMonitors(); err != nil {
-		t.Fatal(err)
-	}
-	if mons := st.SOSMonitors(); len(mons) != 1 || mons[0].Name != "Erin" {
-		t.Fatalf("after reload = %+v", mons)
-	}
-	// Finn tests later: first_test comes from the test, not the unsub's ''.
-	recordRaw(t, st, groupTextRaw(t, key, "Finn", "join"), now.Add(3*time.Minute))
-	if err := st.loadSOSMonitors(); err != nil {
-		t.Fatal(err)
-	}
-	found := false
-	for _, m := range st.SOSMonitors() {
-		if m.Name == "Finn" {
-			found = true
-			if m.FirstTest == "" {
-				t.Fatal("Finn's first_test is empty")
+	a, b := monitorUser(t, st, "a@x.ca"), monitorUser(t, st, "b@x.ca")
+	names := func() string {
+		t.Helper()
+		var mem []string
+		for _, m := range st.SOSMonitors() {
+			if m.Since == "" {
+				t.Errorf("%s has no since", m.Name)
 			}
+			mem = append(mem, m.Name)
+		}
+		return strings.Join(mem, ",")
+	}
+	set := func(id int64, on bool, name string) {
+		t.Helper()
+		if err := st.SetSOSMonitor(id, on, name); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if !found {
-		t.Fatal("Finn not listed after testing")
+
+	recordRaw(t, st, groupTextRaw(t, meshcore.DeriveHashtagKey(SOSChannel), "Radio", "join"), time.Now().UTC())
+	if st.SOSMonitors() == nil || names() != "" {
+		t.Fatalf("start = %q, want empty and not nil", names())
+	}
+	set(a, true, "zed")
+	set(b, true, "Alice")
+	if names() != "Alice,zed" {
+		t.Fatalf("listed = %q", names())
+	}
+	// Someone else's listed name is refused, in any case; one's own is not.
+	if err := st.SetSOSMonitor(b, true, "ZED"); err != ErrSOSNameTaken {
+		t.Fatalf("taken name: %v", err)
+	}
+	since := st.SOSMonitors()[1].Since
+	set(a, true, "Zed 2")
+	if names() != "Alice,Zed 2" || st.SOSMonitors()[1].Since != since {
+		t.Fatalf("renamed = %q", names())
+	}
+	// Off: gone, name kept, and free for another account.
+	set(a, false, "")
+	if u, _, _ := st.GetUserByID(a); u.SOSMonitor || u.SOSMonitorName != "Zed 2" || names() != "Alice" {
+		t.Fatalf("off: %+v, listed %q", u, names())
+	}
+	set(b, true, "zed 2")
+
+	// The roster survives a reopen; blocking and deleting take accounts off it.
+	if err := st.loadSOSMonitors(); err != nil || names() != "zed 2" {
+		t.Fatalf("reload = %q, %v", names(), err)
+	}
+	if err := st.SetUserBlocked(b, true); err != nil || names() != "" {
+		t.Fatalf("blocked = %q, %v", names(), err)
+	}
+	if err := st.SetUserBlocked(b, false); err != nil || names() != "zed 2" {
+		t.Fatalf("unblocked = %q, %v", names(), err)
+	}
+	if err := st.DeleteUserAndReleaseNodes(b, "x"); err != nil || names() != "" {
+		t.Fatalf("deleted = %q, %v", names(), err)
 	}
 }
 
-// A live #sos "join" lists its sender once per transmission (not per observer
-// copy); other messages and other channels do not.
-func TestRecordSOSMonitors(t *testing.T) {
-	RegisterSOSChannel()
+// Only a heard companion's name counts; spaces and emoji may be left out when
+// that isn't ambiguous.
+func TestFindCompanion(t *testing.T) {
 	st := testStore(t)
-	key := meshcore.DeriveHashtagKey(SOSChannel)
-	now := time.Now().UTC()
-
-	test1 := groupTextRaw(t, key, "Alice", "join")
-	recordRaw(t, st, test1, now)
-	recordRaw(t, st, test1, now.Add(2*time.Second)) // another observer's copy
-	recordRaw(t, st, groupTextRaw(t, key, "Alice", "Join from the ridge"), now.Add(time.Minute))
-	recordRaw(t, st, groupTextRaw(t, key, "Bob", "anyone around?"), now)
-	pub := []byte{0x8b, 0x33, 0x87, 0xe9, 0xc5, 0xcd, 0xea, 0x6a, 0xc9, 0xe5, 0xed, 0xba, 0xa1, 0x15, 0xcd, 0x72}
-	recordRaw(t, st, groupTextRaw(t, pub, "Carol", "join"), now) // Public, not #sos
-
-	mons := st.SOSMonitors()
-	if len(mons) != 1 || mons[0].Name != "Alice" || mons[0].Tests != 2 {
-		t.Fatalf("monitors = %+v, want Alice with 2 tests", mons)
+	for i, n := range []struct{ role, name, retired string }{
+		{"ChatNode", "VE7KIP🌸", ""}, {"ChatNode", "KOD - Jesse", ""}, {"ChatNode", "Twin 📡", ""},
+		{"ChatNode", "Twin 🗼", ""}, {"ChatNode", "🦅", ""}, {"ChatNode", "Gone", "2026-01-01T00:00:00Z"},
+		{"ChatNode", "Blocked", ""}, {"Repeater", "Hilltop", ""}, {"ChatNode", "", ""},
+	} {
+		if _, err := st.db.Exec(`INSERT INTO nodes (pubkey, name, role, first_seen, last_seen, retired_at)
+			VALUES (?,?,?,'','',?)`, fmt.Sprintf("%064X", i), n.name, n.role, n.retired); err != nil {
+			t.Fatal(err)
+		}
 	}
-
-	// The roster survives a reopen (loaded from the table).
-	if err := st.loadSOSMonitors(); err != nil {
+	if err := st.AddBlock(BlockNode, fmt.Sprintf("%064X", 6), "Blocked", ""); err != nil {
 		t.Fatal(err)
 	}
-	if mons := st.SOSMonitors(); len(mons) != 1 || mons[0].Tests != 2 {
-		t.Fatalf("after reload = %+v", mons)
+	for in, want := range map[string]string{
+		"VE7KIP🌸": "VE7KIP🌸", " ve7kip ": "VE7KIP🌸", "kod jesse": "KOD - Jesse", "KOD": "", "🦅": "🦅",
+		"Twin 🗼": "Twin 🗼", "twin": "", "Gone": "", "Blocked": "", "Hilltop": "", "": "", "📻": "",
+	} {
+		if got, ok, err := st.FindCompanion(in); err != nil || got != want || ok != (want != "") {
+			t.Errorf("FindCompanion(%q) = %q, %v, %v; want %q", in, got, ok, err, want)
+		}
 	}
 }
 
-// The backfill finds tests already in history, runs once, and agrees with
-// rows live ingest wrote for the same transmission.
-func TestBackfillSOSMonitors(t *testing.T) {
-	RegisterSOSChannel()
-	st := testStore(t)
-	key := meshcore.DeriveHashtagKey(SOSChannel)
-	now := time.Now().UTC()
-
-	recordRaw(t, st, groupTextRaw(t, key, "Dave", "join"), now.Add(-48*time.Hour))
-	// Wipe what live ingest wrote, as on a database from before the roster.
-	if _, err := st.db.Exec(`DELETE FROM channel_monitors`); err != nil {
+func monitorUser(t *testing.T, st *Store, email string) int64 {
+	t.Helper()
+	u, err := st.CreateUser(email, "h", "")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.loadSOSMonitors(); err != nil {
-		t.Fatal(err)
-	}
-	if len(st.SOSMonitors()) != 0 {
-		t.Fatal("roster not cleared")
-	}
-
-	scanned, found, err := st.BackfillSOSMonitors(context.Background(), 7, now)
-	if err != nil || scanned != 1 || found != 1 {
-		t.Fatalf("backfill = %d scanned, %d found, %v", scanned, found, err)
-	}
-	if mons := st.SOSMonitors(); len(mons) != 1 || mons[0].Name != "Dave" || mons[0].Tests != 1 {
-		t.Fatalf("monitors = %+v", mons)
-	}
-	// Second run is a no-op.
-	if scanned, _, err := st.BackfillSOSMonitors(context.Background(), 7, now); err != nil || scanned != 0 {
-		t.Fatalf("second backfill scanned %d, %v", scanned, err)
-	}
+	return u.ID
 }
 
 // Same cases as the web client's ALERT_RE; the two must agree.
@@ -317,8 +279,8 @@ func TestSOSResolveStopsPulse(t *testing.T) {
 }
 
 // Purging a channel removes its observations (every observer's copy) and
-// nothing else; the monitor roster survives.
-func TestPurgeChannelKeepsRoster(t *testing.T) {
+// nothing else.
+func TestPurgeChannel(t *testing.T) {
 	RegisterSOSChannel()
 	st := testStore(t)
 	key := meshcore.DeriveHashtagKey(SOSChannel)
@@ -349,11 +311,5 @@ func TestPurgeChannelKeepsRoster(t *testing.T) {
 	st.db.QueryRow(`SELECT COUNT(*) FROM observations`).Scan(&total)
 	if total != 1 {
 		t.Fatalf("%d observations left, want the 1 Public message", total)
-	}
-	if err := st.loadSOSMonitors(); err != nil {
-		t.Fatal(err)
-	}
-	if mons := st.SOSMonitors(); len(mons) != 1 || mons[0].Name != "Gail" {
-		t.Fatalf("roster after purge = %+v, want Gail", mons)
 	}
 }

@@ -39,7 +39,11 @@
 			<p class="text-fg-dim mt-1.5 text-xs leading-relaxed">
 				In a life-threatening emergency call <span class="text-fg font-600">911</span> first; the mesh is a
 				backup, not a replacement. Ridgeline only shows #sos — to post or keep watch, add it to your own MeshCore
-				app or radio.
+				app or radio. If you keep watch, say so under <button
+					type="button"
+					onclick={() => sos.setCard('monitors', true)}
+					class="text-coral hover:underline">Monitoring</button
+				>; there’s nothing to send on the channel.
 			</p>
 			<div class="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
 				<a

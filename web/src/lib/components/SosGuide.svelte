@@ -11,12 +11,14 @@
 	//   - pulse window 12 h (SOSAlertWindow / ALERT_WINDOW_MS)
 	//   - emails: 30 s batch, then at most one per 10 min, except a real call after a
 	//     tests-only email (api/sos_alerts.go)
-	//   - monitor list: first word "join" adds, "leave" removes (store.monitorWord)
-	//   - chat clean-up (#cleanup): join/leave/test hidden after 5 min, calls for
+	//   - monitor list: accounts that answer Yes (SosMonitorToggle, store.SetSOSMonitor)
+	//   - chat clean-up (#cleanup): test (and stray join/leave) hidden after 5 min, calls for
 	//     help after 12 h, everything else after 3 h (sos.svelte.ts hidden())
 	//   - a message opening with an @-mention never alerts (sosReplyRe)
 	//   - monthly test: KOD-BOT [Scheduled_Messages] `0 9 1 * *` on the bot Pi
 	//   - map ring: lib/sos-map.ts (12 h, name match, hide per browser, admin resolve)
+	import SosMonitorToggle from './SosMonitorToggle.svelte';
+
 	let { compact = false }: { compact?: boolean } = $props();
 	const m = $derived(compact ? '/m' : '');
 
@@ -80,21 +82,23 @@
 					In your MeshCore app or radio, add a hashtag channel named <span class="text-fg font-mono">sos</span>.
 				</li>
 				<li>
-					Send a single message <span class="text-fg font-mono">join</span> from your companion to the channel. If
-					Ridgeline hears your message, your username is added to the
-					<span class="text-fg">monitoring</span> list on its #sos page.
-				</li>
-				<li>
 					Enable notifications in your MeshCore app for <span class="text-fg font-mono">#sos</span> to ensure you
 					are alerted in real time.
 				</li>
+				<li>
+					Let others know you're listening: enter your radio's name below, answer
+					<span class="text-fg">Yes</span>, and it goes on the <span class="text-fg">monitoring</span> list on
+					Ridgeline's #sos page. It needs a Ridgeline account, and a radio Ridgeline has heard: if it says the name
+					isn't valid, send a flood advert from your radio, wait a minute and try again.
+				</li>
 			</ol>
+			<div class="border-line bg-panel-2/40 rounded-[var(--radius)] border px-4 py-3">
+				<SosMonitorToggle mobile={compact} />
+			</div>
 			<p class="text-fg-dim">
-				Send <span class="text-fg font-mono">leave</span> to come off the list. The word has to come first in the
-				message, in any case. Ridgeline hides join and leave messages after 5 minutes; a hidden join still keeps
-				you on the list. If you joined with the old word, <span class="text-fg font-mono">test</span>, you're
-				still on it. See
-				<a href="#cleanup" class="text-coral hover:underline">clean-up</a> for how long other messages stay.
+				There's nothing to send on the channel to join or leave. Answer <span class="text-fg">No</span> at any time
+				to come off the list. You can also change it under <span class="text-fg">Monitoring</span> on #sos, or in
+				<a href="{m}/account#sos-monitor" class="text-coral hover:underline">Account</a>.
 			</p>
 			<p class="text-fg-dim">
 				<span class="text-fg">Who's on the channel?</span> In the MeshCore app, open #sos, tap
@@ -262,10 +266,8 @@
 			<ul class="text-fg-dim space-y-1.5">
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>
-					<span><span class="text-fg font-mono">join</span>, <span class="text-fg font-mono">leave</span> and
-						<span class="text-fg font-mono">test</span> after <span class="text-fg">5 minutes</span>. Hiding a join
-						doesn't take you off the monitoring list; only sending <span class="text-fg font-mono">leave</span>
-						removes your name.</span>
+					<span>Messages starting with <span class="text-fg font-mono">test</span> after
+						<span class="text-fg">5 minutes</span></span>
 				</li>
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>

@@ -123,6 +123,11 @@ class Auth {
 		this.user = await account.setSOSAlertTests(this.csrf, tests);
 	}
 
+	/** Go on or off the public #sos monitoring list, under name. */
+	async setSOSMonitor(enabled: boolean, name: string) {
+		this.user = await account.setSOSMonitor(this.csrf, enabled, name);
+	}
+
 	/** Change password (re-auth with the current one). Session stays valid. */
 	async changePassword(currentPassword: string, newPassword: string) {
 		await account.changePassword(this.csrf, currentPassword, newPassword);

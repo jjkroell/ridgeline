@@ -3,12 +3,11 @@
 // who monitors it — each either open or minimized to a pill beside the channel
 // name, per browser. Also the roster from the server, and the rules that keep
 // the chat clean: "join" / "leave" / "test" housekeeping messages are hidden
-// from the #sos chat five minutes after they are heard (the sender stays
-// listed), calls
-// for help after 12 hours, everything else after 3.
+// from the #sos chat five minutes after they are heard, calls for help after
+// 12 hours, everything else after 3.
 // Shared by the desktop and mobile channel pages and the Channels widget.
 import { serverNow } from '$lib/server-clock.svelte';
-import { api, type ChannelMonitor } from './api';
+import { api, type SOSMonitor } from './api';
 import { SOS_ID } from './channels.svelte';
 import { sosAlarm } from './sos-alarm.svelte';
 
@@ -39,7 +38,7 @@ export type SosCardKind = 'info' | 'monitors' | 'alerts';
 /** Only alerts this fresh ring the alarm (not ones found on load or reconnect). */
 const ALARM_FRESH_MS = 5 * 60_000;
 // How often an open page refreshes the roster; it changes only when someone
-// sends "join" or "leave", so this is slow on purpose.
+// goes on or off the list, so this is slow on purpose.
 const REFRESH_MS = 60_000;
 /** A housekeeping message stays in the #sos chat this long, then is hidden. */
 export const HIDE_AFTER_MS = 5 * 60_000;
@@ -53,23 +52,12 @@ function firstWord(text: string): string {
 	return first.replace(/[\p{P}]+$/u, '').toLowerCase();
 }
 
-/**
- * Classifies a channel message by its first word, in any case, trailing
- * punctuation allowed: "join" checks in, "leave" checks out. (Until v0.24.67
- * the words were "test" and "unsub".) Mirrors monitorWord in
- * internal/store/sos.go — keep the two in step.
- */
-export function monitorWord(text: string): 'join' | 'leave' | null {
-	const w = firstWord(text);
-	if (w === 'join') return 'join';
-	if (w === 'leave') return 'leave';
-	return null;
-}
-
-/** Housekeeping on #sos, hidden after five minutes: a join or leave, or a
- *  message starting with "test" (radio checks, the monthly test). */
+/** Housekeeping on #sos, hidden after five minutes: a message whose first word
+ *  (any case, trailing punctuation allowed) is "test" — radio checks, the
+ *  monthly test — or "join" / "leave", which listed people until v0.24.78 and
+ *  which some may still send. */
 export function housekeeping(text: string): boolean {
-	return monitorWord(text) !== null || firstWord(text) === 'test';
+	return ['test', 'join', 'leave'].includes(firstWord(text));
 }
 
 function readFlag(key: string, fallback: 'open' | 'min'): { value: 'open' | 'min'; seen: boolean } {
@@ -99,7 +87,7 @@ class SOS {
 	alertsMinimized = $state(true);
 	/** Whether this browser has seen the #sos card before (false = first launch). */
 	seen = $state(false);
-	monitors = $state<ChannelMonitor[]>([]);
+	monitors = $state<SOSMonitor[]>([]);
 	/** Newest #sos alert the server heard (epoch ms; 0 = none in 12 h). */
 	lastAlert = $state(0);
 	/** Who sent #sos alerts and when (epoch ms), newest per sender — for the map rings. */

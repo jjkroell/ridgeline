@@ -1,18 +1,14 @@
 <!--
-  Who monitors #sos: everyone who has sent "join" there (and not "leave"
-  since), most recent first. Its own card beside the info card; minimizing it
-  leaves a "N monitoring" pill (SosPill kind="monitors") by the channel name.
+  Who monitors #sos: every account that says so, under its radio's name, and
+  the Yes / No switch for the viewer's own (SosMonitorToggle). Its own card
+  beside the info card; minimizing it leaves a "N monitoring" pill
+  (SosPill kind="monitors") by the channel name.
 -->
 <script lang="ts">
 	import { sos } from '$lib/sos.svelte';
-	import { ago } from '$lib/format';
+	import SosMonitorToggle from './SosMonitorToggle.svelte';
 
 	let { mobile = false }: { mobile?: boolean } = $props();
-
-	// A monitor who has not checked in for a month is shown, but dimmed — the
-	// list is "who has said they listen", and that goes stale.
-	const STALE_MS = 30 * 86400_000;
-	const stale = (iso: string) => sos.now - +new Date(iso) > STALE_MS;
 </script>
 
 <section
@@ -37,22 +33,21 @@
 	{#if !sos.loaded}
 		<div class="text-fg-faint text-xs">Loading…</div>
 	{:else if sos.monitors.length === 0}
-		<div class="text-fg-faint text-xs">No one has checked in yet. Send <span class="font-mono">join</span> on #sos to be the first.</div>
+		<div class="text-fg-faint text-xs">No one is listed yet.</div>
 	{:else}
 		<ul class="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
 			{#each sos.monitors as m (m.name)}
 				<li
 					data-sos-monitor
-					title="Joined {new Date(m.firstTest).toLocaleDateString()} · last check-in {new Date(m.lastTest).toLocaleString()}"
-					class="border-line bg-panel-2/50 inline-flex items-baseline gap-1.5 rounded-[var(--radius)] border px-2 py-0.5 text-xs {stale(m.lastTest) ? 'opacity-55' : ''}"
+					title="Since {new Date(m.since).toLocaleDateString()}"
+					class="border-line bg-panel-2/50 text-fg font-600 max-w-full truncate rounded-[var(--radius)] border px-2 py-0.5 text-xs"
 				>
-					<span class="text-fg font-600 max-w-[12rem] truncate">{m.name}</span>
-					<span class="text-fg-faint font-mono text-[0.62rem]">{ago(m.lastTest)}</span>
+					{m.name}
 				</li>
 			{/each}
 		</ul>
-		<div class="text-fg-faint mt-2 text-[0.68rem]">
-			Names are as sent on the channel. Send <span class="font-mono">leave</span> to come off the list.
-		</div>
 	{/if}
+	<div class="border-line/60 mt-2.5 border-t pt-2.5">
+		<SosMonitorToggle {mobile} />
+	</div>
 </section>

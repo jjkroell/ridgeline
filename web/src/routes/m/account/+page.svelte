@@ -79,12 +79,13 @@
 		}
 	}
 
-	// /account#sos-alerts (the #sos alert emails and the #sos card link here)
-	// opens Account settings and scrolls to the #sos alerts switch.
+	// /account#sos-alerts (the #sos alert emails and the #sos card link here) and
+	// #sos-monitor (the #sos guide) open Account settings and scroll to the switch.
 	function openSOSAlerts() {
-		if (location.hash !== '#sos-alerts') return;
+		const id = location.hash.slice(1);
+		if (id !== 'sos-alerts' && id !== 'sos-monitor') return;
 		settingsOpen = true;
-		tick().then(() => document.getElementById('sos-alerts')?.scrollIntoView({ block: 'center' }));
+		tick().then(() => document.getElementById(id)?.scrollIntoView({ block: 'center' }));
 	}
 	onMount(() => {
 		loadMyNodes();

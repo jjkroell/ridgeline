@@ -26,7 +26,7 @@ export interface DecryptedMessage {
 
 const STORAGE_KEY = 'ridgeline-channels';
 const SORT_KEY = 'ridgeline-channel-sort';
-const PUBLIC_KEY_HEX = '8b3387e9c5cdea6ac9e5edbaa115cd72';
+export const PUBLIC_KEY_HEX = '8b3387e9c5cdea6ac9e5edbaa115cd72';
 
 function publicChannel(): Channel {
 	return {

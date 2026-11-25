@@ -31,6 +31,8 @@ export function syncAnalytics(): void {
 	s.defer = true;
 	s.src = SRC;
 	s.setAttribute('data-website-id', WEBSITE_ID);
+	// A private channel link carries its key in the fragment (channel-link.ts).
+	s.setAttribute('data-exclude-hash', 'true');
 	document.head.appendChild(s);
 	injected = true;
 }

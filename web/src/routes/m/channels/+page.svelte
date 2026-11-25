@@ -3,6 +3,8 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
 	import { channels, isPermanent, SOS_ID, type Channel } from '$lib/channels.svelte';
+	import { channelMenu, copyChannelLink, followChannelUrl } from '$lib/channel-link';
+	import { longpress } from '$lib/mobile/context-menu.svelte';
 	import { sos } from '$lib/sos.svelte';
 	import SosCard from '$lib/components/SosCard.svelte';
 	import SosPill from '$lib/components/SosPill.svelte';
@@ -24,8 +26,8 @@
 	onMount(async () => {
 		channels.init();
 		sos.init();
-		// First launch, or ?channel=sos (the What's new "Open #sos" link), opens #sos.
-		if (!sos.seen || page.url.searchParams.get('channel') === SOS_ID) open(SOS_ID);
+		// First launch opens #sos.
+		if (!sos.seen) open(SOS_ID);
 		sos.markSeen();
 		try {
 			history = await api.channelHistory(HISTORY_SEC);
@@ -89,6 +91,10 @@
 		pane = 'chat';
 		pinned = true;
 	}
+
+	// A channel link (?channel=sos, or one from Copy link) opens its channel,
+	// asking first if this browser doesn't have it.
+	$effect(() => followChannelUrl(page.url, open));
 
 	let scroller = $state<HTMLDivElement>();
 	let pinned = $state(true);
@@ -248,7 +254,7 @@
 			{:else}
 				{#each channels.list as c (c.id)}
 					{@const last = lastOf(c.id)}
-					<button onclick={() => open(c.id)} class="active:bg-line/40 flex w-full flex-col gap-1 px-4 py-3 text-left" class:sos-alert-row={c.id === SOS_ID && sosAlert}>
+					<button onclick={() => open(c.id)} use:longpress={() => channelMenu(c, open)} class="active:bg-line/40 flex w-full flex-col gap-1 px-4 py-3 text-left" class:sos-alert-row={c.id === SOS_ID && sosAlert}>
 						<div class="flex items-center gap-2">
 							<span class="h-2 w-2 shrink-0 rounded-full" style="background:{typeColor[c.type]}"></span>
 							<span class="font-display text-fg truncate text-sm font-700" class:sos-alert={c.id === SOS_ID && sosAlert}>{c.name}</span>
@@ -279,7 +285,10 @@
 					{#if sos.alertsMinimized}<SosPill kind="alerts" compact />{/if}
 				{/if}
 			</div>
-			<span class="text-fg-faint font-mono text-[0.62rem]"><span class="text-signal tnum">{messages.length}</span> msgs</span>
+			<span class="text-fg-faint shrink-0 font-mono text-[0.62rem]"><span class="text-signal tnum">{messages.length}</span> msgs</span>
+			<button onclick={() => selected && copyChannelLink(selected)} aria-label="Copy a link to this channel" class="text-fg-dim active:text-fg shrink-0 p-1">
+				<svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L12 5.6M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4L12 18.4" /></svg>
+			</button>
 			{#if !isPermanent(selected) && (selected.type !== 'public' || !channels.hasPublic)}
 				<button onclick={() => removeChannel(selected.id)} class="text-fg-faint active:text-coral text-xs">remove</button>
 			{/if}

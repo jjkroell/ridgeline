@@ -3,6 +3,8 @@
 	import { page } from '$app/state';
 	import Seo from '$lib/components/Seo.svelte';
 	import { channels, isPermanent, SOS_ID, type Channel } from '$lib/channels.svelte';
+	import { channelMenu, copyChannelLink, followChannelUrl } from '$lib/channel-link';
+	import { rightclick } from '$lib/mobile/context-menu.svelte';
 	import { sos } from '$lib/sos.svelte';
 	import SosCard from '$lib/components/SosCard.svelte';
 	import SosPill from '$lib/components/SosPill.svelte';
@@ -112,10 +114,9 @@
 	// open when the message lands does not count as seeing it.
 	const sosAlert = $derived(sos.alerting(byChannel.get(SOS_ID)));
 
-	// ?channel=sos (the What's new "Open #sos" link) opens #sos.
-	$effect(() => {
-		if (page.url.searchParams.get('channel') === SOS_ID) selectChannel(SOS_ID);
-	});
+	// A channel link (?channel=sos, or one from Copy link) opens its channel,
+	// asking first if this browser doesn't have it.
+	$effect(() => followChannelUrl(page.url, selectChannel));
 
 	function selectChannel(id: string) {
 		if (id === SOS_ID) sos.ackAlert();
@@ -398,6 +399,7 @@
 						{@const on = c.id === selectedId}
 						<button
 							onclick={() => selectChannel(c.id)}
+							use:rightclick={() => channelMenu(c, selectChannel)}
 							class="relative flex w-full flex-col gap-0.5 px-4 py-2.5 text-left transition-colors {on
 								? 'bg-panel-2/60'
 								: 'hover:bg-panel-2/30'}"
@@ -469,7 +471,17 @@
 								<span class="hidden sm:inline">{sortDir === 'desc' ? 'Newest first' : 'Oldest first'}</span>
 							</button>
 						</Tooltip>
-						<span class="text-fg-faint font-mono text-xs"><span class="text-signal tnum">{messages.length}</span> msgs</span>
+						<span class="text-fg-faint shrink-0 font-mono text-xs"><span class="text-signal tnum">{messages.length}</span> msgs</span>
+						<Tooltip text="Copy a link to this channel" class="shrink-0">
+							<button
+								onclick={() => selected && copyChannelLink(selected)}
+								aria-label="Copy a link to this channel"
+								class="text-fg-faint hover:text-fg flex items-center gap-1 font-mono text-[0.62rem] transition-colors"
+							>
+								<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L12 5.6M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4L12 18.4" /></svg>
+								<span class="hidden sm:inline">Copy link</span>
+							</button>
+						</Tooltip>
 						<button
 							onclick={() => (settingsOpen = !settingsOpen)}
 							aria-label="Channel settings"

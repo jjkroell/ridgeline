@@ -19,7 +19,10 @@ export const load: LayoutLoad = ({ url }) => {
 	if (url.pathname === '/m' || url.pathname.startsWith('/m/')) return;
 	const isPhone = window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 820;
 	if (isPhone && MOBILE_ROOTS.includes(url.pathname)) {
-		// Keep the query (e.g. /channels?channel=sos) across the hop.
-		redirect(307, (url.pathname === '/' ? '/m' : '/m' + url.pathname) + url.search);
+		// Keep the query (/channels?channel=sos) and fragment (a private channel
+		// link's key) across the hop. load can't read url.hash; on a page load the
+		// address bar has it.
+		const hash = location.pathname === url.pathname ? location.hash : '';
+		redirect(307, (url.pathname === '/' ? '/m' : '/m' + url.pathname) + url.search + hash);
 	}
 };

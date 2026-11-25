@@ -51,6 +51,13 @@ func TestSOSMonitors(t *testing.T) {
 	if names() != "Alice,Zed 2" || st.SOSMonitors()[1].Since != since {
 		t.Fatalf("renamed = %q", names())
 	}
+	// KOD-BOT leads, whatever sorts before it.
+	bot := monitorUser(t, st, "bot@x.ca")
+	set(bot, true, "KOD-BOT")
+	if names() != "KOD-BOT,Alice,Zed 2" {
+		t.Fatalf("pinned = %q", names())
+	}
+	set(bot, false, "")
 	// Off: gone, name kept, and free for another account.
 	set(a, false, "")
 	if u, _, _ := st.GetUserByID(a); u.SOSMonitor || u.SOSMonitorName != "Zed 2" || names() != "Alice" {

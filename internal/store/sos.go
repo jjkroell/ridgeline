@@ -40,6 +40,10 @@ type SOSMonitor struct {
 	Since  string `json:"since"` // RFC3339, when it was switched on
 }
 
+// sosPinnedMonitor leads the list whenever it is on it: the bot that answers
+// calls on #sos.
+const sosPinnedMonitor = "KOD-BOT"
+
 // ErrSOSNameTaken: another account is already listed under that name.
 var ErrSOSNameTaken = errors.New("store: #sos monitor name taken")
 
@@ -368,6 +372,9 @@ func (s *Store) readSOSMonitors() error {
 		return err
 	}
 	sort.Slice(mons, func(i, j int) bool {
+		if a, b := mons[i].Name == sosPinnedMonitor, mons[j].Name == sosPinnedMonitor; a != b {
+			return a
+		}
 		if a, b := strings.ToLower(mons[i].Name), strings.ToLower(mons[j].Name); a != b {
 			return a < b
 		}
@@ -379,7 +386,7 @@ func (s *Store) readSOSMonitors() error {
 	return nil
 }
 
-// SOSMonitors returns who monitors #sos, by name. Served from memory — the
+// SOSMonitors returns who monitors #sos, by name (sosPinnedMonitor first). Served from memory — the
 // endpoint never queues on the single DB connection. Never nil.
 func (s *Store) SOSMonitors() []SOSMonitor {
 	s.sosMu.RLock()

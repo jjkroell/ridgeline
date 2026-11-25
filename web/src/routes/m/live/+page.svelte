@@ -6,6 +6,10 @@
 	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
 	import TimeModeToggle from '$lib/components/TimeModeToggle.svelte';
 	import RouteTag from '$lib/components/RouteTag.svelte';
+	import FeedFilterBar from '$lib/components/FeedFilterBar.svelte';
+	import { FeedFilter } from '$lib/feed-filter.svelte';
+	import { onMount } from 'svelte';
+	import { api, type Node } from '$lib/api';
 
 	let selected = $state<LiveGroup | null>(null);
 	let paused = $state(false);
@@ -16,7 +20,17 @@
 	let unscopedOnly = $state(false);
 	const liveGroups = $derived(groupLive(live.events));
 	const shown = $derived(paused ? frozen : liveGroups);
-	const groups = $derived(unscopedOnly ? shown.filter((g) => g.routeType === 'Flood') : shown);
+	const scoped = $derived(unscopedOnly ? shown.filter((g) => g.routeType === 'Flood') : shown);
+	// Search box + type chips, shared with desktop (?q= / ?t=).
+	const filter = new FeedFilter();
+	onMount(() => filter.load());
+	// Node list for the "Matching nodes" links, fetched only once someone searches.
+	let nodes = $state<Node[]>([]);
+	$effect(() => {
+		if (filter.q.trim() && nodes.length === 0) api.nodes().then((n) => (nodes = n)).catch(() => {});
+	});
+	const typeCounts = $derived(filter.counts(scoped));
+	const groups = $derived(filter.apply(scoped));
 	const unscopedCount = $derived(shown.filter((g) => g.routeType === 'Flood').length);
 
 	function togglePause() {
@@ -46,9 +60,22 @@
 		<button onclick={togglePause} class="rounded-full border px-3 py-1 text-xs font-600 {paused ? 'border-amber/50 text-amber bg-amber/10' : 'border-line text-fg-dim'}">{paused ? 'Paused' : 'Pause'}</button>
 	</div>
 
+	<FeedFilterBar
+		{filter}
+		counts={typeCounts}
+		shown={groups.length}
+		total={scoped.length}
+		oldest={live.events.at(-1)?.receivedAt}
+		{nodes}
+		nodeBase="/m/nodes/"
+		compact
+	/>
+
 	<div class="border-line/60 bg-panel divide-line/50 divide-y overflow-hidden rounded-2xl border">
 		{#if groups.length === 0}
-			<div class="text-fg-faint px-4 py-12 text-center text-sm">Waiting for packets…</div>
+			<div class="text-fg-faint px-4 py-12 text-center text-sm">
+				{#if filter.active && scoped.length > 0}No packets match. <button class="text-signal" onclick={() => filter.clear()}>Clear</button>{:else}Waiting for packets…{/if}
+			</div>
 		{:else}
 			{#each groups as g (g.key)}
 				{@const col = roleColor(g.node?.role ?? '')}

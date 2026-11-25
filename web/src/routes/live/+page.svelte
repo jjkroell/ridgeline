@@ -17,6 +17,8 @@
 	import LiveGroupModal from '$lib/components/LiveGroupModal.svelte';
 	import TimeModeToggle from '$lib/components/TimeModeToggle.svelte';
 	import PathModal from '$lib/components/PathModal.svelte';
+	import FeedFilterBar from '$lib/components/FeedFilterBar.svelte';
+	import { FeedFilter } from '$lib/feed-filter.svelte';
 
 	let paused = $state(false);
 	let frozen = $state<typeof live.events>([]);
@@ -41,7 +43,19 @@
 	// normal traffic.
 	let unscopedOnly = $state(false);
 	const allGroups = $derived(groupLive(inWindow(paused ? frozen : live.events)));
-	const groups = $derived(unscopedOnly ? allGroups.filter((g) => g.routeType === 'Flood') : allGroups);
+	const scoped = $derived(unscopedOnly ? allGroups.filter((g) => g.routeType === 'Flood') : allGroups);
+	// Search box + type chips (?q= / ?t= in the address bar).
+	const filter = new FeedFilter();
+	const typeCounts = $derived(filter.counts(scoped));
+	const groups = $derived(
+		filter.apply(scoped, (g) => [
+			packetSummary(g),
+			...leadPath(g).flatMap((h) => {
+				const n = resolveHop(h);
+				return n ? [n.name, hashId(n)] : [];
+			})
+		])
+	);
 	const unscopedCount = $derived(allGroups.filter((g) => g.routeType === 'Flood').length);
 
 	// Node list (loaded once) lets us resolve path-hop key prefixes to names.
@@ -97,6 +111,7 @@
 		}
 	}
 	onMount(() => {
+		filter.load();
 		const sp = addressBarUrl(page.url).searchParams;
 		const h = sp.get('p');
 		deepObs = sp.get('obs');
@@ -221,6 +236,14 @@
 </PageHeader>
 
 <div class="px-6 py-6 md:px-10">
+	<FeedFilterBar
+		{filter}
+		counts={typeCounts}
+		shown={groups.length}
+		total={scoped.length}
+		oldest={(paused ? frozen : live.events).at(-1)?.receivedAt}
+		{nodes}
+	/>
 	<div class="panel overflow-hidden">
 		<div
 			style="--tcol:{timeCol}"
@@ -238,7 +261,10 @@
 
 		{#if groups.length === 0}
 			<div class="text-fg-faint px-5 py-16 text-center text-sm">
-				{#if live.connected}Waiting for the first packet…{:else}Connecting to live feed…{/if}
+				{#if filter.active && scoped.length > 0}No packets in the feed match. <button
+						class="text-signal hover:underline"
+						onclick={() => filter.clear()}>Clear the search</button
+					>{:else if live.connected}Waiting for the first packet…{:else}Connecting to live feed…{/if}
 			</div>
 		{:else}
 			<div class="divide-line/40 divide-y">

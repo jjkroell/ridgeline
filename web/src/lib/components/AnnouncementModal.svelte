@@ -31,7 +31,7 @@
 		{
 			icon: 'M9 8a3.2 3.2 0 100-.01M3 20a6 6 0 0112 0M16 11l2 2 4-4',
 			title: 'How to get back on the list',
-			body: 'Sign in to Ridgeline, open #sos under Channels and tap the monitoring count beside its name. Enter your companion radio’s name and answer Yes to “Are you monitoring #sos?”. Answer No at any time to come off. If it says the name isn’t valid, Ridgeline hasn’t heard your radio: send a flood advert, wait a minute and try again.'
+			body: 'Sign in to Ridgeline, open #sos under Channels and tap the monitoring count beside its name. Enter your companion radio’s name (just one, even if you have several) and answer Yes to “Are you monitoring #sos?”. Answer No at any time to come off. If it says the name isn’t valid, Ridgeline hasn’t heard your radio: send a flood advert, wait a minute and try again.'
 		},
 		{
 			icon: 'M18.4 5.6a9 9 0 11-12.8 0 9 9 0 0112.8 0zM5.6 5.6l12.8 12.8',

@@ -86,10 +86,11 @@
 					are alerted in real time.
 				</li>
 				<li>
-					Let others know you're listening: enter your radio's name below, answer
+					Let others know you're listening: start typing your radio's name below, pick it, answer
 					<span class="text-fg">Yes</span>, and it goes on the <span class="text-fg">monitoring</span> list on
 					Ridgeline's #sos page. It needs a Ridgeline account, and a radio Ridgeline has heard: if it says the name
 					isn't valid, send a flood advert from your radio, wait a minute and try again.
+					<span class="text-fg">You only need to enter one companion</span>, even if you have several.
 				</li>
 			</ol>
 			<div class="border-line bg-panel-2/40 rounded-[var(--radius)] border px-4 py-3">

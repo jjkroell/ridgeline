@@ -1,4 +1,4 @@
-// A pulsing red ring on the maps over the node of whoever sent a #sos alert in
+// A pulsing red ring on the maps over the node of whoever sent a #mayday alert in
 // the last 12 hours (the same window as the channel pulse), when that node has
 // a position. Shared by /map, /live-map and their phone versions.
 //
@@ -7,7 +7,7 @@
 // recently heard. Its position is the node's last advertised one, not
 // necessarily where the sender is now.
 //
-// Tapping the "SOS · name" label opens a popup: open #sos, hide the ring on
+// Tapping the "SOS · name" label opens a popup: open #mayday, hide the ring on
 // this browser's maps, or (admins) mark it resolved, which clears it for
 // everyone. Either way a newer alert from that sender rings again.
 //
@@ -79,8 +79,8 @@ export class SosRings {
 			el.innerHTML = '<span></span><span></span><b></b>';
 			const label = document.createElement('button');
 			label.type = 'button';
-			label.textContent = `SOS · ${s.name.length > 22 ? s.name.slice(0, 21) + '…' : s.name}`;
-			label.setAttribute('aria-label', `#sos alert from ${s.name} — options`);
+			label.textContent = `Mayday · ${s.name.length > 22 ? s.name.slice(0, 21) + '…' : s.name}`;
+			label.setAttribute('aria-label', `#mayday alert from ${s.name} — options`);
 			el.append(label);
 			const entry = {
 				marker: new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([s.lng, s.lat]).addTo(this.#map),
@@ -100,15 +100,15 @@ export class SosRings {
 		const box = document.createElement('div');
 		const title = document.createElement('div');
 		title.className = 'sos-popup-title';
-		title.textContent = `SOS · ${s.name}`;
+		title.textContent = `Mayday · ${s.name}`;
 		const meta = document.createElement('div');
 		meta.className = 'sos-popup-meta';
 		meta.textContent = `Alert heard ${ago(new Date(s.at).toISOString())} ago · shown at the node's last advertised position`;
 		const actions = document.createElement('div');
 		actions.className = 'sos-popup-actions';
 		const open = document.createElement('a');
-		open.href = `${location.pathname.startsWith('/m/') ? '/m' : ''}/channels?channel=sos`;
-		open.textContent = 'Open #sos';
+		open.href = `${location.pathname.startsWith('/m/') ? '/m' : ''}/channels?channel=mayday`;
+		open.textContent = 'Open #mayday';
 		const hide = document.createElement('button');
 		hide.type = 'button';
 		hide.textContent = 'Hide on my map';

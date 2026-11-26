@@ -92,13 +92,14 @@
 		if (p.startsWith('/m/analytics')) return 'Analytics';
 		if (p.startsWith('/m/topology')) return 'Topology';
 		if (p.startsWith('/m/channels')) return 'Channels';
-		if (p.startsWith('/m/sos')) return '#sos';
+		if (p.startsWith('/m/mayday')) return sos.enabled ? '#mayday' : 'Emergency';
 		if (p.startsWith('/m/identity')) return 'Node Identity';
 		if (p.startsWith('/m/observers')) return p === '/m/observers' ? 'Observers' : 'Observer';
 		if (p.startsWith('/m/admin')) return 'Admin';
 		if (p.startsWith('/m/account')) return 'Account';
 		if (p.startsWith('/m/settings')) return 'Settings';
 		if (p.startsWith('/m/contact')) return 'Contact us';
+		if (p.startsWith('/m/survey')) return 'Survey';
 		if (p.startsWith('/m/login')) return auth.loggedIn ? 'Account' : 'Sign in';
 		return 'Ridgeline';
 	});
@@ -113,7 +114,7 @@
 	// Cupertino large titles: list-style pages show the title big in the
 	// content and hand it to the bar once it scrolls away. Maps, detail pages
 	// and the full-height chat/topology views keep the compact bar title.
-	const LARGE = ['/m', '/m/nodes', '/m/live', '/m/analytics', '/m/observers', '/m/identity', '/m/hash-ids', '/m/sos', '/m/account', '/m/admin', '/m/login', '/m/settings', '/m/contact'];
+	const LARGE = ['/m', '/m/nodes', '/m/live', '/m/analytics', '/m/observers', '/m/identity', '/m/hash-ids', '/m/mayday', '/m/account', '/m/admin', '/m/login', '/m/settings', '/m/contact', '/m/survey'];
 	const largeTitle = $derived(theme.isApple && LARGE.includes(page.url.pathname));
 	let mainEl = $state<HTMLElement>();
 	let scrolled = $state(false);
@@ -254,7 +255,7 @@
 		{#each tabs as t (t.href)}
 			{@const on = t.sheet ? moreOpen || anyMoreActive : activeTab(t.href, t.exact)}
 			{#if t.sheet}
-				<!-- Channels lives in the More sheet, so an #sos alert pulses More. -->
+				<!-- Channels lives in the More sheet, so an #mayday alert pulses More. -->
 				<button onclick={() => (moreOpen = !moreOpen)} class="relative flex flex-col items-center gap-1 py-2.5" class:sos-alert-row={sos.flagged}>
 					{#if on}<span data-nav-bar class="bg-signal absolute top-0 h-[2px] w-7 rounded-full"></span>{/if}
 					<svg viewBox="0 0 24 24" class="h-[22px] w-[22px] {on ? 'text-signal' : 'text-fg-faint'}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d={icons[t.icon]} /></svg>

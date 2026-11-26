@@ -773,18 +773,20 @@ export interface DiscoveredChannels {
   confirmed: number;
 }
 
-/** An account that says it monitors #sos, under its radio's name. */
+/** An account that says it monitors #mayday, under its radio's name. */
 export interface SOSMonitor {
   name: string;
   /** When it was switched on. */
   since: string;
 }
 export interface SOSRoster {
+  /** The admin's emergency-channel switch; false = everything below is empty. */
+  enabled?: boolean;
   channel: string;
   monitors: SOSMonitor[];
-  /** When the newest #sos message with an emergency word was heard ("" if none in 12 h). */
+  /** When the newest #mayday message with an emergency word was heard ("" if none in 12 h). */
   lastAlert?: string;
-  /** Who sent #sos alerts in the last 12 h, newest first (the maps ring their nodes). */
+  /** Who sent #mayday alerts in the last 12 h, newest first (the maps ring their nodes). */
   alerts?: { sender: string; at: string }[];
   /** Newest alert an admin marked resolved ("" if none); lastAlert already leaves resolved ones out. */
   clearedAt?: string;
@@ -858,7 +860,7 @@ export const api = {
     get<LiveEvent[]>(`/api/channels/recent?since=${sinceSec}`),
   /** Hashtag channels confirmed on the mesh by decryption, plus candidate counts. */
   discoveredChannels: () => get<DiscoveredChannels>(`/api/channels/discovered`),
-  /** Who monitors #sos (by name), and its alert state. */
+  /** Who monitors #mayday (by name), and its alert state. */
   sosMonitors: () => get<SOSRoster>(`/api/channels/sos`),
   /**
    * Submit a hashtag name to the shared discovery pool (best-effort; open to
@@ -894,14 +896,14 @@ export interface AuthUser {
   isOwner: boolean;
   /** Whether the account's email address has been confirmed. */
   emailVerified: boolean;
-  /** Opted in to an email when an emergency word is heard on #sos. */
+  /** Opted in to an email when an emergency word is heard on #mayday. */
   sosAlerts: boolean;
-  /** …including #sos messages that say they're a test. */
+  /** …including #mayday messages that say they're a test. */
   sosAlertTests: boolean;
   /** When sosAlerts / sosAlertTests last changed (absent: never recorded). */
   sosAlertsAt?: string;
   sosAlertTestsAt?: string;
-  /** Listed publicly as monitoring #sos… */
+  /** Listed publicly as monitoring #mayday… */
   sosMonitor: boolean;
   /** …with this radio (its name; kept while off; "" if never set). */
   sosMonitorName: string;
@@ -992,13 +994,13 @@ export const account = {
   /** Change display name; returns the updated account. */
   updateProfile: (csrf: string, displayName: string) =>
     mutate<AuthUser>("/api/account/profile", "PUT", csrf, { displayName }),
-  /** Turn #sos alert emails on or off; returns the updated account. */
+  /** Turn #mayday alert emails on or off; returns the updated account. */
   setSOSAlerts: (csrf: string, enabled: boolean) =>
     mutate<AuthUser>("/api/account/sos-alerts", "PUT", csrf, { enabled }),
-  /** Include #sos test messages in those emails; returns the updated account. */
+  /** Include #mayday test messages in those emails; returns the updated account. */
   setSOSAlertTests: (csrf: string, tests: boolean) =>
     mutate<AuthUser>("/api/account/sos-alerts", "PUT", csrf, { tests }),
-  /** Go on or off the public #sos monitoring list; returns the updated account. */
+  /** Go on or off the public #mayday monitoring list; returns the updated account. */
   setSOSMonitor: (csrf: string, enabled: boolean, name: string) =>
     mutate<AuthUser>("/api/account/sos-monitor", "PUT", csrf, { enabled, name }),
   /** Change password after re-authenticating with the current one. */
@@ -1369,7 +1371,7 @@ export const locationShares = {
 };
 
 /** Admin member management (session-admin gated). */
-/** Admin: mark a #sos alert resolved — clears the map ring on the sender's
+/** Admin: mark a #mayday alert resolved — clears the map ring on the sender's
  *  node for everyone until they send another alert. */
 export const adminSos = {
   resolve: (csrf: string, sender: string) =>
@@ -1390,6 +1392,34 @@ export const adminChannels = {
 export const adminSeason = {
   set: (csrf: string, season: string) =>
     mutate<{ season: string }>("/api/admin/season", "POST", csrf, { season }),
+};
+
+/** Admin: a survey's answers, newest first (api/survey.go). */
+export interface SurveyResponse {
+  id: number;
+  createdAt: string;
+  userId?: number;
+  /** Short salted hash of the sender's IP: equal = same connection. */
+  group?: string;
+  answers: {
+    used?: string[];
+    monitor?: string;
+    nameOther?: string;
+    features?: string[];
+    concerns?: string;
+    other?: string;
+    email?: string;
+  };
+}
+export const adminSurvey = {
+  list: (id: string) => get<{ survey: string; responses: SurveyResponse[] }>(`/api/admin/survey/${id}`),
+};
+
+/** Admin: the emergency-channel (#mayday) integration for everyone — its
+ *  alerts, alert emails, map rings, monitoring list, guide and built-in channel. */
+export const adminEmergency = {
+  set: (csrf: string, enabled: boolean) =>
+    mutate<{ enabled: boolean }>("/api/admin/emergency", "POST", csrf, { enabled }),
 };
 
 export const adminUsers = {

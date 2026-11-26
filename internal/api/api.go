@@ -80,7 +80,9 @@ type Server struct {
 	mqttSubSeen *mqttAuthState
 	// Rate limiters for the unauthenticated email-sending endpoints (register,
 	// resend-verification, forgot-password), keyed by client IP and by target email address.
-	emailIPLimiter   *rateLimiter
+	emailIPLimiter *rateLimiter
+	// surveyLimiter caps survey submissions per IP (api/survey.go).
+	surveyLimiter    *rateLimiter
 	emailAddrLimiter *rateLimiter
 	// Brute-force limiters for the login + password-reset endpoints, keyed by
 	// client IP and by target account (login only).
@@ -154,6 +156,7 @@ func New(st *store.Store, log *slog.Logger, version, webDir string) *Server {
 		mqttSubSeen:  newMQTTAuthState(),
 		// ~5 emails/IP then 1 every 2 min; ~2 per target address then 1 every 10 min.
 		emailIPLimiter:   newRateLimiter(1.0/120, 5),
+		surveyLimiter:    newRateLimiter(1.0/600, 3), // 3 at once, then one per 10 min
 		emailAddrLimiter: newRateLimiter(1.0/600, 2),
 		// Login/reset brute-force: ~10 attempts/IP then 1 every 6s; ~5 per account
 		// then 1 every 30s — generous for a mistyped password, tight for guessing.
@@ -179,6 +182,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.health)
 	mux.HandleFunc("POST /api/contact", s.contact)
+	mux.HandleFunc("POST /api/survey/{id}", s.surveySubmit)
 	mux.HandleFunc("GET /api/stats", s.stats)
 	mux.HandleFunc("GET /api/nodes", s.nodes)
 	mux.HandleFunc("GET /api/nodes/{pubkey}", s.nodeDetail)
@@ -202,7 +206,7 @@ func (s *Server) Handler() http.Handler {
 	// grants nothing — the limiter guards table growth, not a secret.
 	mux.HandleFunc("GET /api/channels/discovered", s.channelsDiscovered)
 	mux.HandleFunc("POST /api/channels/candidates", s.channelCandidateCreate)
-	// The permanent #sos channel's monitor roster and alert state; public.
+	// The emergency channel's (#mayday) monitor roster and alert state; public.
 	mux.HandleFunc("GET /api/channels/sos", s.channelsSOS)
 	mux.HandleFunc("GET /api/live", s.live)
 
@@ -301,6 +305,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/channels/remove", s.requireAdminUser(s.adminRemoveChannel))
 	mux.HandleFunc("POST /api/admin/channels/restore", s.requireAdminUser(s.adminRestoreChannel))
 	mux.HandleFunc("POST /api/admin/season", s.requireAdminUser(s.adminSetSeason))
+	mux.HandleFunc("POST /api/admin/emergency", s.requireAdminUser(s.adminSetEmergency))
+	mux.HandleFunc("GET /api/admin/survey/{id}", s.requireAdminUser(s.adminSurvey))
 	mux.HandleFunc("POST /api/admin/users/delete", s.requireAdminUser(s.adminDeleteUser))
 	mux.HandleFunc("GET /api/admin/detect", s.requireAdminUser(s.adminDetect))
 	mux.HandleFunc("GET /api/admin/blocklist", s.requireAdminUser(s.adminBlocklist))
@@ -494,6 +500,10 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	// The admin's seasonal-theme switch (store.Season); absent = follow dates.
 	if v := s.store.Season(); v != store.SeasonAuto {
 		h["season"] = v
+	}
+	// The emergency-channel switch (store.EmergencyEnabled); absent = off.
+	if s.store.EmergencyEnabled() {
+		h["emergency"] = store.SOSChannel
 	}
 	writeJSON(w, h)
 }

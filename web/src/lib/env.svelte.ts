@@ -12,6 +12,9 @@ class Env {
 	/** The admin's seasonal-theme switch: null = none set (follow each theme's
 	 *  dates), 'none' = all off, else the one theme id turned on. */
 	season = $state<string | null>(null);
+	/** The admin's emergency-channel switch: on = #mayday's alerts, roster,
+	 *  guide and permanent channel are live. Off (the default) hides them all. */
+	emergency = $state(false);
 	/** /api/health has answered (or failed): `season` is final for this load. */
 	loaded = $state(false);
 	#started = false;
@@ -26,6 +29,7 @@ class Env {
 				this.environment = typeof j.environment === 'string' ? j.environment : '';
 				this.meshRadio = typeof j.meshRadio === 'string' ? j.meshRadio : '';
 				this.season = typeof j.season === 'string' && j.season ? j.season : null;
+				this.emergency = typeof j.emergency === 'string' && j.emergency !== '';
 			}
 		} catch {
 			// Health unreachable — assume a normal instance; never show the banner

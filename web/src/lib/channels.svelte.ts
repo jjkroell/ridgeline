@@ -1,8 +1,10 @@
 // User's group channels, persisted to localStorage. Channels live only in the
 // browser — keys never go to the server; GroupText is decrypted client-side
 // (see channel-crypto.ts). The well-known Public channel is added by default
-// but can be removed like any other. #sos, the mesh's emergency channel, is
-// permanent: every browser carries it and it cannot be removed.
+// but can be removed like any other. #mayday, the mesh's emergency channel, is
+// permanent while an admin has the emergency integration switched on (see
+// setEmergency): every browser carries it and it cannot be removed. Until
+// v0.24.88 that was #sos, which browsers keep as an ordinary channel (id 'sos').
 import { deriveHashtagKey, channelHashByte, decryptGroupText } from './channel-crypto';
 
 export type ChannelType = 'public' | 'hashtag' | 'private';
@@ -38,21 +40,21 @@ function publicChannel(): Channel {
 	};
 }
 
-/** id of the permanent #sos channel. */
-export const SOS_ID = 'sos';
+/** id of the emergency channel (#mayday), permanent while the integration is on. */
+export const SOS_ID = 'mayday';
 
 function sosChannel(): Channel {
-	const keyHex = deriveHashtagKey('sos');
-	return { id: SOS_ID, name: '#sos', type: 'hashtag', keyHex, hashByte: channelHashByte(keyHex) };
+	const keyHex = deriveHashtagKey(SOS_ID);
+	return { id: SOS_ID, name: '#' + SOS_ID, type: 'hashtag', keyHex, hashByte: channelHashByte(keyHex) };
 }
 
-/** A channel the user cannot remove. */
+/** A channel the user cannot remove: #mayday, while the integration is on. */
 export function isPermanent(c: Pick<Channel, 'id'> | null | undefined): boolean {
-	return c?.id === SOS_ID;
+	return c?.id === SOS_ID && channels.emergency;
 }
 
-// Put #sos in a saved list that lacks it — right after Public when that is
-// there, else first — replacing a '#sos' the user added by hand before it was
+// Put #mayday in a saved list that lacks it — right after Public when that is
+// there, else first — replacing a '#mayday' the user added by hand before it was
 // built in (same key), so it never shows twice.
 function withSOS(list: Channel[]): Channel[] {
 	const sos = sosChannel();
@@ -88,7 +90,9 @@ function normalize(c: Partial<Channel>): Channel | null {
 }
 
 class Channels {
-	list = $state<Channel[]>([publicChannel(), sosChannel()]);
+	list = $state<Channel[]>([publicChannel()]);
+	/** The admin's emergency switch (env.emergency): #mayday is built in while on. */
+	emergency = $state(false);
 	// Per-channel reader sort direction, keyed by channel id.
 	sortById = $state<Record<string, SortDir>>({});
 	#loaded = false;
@@ -103,8 +107,7 @@ class Channels {
 				const parsed = JSON.parse(raw);
 				if (Array.isArray(parsed)) {
 					const saved = parsed.map(normalize).filter((c): c is Channel => c !== null);
-					this.list = withSOS(saved);
-					if (!saved.some((c) => c.id === SOS_ID)) this.#persist();
+					this.list = saved;
 				}
 			}
 		} catch {
@@ -190,8 +193,17 @@ class Channels {
 		return null;
 	}
 
+	/** The integration switched on: add #mayday where it's missing (and keep it). */
+	setEmergency(on: boolean) {
+		this.init();
+		this.emergency = on;
+		if (!on || this.list.some((c) => c.id === SOS_ID)) return;
+		this.list = withSOS(this.list);
+		this.#persist();
+	}
+
 	remove(id: string) {
-		if (id === SOS_ID) return; // permanent
+		if (isPermanent({ id })) return;
 		this.list = this.list.filter((c) => c.id !== id);
 		this.#persist();
 		if (id in this.sortById) {

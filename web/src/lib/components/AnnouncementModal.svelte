@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Modal from './Modal.svelte';
-	import { announce } from '$lib/announce.svelte';
+	import { announce, RELEASE_ON } from '$lib/announce.svelte';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { seasonal } from '$lib/seasonal.svelte';
@@ -8,8 +8,8 @@
 
 	// Each entry is one new capability, in user-facing terms. While a season is
 	// in force its own items lead (see $lib/seasonal.svelte; they vanish when it
-	// ends), then the newest release's (`latest`, red: it is about
-	// #sos); `settings` and `sos` are earlier ones, under "Earlier" labels.
+	// ends), then the newest release's (`latest`, red: the emergency channel);
+	// `settings` is an earlier one, under an "Earlier" label.
 	onMount(() => seasonal.load());
 	const season = $derived(seasonal.season);
 	function trySeason() {
@@ -17,28 +17,62 @@
 		announce.close();
 		goto('/live-map');
 	}
-	// Land on #sos with its Monitoring card (the Yes / No) open.
+	// Land on #mayday with its Monitoring card (the Yes / No) open.
 	function openMonitoring() {
 		sosState.setCard('monitors', true);
 		announce.close();
 	}
-	const latest: { icon: string; title: string; body: string }[] = [
+	type Item = { icon: string; title: string; body: string; href?: string; cta?: string };
+	// The admin's emergency switch picks the note (announce.current): off, #sos
+	// is no longer monitored (no word of #mayday: that name isn't public yet);
+	// on, #mayday has taken its place.
+	const off: Item[] = [
+		{
+			icon: 'M18.4 5.6a9 9 0 11-12.8 0 9 9 0 0112.8 0zM5.6 5.6l12.8 12.8',
+			title: 'Ridgeline no longer monitors #sos',
+			body: 'Ridgeline has stopped watching the #sos channel. It no longer sends #sos alert emails, sounds the alarm, marks callers on the maps or keeps a list of who is monitoring. #sos still works on the mesh as an ordinary channel, but nobody is watching it through Ridgeline.'
+		},
 		{
 			icon: 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
-			title: 'The #sos monitoring list has been cleared: please add yourself again',
-			body: 'People are no longer listed by sending join on the channel, and everyone who was on the old list has come off it. If you monitor #sos, please go through the new selection below, so others can see you are listening. Your radio still receives #sos as before; only the list on Ridgeline was cleared.'
+			title: 'In an emergency, call 911',
+			body: 'If you have any phone or cell service, call 911 first. The mesh is not an emergency service, and nothing on it reaches emergency services by itself.'
+		},
+		{
+			icon: 'M5 12l5 5L20 7',
+			title: 'Nothing for you to do',
+			body: 'Your alert-email choice and your monitoring entry are kept, unused. You can leave #sos in your channel list or remove it.'
+		},
+		{
+			icon: 'M9 11l3 3 8-8M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2h9',
+			title: 'Tell us what you think',
+			body: 'Should Ridgeline monitor an emergency channel again? Six quick questions, all optional.',
+			href: '/survey',
+			cta: 'Take the survey'
+		}
+	];
+	const on: Item[] = [
+		{
+			icon: 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
+			title: '#mayday is now the mesh’s emergency channel',
+			body: 'Ridgeline watches #mayday instead of #sos. Add #mayday to your MeshCore app or radio (a hashtag channel, no key needed): everyone has it under Channels here. Post there if you or someone near you needs help, and say where you are. In a life-threatening emergency, call 911 first if you can.'
 		},
 		{
 			icon: 'M9 8a3.2 3.2 0 100-.01M3 20a6 6 0 0112 0M16 11l2 2 4-4',
-			title: 'How to get back on the list',
-			body: 'Sign in to Ridgeline, open #sos under Channels and tap the monitoring count beside its name. Enter your companion radio’s name (just one, even if you have several) and answer Yes to “Are you monitoring #sos?”. Answer No at any time to come off. If it says the name isn’t valid, Ridgeline hasn’t heard your radio: send a flood advert, wait a minute and try again.'
+			title: 'Monitoring? Add yourself to the #mayday list',
+			body: 'The #mayday list starts empty. Once your companion radio has joined #mayday, sign in, open #mayday under Channels, tap the monitoring count and answer Yes with your radio’s name.'
+		},
+		{
+			icon: 'M3 6h18v12H3zM3 7l9 6 9-6',
+			title: 'Alert emails now cover #mayday',
+			body: 'If you turned on alert emails, they now come from #mayday. Change it under Account → Account settings.'
 		},
 		{
 			icon: 'M18.4 5.6a9 9 0 11-12.8 0 9 9 0 0112.8 0zM5.6 5.6l12.8 12.8',
-			title: 'Please don’t send join or leave on #sos',
-			body: 'They do nothing now. Keep #sos clear for people who need help.'
+			title: 'Ridgeline no longer monitors #sos',
+			body: 'Messages on #sos no longer trigger alerts or emails. You can remove #sos from your channel list.'
 		}
 	];
+	const latest = $derived(announce.current === RELEASE_ON ? on : off);
 	const settings: { icon: string; title: string; body: string }[] = [
 		{
 			icon: 'M4 6h9m4 0h3M4 12h3m4 0h9M4 18h11m4 0h1M15 4v4M9 10v4M17 16v4',
@@ -51,28 +85,6 @@
 			body: 'The page has advert intervals, and TX delay values based on how many neighbours your repeater hears, with a short explanation of what each setting does. Choose your neighbour count and it lists the commands to send, each with its own Copy button.'
 		}
 	];
-	const sos: { icon: string; title: string; body: string }[] = [
-		{
-			icon: 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z',
-			title: '#sos, the mesh’s emergency channel',
-			body: 'Everyone now has #sos under Channels, next to Public. It is for people who need help: post there if you or someone near you needs assistance, and say where you are. Keep it clear otherwise. In a life-threatening emergency, call 911 first; the mesh is a backup, not a replacement.'
-		},
-		{
-			icon: 'M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0',
-			title: '#sos lights up when someone needs help',
-			body: 'If a #sos message mentions sos, emergency, mayday, 911, threat or life, or says someone needs help, the #sos row and Channels in the menu (More on a phone) pulse red until you open #sos. They also pulse if it arrived while Ridgeline was closed, for up to 12 hours.'
-		},
-		{
-			icon: 'M3 6h18v12H3zM3 7l9 6 9-6',
-			title: 'Get an email when someone calls for help',
-			body: 'If you have a Ridgeline account, you can turn on #sos alert emails under Account → Account settings (on a phone, More → Settings → Account). When one of the words above is heard on #sos, Ridgeline emails you the message with a link to the channel. Messages that arrive close together come in one email, with at least 10 minutes between emails. Alerts are off unless you turn them on, your email address needs to be confirmed first, and you can turn them off again at any time.'
-		},
-		{
-			icon: 'M11 5L6 9H2v6h4l5 4zM15.5 8.5a5 5 0 010 7M19 5a10 10 0 010 14',
-			title: 'A sound and a notification, too',
-			body: 'While Ridgeline is open, it can also play a bell and show a system notification when someone calls for help on #sos. Turn either on under the Alerts pill beside #sos (on a phone, also under More → Settings), and press Test to hear it. They are off unless you turn them on, and the choice is saved in this browser only.'
-		}
-	];
 </script>
 
 {#snippet heading(text: string)}
@@ -81,7 +93,7 @@
 	</div>
 {/snippet}
 
-{#snippet list(items: { icon: string; title: string; body: string }[], red: boolean)}
+{#snippet list(items: Item[], red: boolean)}
 	<ul class="flex flex-col gap-4">
 		{#each items as item (item.title)}
 			<li class="flex items-start gap-3">
@@ -102,6 +114,14 @@
 				<div class="min-w-0">
 					<div class="text-fg text-sm font-600">{item.title}</div>
 					<div class="text-fg-dim mt-0.5 text-sm leading-relaxed">{item.body}</div>
+					{#if item.href}
+						<a
+							href={item.href}
+							onclick={() => announce.close()}
+							class="bg-coral text-ink mt-2.5 inline-block rounded-[var(--radius)] px-4 py-2 text-sm font-600 transition-[filter] hover:brightness-110"
+							>{item.cta}</a
+						>
+					{/if}
 				</div>
 			</li>
 		{/each}
@@ -134,14 +154,12 @@
 				{/each}
 			</ul>
 
-			{@render heading('Also new: #sos monitoring')}
+			{@render heading(announce.current === RELEASE_ON ? 'Also new: #mayday' : 'Also new: #sos')}
 			{/if}
 
 			{@render list(latest, true)}
 			{@render heading('Earlier: recommended settings')}
 			{@render list(settings, false)}
-			{@render heading('Earlier: #sos')}
-			{@render list(sos, true)}
 		</div>
 
 		<div class="border-line/70 flex flex-wrap items-center justify-end gap-x-3 gap-y-2 border-t px-6 py-4">
@@ -153,12 +171,14 @@
 					><img src={seasonal.src(season.emoji)} alt="" class="mr-1.5 inline h-4 w-4 align-[-0.15em]" />{season.tryLabel}</button
 				>
 			{/if}
-			<a
-				href="/channels?channel=sos"
-				onclick={openMonitoring}
-				class="bg-coral text-ink rounded-[var(--radius)] px-4 py-2 text-sm font-600 transition-[filter] hover:brightness-110"
-				>Open the #sos list</a
-			>
+			{#if announce.current === RELEASE_ON}
+				<a
+					href="/channels?channel=mayday"
+					onclick={openMonitoring}
+					class="bg-coral text-ink rounded-[var(--radius)] px-4 py-2 text-sm font-600 transition-[filter] hover:brightness-110"
+					>Open #mayday</a
+				>
+			{/if}
 			<button
 				onclick={() => announce.close()}
 				class="bg-signal/15 text-signal border-signal/40 hover:bg-signal/25 rounded-[var(--radius)] border px-4 py-2 text-sm font-600 transition-colors"

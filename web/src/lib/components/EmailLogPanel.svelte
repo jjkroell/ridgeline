@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Every email Ridgeline handed to the SMTP relay (#sos alerts, verification,
+	// Every email Ridgeline handed to the SMTP relay (#mayday alerts, verification,
 	// resets, note notifications, contact form), newest first, with the relay's
 	// refusal when it didn't take one. Shared by /admin and /m/admin like
 	// MembersPanel; `compact` switches to the mobile card chrome.
@@ -39,7 +39,7 @@
 
 	const KINDS: { id: string; label: string }[] = [
 		{ id: '', label: 'All' },
-		{ id: 'sos-alert', label: '#sos alerts' },
+		{ id: 'sos-alert', label: '#mayday alerts' },
 		{ id: 'verification', label: 'Verification' },
 		{ id: 'password-reset', label: 'Password reset' },
 		{ id: 'note', label: 'Notes' },

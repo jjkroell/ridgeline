@@ -1,9 +1,9 @@
 <!--
-  "Are you monitoring #sos?" Yes / No: whether the signed-in account is on the
-  public #sos monitoring list, and with which radio: the server lists only a
+  "Are you monitoring #mayday?" Yes / No: whether the signed-in account is on the
+  public #mayday monitoring list, and with which radio: the server lists only a
   companion it has heard, as that radio advertises its name. Typing filters
   the companions heard, to pick from. In the monitor list card,
-  the #sos guide and Account settings. Nothing is sent on the mesh.
+  the #mayday guide and Account settings. Nothing is sent on the mesh.
 -->
 <script lang="ts">
 	import { tick } from 'svelte';
@@ -128,7 +128,7 @@
 
 <div data-sos-monitor-toggle>
 	<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-		<span class="text-fg text-sm font-600" id="{uid}-q">Are you monitoring #sos?</span>
+		<span class="text-fg text-sm font-600" id="{uid}-q">Are you monitoring #mayday?</span>
 		<div
 			role="radiogroup"
 			aria-labelledby="{uid}-q"

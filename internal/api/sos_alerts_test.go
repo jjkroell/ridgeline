@@ -55,6 +55,7 @@ func TestSOSAlertEmails(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
+	st.SetEmergencyEnabled(true, 0, time.Now())
 	srv := New(st, slog.New(slog.NewTextHandler(io.Discard, nil)), "test", "")
 	fm := &fakeMailer{base: "https://ridgeline.example"}
 	srv.SetMailer(fm)
@@ -92,7 +93,7 @@ func TestSOSAlertEmails(t *testing.T) {
 	if !strings.Contains(m.subject, "2 messages") {
 		t.Errorf("subject %q should count the 2 batched alerts", m.subject)
 	}
-	for _, want := range []string{"SOS rolled ankle", "need help, cold", "/channels?channel=sos", "/account#sos-alerts", "911"} {
+	for _, want := range []string{"SOS rolled ankle", "need help, cold", "/channels?channel=mayday", "/account#sos-alerts", "911"} {
 		if !strings.Contains(m.text, want) {
 			t.Errorf("text missing %q:\n%s", want, m.text)
 		}
@@ -135,6 +136,7 @@ func TestSOSAlertTestMessages(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
+	st.SetEmergencyEnabled(true, 0, time.Now())
 	srv := New(st, slog.New(slog.NewTextHandler(io.Discard, nil)), "test", "")
 	fm := &fakeMailer{base: "https://ridgeline.example"}
 	srv.SetMailer(fm)
@@ -201,6 +203,7 @@ func TestSOSAlertRealSkipsGapAfterTest(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
+	st.SetEmergencyEnabled(true, 0, time.Now())
 	srv := New(st, slog.New(slog.NewTextHandler(io.Discard, nil)), "test", "")
 	fm := &fakeMailer{base: "https://ridgeline.example"}
 	srv.SetMailer(fm)
@@ -246,6 +249,7 @@ func TestSOSAlertRealSkipsGapAfterTest(t *testing.T) {
 func TestSOSMonitorSwitch(t *testing.T) {
 	st, base, fm, cleanup := mailEnv(t)
 	defer cleanup()
+	st.SetEmergencyEnabled(true, 0, time.Now())
 	owner, member, anon := newClient(t, base), newClient(t, base), newClient(t, base)
 	owner.do("POST", "/api/auth/register",
 		map[string]string{"email": "owner@example.com", "password": "hunter2hunter2", "displayName": "Someone"}, false)
@@ -295,6 +299,30 @@ func TestSOSMonitorSwitch(t *testing.T) {
 	put(member, m{"enabled": false}, true, 200)
 	if mons := st.SOSMonitors(); len(mons) != 1 {
 		t.Fatalf("after off = %+v", mons)
+	}
+
+	// The admin switch: members can't use it; off empties the public roster
+	// and drops "emergency" from health, keeping the stored list; on restores it.
+	if r, _ := member.do("POST", "/api/admin/emergency", m{"enabled": false}, true); r.StatusCode != 403 {
+		t.Fatalf("member switched it: %d", r.StatusCode)
+	}
+	if r, b := owner.do("POST", "/api/admin/emergency", m{"enabled": false}, true); r.StatusCode != 200 || b["enabled"] != false {
+		t.Fatalf("owner off: %d %v", r.StatusCode, b)
+	}
+	_, body = anon.do("GET", "/api/channels/sos", nil, false)
+	if list, _ := body["monitors"].([]any); body["enabled"] != false || len(list) != 0 || body["channel"] != "#mayday" {
+		t.Fatalf("roster while off = %v", body)
+	}
+	if _, h := anon.do("GET", "/api/health", nil, false); h["emergency"] != nil {
+		t.Fatalf("health while off = %v", h)
+	}
+	owner.do("POST", "/api/admin/emergency", m{"enabled": true}, true)
+	_, body = anon.do("GET", "/api/channels/sos", nil, false)
+	if list, _ := body["monitors"].([]any); body["enabled"] != true || len(list) != 1 {
+		t.Fatalf("roster back on = %v", body)
+	}
+	if _, h := anon.do("GET", "/api/health", nil, false); h["emergency"] != "mayday" {
+		t.Fatalf("health while on = %v", h)
 	}
 }
 

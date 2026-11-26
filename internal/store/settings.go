@@ -51,3 +51,40 @@ func (s *Store) loadSeason() error {
 	s.season.Store(v)
 	return nil
 }
+
+// EmergencyEnabled is the admin's switch for the emergency-channel integration
+// (SOSChannel): its alerts, alert emails, map rings, monitoring list, guide and
+// permanent channel. Off unless an admin turns it on; switched off, the code
+// and every stored setting stay, and nothing on the channel triggers anything.
+// In memory, so ingest and /api/health check it without the database.
+func (s *Store) EmergencyEnabled() bool {
+	return s.emergency.Load()
+}
+
+// SetEmergencyEnabled records the admin's choice; see EmergencyEnabled.
+func (s *Store) SetEmergencyEnabled(on bool, userID int64, now time.Time) error {
+	v := "off"
+	if on {
+		v = "on"
+	}
+	if _, err := s.db.Exec(`INSERT INTO site_settings (key, value, updated_at, user_id) VALUES ('emergency', ?, ?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, user_id = excluded.user_id`,
+		v, now.UTC().Format(time.RFC3339), userID); err != nil {
+		return err
+	}
+	s.emergency.Store(on)
+	return nil
+}
+
+func (s *Store) loadEmergency() error {
+	var v string
+	err := s.db.QueryRow(`SELECT value FROM site_settings WHERE key = 'emergency'`).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		v, err = "off", nil
+	}
+	if err != nil {
+		return err
+	}
+	s.emergency.Store(v == "on")
+	return nil
+}

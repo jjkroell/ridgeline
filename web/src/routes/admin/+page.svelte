@@ -14,6 +14,8 @@
 	import MembersPanel from '$lib/components/MembersPanel.svelte';
 	import EmailLogPanel from '$lib/components/EmailLogPanel.svelte';
 	import SeasonsPanel from '$lib/components/SeasonsPanel.svelte';
+	import EmergencyPanel from '$lib/components/EmergencyPanel.svelte';
+	import SurveyPanel from '$lib/components/SurveyPanel.svelte';
 	import ChannelsPanel from '$lib/components/ChannelsPanel.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import WindowToggle from '$lib/components/WindowToggle.svelte';
@@ -781,6 +783,8 @@
 		<MembersPanel />
 		<EmailLogPanel />
 		<SeasonsPanel />
+		<EmergencyPanel />
+		<SurveyPanel />
 		<ChannelsPanel />
 	{/if}
 </div>

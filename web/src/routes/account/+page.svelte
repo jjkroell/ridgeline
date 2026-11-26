@@ -132,8 +132,8 @@
 		if (auth.ready && !auth.loggedIn) goto('/login');
 	});
 
-	// /account#sos-alerts (the #sos alert emails and the #sos card link here) and
-	// #sos-monitor (the #sos guide) open Account settings and scroll to the switch.
+	// /account#sos-alerts (the #mayday alert emails and the #mayday card link here) and
+	// #sos-monitor (the #mayday guide) open Account settings and scroll to the switch.
 	function openSOSAlerts() {
 		const id = location.hash.slice(1);
 		if (id !== 'sos-alerts' && id !== 'sos-monitor') return;

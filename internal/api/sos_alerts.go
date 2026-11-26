@@ -14,8 +14,8 @@ import (
 	"github.com/jjkroell/ridgeline/internal/store"
 )
 
-// #sos alert emails. Accounts that opt in (Account → #sos alerts) are emailed
-// when an emergency word is heard on #sos — the same words that pulse the
+// #mayday alert emails. Accounts that opt in (Account → #mayday alerts) are emailed
+// when an emergency word is heard on #mayday — the same words that pulse the
 // channel in the UI (store.isSOSAlert). Anyone on the mesh can type "sos", so
 // alerts are batched: the first waits sosAlertCoalesce for others to join it,
 // and after a send the next waits until sosAlertMinGap has passed, carrying
@@ -43,10 +43,10 @@ type sosNotifier struct {
 	minGap    time.Duration
 }
 
-// NotifySOSAlert queues a newly heard #sos alert for the opted-in accounts.
+// NotifySOSAlert queues a newly heard #mayday alert for the opted-in accounts.
 // The store's alert hook; never blocks (Record holds the write lock).
 func (s *Server) NotifySOSAlert(m store.SOSAlertMsg) {
-	if !s.mailEnabled() {
+	if !s.mailEnabled() || !s.store.EmergencyEnabled() {
 		return
 	}
 	n := &s.sosMail
@@ -139,7 +139,7 @@ func (s *Server) flushSOSAlerts() {
 // sosAlertEmail renders one alert email for a batch (oldest first).
 func (s *Server) sosAlertEmail(batch []store.SOSAlertMsg) (subject, text, body string) {
 	base := s.mail.BaseURL()
-	link := base + "/channels?channel=sos"
+	link := base + "/channels?channel=" + store.SOSChannel
 	settings := base + "/account#sos-alerts"
 	loc, err := time.LoadLocation("America/Vancouver")
 	if err != nil {
@@ -157,9 +157,9 @@ func (s *Server) sosAlertEmail(batch []store.SOSAlertMsg) (subject, text, body s
 	}
 
 	if len(batch) == 1 {
-		subject = "SOS on the mesh: " + who(batch[0])
+		subject = "Mayday on the mesh: " + who(batch[0])
 	} else {
-		subject = fmt.Sprintf("SOS on the mesh: %d messages on #sos", len(batch))
+		subject = fmt.Sprintf("Mayday on the mesh: %d messages on #mayday", len(batch))
 	}
 
 	shown := batch
@@ -179,30 +179,30 @@ func (s *Server) sosAlertEmail(batch []store.SOSAlertMsg) (subject, text, body s
 		more = fmt.Sprintf("(and %d earlier message(s) — see the channel)", extra)
 	}
 
-	text = fmt.Sprintf(`Ridgeline heard this on the #sos channel:
+	text = fmt.Sprintf(`Ridgeline heard this on the #mayday channel:
 
 %s%s
 Read the channel: %s
 
-Ridgeline only relays what the mesh hears: it can't reply or reach emergency services. To respond, use #sos in your own MeshCore app or radio. If someone's life is in danger, call 911.
+Ridgeline only relays what the mesh hears: it can't reply or reach emergency services. To respond, use #mayday in your own MeshCore app or radio. If someone's life is in danger, call 911.
 
-You're receiving this because you turned on #sos alert emails. Turn them off under Account on Ridgeline: %s
+You're receiving this because you turned on #mayday alert emails. Turn them off under Account on Ridgeline: %s
 `, tl.String(), more, link, settings)
 
 	moreHTML := ""
 	if more != "" {
 		moreHTML = `<p style="color:#666;font-size:13px">` + html.EscapeString(more) + `</p>`
 	}
-	body = fmt.Sprintf(`<p>Ridgeline heard this on the <strong>#sos</strong> channel:</p>
+	body = fmt.Sprintf(`<p>Ridgeline heard this on the <strong>#mayday</strong> channel:</p>
 %s%s
-<p><a href="%s" style="display:inline-block;padding:10px 18px;background:#d94a47;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Read #sos on Ridgeline</a></p>
-<p style="color:#444;font-size:13px">Ridgeline only relays what the mesh hears: it can't reply or reach emergency services. To respond, use #sos in your own MeshCore app or radio. <strong>If someone's life is in danger, call 911.</strong></p>
-<p style="color:#666;font-size:13px">You're receiving this because you turned on #sos alert emails. <a href="%s">Turn them off</a> under Account on Ridgeline.</p>`,
+<p><a href="%s" style="display:inline-block;padding:10px 18px;background:#d94a47;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Read #mayday on Ridgeline</a></p>
+<p style="color:#444;font-size:13px">Ridgeline only relays what the mesh hears: it can't reply or reach emergency services. To respond, use #mayday in your own MeshCore app or radio. <strong>If someone's life is in danger, call 911.</strong></p>
+<p style="color:#666;font-size:13px">You're receiving this because you turned on #mayday alert emails. <a href="%s">Turn them off</a> under Account on Ridgeline.</p>`,
 		hl.String(), moreHTML, htmlAttr(link), htmlAttr(settings))
 	return subject, text, body
 }
 
-// accountSOSAlerts turns the caller's #sos alert emails on or off, and
+// accountSOSAlerts turns the caller's #mayday alert emails on or off, and
 // whether they include test messages. Either field may be sent alone.
 func (s *Server) accountSOSAlerts(w http.ResponseWriter, r *http.Request, user store.User) {
 	var req struct {
@@ -230,7 +230,7 @@ func (s *Server) accountSOSAlerts(w http.ResponseWriter, r *http.Request, user s
 	s.returnUpdatedUser(w, user.ID)
 }
 
-// accountSOSMonitor lists the caller as monitoring #sos, or takes them off the
+// accountSOSMonitor lists the caller as monitoring #mayday, or takes them off the
 // list. The name must be a companion radio Ridgeline has heard, and is listed
 // as that radio advertises it.
 func (s *Server) accountSOSMonitor(w http.ResponseWriter, r *http.Request, user store.User) {

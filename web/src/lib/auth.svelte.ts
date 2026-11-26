@@ -114,7 +114,7 @@ class Auth {
 		this.user = await account.updateProfile(this.csrf, displayName);
 	}
 
-	/** Turn #sos alert emails on or off; updates the cached user on success. */
+	/** Turn #mayday alert emails on or off; updates the cached user on success. */
 	async setSOSAlerts(enabled: boolean) {
 		this.user = await account.setSOSAlerts(this.csrf, enabled);
 	}
@@ -123,7 +123,7 @@ class Auth {
 		this.user = await account.setSOSAlertTests(this.csrf, tests);
 	}
 
-	/** Go on or off the public #sos monitoring list, under name. */
+	/** Go on or off the public #mayday monitoring list, under name. */
 	async setSOSMonitor(enabled: boolean, name: string) {
 		this.user = await account.setSOSMonitor(this.csrf, enabled, name);
 	}

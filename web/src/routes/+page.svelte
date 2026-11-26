@@ -8,6 +8,7 @@
 	import Tooltip from '$lib/components/Tooltip.svelte';
 	import { isSearchCrawler } from '$lib/crawler';
 	import { announce } from '$lib/announce.svelte';
+	import { sos } from '$lib/sos.svelte';
 	import { overview } from '$lib/overview.svelte';
 	import OverviewGrid from '$lib/components/widgets/OverviewGrid.svelte';
 	import OverviewCustomizer from '$lib/components/widgets/OverviewCustomizer.svelte';
@@ -60,9 +61,9 @@
 {#snippet intro()}
 	Ridgeline is a live observatory for the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland of British
 	Columbia: an off-grid text messaging network on 909.000 MHz that needs no internet or cell service. New here? See the
-	<a href="/settings" class="text-signal hover:underline">recommended radio settings</a>, the
-	<a href="/faq" class="text-signal hover:underline">909.000 MHz FAQ</a> or the
-	<a href="/sos" class="text-signal hover:underline">#sos channel</a>.
+	<a href="/settings" class="text-signal hover:underline">recommended radio settings</a>{#if sos.enabled}, the
+		<a href="/faq" class="text-signal hover:underline">909.000 MHz FAQ</a> or the
+		<a href="/mayday" class="text-signal hover:underline">#mayday channel</a>{:else}{' '}or the <a href="/faq" class="text-signal hover:underline">909.000 MHz FAQ</a>{/if}.
 {/snippet}
 
 <PageHeader eyebrow="Network Observatory" title="Overview" {intro}>

@@ -8,6 +8,8 @@
 	import MembersPanel from '$lib/components/MembersPanel.svelte';
 	import EmailLogPanel from '$lib/components/EmailLogPanel.svelte';
 	import SeasonsPanel from '$lib/components/SeasonsPanel.svelte';
+	import EmergencyPanel from '$lib/components/EmergencyPanel.svelte';
+	import SurveyPanel from '$lib/components/SurveyPanel.svelte';
 	import ChannelsPanel from '$lib/components/ChannelsPanel.svelte';
 	import KnownBridgePicker from '$lib/components/KnownBridgePicker.svelte';
 
@@ -363,6 +365,8 @@
 			<MembersPanel compact />
 			<EmailLogPanel compact />
 			<SeasonsPanel compact />
+			<EmergencyPanel compact />
+			<SurveyPanel compact />
 			<ChannelsPanel compact />
 		</div>
 </div>

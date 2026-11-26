@@ -28,7 +28,7 @@
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
-	// Pulsing red rings over the nodes of recent #sos alert senders.
+	// Pulsing red rings over the nodes of recent #mayday alert senders.
 	let sosRings = $state<SosRings | null>(null);
 	$effect(() => sosRings?.update(sosSpots(nodes, sos.ringAlerts)));
 	let webglOk = $state(true);

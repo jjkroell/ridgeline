@@ -42,7 +42,7 @@
 	let memberBusyId = $state<number | null>(null);
 	let confirmDeleteId = $state<number | null>(null);
 
-	/** Hover for a read-only #sos setting: when it last changed, local
+	/** Hover for a read-only #mayday setting: when it last changed, local
 	 *  YY/MM/DD HH:MM. None before changes were recorded (v0.24.31). */
 	function changedAt(iso?: string): string | undefined {
 		if (!iso) return undefined;
@@ -134,7 +134,7 @@
 	});
 </script>
 
-<!-- The member's own #sos email settings: read-only here, hover for when they
+<!-- The member's own #mayday email settings: read-only here, hover for when they
      last changed. Beside Admin on desktop; under the email on a phone. -->
 {#snippet sosPills(m: AuthUser)}
 	<div class="flex items-center gap-1.5">
@@ -143,7 +143,7 @@
 				? 'bg-coral/15 text-coral'
 				: 'bg-line/50 text-fg-faint'}"
 			title={changedAt(m.sosAlertsAt)}
-			>#sos {m.sosAlerts ? 'on' : 'off'}</span
+			>#mayday {m.sosAlerts ? 'on' : 'off'}</span
 		>
 		<span
 			class="rounded-full px-2 py-0.5 text-[0.62rem] font-600 {m.sosAlerts && m.sosAlertTests

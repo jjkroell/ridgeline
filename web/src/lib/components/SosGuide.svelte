@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Explainer for the permanent #sos channel: what it is for, how to join
+	// Explainer for the permanent #mayday channel: what it is for, how to join
 	// and monitor it, and what happens to a message sent on it — the radios,
 	// Ridgeline's alerts and the KOD-BOT auto reply.
 	//
@@ -24,7 +24,7 @@
 
 	const sections = [
 		{ id: 'limits', label: 'Limits & responsibility' },
-		{ id: 'about', label: 'What #sos is' },
+		{ id: 'about', label: 'What #mayday is' },
 		{ id: 'join', label: 'Join & monitor' },
 		{ id: 'flow', label: 'Message flow' },
 		{ id: 'alerts', label: 'Ridgeline alerts' },
@@ -34,7 +34,7 @@
 	];
 
 	const triggers = ['sos', 'emergency', 'mayday', '911', 'threat', 'life', 'need help', 'needs help', 'help me'];
-	const notTriggers = ['#sos', 'wildlife', 'lifeline', 'threats', 'thanks for the help', 'test'];
+	const notTriggers = ['#mayday', 'wildlife', 'lifeline', 'threats', 'thanks for the help', 'test'];
 </script>
 
 <div class="mx-auto max-w-3xl space-y-4 {compact ? 'px-4 py-4' : 'px-6 py-6 md:px-10'}">
@@ -50,22 +50,22 @@
 			Limits and responsibility
 		</h2>
 		<p class="text-fg">
-			#sos and Ridgeline are run by volunteers and offered <span class="font-700">as is</span>, with
+			#mayday and Ridgeline are run by volunteers and offered <span class="font-700">as is</span>, with
 			<span class="font-700">no guarantee that a message will be sent, heard, emailed or answered</span>. Coverage has
 			gaps, and radios, repeaters, the internet, Ridgeline, its emails and KOD-BOT can all fail without warning.
 			People on the monitoring list haven't promised to respond.
 		</p>
 		<p class="text-fg">
-			Anyone can post under any name, and <span class="font-700">everything on #sos is public, including your
+			Anyone can post under any name, and <span class="font-700">everything on #mayday is public, including your
 			location</span>.
 		</p>
 		<p class="text-fg">
-			#sos is <span class="font-700">not an emergency service</span> and must not replace 911, a satellite messenger
+			#mayday is <span class="font-700">not an emergency service</span> and must not replace 911, a satellite messenger
 			or a personal locator beacon. If you choose to help, look after your own safety first.
 		</p>
 		<p class="text-fg">
 			To the extent the law allows, the volunteers who run Ridgeline, the repeaters and KOD-BOT accept no liability
-			for loss or injury from using #sos or relying on it.
+			for loss or injury from using #mayday or relying on it.
 		</p>
 		<p class="text-fg">
 			In a life-threatening emergency, <span class="font-700">call 911 first</span> if you have any phone or cell
@@ -86,9 +86,9 @@
 
 	<div class="panel rise space-y-6 px-5 py-5 text-sm leading-relaxed" style="animation-delay:40ms">
 		<section id="about" class="scroll-mt-24 space-y-2">
-			<h2 class="font-display text-fg text-base font-700">What #sos is</h2>
+			<h2 class="font-display text-fg text-base font-700">What #mayday is</h2>
 			<p class="text-fg-dim">
-				<span class="text-fg font-mono">#sos</span> is the mesh's channel for people who need help. Post there if
+				<span class="text-fg font-mono">#mayday</span> is the mesh's channel for people who need help. Post there if
 				you or someone near you needs assistance, and <span class="text-fg">say where you are</span>. Keep it
 				clear otherwise — no chat or radio checks — so that every message on it is worth a notification.
 			</p>
@@ -96,7 +96,7 @@
 				It's an ordinary MeshCore hashtag channel, so anyone can join it with no key to share. A call for help
 				on Public can get lost in the chatter, and many people keep Public notifications to mentions only.
 				<span class="text-fg font-mono">#emergency</span> is for emergencies that affect everyone, like an
-				earthquake; #sos is for one person or group who needs help. Join both.
+				earthquake; #mayday is for one person or group who needs help. Join both.
 			</p>
 		</section>
 
@@ -107,13 +107,13 @@
 					In your MeshCore app or radio, add a hashtag channel named <span class="text-fg font-mono">sos</span>.
 				</li>
 				<li>
-					Enable notifications in your MeshCore app for <span class="text-fg font-mono">#sos</span> to ensure you
+					Enable notifications in your MeshCore app for <span class="text-fg font-mono">#mayday</span> to ensure you
 					are alerted in real time.
 				</li>
 				<li>
 					Let others know you're listening: start typing your radio's name below, pick it, answer
 					<span class="text-fg">Yes</span>, and it goes on the <span class="text-fg">monitoring</span> list on
-					Ridgeline's #sos page. It needs a Ridgeline account, and a radio Ridgeline has heard: if it says the name
+					Ridgeline's #mayday page. It needs a Ridgeline account, and a radio Ridgeline has heard: if it says the name
 					isn't valid, send a flood advert from your radio, wait a minute and try again.
 					<span class="text-fg">You only need to enter one companion</span>, even if you have several.
 				</li>
@@ -123,11 +123,11 @@
 			</div>
 			<p class="text-fg-dim">
 				There's nothing to send on the channel to join or leave. Answer <span class="text-fg">No</span> at any time
-				to come off the list. You can also change it under <span class="text-fg">Monitoring</span> on #sos, or in
+				to come off the list. You can also change it under <span class="text-fg">Monitoring</span> on #mayday, or in
 				<a href="{m}/account#sos-monitor" class="text-coral hover:underline">Account</a>.
 			</p>
 			<p class="text-fg-dim">
-				<span class="text-fg">Who's on the channel?</span> In the MeshCore app, open #sos, tap
+				<span class="text-fg">Who's on the channel?</span> In the MeshCore app, open #mayday, tap
 				<span class="text-fg">⋮</span> (the three-dot menu) → <span class="text-fg whitespace-nowrap"
 					><svg viewBox="0 0 24 24" class="-mt-0.5 mr-0.5 inline h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>Channel Settings</span
 				> →
@@ -136,12 +136,12 @@
 		</section>
 
 		<section id="flow" class="scroll-mt-24 space-y-3">
-			<h2 class="font-display text-fg text-base font-700">What happens to a message on #sos</h2>
+			<h2 class="font-display text-fg text-base font-700">What happens to a message on #mayday</h2>
 			<div class="space-y-2">
 				<div class="border-line rounded-[var(--radius)] border px-4 py-3">
 					<div class="label">1 · You send</div>
 					<p class="text-fg-dim mt-1">
-						You post on #sos from your radio or app (using a
+						You post on #mayday from your radio or app (using a
 						<a href="#triggers" class="text-coral hover:underline">trigger word</a>), for example:
 					</p>
 					<p class="border-line text-fg bg-panel-2/40 mt-2 rounded-[var(--radius)] border px-3 py-2 font-mono text-xs">
@@ -172,14 +172,14 @@
 					<div class="border-line rounded-[var(--radius)] border px-4 py-3">
 						<div class="label">Monitors' radios</div>
 						<p class="text-fg-dim mt-1">
-							Everyone with #sos on their radio or app gets it directly, with a notification if they left them
+							Everyone with #mayday on their radio or app gets it directly, with a notification if they left them
 							on. This is what reaches people who can help.
 						</p>
 					</div>
 					<div class="border-line rounded-[var(--radius)] border px-4 py-3">
 						<div class="label">Ridgeline</div>
 						<p class="text-fg-dim mt-1">
-							Ridgeline's observers hear it and the site shows it under #sos. If it has a
+							Ridgeline's observers hear it and the site shows it under #mayday. If it has a
 							<a href="#triggers" class="text-coral hover:underline">trigger word</a>, Ridgeline raises the
 							<a href="#alerts" class="text-coral hover:underline">alerts</a> below.
 						</p>
@@ -188,26 +188,26 @@
 						<div class="label">KOD-BOT</div>
 						<p class="text-fg-dim mt-1">
 							If it has a trigger word, the bot <a href="#bot" class="text-coral hover:underline">replies on
-							#sos</a> so you know the mesh carried it.
+							#mayday</a> so you know the mesh carried it.
 						</p>
 					</div>
 				</div>
 			</div>
 			<p class="text-fg-faint text-xs">
 				Each of the three hears the message only if the mesh reaches it. A reply from KOD-BOT shows your message got
-				out; it doesn't mean anyone has read it yet. Watch #sos for a person to answer.
+				out; it doesn't mean anyone has read it yet. Watch #mayday for a person to answer.
 			</p>
 		</section>
 
 		<section id="alerts" class="scroll-mt-24 space-y-2">
 			<h2 class="font-display text-fg text-base font-700">Ridgeline's alerts</h2>
-			<p class="text-fg-dim">When a #sos message with a trigger word is heard:</p>
+			<p class="text-fg-dim">When a #mayday message with a trigger word is heard:</p>
 			<ul class="text-fg-dim space-y-2">
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>
 					<span
 						><span class="text-fg">A red pulse</span> on <span class="text-fg">Channels</span> in the menu and on
-						the #sos row, for everyone, until you open #sos (or for 12 hours, or until an admin marks the alert
+						the #mayday row, for everyone, until you open #mayday (or for 12 hours, or until an admin marks the alert
 							resolved). No setting needed.</span
 					>
 				</li>
@@ -218,7 +218,7 @@
 						and <a href="{m}/live-map" class="text-coral hover:underline">Live Map</a>), pulsing over the sender's node
 						and labelled <span class="text-fg font-mono">SOS · name</span>, for 12 hours. It only appears if their radio
 						shares its location in its adverts, and it sits at the last position the radio advertised, not a live GPS
-						fix. Opening #sos doesn't clear it. Tap the label to open #sos or <span class="text-fg">hide it on your
+						fix. Opening #mayday doesn't clear it. Tap the label to open #mayday or <span class="text-fg">hide it on your
 						map</span>; an admin can mark it <span class="text-fg">resolved</span>, which clears it, and the red pulse, for everyone. A new
 						alert from that person brings it back. <span class="text-fg">So responders can find you, turn on location
 						sharing in your MeshCore app or radio.</span></span
@@ -227,7 +227,7 @@
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>
 					<span
-						><span class="text-fg">A sound and a pop-up notification</span>, if you turn them on in the #sos
+						><span class="text-fg">A sound and a pop-up notification</span>, if you turn them on in the #mayday
 						channel's <span class="text-fg">Alerts</span> card (on a phone, also under Settings). They're saved in
 						that browser only, and Ridgeline has to be open — on a phone, on screen. On an iPhone, add Ridgeline to
 						your home screen first to get notifications.</span
@@ -236,8 +236,8 @@
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>
 					<span
-						><span class="text-fg">An email</span> with the message and a link to #sos, to every account that turned
-						on #sos alerts under <a href="{m}/account#sos-alerts" class="text-coral hover:underline">Account</a>
+						><span class="text-fg">An email</span> with the message and a link to #mayday, to every account that turned
+						on #mayday alerts under <a href="{m}/account#sos-alerts" class="text-coral hover:underline">Account</a>
 						(needs a verified email). It works while Ridgeline is closed. The first email waits about 30 seconds so
 						messages sent together arrive as one; after that, at most one email every 10 minutes, carrying
 						everything heard in between. A real call right after a test email doesn't wait out those 10 minutes.
@@ -248,7 +248,7 @@
 			</ul>
 			<p id="monthly-test" class="text-fg-dim scroll-mt-24">
 				<span class="text-fg">Monthly test.</span> At <span class="text-fg">9:00 AM Pacific on the 1st of every
-				month</span>, KOD-BOT sends a test on #sos:
+				month</span>, KOD-BOT sends a test on #mayday:
 				<span class="text-fg font-mono">SOS test message. no emergency in progress</span>. It sets off the alerts
 				like a real call, to check the whole chain still works end to end — the mesh, Ridgeline's observers, the
 				pulse, the map ring, notifications and email. There's nothing to do. The email goes only to accounts with
@@ -260,7 +260,7 @@
 		<section id="bot" class="scroll-mt-24 space-y-2">
 			<h2 class="font-display text-fg text-base font-700">The KOD-BOT auto reply</h2>
 			<p class="text-fg-dim">
-				KOD-BOT also listens on #sos. When it hears a trigger word it replies on #sos, addressed to you:
+				KOD-BOT also listens on #mayday. When it hears a trigger word it replies on #mayday, addressed to you:
 			</p>
 			<p class="border-line text-fg bg-panel-2/40 rounded-[var(--radius)] border px-3 py-2 font-mono text-xs">
 				@[your name] SOS received, email sent to Ridgeline Alert users. Send your location and nature of the emergency ASAP.
@@ -268,7 +268,7 @@
 			<ul class="text-fg-dim space-y-1.5">
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>
-					<span>The reply means the mesh carried your message as far as the bot's radio. It shows in #sos on Ridgeline too.</span>
+					<span>The reply means the mesh carried your message as far as the bot's radio. It shows in #mayday on Ridgeline too.</span>
 				</li>
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>
@@ -280,7 +280,7 @@
 					<span
 						>It opens with an @-mention, so it can't set off an alert itself. Messages that aren't calls for
 						help (a <span class="text-fg font-mono">test</span>, chat) get no reply, and no other bot commands
-						answer on #sos.</span
+						answer on #mayday.</span
 					>
 				</li>
 			</ul>
@@ -288,7 +288,7 @@
 
 		<section id="cleanup" class="scroll-mt-24 space-y-2">
 			<h2 class="font-display text-fg text-base font-700">Clean-up</h2>
-			<p class="text-fg-dim">To keep #sos easy to read, Ridgeline clears messages from its #sos view as they age:</p>
+			<p class="text-fg-dim">To keep #mayday easy to read, Ridgeline clears messages from its #mayday view as they age:</p>
 			<ul class="text-fg-dim space-y-1.5">
 				<li class="flex gap-2">
 					<span class="text-coral shrink-0">·</span>
@@ -336,8 +336,8 @@
 				{/each}
 			</div>
 			<p class="text-fg-faint text-xs">
-				"#sos" on its own is the channel's name, and a bare "help" doesn't count, so "thanks for the help" stays
-				quiet. A message without a trigger word still goes to everyone on #sos — it just raises no alert.
+				"#mayday" on its own is the channel's name, and a bare "help" doesn't count, so "thanks for the help" stays
+				quiet. A message without a trigger word still goes to everyone on #mayday — it just raises no alert.
 			</p>
 			<p class="text-fg-dim">
 				<span class="text-fg">Replies don't count either.</span> A message that <span class="text-fg">starts with an
@@ -352,6 +352,6 @@
 	</div>
 
 	<p class="text-fg-faint px-1 text-xs">
-		See it live: <a href="{m}/channels?channel=sos" class="text-coral hover:underline">open #sos on Ridgeline</a>.
+		See it live: <a href="{m}/channels?channel=mayday" class="text-coral hover:underline">open #mayday on Ridgeline</a>.
 	</p>
 </div>

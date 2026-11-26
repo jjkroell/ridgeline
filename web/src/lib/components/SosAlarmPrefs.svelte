@@ -1,6 +1,6 @@
 <!--
-  This browser's #sos alarm switches: a sound and a system notification when an
-  emergency word is heard on #sos (sos-alarm.svelte.ts). In the #sos info card
+  This browser's #mayday alarm switches: a sound and a system notification when an
+  emergency word is heard on #mayday (sos-alarm.svelte.ts). In the #mayday info card
   and the phone Settings page.
 -->
 <script lang="ts">

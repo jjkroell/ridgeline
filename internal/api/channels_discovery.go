@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -31,7 +32,16 @@ func (s *Server) channelsDiscovered(w http.ResponseWriter, _ *http.Request) {
 // (lastAlert, "" if none in the last 12 h) — the UI flags #sos from it on
 // every page. Served from memory.
 func (s *Server) channelsSOS(w http.ResponseWriter, _ *http.Request) {
+	// Switched off by an admin: the channel name only, nothing to show.
+	if !s.store.EmergencyEnabled() {
+		writeJSON(w, map[string]any{
+			"enabled": false, "channel": "#" + store.SOSChannel,
+			"monitors": []store.SOSMonitor{}, "lastAlert": "", "alerts": nil, "clearedAt": "",
+		})
+		return
+	}
 	writeJSON(w, map[string]any{
+		"enabled":   true,
 		"channel":   "#" + store.SOSChannel,
 		"monitors":  s.store.SOSMonitors(),
 		"lastAlert": s.store.SOSLastAlert(),
@@ -103,6 +113,34 @@ func (s *Server) adminChangeChannel(
 	}
 	s.audit(actor, action, req.Name, "")
 	writeJSON(w, map[string]bool{"ok": true})
+}
+
+// adminSetEmergency turns the emergency-channel integration (store.SOSChannel)
+// on or off for everyone; see store.EmergencyEnabled.
+func (s *Server) adminSetEmergency(w http.ResponseWriter, r *http.Request, actor store.User) {
+	var req struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Enabled == nil {
+		writeErr(w, http.StatusBadRequest, "bad request body")
+		return
+	}
+	was := s.store.EmergencyEnabled()
+	if err := s.store.SetEmergencyEnabled(*req.Enabled, actor.ID, time.Now()); err != nil {
+		s.fail(w, err)
+		return
+	}
+	// Turned on: find the last 12 h of alerts again (skipped while off), so the
+	// flag and map rings are right at once. Short hourly batches, in the background.
+	if *req.Enabled && !was {
+		go func() {
+			if err := s.store.LoadSOSAlert(context.Background(), time.Now()); err != nil {
+				s.log.Warn("sos alert load", "err", err)
+			}
+		}()
+	}
+	s.log.Info("admin set emergency channel", "actor", actor.ID, "enabled", *req.Enabled, "channel", store.SOSChannel)
+	writeJSON(w, map[string]bool{"enabled": *req.Enabled})
 }
 
 // adminSetSeason sets the live map's seasonal theme for everyone: one theme

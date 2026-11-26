@@ -1,5 +1,5 @@
 <!--
-  Who monitors #sos: every account that says so, under its radio's name, and
+  Who monitors #mayday: every account that says so, under its radio's name, and
   the Yes / No switch for the viewer's own (SosMonitorToggle). Its own card
   beside the info card; minimizing it leaves a "N monitoring" pill
   (SosPill kind="monitors") by the channel name.
@@ -13,7 +13,7 @@
 
 <section
 	data-sos-card
-	aria-label="Who monitors #sos"
+	aria-label="Who monitors #mayday"
 	class="panel relative shrink-0 overflow-hidden {mobile ? 'mb-3 px-4 py-3' : 'px-4 py-3 md:px-5'}"
 	style="border-color:color-mix(in srgb, var(--color-coral) 35%, var(--color-line))"
 >
@@ -23,7 +23,7 @@
 		{#if sos.loaded}<span class="text-coral tnum font-mono text-xs">{sos.monitors.length}</span>{/if}
 		<button
 			onclick={() => sos.setCard('monitors', false)}
-			aria-label="Minimize the #sos monitor list"
+			aria-label="Minimize the #mayday monitor list"
 			title="Minimize"
 			class="text-fg-faint hover:text-fg {mobile ? '-mr-1 p-1' : ''} ml-auto shrink-0 transition-colors"
 		>

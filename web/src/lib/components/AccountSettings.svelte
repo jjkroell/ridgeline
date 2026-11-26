@@ -6,6 +6,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { authApi } from '$lib/api';
 	import SosMonitorToggle from './SosMonitorToggle.svelte';
+	import { sos } from '$lib/sos.svelte';
 
 	let { compact = false }: { compact?: boolean } = $props();
 	const pad = $derived(compact ? 'px-4 py-4' : 'px-5 py-4');
@@ -29,7 +30,7 @@
 		}
 	}
 
-	// #sos alert emails (opt-in)
+	// #mayday alert emails (opt-in)
 	let sosBusy = $state(false);
 	let sosMsg = $state('');
 	async function toggleSOS(e: Event) {
@@ -38,7 +39,7 @@
 		sosMsg = '';
 		try {
 			await auth.setSOSAlerts(box.checked);
-			sosMsg = box.checked ? 'On — you’ll get an email when someone calls for help on #sos.' : 'Off.';
+			sosMsg = box.checked ? 'On — you’ll get an email when someone calls for help on #mayday.' : 'Off.';
 		} catch (err) {
 			box.checked = !box.checked;
 			sosMsg = String((err as Error).message ?? err);
@@ -154,7 +155,9 @@
 		{#if dnMsg}<p class="text-signal mt-1.5 text-xs">{dnMsg}</p>{/if}
 	</form>
 
-	<!-- #sos alert emails (target of /account#sos-alerts) -->
+	<!-- #mayday alert emails (target of /account#sos-alerts) and the monitoring
+	     list: only while an admin has the emergency integration switched on. -->
+	{#if sos.enabled}
 	<div id="sos-alerts" class="scroll-mt-20 {pad}">
 		<label class="flex cursor-pointer items-start gap-3" for="acct-sos">
 			<input
@@ -166,9 +169,9 @@
 				class="accent-coral mt-0.5 h-4 w-4 shrink-0"
 			/>
 			<span class="min-w-0">
-				<span class="text-fg block text-sm font-600">Email me about #sos alerts</span>
+				<span class="text-fg block text-sm font-600">Email me about #mayday alerts</span>
 				<span class="text-fg-faint mt-0.5 block text-xs leading-relaxed">
-					When Ridgeline hears an emergency word on #sos — sos, emergency, mayday, 911, threat, life, “need help” or
+					When Ridgeline hears an emergency word on #mayday — sos, emergency, mayday, 911, threat, life, “need help” or
 					“help me” — it emails you the message. Messages that arrive close together come in one email, and
 					after an email there’s a gap of at least 10 minutes before the next.
 					{#if u && !u.emailVerified}<span class="text-amber">Confirm your email address first.</span>{/if}
@@ -188,8 +191,8 @@
 				<span class="min-w-0">
 					<span class="text-fg block text-sm font-600">Include test messages</span>
 					<span class="text-fg-faint mt-0.5 block text-xs leading-relaxed">
-						Also email me when the message says it's a test — “SOS test”, “testing” — like the ones people send
-						to try #sos. Off: only real calls.
+						Also email me when the message says it's a test — “mayday test”, “testing” — like the ones people send
+						to try #mayday. Off: only real calls.
 					</span>
 				</span>
 			</label>
@@ -197,10 +200,11 @@
 		{#if sosMsg}<p class="text-signal mt-1.5 pl-7 text-xs">{sosMsg}</p>{/if}
 	</div>
 
-	<!-- The public #sos monitoring list (target of /account#sos-monitor) -->
+	<!-- The public #mayday monitoring list (target of /account#sos-monitor) -->
 	<div id="sos-monitor" class="scroll-mt-20 {pad}">
 		<SosMonitorToggle mobile={compact} />
 	</div>
+	{/if}
 
 	<!-- Email -->
 	<form onsubmit={(e) => (e.preventDefault(), saveEmail())} class={pad}>

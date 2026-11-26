@@ -1,6 +1,6 @@
 <!--
-  A minimized #sos card: a pill beside the channel name that reopens it.
-  kind="info" for the channel description and the way into the #sos guide
+  A minimized #mayday card: a pill beside the channel name that reopens it.
+  kind="info" for the channel description and the way into the #mayday guide
   (shown as "Guide"), kind="monitors" for the monitor
   list (it shows the count), kind="alerts" for this browser's sound and
   notification switches (a dot when one is on). Opening one closes the others.
@@ -14,12 +14,12 @@
 	const alarmOn = $derived(sosAlarm.sound || sosAlarm.notify);
 	const label = $derived(
 		kind === 'info'
-			? 'Show the #sos channel info and guide'
+			? 'Show the #mayday channel info and guide'
 			: kind === 'monitors'
-				? `Show who monitors #sos — ${sos.monitors.length}`
-				: `#sos alerts in this browser — ${alarmOn ? 'on' : 'off'}`
+				? `Show who monitors #mayday — ${sos.monitors.length}`
+				: `#mayday alerts in this browser — ${alarmOn ? 'on' : 'off'}`
 	);
-	const title = $derived(kind === 'info' ? 'About #sos and the guide' : kind === 'monitors' ? 'Who monitors #sos' : 'Sound and notification alerts');
+	const title = $derived(kind === 'info' ? 'About #mayday and the guide' : kind === 'monitors' ? 'Who monitors #mayday' : 'Sound and notification alerts');
 </script>
 
 <button

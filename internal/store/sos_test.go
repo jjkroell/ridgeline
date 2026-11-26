@@ -153,6 +153,7 @@ func TestSOSAlertWords(t *testing.T) {
 func TestSOSLastAlert(t *testing.T) {
 	RegisterSOSChannel()
 	st := testStore(t)
+	enableEmergency(t, st)
 	key := meshcore.DeriveHashtagKey(SOSChannel)
 	now := time.Now().UTC()
 
@@ -185,6 +186,7 @@ func TestSOSLastAlert(t *testing.T) {
 func TestSOSAlertSenders(t *testing.T) {
 	RegisterSOSChannel()
 	st := testStore(t)
+	enableEmergency(t, st)
 	key := meshcore.DeriveHashtagKey(SOSChannel)
 	now := time.Now().UTC()
 	at := func(d time.Duration) string { return now.Add(-d).Format(time.RFC3339Nano) }
@@ -222,6 +224,7 @@ func TestSOSAlertSenders(t *testing.T) {
 func TestSOSResolve(t *testing.T) {
 	RegisterSOSChannel()
 	st := testStore(t)
+	enableEmergency(t, st)
 	key := meshcore.DeriveHashtagKey(SOSChannel)
 	now := time.Now().UTC()
 	recordRaw(t, st, groupTextRaw(t, key, "Hiker", "SOS rolled ankle"), now.Add(-time.Hour))
@@ -258,6 +261,7 @@ func TestSOSResolve(t *testing.T) {
 func TestSOSResolveStopsPulse(t *testing.T) {
 	RegisterSOSChannel()
 	st := testStore(t)
+	enableEmergency(t, st)
 	key := meshcore.DeriveHashtagKey(SOSChannel)
 	now := time.Now().UTC()
 	at := func(d time.Duration) string { return now.Add(d).Format(time.RFC3339Nano) }
@@ -318,5 +322,86 @@ func TestPurgeChannel(t *testing.T) {
 	st.db.QueryRow(`SELECT COUNT(*) FROM observations`).Scan(&total)
 	if total != 1 {
 		t.Fatalf("%d observations left, want the 1 Public message", total)
+	}
+}
+
+func enableEmergency(t *testing.T, st *Store) {
+	t.Helper()
+	if err := st.SetEmergencyEnabled(true, 0, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Switched off (the default), an emergency word on the channel notes nothing
+// and fires no hook; switched on again, it does. The switch survives reopening.
+func TestEmergencySwitch(t *testing.T) {
+	RegisterSOSChannel()
+	dir := t.TempDir()
+	st, err := Open(dir + "/s.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.EmergencyEnabled() {
+		t.Fatal("on by default")
+	}
+	fired := 0
+	st.SetSOSAlertHook(func(SOSAlertMsg) { fired++ })
+	key := meshcore.DeriveHashtagKey(SOSChannel)
+	now := time.Now().UTC()
+	recordRaw(t, st, groupTextRaw(t, key, "Hiker", "mayday broken leg"), now.Add(-time.Minute))
+	if st.SOSLastAlert() != "" || len(st.SOSAlertSenders(now)) != 0 || fired != 0 {
+		t.Fatalf("off: lastAlert=%q senders=%v fired=%d", st.SOSLastAlert(), st.SOSAlertSenders(now), fired)
+	}
+	enableEmergency(t, st)
+	recordRaw(t, st, groupTextRaw(t, key, "Paddler", "need help at the dock"), now)
+	if st.SOSLastAlert() == "" || fired != 1 {
+		t.Fatalf("on: lastAlert=%q fired=%d", st.SOSLastAlert(), fired)
+	}
+	st.Close()
+	if st, err = Open(dir + "/s.db"); err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if !st.EmergencyEnabled() {
+		t.Fatal("switch lost on reopen")
+	}
+}
+
+// A listing from before the move to #mayday (sos_monitor_channel = 'sos') is
+// kept but not shown; switching on lists the account for #mayday afresh.
+func TestSOSMonitorsPerChannel(t *testing.T) {
+	st := testStore(t)
+	a := monitorUser(t, st, "old@x.ca")
+	if _, err := st.db.Exec(`UPDATE users SET sos_monitor = 1, sos_monitor_name = 'Old', sos_monitor_at = '2026-11-01T00:00:00Z',
+		sos_monitor_channel = 'sos' WHERE id = ?`, a); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.loadSOSMonitors(); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(st.SOSMonitors()); n != 0 {
+		t.Fatalf("#sos listing shown on #mayday: %d", n)
+	}
+	if u, _, _ := st.GetUserByID(a); u.SOSMonitor {
+		t.Fatal("account shows as monitoring #mayday")
+	}
+	// Off for #mayday leaves the #sos row alone.
+	if err := st.SetSOSMonitor(a, false, ""); err != nil {
+		t.Fatal(err)
+	}
+	var on int
+	st.db.QueryRow(`SELECT sos_monitor FROM users WHERE id = ?`, a).Scan(&on)
+	if on != 1 {
+		t.Fatal("#sos listing cleared")
+	}
+	if err := st.SetSOSMonitor(a, true, "Old"); err != nil {
+		t.Fatal(err)
+	}
+	m := st.SOSMonitors()
+	if len(m) != 1 || m[0].Since == "2026-11-01T00:00:00Z" {
+		t.Fatalf("#mayday listing = %+v (since must be new)", m)
+	}
+	if u, _, _ := st.GetUserByID(a); !u.SOSMonitor {
+		t.Fatal("account not shown as monitoring")
 	}
 }

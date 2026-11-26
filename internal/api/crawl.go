@@ -35,7 +35,7 @@ var appRoutes = map[string]bool{
 	"/channels": true, "/contact": true, "/faq": true, "/firmware-builder": true,
 	"/hash-ids": true, "/identity": true, "/live": true, "/live-map": true,
 	"/login": true, "/map": true, "/nodes": true, "/observers": true, "/privacy": true,
-	"/reset-password": true, "/settings": true, "/sos": true, "/topology": true,
+	"/reset-password": true, "/settings": true, "/mayday": true, "/survey": true, "/topology": true,
 	"/verify-email": true,
 }
 
@@ -68,6 +68,12 @@ func (s *Server) crawlRules(next http.Handler) http.Handler {
 			return
 		}
 		clean := path.Clean("/" + r.URL.Path)
+		// The emergency channel moved from #sos to #mayday (v0.24.88); its guide
+		// moved with it, and says so while the integration is switched off.
+		if clean == "/sos" || clean == "/m/sos" {
+			http.Redirect(w, r, strings.TrimSuffix(clean, "sos")+"mayday", http.StatusMovedPermanently)
+			return
+		}
 		target := previewPath(clean)
 		if clean == "/m" || strings.HasPrefix(clean, "/m/") {
 			w.Header().Add("Vary", "User-Agent")

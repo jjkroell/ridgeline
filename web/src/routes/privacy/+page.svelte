@@ -106,9 +106,15 @@
 			Accounts are optional. If you create one, we store your email address, a display name, and a
 			hashed password so you can sign in, claim nodes, leave notes, and receive notifications you ask
 			for. Email is used only for verification and the notifications you enable. If you say you monitor
-			#sos, your radio’s name is shown on its public monitoring list. You can edit your
+			the emergency channel, your radio’s name is shown on its public monitoring list. You can edit your
 			profile or <strong>delete your account</strong> at any time from your account page; deleting it
 			removes your personal data and releases any nodes you had claimed.
+		</p>
+		<p>
+			If you answer the <a href="/survey" class="text-signal hover:underline">emergency channel survey</a>, we store your
+			answers, and your email only if you give one so we can reply; if you are signed in, the answers are linked to
+			your account. To spot repeat answers we keep a scrambled code made from your IP address (never the address
+			itself). Only Ridgeline’s admins read them. Ask us to delete them at any time.
 		</p>
 	</section>
 

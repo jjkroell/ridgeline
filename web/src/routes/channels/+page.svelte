@@ -31,9 +31,10 @@
 	onMount(async () => {
 		channels.init();
 		sos.init();
-		// First launch opens on #sos, so its card is seen expanded once.
-		if (!selectedId && channels.list.length) selectedId = sos.seen ? channels.list[0].id : SOS_ID;
-		sos.markSeen();
+		// First launch opens on #mayday (while the integration is on), so its card is seen expanded once.
+		if (!selectedId && channels.list.length)
+			selectedId = !sos.seen && channels.emergency ? SOS_ID : channels.list[0].id;
+		if (channels.emergency) sos.markSeen();
 		try {
 			history = await api.channelHistory(HISTORY_SEC);
 		} finally {
@@ -89,7 +90,7 @@
 		}
 		const out = new Map<string, ChatMsg[]>();
 		for (const [id, m] of buckets) {
-			// #sos join/leave/test housekeeping drops out five minutes after it was heard.
+			// #mayday join/leave/test housekeeping drops out five minutes after it was heard.
 			const arr = [...m.values()]
 				.filter((x) => !sos.hidden(id, x.text, x.t))
 				.map(({ obs, ...rest }) => ({ ...rest, observers: obs.size }))
@@ -109,12 +110,12 @@
 		return a && a.length ? a[a.length - 1] : undefined;
 	};
 
-	// The #sos row pulses red on an emergency word there until the user
-	// switches to #sos (or clicks its row while it is open) — merely having it
+	// The #mayday row pulses red on an emergency word there until the user
+	// switches to #mayday (or clicks its row while it is open) — merely having it
 	// open when the message lands does not count as seeing it.
 	const sosAlert = $derived(sos.alerting(byChannel.get(SOS_ID)));
 
-	// A channel link (?channel=sos, or one from Copy link) opens its channel,
+	// A channel link (?channel=mayday, or one from Copy link) opens its channel,
 	// asking first if this browser doesn't have it.
 	$effect(() => followChannelUrl(page.url, selectChannel));
 
@@ -293,7 +294,7 @@
 	<PageHeader
 	eyebrow="Decrypted Traffic"
 	title="Channels"
-	intro="Messages on the MeshCore public and hashtag channels across Vancouver Island and the Lower Mainland, including #sos, the mesh&#39;s permanent emergency channel."
+	intro="Messages on the MeshCore public and hashtag channels across Vancouver Island and the Lower Mainland, including #mayday, the mesh&#39;s permanent emergency channel."
 >
 		<div class="font-mono text-fg-dim text-xs">
 			<span class="text-signal tnum">{channels.list.length}</span>
@@ -411,7 +412,7 @@
 								<span
 									class="font-display truncate text-sm font-700 {on ? 'text-fg' : 'text-fg-dim'}"
 									class:sos-alert={c.id === SOS_ID && sosAlert}
-									title={c.id === SOS_ID && sosAlert ? 'Emergency word in a recent #sos message' : undefined}
+									title={c.id === SOS_ID && sosAlert ? 'Emergency word in a recent #mayday message' : undefined}
 								>{c.name}</span>
 								{#if last}<span class="text-fg-faint ml-auto shrink-0 font-mono text-[0.62rem]">{ago(last.receivedAt)}</span>{/if}
 							</div>
@@ -522,8 +523,8 @@
 						<div class="text-fg-faint py-12 text-center text-sm">Loading messages…</div>
 					{:else if messages.length === 0}
 						<div class="text-fg-faint py-12 text-center text-sm">
-							{selectedId === SOS_ID
-								? 'Nothing on #sos right now. Messages clear after 3 hours, calls for help after 12.'
+							{isPermanent(selected)
+								? 'Nothing on #mayday right now. Messages clear after 3 hours, calls for help after 12.'
 								: 'No messages on this channel in the last 24 hours.'}
 						</div>
 					{:else}

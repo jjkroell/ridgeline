@@ -1,5 +1,5 @@
-// The #sos alarm: an opt-in sound and system notification for a new emergency
-// word on #sos (the same trigger as the red pulse; sos.svelte.ts calls fire()).
+// The #mayday alarm: an opt-in sound and system notification for a new emergency
+// word on #mayday (the same trigger as the red pulse; sos.svelte.ts calls fire()).
 // Both are off by default and kept per browser. Browsers only let audio start
 // after a click or tap, so while the sound is on, the first gesture on any page
 // unlocks it (the live-map chime works the same way); "Test" does it too.
@@ -119,7 +119,7 @@ class SosAlarm {
 			this.#ring();
 		}
 		if (this.notify)
-			this.#notify('Test', 'This is what a #sos alert looks like. No one needs help.').then((err) => {
+			this.#notify('Test', 'This is what a #mayday alert looks like. No one needs help.').then((err) => {
 				this.notifyNote = err
 					? `The browser refused the notification (${err}).`
 					: 'Test notification sent. Nothing appeared? Check that your computer or phone allows notifications from this browser, and that Do Not Disturb or Focus is off.';
@@ -201,15 +201,15 @@ class SosAlarm {
 	async #notify(sender?: string, text?: string): Promise<string> {
 		this.#syncPermission();
 		if (this.permission !== 'granted') return 'notifications are not allowed for this site';
-		const title = sender ? `SOS on the mesh: ${sender}` : 'SOS on the mesh';
+		const title = sender ? `Mayday on the mesh: ${sender}` : 'Mayday on the mesh';
 		const opts: NotificationOptions = {
-			body: text?.trim() || 'An emergency word was heard on #sos.',
+			body: text?.trim() || 'An emergency word was heard on #mayday.',
 			tag: 'ridgeline-sos',
 			// @ts-expect-error renotify: alert again even when replacing a shown one (Chrome)
 			renotify: true,
 			requireInteraction: true,
 			icon: '/icons/icon-192.png',
-			data: { url: '/channels?channel=sos' }
+			data: { url: '/channels?channel=mayday' }
 		};
 		// Phones (Android Chrome, iOS home-screen apps) only show notifications
 		// through the service worker; desktops take either.
@@ -227,7 +227,7 @@ class SosAlarm {
 			const n = new Notification(title, opts);
 			n.onclick = () => {
 				window.focus();
-				location.href = '/channels?channel=sos';
+				location.href = '/channels?channel=mayday';
 				n.close();
 			};
 			return '';

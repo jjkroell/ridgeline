@@ -115,7 +115,7 @@ var seoSections = map[string]seoSection{
 		Description: "Public channel activity on the MeshCore LoRa mesh across Vancouver Island and the Lower Mainland of coastal British Columbia.",
 		Heading:     "MeshCore public channels",
 		Paras: []string{
-			"Messages on the MeshCore mesh's public and hashtag channels across " + seoRegion + ", including #sos, the mesh's permanent emergency channel.",
+			"Messages on the MeshCore mesh's public and hashtag channels across " + seoRegion + ".",
 		},
 		Freq: "hourly", Priority: "0.6",
 	},
@@ -145,7 +145,7 @@ var seoStaticPages = []struct{ Path, Freq, Priority string }{
 	{"/settings", "monthly", "0.9"},
 	{"/faq", "monthly", "0.8"},
 	{"/hash-ids", "monthly", "0.8"},
-	{"/sos", "monthly", "0.8"},
+	{"/mayday", "monthly", "0.8"}, // listed only while the emergency switch is on
 }
 
 // seoNav is the crawl summary's link list, the same set as app.html's.
@@ -160,7 +160,6 @@ var seoNav = [][2]string{
 	{"/channels", "Channels"},
 	{"/observers", "Observer receivers"},
 	{"/hash-ids", "Multi-byte hash IDs"},
-	{"/sos", "The #sos emergency channel"},
 }
 
 // seoDoc is the crawler-facing part of a page: the head's title and
@@ -419,6 +418,9 @@ func (s *Server) buildSitemap() ([]byte, error) {
 		url(p, "", seoSections[p].Freq, seoSections[p].Priority)
 	}
 	for _, p := range seoStaticPages {
+		if p.Path == "/mayday" && !s.store.EmergencyEnabled() {
+			continue
+		}
 		url(p.Path, "", p.Freq, p.Priority)
 	}
 	// Individual node pages are deliberately NOT listed (2026-11-20). They were

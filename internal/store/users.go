@@ -107,7 +107,7 @@ func (s *Store) GetUserByEmail(email string) (User, bool, error) {
 	return s.scanUser(s.db.QueryRow(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
 		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests,
-		       sos_alerts_at, sos_alert_tests_at, sos_monitor, sos_monitor_name
+		       sos_alerts_at, sos_alert_tests_at, (sos_monitor = 1 AND sos_monitor_channel = '`+SOSChannel+`'), sos_monitor_name
 		FROM users WHERE email = ?`, email))
 }
 
@@ -116,7 +116,7 @@ func (s *Store) GetUserByID(id int64) (User, bool, error) {
 	return s.scanUser(s.db.QueryRow(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
 		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests,
-		       sos_alerts_at, sos_alert_tests_at, sos_monitor, sos_monitor_name
+		       sos_alerts_at, sos_alert_tests_at, (sos_monitor = 1 AND sos_monitor_channel = '`+SOSChannel+`'), sos_monitor_name
 		FROM users WHERE id = ?`, id))
 }
 
@@ -146,7 +146,7 @@ func (s *Store) ListUsers() ([]User, error) {
 	rows, err := s.db.Query(`
 		SELECT id, email, password_hash, COALESCE(display_name,''), is_admin, can_claim,
 		       blocked, protected, created_at, COALESCE(last_login,''), email_verified, sos_alerts, sos_alert_tests,
-		       sos_alerts_at, sos_alert_tests_at, sos_monitor, sos_monitor_name
+		       sos_alerts_at, sos_alert_tests_at, (sos_monitor = 1 AND sos_monitor_channel = '` + SOSChannel + `'), sos_monitor_name
 		FROM users ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err

@@ -26,9 +26,9 @@
 	onMount(async () => {
 		channels.init();
 		sos.init();
-		// First launch opens #sos.
-		if (!sos.seen) open(SOS_ID);
-		sos.markSeen();
+		// First launch opens #mayday (while the integration is on).
+		if (!sos.seen && channels.emergency) open(SOS_ID);
+		if (channels.emergency) sos.markSeen();
 		try {
 			history = await api.channelHistory(HISTORY_SEC);
 		} finally {
@@ -70,7 +70,7 @@
 		}
 		const out = new Map<string, ChatMsg[]>();
 		for (const [id, m] of buckets) {
-			// #sos join/leave/test housekeeping drops out five minutes after it was heard.
+			// #mayday join/leave/test housekeeping drops out five minutes after it was heard.
 			out.set(id, [...m.values()].filter((x) => !sos.hidden(id, x.text, x.t)).map(({ obs, ...r }) => ({ ...r, observers: obs.size })).sort((a, b) => a.t - b.t));
 		}
 		return out;
@@ -80,8 +80,8 @@
 	const messages = $derived(selectedId ? (byChannel.get(selectedId) ?? []) : []);
 	const lastOf = (id: string) => { const a = byChannel.get(id); return a && a.length ? a[a.length - 1] : undefined; };
 
-	// The #sos row pulses red on an emergency word there until the user opens
-	// #sos from the list — merely having it open when the message lands does
+	// The #mayday row pulses red on an emergency word there until the user opens
+	// #mayday from the list — merely having it open when the message lands does
 	// not count as seeing it (the list is out of sight then anyway).
 	const sosAlert = $derived(sos.alerting(byChannel.get(SOS_ID)));
 
@@ -92,7 +92,7 @@
 		pinned = true;
 	}
 
-	// A channel link (?channel=sos, or one from Copy link) opens its channel,
+	// A channel link (?channel=mayday, or one from Copy link) opens its channel,
 	// asking first if this browser doesn't have it.
 	$effect(() => followChannelUrl(page.url, open));
 
@@ -305,8 +305,8 @@
 			{#if loadingHistory && messages.length === 0}
 				<div class="text-fg-faint py-12 text-center text-sm">Loading messages…</div>
 			{:else if messages.length === 0}
-				<div class="text-fg-faint py-12 text-center text-sm">{selectedId === SOS_ID
-						? 'Nothing on #sos right now. Messages clear after 3 hours, calls for help after 12.'
+				<div class="text-fg-faint py-12 text-center text-sm">{isPermanent(selected)
+						? 'Nothing on #mayday right now. Messages clear after 3 hours, calls for help after 12.'
 						: 'No messages on this channel in the last 24h.'}</div>
 			{:else}
 				{#each messages as m (m.hash)}

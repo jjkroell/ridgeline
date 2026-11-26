@@ -123,8 +123,8 @@ sw.addEventListener('fetch', (event) => {
 	}
 });
 
-// A #sos alarm notification (sos-alarm.svelte.ts): focus an open Ridgeline
-// window on #sos, or open one.
+// A #mayday alarm notification (sos-alarm.svelte.ts): focus an open Ridgeline
+// window on #mayday, or open one.
 sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
 	const url = (event.notification.data as { url?: string } | null)?.url ?? '/';

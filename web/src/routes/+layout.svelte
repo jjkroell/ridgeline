@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { onNavigate } from '$app/navigation';
 	import { live } from '$lib/live.svelte';
 	import { theme } from '$lib/theme.svelte';
@@ -79,7 +79,6 @@
 		auth.init();
 		live.start();
 		consent.init();
-		announce.init();
 		env.init();
 		sos.init();
 		sosAlarm.init();
@@ -113,7 +112,18 @@
 		const id = env.loaded ? seasonal.scheduled?.id : undefined;
 		if (id) announce.season(id);
 	});
-	// #sos alert flag on every page (the Channels nav item pulses from it).
+	// The admin's emergency-channel switch (#mayday): health first, then each
+	// roster poll keeps it current. What's new waits for it, since which
+	// release note shows (#sos switched off, or #mayday live) depends on it.
+	$effect(() => {
+		if (!env.loaded) return;
+		const on = env.emergency;
+		untrack(() => {
+			sos.setEnabled(on);
+			announce.init(on);
+		});
+	});
+	// #mayday alert flag on every page (the Channels nav item pulses from it).
 	onMount(() => sos.watch());
 	// …and at once when the live feed brings one.
 	$effect(() => {
@@ -244,7 +254,7 @@
 					class="group relative flex items-center gap-3 rounded-[var(--radius)] px-3 py-2.5 text-sm transition-colors
 						{on ? 'text-fg' : 'text-fg-dim hover:text-fg'}"
 					class:sos-alert-row={item.href === '/channels' && sos.flagged}
-					title={item.href === '/channels' && sos.flagged ? 'Emergency word on #sos' : undefined}
+					title={item.href === '/channels' && sos.flagged ? 'Emergency word on #mayday' : undefined}
 				>
 					{#if on}
 						<span data-nav-bar class="bg-signal absolute top-1/2 left-0 h-5 w-[2px] -translate-y-1/2 rounded-full"

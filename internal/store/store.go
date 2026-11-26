@@ -114,7 +114,8 @@ CREATE TABLE IF NOT EXISTS users (
 	sos_alert_tests_at TEXT NOT NULL DEFAULT '', -- when sos_alert_tests last changed
 	sos_monitor   INTEGER NOT NULL DEFAULT 0, -- says they monitor #sos (public list)
 	sos_monitor_name TEXT NOT NULL DEFAULT '', -- the radio's name; kept while off
-	sos_monitor_at TEXT NOT NULL DEFAULT ''     -- when it was switched on
+	sos_monitor_at TEXT NOT NULL DEFAULT '',    -- when it was switched on
+	sos_monitor_channel TEXT NOT NULL DEFAULT 'sos' -- the channel it was for (SOSChannel; 'sos' before v0.24.88)
 );
 
 -- sessions are server-side so they can be revoked. token_hash is the SHA-256 of
@@ -303,6 +304,17 @@ CREATE TABLE IF NOT EXISTS sos_resolved (
 	resolved_at TEXT NOT NULL,             -- server time (RFC3339); alerts up to it are cleared
 	user_id     INTEGER NOT NULL DEFAULT 0 -- the admin who cleared it
 );
+-- Survey answers (api/survey.go): one row per submission, the answers as the
+-- server's own normalised JSON. user_id is 0 for a visitor who wasn't signed in.
+CREATE TABLE IF NOT EXISTS survey_responses (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	survey     TEXT NOT NULL,
+	answers    TEXT NOT NULL,
+	created_at TEXT NOT NULL,              -- server time (RFC3339)
+	user_id    INTEGER NOT NULL DEFAULT 0,
+	ip_hash    TEXT NOT NULL DEFAULT ''    -- salted hash of the sender's IP (never the IP), to spot repeats
+);
+CREATE INDEX IF NOT EXISTS survey_responses_survey ON survey_responses(survey, id);
 -- Site-wide switches an admin sets from the admin panel (e.g. the live map's
 -- seasonal theme). A few rows, read once at open and kept in memory.
 CREATE TABLE IF NOT EXISTS site_settings (
@@ -429,6 +441,9 @@ type Store struct {
 	// season is the admin's seasonal-theme switch (site_settings "season"):
 	// "" = none chosen, follow each theme's dates; "none" = all off; else a theme id.
 	season atomic.Value // string
+	// emergency is the admin's switch for the emergency-channel integration
+	// (site_settings "emergency" = "on"; off when unset). See EmergencyEnabled.
+	emergency    atomic.Bool
 	sosAlertHook func(SOSAlertMsg)
 }
 
@@ -587,6 +602,10 @@ func Open(path string) (*Store, error) {
 	db.Exec(`ALTER TABLE users ADD COLUMN sos_monitor INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE users ADD COLUMN sos_monitor_name TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE users ADD COLUMN sos_monitor_at TEXT NOT NULL DEFAULT ''`)
+	// v0.24.88 moved the emergency channel from #sos to #mayday: every existing
+	// listing was for #sos, so the #mayday list starts empty and #sos's is kept.
+	db.Exec(`ALTER TABLE users ADD COLUMN sos_monitor_channel TEXT NOT NULL DEFAULT 'sos'`)
+	db.Exec(`ALTER TABLE survey_responses ADD COLUMN ip_hash TEXT NOT NULL DEFAULT ''`)
 	// Email verification: new accounts must confirm their address before logging
 	// in. Accounts that predate this feature are grandfathered as verified on the
 	// one-time column add, so nobody is locked out.
@@ -661,6 +680,10 @@ func Open(path string) (*Store, error) {
 	if err := s.loadSeason(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("store: load season: %w", err)
+	}
+	if err := s.loadEmergency(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: load emergency switch: %w", err)
 	}
 	// One-time repair of radio values a far-side receiver wrote onto near-side
 	// nodes back when any hop count could set one. Needs the blocklist loaded
@@ -889,7 +912,8 @@ func (s *Store) Record(o Observation) error {
 
 	// A #sos alert's FIRST stored copy fires the alert hook (email). Checked
 	// before the insert, on idx_obs_hash; only alert packets — rare — pay it.
-	sosAlert := isSOSAlert(p)
+	// Switched off (EmergencyEnabled), nothing is noted or emailed.
+	sosAlert := isSOSAlert(p) && s.EmergencyEnabled()
 	sosAlertNew := false
 	if sosAlert {
 		var one int

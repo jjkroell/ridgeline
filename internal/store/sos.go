@@ -14,7 +14,11 @@ import (
 
 // SOSChannel is the mesh's emergency hashtag channel, without its '#'. It is
 // always decrypted (registered at startup whether or not discovery has
-// confirmed it) and every browser carries it as a permanent channel.
+// confirmed it) and, while the admin switch is on (EmergencyEnabled), every
+// browser carries it as a permanent channel. It was "sos" until v0.24.88; the
+// code keeps the sos names. #sos is now an ordinary channel: decoded if
+// discovery confirms it, with no alerts, emails or roster. Monitors are kept
+// per channel (users.sos_monitor_channel), so the #sos list survives unread.
 //
 // Who monitors it is what people say: a signed-in account switches "I'm
 // monitoring #sos" on and gives the name of its companion radio, which must be
@@ -24,7 +28,7 @@ import (
 // in databases that have them, unread). The web UI still hides join, leave and
 // test messages from the #sos chat after five minutes (other messages after 3
 // hours, calls for help after 12; sos.svelte.ts).
-const SOSChannel = "sos"
+const SOSChannel = "mayday"
 
 // RegisterSOSChannel adds #sos to the decoder's channel set. Idempotent;
 // called at startup before ingest so live #sos messages decrypt from the first
@@ -232,6 +236,9 @@ func (s *Store) SOSAlertsClearedAt() string {
 // thousand GroupText rows each), each its own short query so ingest isn't held
 // up. Live ingest may note a newer alert meanwhile; noteSOSAlert keeps the max.
 func (s *Store) LoadSOSAlert(ctx context.Context, now time.Time) error {
+	if !s.EmergencyEnabled() {
+		return nil // switched off: no flag, no rings (SetEmergency reloads on turn-on)
+	}
 	end := now.UTC()
 	for to := end; to.After(end.Add(-SOSAlertWindow)); to = to.Add(-time.Hour) {
 		if err := ctx.Err(); err != nil {
@@ -270,7 +277,9 @@ func (s *Store) SetSOSMonitor(id int64, on bool, name string) error {
 	s.sosRosterMu.Lock()
 	defer s.sosRosterMu.Unlock()
 	if !on {
-		if _, err := s.db.Exec(`UPDATE users SET sos_monitor = 0 WHERE id = ?`, id); err != nil {
+		// Only this channel's listing: a #sos one (before the rename) is kept.
+		if _, err := s.db.Exec(`UPDATE users SET sos_monitor = 0 WHERE id = ? AND sos_monitor_channel = ?`,
+			id, SOSChannel); err != nil {
 			return err
 		}
 		return s.readSOSMonitors()
@@ -280,11 +289,12 @@ func (s *Store) SetSOSMonitor(id int64, on bool, name string) error {
 			return ErrSOSNameTaken
 		}
 	}
-	// "Since" is when it was switched on; a rename while on keeps it.
+	// "Since" is when it was switched on; a rename while on keeps it. Being
+	// on for another channel (#sos, before the rename) counts as off.
 	if _, err := s.db.Exec(`UPDATE users SET
-			sos_monitor_at = CASE WHEN sos_monitor = 1 THEN sos_monitor_at ELSE ? END,
-			sos_monitor = 1, sos_monitor_name = ?
-		WHERE id = ?`, time.Now().UTC().Format(time.RFC3339), name, id); err != nil {
+			sos_monitor_at = CASE WHEN sos_monitor = 1 AND sos_monitor_channel = ? THEN sos_monitor_at ELSE ? END,
+			sos_monitor = 1, sos_monitor_name = ?, sos_monitor_channel = ?
+		WHERE id = ?`, SOSChannel, time.Now().UTC().Format(time.RFC3339), name, SOSChannel, id); err != nil {
 		return err
 	}
 	return s.readSOSMonitors()
@@ -355,7 +365,7 @@ func (s *Store) loadSOSMonitors() error {
 // older read can't replace a newer one.
 func (s *Store) readSOSMonitors() error {
 	rows, err := s.db.Query(`SELECT id, sos_monitor_name, sos_monitor_at FROM users
-		WHERE sos_monitor = 1 AND blocked = 0 AND sos_monitor_name <> ''`)
+		WHERE sos_monitor = 1 AND sos_monitor_channel = ? AND blocked = 0 AND sos_monitor_name <> ''`, SOSChannel)
 	if err != nil {
 		return err
 	}

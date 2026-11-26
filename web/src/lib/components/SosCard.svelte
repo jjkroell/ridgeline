@@ -1,7 +1,7 @@
 <!--
-  The permanent #sos channel's info card: what the channel is for, 911 first,
-  and the way into the #sos guide (/sos), which has the rest — joining,
-  monitoring, alerts, the auto reply and the trigger words. Sits above the #sos
+  The permanent #mayday channel's info card: what the channel is for, 911 first,
+  and the way into the #mayday guide (/sos), which has the rest — joining,
+  monitoring, alerts, the auto reply and the trigger words. Sits above the #mayday
   messages; minimizing it leaves a Guide pill (SosPill kind="info") beside the
   channel name. The monitor names are in SosMonitors.
 -->
@@ -9,7 +9,7 @@
 	import { sos } from '$lib/sos.svelte';
 
 	let { mobile = false }: { mobile?: boolean } = $props();
-	const guide = $derived(`${mobile ? '/m' : ''}/sos`);
+	const guide = $derived(`${mobile ? '/m' : ''}/mayday`);
 	const links = [
 		{ hash: 'join', label: 'Join & monitor' },
 		{ hash: 'alerts', label: 'Alerts' },
@@ -21,7 +21,7 @@
 
 <section
 	data-sos-card
-	aria-label="About the #sos channel"
+	aria-label="About the #mayday channel"
 	class="panel relative shrink-0 overflow-hidden {mobile ? 'mb-3 px-4 py-3.5' : 'px-4 py-3.5 md:px-5'}"
 	style="border-color:color-mix(in srgb, var(--color-coral) 35%, var(--color-line))"
 >
@@ -33,13 +33,13 @@
 				<span class="label text-coral!" data-caps>Emergency channel</span>
 			</div>
 			<p class="text-fg mt-1.5 text-sm leading-relaxed">
-				<span class="font-mono">#sos</span> is the mesh's channel for people who need help. Post here if you
+				<span class="font-mono">#mayday</span> is the mesh's channel for people who need help. Post here if you
 				or someone near you needs assistance, and say where you are. Keep it clear otherwise — no chat or
 				radio checks.
 			</p>
 			<p class="text-fg-dim mt-1.5 text-xs leading-relaxed">
 				In a life-threatening emergency call <span class="text-fg font-600">911</span> first; the mesh is a
-				backup, not a replacement. Ridgeline only shows #sos — to post or keep watch, add it to your own MeshCore
+				backup, not a replacement. Ridgeline only shows #mayday — to post or keep watch, add it to your own MeshCore
 				app or radio. If you keep watch, say so under <button
 					type="button"
 					onclick={() => sos.setCard('monitors', true)}
@@ -53,7 +53,7 @@
 					style="background:color-mix(in srgb, var(--color-coral) 12%, transparent); border:1px solid color-mix(in srgb, var(--color-coral) 35%, transparent)"
 				>
 					<svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z" /><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5" /></svg>
-					How #sos works
+					How #mayday works
 				</a>
 				{#each links as l (l.hash)}
 					<a href="{guide}#{l.hash}" class="text-fg-dim hover:text-coral transition-colors">{l.label}</a>
@@ -62,7 +62,7 @@
 		</div>
 		<button
 			onclick={() => sos.setCard('info', false)}
-			aria-label="Minimize the #sos info"
+			aria-label="Minimize the #mayday info"
 			title="Minimize"
 			class="text-fg-faint hover:text-fg {mobile ? '-mr-1 p-1' : ''} shrink-0 transition-colors"
 		>

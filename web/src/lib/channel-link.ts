@@ -10,6 +10,7 @@
 import { goto } from '$app/navigation';
 import { untrack } from 'svelte';
 import { channels, PUBLIC_KEY_HEX, SOS_ID, type Channel } from './channels.svelte';
+import { env } from './env.svelte';
 import { deriveHashtagKey } from './channel-crypto';
 import { copyText } from './map-share';
 import { confirmer } from './confirm.svelte';
@@ -123,6 +124,11 @@ async function confirmAdd(t: Target): Promise<string | null> {
 export function followChannelUrl(url: URL, select: (id: string) => void): (() => void) | void {
 	const t = parseChannelUrl(url);
 	if (!t || isSearchCrawler()) return;
+	// Wait for /api/health: while the emergency switch is on, #mayday is built
+	// in, and a link to it (alarm, email, map ring) must open it rather than ask
+	// to add it. Reading env.loaded re-runs the caller's effect when it lands.
+	if (!env.loaded) return;
+	untrack(() => channels.setEmergency(env.emergency)); // the layout's effect may not have run yet
 	// Let the page's own mount (channels.init, What's new opening) finish first.
 	const known = t !== 'bad' && untrack(() => (channels.init(), find(t)));
 	// A first-time visitor gets What's new and, on a small screen, a cookie banner
@@ -131,7 +137,7 @@ export function followChannelUrl(url: URL, select: (id: string) => void): (() =>
 	if (!known && (announce.open || (consent.open && matchMedia('(max-width: 767px)').matches))) return;
 	const timer = setTimeout(async () => {
 		// Take the link out of the address bar, so a reload doesn't ask again and
-		// a key doesn't linger there. #sos can't be removed, so its link may stay.
+		// a key doesn't linger there. #mayday can't be removed, so its link may stay.
 		if (!known || known.id !== SOS_ID)
 			goto(url.pathname, { replaceState: true, keepFocus: true, noScroll: true });
 		if (t === 'bad') {
